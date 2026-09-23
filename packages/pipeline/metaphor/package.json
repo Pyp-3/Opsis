@@ -1,0 +1,13 @@
+{
+  "name": "@opsis/metaphor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stage 2: Semantic Graph -> Visual Plan",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

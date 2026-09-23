@@ -1,0 +1,13 @@
+{
+  "name": "@opsis/primitives",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "3D + 2D primitive library (PROMPT.md §9)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

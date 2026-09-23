@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+
+# Agent runtime (managed by the Heuresis platform, not part of Opsis)
+.heuresis/
+skills/
