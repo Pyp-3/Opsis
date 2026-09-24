@@ -1,0 +1,11 @@
+{
+  "utterance": "Flibbertigibbet quorps the zindle.",
+  "expectations": {
+    "expectedMetaphors": ["flow"],
+    "requiredEntityLemmas": [],
+    "requiredRelations": [],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": ["ambiguity"],
+    "requiredPrimitives": ["labeled_card"]
+  }
+}

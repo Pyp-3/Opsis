@@ -1,0 +1,10 @@
+{
+  "utterance": "A cat is a mammal, and a mammal is an animal.",
+  "expectations": {
+    "expectedMetaphors": ["tree"],
+    "requiredEntityLemmas": ["cat", "mammal", "animal"],
+    "requiredRelations": [{ "type": "is_a", "modality": "certain", "minimumCount": 2 }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

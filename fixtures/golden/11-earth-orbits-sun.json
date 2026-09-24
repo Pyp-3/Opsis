@@ -1,0 +1,10 @@
+{
+  "utterance": "The Earth orbits the Sun.",
+  "expectations": {
+    "expectedMetaphors": ["actor_action", "flow"],
+    "requiredEntityLemmas": ["earth", "orbit", "sun"],
+    "requiredRelations": [{ "type": "moves", "modality": "certain" }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

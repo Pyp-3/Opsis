@@ -1,0 +1,10 @@
+{
+  "utterance": "Ice melts into water when it gets warm.",
+  "expectations": {
+    "expectedMetaphors": ["flow"],
+    "requiredEntityLemmas": ["ice", "melt", "water", "warm"],
+    "requiredRelations": [{ "type": "transforms_into", "modality": "certain" }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

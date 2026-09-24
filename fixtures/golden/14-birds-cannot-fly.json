@@ -1,0 +1,10 @@
+{
+  "utterance": "Some birds cannot fly.",
+  "expectations": {
+    "expectedMetaphors": ["flow"],
+    "requiredEntityLemmas": ["bird", "fly"],
+    "requiredRelations": [{ "type": "moves", "modality": "negated" }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

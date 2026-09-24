@@ -1,0 +1,10 @@
+{
+  "utterance": "An atom has a nucleus and electrons.",
+  "expectations": {
+    "expectedMetaphors": ["container"],
+    "requiredEntityLemmas": ["atom", "nucleus", "electron"],
+    "requiredRelations": [{ "type": "has_part", "modality": "certain", "minimumCount": 2 }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

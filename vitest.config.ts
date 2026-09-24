@@ -6,6 +6,12 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    projects: ['apps/*', 'packages/{schema,primitives,ui}', 'packages/pipeline/*', 'tests/lint'],
+    projects: [
+      'apps/*',
+      'packages/{schema,primitives,ui}',
+      'packages/pipeline/*',
+      { test: { name: 'golden', include: ['tests/golden/**/*.test.ts'] } },
+      'tests/lint',
+    ],
   },
 });

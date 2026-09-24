@@ -1,0 +1,10 @@
+{
+  "utterance": "An elephant is heavier than a mouse.",
+  "expectations": {
+    "expectedMetaphors": ["scale"],
+    "requiredEntityLemmas": ["elephant", "mouse"],
+    "requiredRelations": [{ "type": "compares", "modality": "certain" }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

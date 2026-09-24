@@ -1,0 +1,13 @@
+{
+  "utterance": "The heart pumps blood to the lungs.",
+  "expectations": {
+    "expectedMetaphors": ["actor_action", "flow"],
+    "requiredEntityLemmas": ["heart", "pump", "blood", "lung"],
+    "requiredRelations": [
+      { "type": "agent_of", "modality": "certain" },
+      { "type": "acts_on", "modality": "certain" }
+    ],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

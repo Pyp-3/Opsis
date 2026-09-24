@@ -1,0 +1,10 @@
+{
+  "utterance": "Nairobi is north of Mombasa.",
+  "expectations": {
+    "expectedMetaphors": ["compass", "map"],
+    "requiredEntityLemmas": ["Nairobi", "Mombasa", "north"],
+    "requiredRelations": [{ "type": "direction", "modality": "certain" }],
+    "explodableParts": [],
+    "requiredPedagogyNoteKinds": []
+  }
+}

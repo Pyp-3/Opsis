@@ -1,0 +1,10 @@
+{
+  "utterance": "A sandwich can contain bread, tomato, ham.",
+  "expectations": {
+    "expectedMetaphors": ["stack"],
+    "requiredEntityLemmas": ["sandwich", "bread", "tomato", "ham"],
+    "requiredRelations": [{ "type": "contains", "modality": "possible", "minimumCount": 3 }],
+    "explodableParts": ["bread", "tomato", "ham"],
+    "requiredPedagogyNoteKinds": []
+  }
+}
