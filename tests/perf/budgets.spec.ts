@@ -24,6 +24,21 @@ test('a cached diagram is returned in under 300 ms', async ({ request }) => {
   expect(elapsed).toBeLessThan(300);
 });
 
+test('an uncached offline diagram is returned in under 6 seconds', async ({ request }) => {
+  const body = {
+    utterance: `A bicycle has two wheels, a frame, pedals and a chain. ${crypto.randomUUID()}`,
+    audience: 'teen',
+  };
+  const started = performance.now();
+  const response = await request.post('/v1/visualize', {
+    data: body,
+    headers: { accept: 'application/json' },
+  });
+  const elapsed = performance.now() - started;
+  expect(response.ok()).toBe(true);
+  expect(elapsed).toBeLessThan(6_000);
+});
+
 test('a hardware-rendered 50-node scene renders at least 30 frames per second', async ({
   page,
 }) => {

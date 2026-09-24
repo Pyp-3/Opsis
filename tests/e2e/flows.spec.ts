@@ -94,6 +94,42 @@ test('2D edits persist in 3D and after save/reload', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('animated presentation reveals direction, locks edits, then restores editing', async ({
+  page,
+}) => {
+  await draw(page, 'The sun rises in the east.');
+  const label = page.getByRole('textbox', { name: 'Label for Sun' });
+  await page.getByRole('button', { name: 'Present' }).click();
+  await expect(label).toBeDisabled();
+  await page.getByRole('button', { name: 'Play presentation' }).click();
+  await expect(page.locator('.opsis-flow-edge--emphasized')).toHaveCount(1, { timeout: 3_000 });
+  await expect(page.getByRole('button', { name: 'Pause presentation' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Exit presentation' }).click();
+  await expect(label).toBeEnabled();
+  await label.fill('Morning sun');
+  await label.press('Enter');
+  await page.getByRole('button', { name: '3D' }).click();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Diagram as list' })
+      .getByRole('button', { name: /^Morning sun/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Auto' }).click();
+  await expect(page.getByRole('textbox', { name: 'Label for Morning sun' })).toHaveValue(
+    'Morning sun',
+  );
+});
+
+test('offline fallback draws an unknown sentence without a provider or crash', async ({ page }) => {
+  await draw(page, 'Flibbertigibbet quuxes the zorbulator.');
+  await expect(page.getByText(/2D selected for clarity/)).toBeVisible();
+  await expect(page.locator('.opsis-flow-node')).toHaveCount(1);
+  await expect(page.getByRole('navigation', { name: 'Diagram as list' })).toContainText(
+    'Flibbertigibbet quuxes the zorbulator',
+  );
+});
+
 test('keyboard-only sandwich flow supports summary, explanation, drill-down and back', async ({
   page,
 }) => {
