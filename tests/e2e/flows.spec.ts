@@ -133,3 +133,39 @@ test.describe('reduced motion', () => {
     );
   });
 });
+
+test.describe('mobile Auto view', () => {
+  test.use({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+
+  test('keeps the complete learning flow available when changing modes', async ({ page }) => {
+    await draw(page, 'The sun rises in the east.');
+    await expect(page.getByRole('button', { name: 'Auto' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByText(/2D selected for clarity/)).toBeVisible();
+    await expect(page.locator('.opsis-editor__flow')).toBeVisible();
+
+    await page.getByLabel('Reading level').selectOption('child');
+    const outline = page.getByRole('navigation', { name: 'Diagram as list' });
+    await outline.getByRole('button', { name: 'Rise' }).focus();
+    await page.keyboard.press('Shift+Enter');
+    await expect(page.getByRole('complementary', { name: 'Rise' })).toContainText('Did you know?');
+
+    await page.getByRole('button', { name: '3D' }).click();
+    await expect(page.locator('canvas')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Rise' })).toBeVisible();
+    await expect(page.getByLabel('Reading level')).toHaveValue('child');
+
+    await page.getByRole('button', { name: 'Auto' }).click();
+    await expect(page.locator('.opsis-editor__flow')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Rise' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Present' }).click();
+    await page.getByRole('button', { name: 'Play presentation' }).click();
+    await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
+
+    const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+    expect(audit.violations).toEqual([]);
+  });
+});

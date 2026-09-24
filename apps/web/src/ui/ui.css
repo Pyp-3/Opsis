@@ -215,6 +215,15 @@ body {
   border-radius: 0 0.5rem 0.5rem 0;
   border-left: none;
 }
+.opsis-app .opsis-segmented button:not(:first-child) {
+  border-left: none;
+}
+.opsis-mode-rationale {
+  flex: 1 1 18rem;
+  margin: 0;
+  color: var(--opsis-ui-textMuted);
+  font-size: 0.85rem;
+}
 
 /* Empty, loading and error states */
 .opsis-onboarding {
@@ -374,4 +383,20 @@ body {
   background: var(--opsis-ui-text);
   color: var(--opsis-ui-surface);
   font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .opsis-toolbar {
+    align-items: stretch;
+  }
+  .opsis-mode-rationale {
+    flex-basis: 100%;
+  }
+  .opsis-panel {
+    top: auto;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    width: calc(100% - 1rem);
+    max-height: 55%;
+  }
 }

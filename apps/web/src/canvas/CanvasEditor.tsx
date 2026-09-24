@@ -19,6 +19,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession, useSessionStore } from '../state/context';
 import { saveOsg, shareOsg } from '../state/api';
 import { LAST_OSG_STORAGE_KEY } from '../state/session';
+import { nodeInfo } from '../scene/model';
+import { Outline } from '../ui/Outline';
+import { SidePanel } from '../ui/SidePanel';
 import { SnapshotHistory } from './history';
 import {
   addNode,
@@ -129,6 +132,8 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   const [presentationPlaying, setPresentationPlaying] = useState(false);
   const [presentationStep, setPresentationStep] = useState(0);
   const presentation = useMemo(() => createPresentationPlan(osg), [osg]);
+  const scene = osg.scenes[0];
+  const selectedNode = scene?.nodes.find((node) => node.id === selectedId);
   const currentStep = presentation.steps[presentationStep];
   const updateHistoryState = useCallback(
     () => setHistoryState({ canUndo: history.canUndo(), canRedo: history.canRedo() }),
@@ -406,45 +411,61 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
           {message}
         </p>
       ) : null}
-      <div className="opsis-editor__flow">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          snapToGrid
-          snapGrid={[20, 20]}
-          fitView
-          fitViewOptions={{ padding: 0.1 }}
-          deleteKeyCode={null}
-          nodesConnectable={!presentationActive}
-          edgesReconnectable={!presentationActive}
-          onNodeClick={(_event, node) => select(node.id)}
-          onEdgeClick={(_event, edge) => select(edge.id)}
-          onPaneClick={() => select(null)}
-          onNodeDragStop={(_event, node) => {
-            if (!presentationActive)
-              commit(moveNode(osg, node.id, node.position.x, node.position.y));
-          }}
-          onConnect={(connection: Connection) => {
-            if (!presentationActive && connection.source && connection.target)
-              commit(connectNodes(osg, connection.source, connection.target, editableNodeId()));
-          }}
-          onReconnect={(oldEdge, connection) => {
-            if (!presentationActive && connection.source && connection.target)
-              commit(relinkEdge(osg, oldEdge.id, connection.source, connection.target));
-          }}
-        >
-          <Background gap={20} />
-          <MiniMap pannable zoomable ariaLabel={t('canvas.minimap')} />
-          <Controls showInteractive={false} />
-          <FitSignal
-            signal={fitSignal + (presentationActive ? presentationStep + 1 : 0)}
-            {...(presentationActive && currentStep
-              ? { focusNodeIds: currentStep.focusNodeIds }
-              : {})}
-            reduceMotion={reduceMotion}
+      <div className="opsis-editor__stage">
+        <div className="opsis-editor__workspace">
+          <div className="opsis-editor__flow">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              snapToGrid
+              snapGrid={[20, 20]}
+              fitView
+              fitViewOptions={{ padding: 0.1 }}
+              deleteKeyCode={null}
+              nodesConnectable={!presentationActive}
+              edgesReconnectable={!presentationActive}
+              onNodeClick={(_event, node) => select(node.id)}
+              onEdgeClick={(_event, edge) => select(edge.id)}
+              onPaneClick={() => select(null)}
+              onNodeDragStop={(_event, node) => {
+                if (!presentationActive)
+                  commit(moveNode(osg, node.id, node.position.x, node.position.y));
+              }}
+              onConnect={(connection: Connection) => {
+                if (!presentationActive && connection.source && connection.target)
+                  commit(connectNodes(osg, connection.source, connection.target, editableNodeId()));
+              }}
+              onReconnect={(oldEdge, connection) => {
+                if (!presentationActive && connection.source && connection.target)
+                  commit(relinkEdge(osg, oldEdge.id, connection.source, connection.target));
+              }}
+            >
+              <Background gap={20} />
+              <MiniMap pannable zoomable ariaLabel={t('canvas.minimap')} />
+              <Controls showInteractive={false} />
+              <FitSignal
+                signal={fitSignal + (presentationActive ? presentationStep + 1 : 0)}
+                {...(presentationActive && currentStep
+                  ? { focusNodeIds: currentStep.focusNodeIds }
+                  : {})}
+                reduceMotion={reduceMotion}
+              />
+            </ReactFlow>
+          </div>
+          {active && selectedNode ? (
+            <SidePanel node={selectedNode} info={nodeInfo(osg, selectedNode)} />
+          ) : null}
+        </div>
+        {active && scene ? (
+          <Outline
+            osg={osg}
+            scene={scene}
+            selectedId={selectedId}
+            onSelect={(id, tab) => select(id, tab)}
+            onHover={() => undefined}
           />
-        </ReactFlow>
+        ) : null}
       </div>
     </section>
   );

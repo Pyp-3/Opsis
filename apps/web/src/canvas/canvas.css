@@ -31,6 +31,15 @@
   margin: 0;
   color: var(--opsis-ui-textMuted);
 }
+.opsis-editor__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 0.75rem;
+}
+.opsis-editor__workspace {
+  position: relative;
+  min-width: 0;
+}
 .opsis-editor__flow {
   height: min(68vh, 640px);
   min-height: 28rem;
@@ -110,7 +119,16 @@
   }
 }
 @media (max-width: 640px) {
+  .opsis-editor__stage {
+    grid-template-columns: 1fr;
+  }
   .opsis-editor__flow {
     min-height: 24rem;
+  }
+  .opsis-editor__toolbar {
+    align-items: stretch;
+  }
+  .opsis-editor__toolbar > * {
+    flex: 1 1 auto;
   }
 }

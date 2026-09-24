@@ -14,6 +14,9 @@ import { ApiError, isAbort } from './api';
 export type Audience = 'child' | 'teen' | 'adult';
 /** Explanation depth: the Summary and Explanation tabs of the side panel. */
 export type Level = Explanation['level'];
+/** Auto follows the deterministic dimension decision carried by the OSG. */
+export type ViewPreference = 'auto' | '2d' | '3d';
+export type ViewMode = Exclude<ViewPreference, 'auto'>;
 export const LAST_OSG_STORAGE_KEY = 'opsis:last-saved-osg';
 
 /** The API surface the session needs; tests inject a fake. */
@@ -50,7 +53,9 @@ export type SessionState = {
   /** User override for motion; `null` follows `prefers-reduced-motion`. */
   reduceMotion: boolean | null;
   /** Both renderers read the same OSG from `trail`; this only chooses its presentation. */
-  viewMode: '2d' | '3d';
+  viewMode: ViewMode;
+  /** `auto` follows curator policy; 2D and 3D are explicit learner overrides. */
+  viewPreference: ViewPreference;
   /** `/v1/explain` results keyed by `explanationKey`. */
   explanations: Record<string, ExplanationEntry>;
   /** Node ids known to exist in the API's persisted copy of each diagram. */
@@ -72,7 +77,8 @@ export type SessionState = {
   setAudience: (audience: Audience) => void;
   setPaletteId: (paletteId: PaletteId) => void;
   setReduceMotion: (reduce: boolean | null) => void;
-  setViewMode: (mode: '2d' | '3d') => void;
+  setViewMode: (mode: ViewMode) => void;
+  setViewPreference: (preference: ViewPreference) => void;
   /** Replaces the current OSG after a canvas edit has passed shared-schema validation. */
   replaceCurrentOsg: (osg: OSG) => void;
   /** Records the server-confirmed node set after an explicit save. */
@@ -96,6 +102,13 @@ export function explanationKey(
 /** The diagram on screen. */
 export function currentOsg(state: Pick<SessionState, 'trail'>): OSG | undefined {
   return state.trail[state.trail.length - 1];
+}
+
+/** Resolves D-004: only an OSG whose every scene is approved for 3D opens there automatically. */
+export function policyViewMode(osg: OSG | undefined): ViewMode {
+  return osg && osg.scenes.length > 0 && osg.scenes.every((scene) => scene.dimension === '3d')
+    ? '3d'
+    : '2d';
 }
 
 function persistedNodes(osg: OSG): string[] {
@@ -139,6 +152,10 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
           selectedId: null,
           panelTab: 'summary',
           exploded: false,
+          viewMode:
+            state.viewPreference === 'auto'
+              ? policyViewMode(trail[trail.length - 1])
+              : state.viewPreference,
           persistedNodeIds: {
             ...state.persistedNodeIds,
             ...Object.fromEntries(trail.map((osg) => [osg.id, persistedNodes(osg)])),
@@ -180,7 +197,8 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
     audience: 'teen',
     paletteId: 'default',
     reduceMotion: null,
-    viewMode: '3d',
+    viewMode: '2d',
+    viewPreference: 'auto',
     explanations: {},
     persistedNodeIds: {},
 
@@ -262,14 +280,16 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
       const at = trail.findIndex((o) => o.id === crumb.id);
       if (at >= 0) {
         inFlight?.abort();
-        set({
+        set((state) => ({
           status: 'ready',
           error: null,
           trail: trail.slice(0, at + 1),
           selectedId: null,
           panelTab: 'summary',
           exploded: false,
-        });
+          viewMode:
+            state.viewPreference === 'auto' ? policyViewMode(trail[at]) : state.viewPreference,
+        }));
         return;
       }
       // Opened from a saved or shared child: the ancestor is not in memory yet.
@@ -294,7 +314,12 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
     setAudience: (audience) => set({ audience }),
     setPaletteId: (paletteId) => set({ paletteId }),
     setReduceMotion: (reduceMotion) => set({ reduceMotion }),
-    setViewMode: (viewMode) => set({ viewMode }),
+    setViewMode: (viewMode) => set({ viewMode, viewPreference: viewMode }),
+    setViewPreference: (viewPreference) =>
+      set((state) => ({
+        viewPreference,
+        viewMode: viewPreference === 'auto' ? policyViewMode(currentOsg(state)) : viewPreference,
+      })),
     replaceCurrentOsg: (osg) =>
       set((state) => ({
         trail: state.trail.length > 0 ? [...state.trail.slice(0, -1), osg] : [osg],

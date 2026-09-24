@@ -2,7 +2,13 @@ import { t } from '@opsis/ui';
 import { useId } from 'react';
 import { ExportControls } from '../canvas/ExportControls';
 import { useSession } from '../state/context';
-import { breadcrumbsFor, currentOsg, sceneExplodable, type Audience } from '../state/session';
+import {
+  breadcrumbsFor,
+  currentOsg,
+  sceneExplodable,
+  type Audience,
+  type ViewPreference,
+} from '../state/session';
 
 /** The five onboarding sentences (PROMPT.md §13 M5). The first two are the North Star. */
 export const SAMPLE_SENTENCES = [
@@ -91,6 +97,7 @@ export function Breadcrumbs() {
 }
 
 const AUDIENCES: Audience[] = ['child', 'teen', 'adult'];
+const VIEW_PREFERENCES: ViewPreference[] = ['auto', '2d', '3d'];
 
 /** Diagram toolbar: explode, fit, view mode, export, reading level and display options. */
 export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean }) {
@@ -105,7 +112,8 @@ export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean 
   const reduceMotion = useSession((s) => s.reduceMotion) ?? systemReducedMotion;
   const setReduceMotion = useSession((s) => s.setReduceMotion);
   const viewMode = useSession((s) => s.viewMode);
-  const setViewMode = useSession((s) => s.setViewMode);
+  const viewPreference = useSession((s) => s.viewPreference);
+  const setViewPreference = useSession((s) => s.setViewPreference);
   const levelId = useId();
   const explodable = sceneExplodable(osg?.scenes[0]);
 
@@ -127,21 +135,22 @@ export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean 
             {t('toolbar.zoomToFit')}
           </button>
           <span role="group" aria-label={t('toolbar.viewLabel')} className="opsis-segmented">
-            <button
-              type="button"
-              aria-pressed={viewMode === '3d'}
-              onClick={() => setViewMode('3d')}
-            >
-              {t('toolbar.view3d')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={viewMode === '2d'}
-              onClick={() => setViewMode('2d')}
-            >
-              {t('toolbar.view2d')}
-            </button>
+            {VIEW_PREFERENCES.map((preference) => (
+              <button
+                key={preference}
+                type="button"
+                aria-pressed={viewPreference === preference}
+                onClick={() => setViewPreference(preference)}
+              >
+                {t(`toolbar.view${preference === 'auto' ? 'Auto' : preference}`)}
+              </button>
+            ))}
           </span>
+          <p className="opsis-mode-rationale" aria-live="polite">
+            {viewPreference === 'auto'
+              ? t(viewMode === '3d' ? 'toolbar.auto3dReason' : 'toolbar.auto2dReason')
+              : t('toolbar.overrideReason', { mode: viewMode.toUpperCase() })}
+          </p>
           <ExportControls osg={osg} />
         </>
       ) : null}

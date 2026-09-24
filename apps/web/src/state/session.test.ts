@@ -1,11 +1,57 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api';
 import { fakeApi } from './fakeApi';
-import { createSessionStore, currentOsg, explanationKey, type SessionApi } from './session';
+import {
+  createSessionStore,
+  currentOsg,
+  explanationKey,
+  policyViewMode,
+  type SessionApi,
+} from './session';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('session store', () => {
+  it('opens only curator-approved scenes in 3D while Auto is selected', async () => {
+    const api = fakeApi();
+    const store = createSessionStore(api);
+    const twoDimensional = await api.visualize(
+      { utterance: 'sandwich', audience: 'teen' },
+      () => undefined,
+    );
+    twoDimensional.scenes[0]!.dimension = '2d';
+    api.visualize.mockResolvedValueOnce(twoDimensional);
+
+    store.getState().submit('flat scene');
+    await settle();
+    expect(store.getState()).toMatchObject({ viewPreference: 'auto', viewMode: '2d' });
+    expect(policyViewMode(twoDimensional)).toBe('2d');
+
+    const mixed = structuredClone(twoDimensional);
+    mixed.scenes.push({ ...structuredClone(mixed.scenes[0]!), id: 'second', dimension: '3d' });
+    expect(policyViewMode(mixed)).toBe('2d');
+
+    const approved = structuredClone(twoDimensional);
+    approved.scenes[0]!.dimension = '3d';
+    expect(policyViewMode(approved)).toBe('3d');
+  });
+
+  it('keeps an explicit view override across navigation until Auto is restored', async () => {
+    const api = fakeApi();
+    const store = createSessionStore(api);
+    store.getState().submit('sandwich');
+    await settle();
+    expect(store.getState().viewMode).toBe('3d');
+
+    store.getState().setViewMode('2d');
+    store.getState().open('e_tomato');
+    await settle();
+    expect(store.getState()).toMatchObject({ viewPreference: '2d', viewMode: '2d' });
+
+    store.getState().setViewPreference('auto');
+    expect(store.getState()).toMatchObject({ viewPreference: 'auto', viewMode: '3d' });
+  });
+
   it('draws a sentence, recording each progress stage', async () => {
     const api = fakeApi();
     const store = createSessionStore(api);
@@ -166,9 +212,16 @@ describe('session store', () => {
     const osg = structuredClone(currentOsg(store.getState())!);
     osg.scenes[0]!.nodes[0]!.label = 'Edited sandwich';
     store.getState().replaceCurrentOsg(osg);
+    store.getState().select('e_tomato', 'explanation');
+    store.getState().setAudience('child');
     store.getState().setViewMode('2d');
     store.getState().setViewMode('3d');
     expect(currentOsg(store.getState())?.scenes[0]?.nodes[0]?.label).toBe('Edited sandwich');
+    expect(store.getState()).toMatchObject({
+      selectedId: 'e_tomato',
+      panelTab: 'explanation',
+      audience: 'child',
+    });
   });
 
   it('restores a saved OSG by id after a reload', async () => {

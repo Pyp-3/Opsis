@@ -6,6 +6,7 @@ import { App } from './App';
 import { ApiError } from './state/api';
 import { fakeApi } from './state/fakeApi';
 import { createSessionStore } from './state/session';
+import { loadFixture } from './scene/fixtures';
 import { SAMPLE_SENTENCES } from './ui/Chrome';
 
 // WebGL is unavailable in jsdom; the canvas chunk is covered by browser checks.
@@ -281,6 +282,32 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false);
     fireEvent.click(undo);
     expect(store.getState().trail.at(-1)?.scenes[0]?.nodes).toHaveLength(initialNodeCount ?? 0);
+  });
+
+  it('explains Auto mode and keeps selection, pedagogy and reading level in the 2D equivalent', async () => {
+    const api = fakeApi();
+    api.visualize.mockImplementation(async (_body, onProgress) => {
+      for (const stage of ['parsing', 'mapping', 'layout', 'done'] as const) onProgress(stage);
+      const osg = loadFixture('sun-east');
+      osg.scenes[0]!.dimension = '2d';
+      return osg;
+    });
+    const { store } = renderApp(api);
+    await draw('The sun rises in the east.');
+    expect(screen.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText(/Auto uses 3D only for curator-approved spatial scenes/)).toBeDefined();
+
+    fireEvent.change(screen.getByLabelText('Reading level'), { target: { value: 'child' } });
+    fireEvent.click(outlineButton('Rises'));
+    expect(screen.getByRole('note').textContent).toMatch(/only appears to rise/);
+
+    fireEvent.click(screen.getByRole('button', { name: '3D' }));
+    expect(store.getState()).toMatchObject({ selectedId: 'e_rises', audience: 'child' });
+    expect(screen.getByRole('complementary', { name: 'Rises' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    expect(store.getState()).toMatchObject({ viewPreference: 'auto', viewMode: '2d' });
+    expect(screen.getByRole('complementary', { name: 'Rises' })).toBeDefined();
   });
 
   it('has no serious axe violations in the empty, diagram and panel states', async () => {
