@@ -47,6 +47,13 @@ export function fakeApi(overrides: Partial<FakeApi> = {}): FakeApi {
     ),
     drilldown: vi.fn<SessionApi['drilldown']>(async () => tomatoChild(loadFixture('sandwich'))),
     loadOsg: vi.fn<SessionApi['loadOsg']>(async () => loadFixture('sandwich')),
+    saveOsg: vi.fn<SessionApi['saveOsg']>(async (osg) => osg),
+    shareOsg: vi.fn<SessionApi['shareOsg']>(async (id) => ({
+      token: 'test-share-token',
+      osgId: id,
+      url: '/v1/shared/test-share-token',
+      readOnly: true,
+    })),
     ...overrides,
   };
 }

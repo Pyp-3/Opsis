@@ -14,9 +14,13 @@ import { ApiError, isAbort } from './api';
 export type Audience = 'child' | 'teen' | 'adult';
 /** Explanation depth: the Summary and Explanation tabs of the side panel. */
 export type Level = Explanation['level'];
+export const LAST_OSG_STORAGE_KEY = 'opsis:last-saved-osg';
 
 /** The API surface the session needs; tests inject a fake. */
-export type SessionApi = Pick<typeof defaultApi, 'visualize' | 'explain' | 'drilldown' | 'loadOsg'>;
+export type SessionApi = Pick<
+  typeof defaultApi,
+  'visualize' | 'explain' | 'drilldown' | 'loadOsg' | 'saveOsg' | 'shareOsg'
+>;
 
 /** A cached `/v1/explain` result. */
 export type ExplanationEntry =
@@ -45,6 +49,8 @@ export type SessionState = {
   paletteId: PaletteId;
   /** User override for motion; `null` follows `prefers-reduced-motion`. */
   reduceMotion: boolean | null;
+  /** Both renderers read the same OSG from `trail`; this only chooses its presentation. */
+  viewMode: '2d' | '3d';
   /** `/v1/explain` results keyed by `explanationKey`. */
   explanations: Record<string, ExplanationEntry>;
 
@@ -64,6 +70,11 @@ export type SessionState = {
   setAudience: (audience: Audience) => void;
   setPaletteId: (paletteId: PaletteId) => void;
   setReduceMotion: (reduce: boolean | null) => void;
+  setViewMode: (mode: '2d' | '3d') => void;
+  /** Replaces the current OSG after a canvas edit has passed shared-schema validation. */
+  replaceCurrentOsg: (osg: OSG) => void;
+  /** Loads a saved diagram by id, used to restore the last explicit save after reload. */
+  restoreSaved: (id: string) => void;
 };
 
 export type SessionStore = StoreApi<SessionState>;
@@ -157,6 +168,7 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
     audience: 'teen',
     paletteId: 'default',
     reduceMotion: null,
+    viewMode: '3d',
     explanations: {},
 
     setDraft: (draft) => set({ draft }),
@@ -268,5 +280,20 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
     setAudience: (audience) => set({ audience }),
     setPaletteId: (paletteId) => set({ paletteId }),
     setReduceMotion: (reduceMotion) => set({ reduceMotion }),
+    setViewMode: (viewMode) => set({ viewMode }),
+    replaceCurrentOsg: (osg) =>
+      set((state) => ({
+        trail: state.trail.length > 0 ? [...state.trail.slice(0, -1), osg] : [osg],
+        selectedId:
+          state.selectedId &&
+          osg.scenes.some((scene) => scene.nodes.some((n) => n.id === state.selectedId))
+            ? state.selectedId
+            : null,
+      })),
+    restoreSaved: (id) => {
+      if (get().trail.length > 0) return;
+      const again = () => get().restoreSaved(id);
+      run(set, async () => [await api.loadOsg(id)], again);
+    },
   }));
 }

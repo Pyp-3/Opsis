@@ -132,4 +132,25 @@ describe('session store', () => {
     await settle();
     expect(store.getState()).toMatchObject({ status: 'idle', error: null });
   });
+
+  it('keeps one edited OSG while switching between 2D and 3D', async () => {
+    const store = createSessionStore(fakeApi());
+    store.getState().submit('sandwich');
+    await settle();
+    const osg = structuredClone(currentOsg(store.getState())!);
+    osg.scenes[0]!.nodes[0]!.label = 'Edited sandwich';
+    store.getState().replaceCurrentOsg(osg);
+    store.getState().setViewMode('2d');
+    store.getState().setViewMode('3d');
+    expect(currentOsg(store.getState())?.scenes[0]?.nodes[0]?.label).toBe('Edited sandwich');
+  });
+
+  it('restores a saved OSG by id after a reload', async () => {
+    const api = fakeApi();
+    const store = createSessionStore(api);
+    store.getState().restoreSaved('20000000-0000-4000-8000-000000000002');
+    await settle();
+    expect(api.loadOsg).toHaveBeenCalledWith('20000000-0000-4000-8000-000000000002');
+    expect(currentOsg(store.getState())?.id).toBe('20000000-0000-4000-8000-000000000002');
+  });
 });

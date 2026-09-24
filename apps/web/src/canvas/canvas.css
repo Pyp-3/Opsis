@@ -1,0 +1,72 @@
+.opsis-editor {
+  display: grid;
+  gap: 0.5rem;
+}
+.opsis-editor__toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.opsis-editor__toolbar label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+}
+.opsis-editor__toolbar input,
+.opsis-flow-node input {
+  font: inherit;
+  color: var(--opsis-ui-text);
+  background: var(--opsis-ui-surface);
+  border: 1px solid var(--opsis-ui-outline);
+  border-radius: 0.35rem;
+  padding: 0.35rem;
+}
+.opsis-editor__message {
+  margin: 0;
+  color: var(--opsis-ui-textMuted);
+}
+.opsis-editor__flow {
+  height: min(68vh, 640px);
+  min-height: 28rem;
+  border: 1px solid var(--opsis-ui-outline);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--opsis-ui-background);
+}
+.opsis-flow-node {
+  min-width: 9rem;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem;
+  border: 2px solid var(--opsis-ui-outline);
+  border-radius: 0.65rem;
+  background: var(--opsis-ui-surface);
+  color: var(--opsis-ui-text);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.opsis-flow-node--selected {
+  border-color: var(--opsis-ui-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--opsis-ui-accent) 35%, transparent);
+}
+.opsis-flow-node--optional {
+  border-style: dashed;
+}
+.opsis-flow-node input {
+  width: 8rem;
+  box-sizing: border-box;
+  font-weight: 650;
+}
+.opsis-flow-node small {
+  color: var(--opsis-ui-textMuted);
+}
+.opsis-export {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .opsis-editor__flow {
+    min-height: 24rem;
+  }
+}

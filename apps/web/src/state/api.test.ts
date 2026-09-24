@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadFixture } from '../scene/fixtures';
-import { ApiError, createSseParser, explain, visualize } from './api';
+import { ApiError, createSseParser, explain, saveOsg, shareOsg, visualize } from './api';
 
 /** A fetch that answers with an SSE body delivered in the given chunks. */
 function sseFetch(chunks: string[], status = 200): typeof fetch {
@@ -120,6 +120,35 @@ describe('explain', () => {
     });
     await expect(
       explain(request, { fetcher: jsonFetch({ ...body, confidence: 'maybe' }) }),
+    ).rejects.toMatchObject({ code: 'bad_response' });
+  });
+});
+
+describe('OSG persistence', () => {
+  it('saves to the id route and validates the returned OSG', async () => {
+    const osg = loadFixture('sandwich');
+    let request: { input: string; init?: RequestInit } | undefined;
+    const fetcher: typeof fetch = async (input, init) => {
+      request = { input: String(input), ...(init ? { init } : {}) };
+      return new Response(JSON.stringify(osg), { status: 200 });
+    };
+    await expect(saveOsg(osg, { fetcher })).resolves.toEqual(osg);
+    expect(request?.input).toBe(`/v1/osg/${osg.id}`);
+    expect(request?.init?.method).toBe('PUT');
+    expect(JSON.parse(String(request?.init?.body))).toEqual(osg);
+  });
+
+  it('creates and validates a read-only share link', async () => {
+    const osg = loadFixture('sandwich');
+    const body = {
+      token: 'token',
+      osgId: osg.id,
+      url: '/v1/shared/token',
+      readOnly: true as const,
+    };
+    await expect(shareOsg(osg.id, { fetcher: jsonFetch(body) })).resolves.toEqual(body);
+    await expect(
+      shareOsg(osg.id, { fetcher: jsonFetch({ ...body, readOnly: false }) }),
     ).rejects.toMatchObject({ code: 'bad_response' });
   });
 });

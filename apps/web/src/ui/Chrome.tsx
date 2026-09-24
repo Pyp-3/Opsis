@@ -1,5 +1,6 @@
-import { t, type MessageKey } from '@opsis/ui';
+import { t } from '@opsis/ui';
 import { useId } from 'react';
+import { ExportControls } from '../canvas/ExportControls';
 import { useSession } from '../state/context';
 import { breadcrumbsFor, currentOsg, sceneExplodable, type Audience } from '../state/session';
 
@@ -91,27 +92,6 @@ export function Breadcrumbs() {
 
 const AUDIENCES: Audience[] = ['child', 'teen', 'adult'];
 
-/** Placeholder control for a later milestone: focusable, announced as unavailable. */
-function ComingSoon({ label, pressed }: { label: MessageKey; pressed?: boolean }) {
-  const hintId = useId();
-  return (
-    <>
-      <button
-        type="button"
-        aria-disabled="true"
-        aria-pressed={pressed}
-        aria-describedby={hintId}
-        className="opsis-soon"
-      >
-        {t(label)}
-      </button>
-      <span id={hintId} className="opsis-visually-hidden">
-        {t('toolbar.comingSoon')}
-      </span>
-    </>
-  );
-}
-
 /** Diagram toolbar: explode, fit, view mode, export, reading level and display options. */
 export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean }) {
   const osg = useSession(currentOsg);
@@ -124,6 +104,8 @@ export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean 
   const setPaletteId = useSession((s) => s.setPaletteId);
   const reduceMotion = useSession((s) => s.reduceMotion) ?? systemReducedMotion;
   const setReduceMotion = useSession((s) => s.setReduceMotion);
+  const viewMode = useSession((s) => s.viewMode);
+  const setViewMode = useSession((s) => s.setViewMode);
   const levelId = useId();
   const explodable = sceneExplodable(osg?.scenes[0]);
 
@@ -145,12 +127,22 @@ export function Toolbar({ systemReducedMotion }: { systemReducedMotion: boolean 
             {t('toolbar.zoomToFit')}
           </button>
           <span role="group" aria-label={t('toolbar.viewLabel')} className="opsis-segmented">
-            <button type="button" aria-pressed="true">
+            <button
+              type="button"
+              aria-pressed={viewMode === '3d'}
+              onClick={() => setViewMode('3d')}
+            >
               {t('toolbar.view3d')}
             </button>
-            <ComingSoon label="toolbar.view2d" pressed={false} />
+            <button
+              type="button"
+              aria-pressed={viewMode === '2d'}
+              onClick={() => setViewMode('2d')}
+            >
+              {t('toolbar.view2d')}
+            </button>
           </span>
-          <ComingSoon label="toolbar.export" />
+          <ExportControls osg={osg} />
         </>
       ) : null}
       <span className="opsis-toolbar__field">

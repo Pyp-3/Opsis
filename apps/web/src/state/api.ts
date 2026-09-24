@@ -195,3 +195,50 @@ export async function loadOsg(
   if (!result.success) throw unexpectedError('storage');
   return result.data;
 }
+
+/** `PUT /v1/osg/:id` persists a validated edited OSG. */
+export async function saveOsg(
+  osg: OSG,
+  { fetcher = fetch }: { fetcher?: typeof fetch } = {},
+): Promise<OSG> {
+  const result = OSGSchema.safeParse(
+    await request(
+      `/v1/osg/${encodeURIComponent(osg.id)}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(osg),
+      },
+      'storage',
+      fetcher,
+    ),
+  );
+  if (!result.success) throw unexpectedError('storage');
+  return result.data;
+}
+
+export type ShareResult = { token: string; osgId: string; url: string; readOnly: true };
+
+/** `POST /v1/share/:id` creates a read-only link for a saved OSG. */
+export async function shareOsg(
+  id: string,
+  { fetcher = fetch }: { fetcher?: typeof fetch } = {},
+): Promise<ShareResult> {
+  const body = await request(
+    `/v1/share/${encodeURIComponent(id)}`,
+    { method: 'POST', headers: { accept: 'application/json' } },
+    'share',
+    fetcher,
+  );
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    typeof (body as Partial<ShareResult>).token !== 'string' ||
+    (body as Partial<ShareResult>).osgId !== id ||
+    typeof (body as Partial<ShareResult>).url !== 'string' ||
+    (body as Partial<ShareResult>).readOnly !== true
+  ) {
+    throw unexpectedError('share');
+  }
+  return body as ShareResult;
+}

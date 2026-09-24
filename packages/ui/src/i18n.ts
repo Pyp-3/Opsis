@@ -34,6 +34,7 @@ export const en = {
 
   'state.loadingDiagram': 'Loading diagram…',
   'state.loading3d': 'Loading 3D view…',
+  'state.loading2d': 'Loading 2D editor…',
   'state.error': 'Something went wrong',
   'state.retry': 'Try again',
   'state.dismiss': 'Dismiss',
