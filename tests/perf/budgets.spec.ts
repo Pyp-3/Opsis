@@ -38,43 +38,45 @@ test('a hardware-rendered 50-node scene renders at least 30 frames per second', 
     await add.click();
     await expect(page.locator('.opsis-flow-node')).toHaveCount(count + 1);
   }
+  // Keep the render sample isolated from the side panel's explanation request for an unsaved node.
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '3D' }).click();
   await expect(page.locator('canvas')).toBeVisible();
   const sample = await page.evaluate(
     () =>
       new Promise<{ measurable: boolean; fps: number; renderer: string }>((resolveSample) => {
-        const canvas = document.querySelector('canvas');
-        const gl =
-          canvas?.getContext('webgl2') ??
-          canvas?.getContext('webgl') ??
-          canvas?.getContext('experimental-webgl');
-        let renderer = 'unavailable';
-        if (gl instanceof WebGLRenderingContext || gl instanceof WebGL2RenderingContext) {
-          const extension = gl.getExtension('WEBGL_debug_renderer_info');
-          renderer = extension
-            ? String(gl.getParameter(extension.UNMASKED_RENDERER_WEBGL))
-            : String(gl.getParameter(gl.RENDERER));
-        }
-        if (document.hidden) {
-          resolveSample({ measurable: false, fps: 0, renderer });
+        type Metrics = { renderedFrames: number; renderer: string };
+        const canvas = document.querySelector('canvas') as
+          (HTMLCanvasElement & { __opsisRenderMetrics?: Metrics }) | null;
+        const startedMetrics = canvas?.__opsisRenderMetrics;
+        if (document.hidden || !startedMetrics) {
+          resolveSample({
+            measurable: false,
+            fps: 0,
+            renderer: startedMetrics?.renderer ?? 'unavailable',
+          });
           return;
         }
-        let frames = 0;
         const started = performance.now();
-        const frame = (now: number) => {
-          frames += 1;
-          if (now - started >= 1_000) {
-            resolveSample({ measurable: true, fps: (frames * 1_000) / (now - started), renderer });
-          } else requestAnimationFrame(frame);
-        };
-        requestAnimationFrame(frame);
+        setTimeout(() => {
+          const finished = canvas.__opsisRenderMetrics;
+          const elapsed = performance.now() - started;
+          const renderedFrames = finished
+            ? finished.renderedFrames - startedMetrics.renderedFrames
+            : 0;
+          resolveSample({
+            measurable: Boolean(finished) && elapsed > 0,
+            fps: (renderedFrames * 1_000) / elapsed,
+            renderer: finished?.renderer ?? startedMetrics.renderer,
+          });
+        }, 1_000);
       }),
   );
   await test.info().attach('frame-rate.json', {
     body: JSON.stringify(sample, null, 2),
     contentType: 'application/json',
   });
-  test.skip(!sample.measurable, 'requestAnimationFrame is throttled in this browser');
+  test.skip(!sample.measurable, 'Three.js render telemetry is unavailable in this browser');
   test.skip(
     /swiftshader|llvmpipe|software/iu.test(sample.renderer),
     `hardware frame budget is not measurable with ${sample.renderer}; observed ${sample.fps.toFixed(1)} fps`,

@@ -10,9 +10,14 @@ milestone: M0-M5
 - Exercised all five §14.4 flows against the real offline API, including keyboard-only and reduced-motion runs.
 - Added axe WCAG A/AA integration coverage and three North Star visual baselines: sun/east, sandwich assembled, and sandwich exploded.
 - Fuzzed five shared boundary schemas with 2,500 arbitrary values and rejected 500 deterministic OSG corruptions.
-- Measured bundle, cached response, and a 50-node frame sample. The hardware FPS gate skips with its renderer and observed result attached when Chromium uses software rendering.
+- Measured bundle, cached response, and a 50-node frame sample using completed Three.js
+  `render(scene, camera)` passes rather than browser animation callbacks. The hardware FPS gate skips
+  with its renderer and observed result attached when Chromium uses software rendering.
+- Made console warning/error and page-crash collection automatic for every browser test. The first
+  corrected run exposed the unsaved-node explanation defect recorded as `B-QA-002`; the performance
+  setup now clears its unrelated editor selection before sampling.
 - Ran the complete offline golden pipeline: **11/15 (73.3%)**. No `OPSIS_LLM_API_KEY` / model configuration was present, so an LLM golden run was not available.
-- Final verification: **483/483 unit/integration tests passed** across 38 files; browser suite **9 passed, 1 hardware-only FPS check skipped**; initial entry bundle was **71.30 KiB gzipped**; lint, formatting, strict typecheck, production builds, and `git diff --check` passed.
+- Final verification: **483/483 unit/integration tests passed** across 38 files; browser suite **9 passed, 1 hardware-only FPS check skipped** with automatic browser-problem monitoring; initial entry bundle was **71.30 KiB gzipped**; lint, formatting, strict typecheck, production builds, and `git diff --check` passed.
 
 ## Milestone gate
 
@@ -35,6 +40,7 @@ milestone: M0-M5
 - M3/M5 pedagogy gates: reviewer sample is not yet available.
 - M5 golden target: `B-QA-001` (semantic parser coverage).
 - M5 frame-rate claim: CI Chromium exposes a software renderer, so the hardware-specific threshold is intentionally not asserted there.
+- Unsaved canvas nodes request `/v1/explain` before the API knows about them (`B-QA-002`, canvas owner).
 
 ## Next
 
@@ -45,4 +51,6 @@ milestone: M0-M5
 ## Risks
 
 - Visual baselines include WebGL output and may need platform-specific approval when the CI renderer changes.
+- The unsaved-node explanation defect is isolated from the performance sample but remains visible to
+  users until `B-QA-002` is fixed.
 - A green CI run means all automatable gates passed; it does not override the explicit M3/M5 vetoes above.

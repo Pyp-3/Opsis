@@ -3,7 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import type { OSG, PositionedScene } from '@opsis/schema';
 import { resolveColor, type PaletteId } from '@opsis/ui';
 import { useEffect } from 'react';
-import { Box3, PerspectiveCamera, Vector3 } from 'three';
+import { Box3, PerspectiveCamera, Vector3, type WebGLRenderer } from 'three';
 import type { Vec3 } from '@opsis/primitives';
 import { centerOf, compassHighlights, fitDistance, fitPoints } from './model';
 import { SceneEdges } from './SceneEdges';
@@ -19,6 +19,33 @@ const CAMERA_DIRECTION = {
   iso: [0.8, 0.7, 1],
   free: [0.8, 0.7, 1],
 } as const;
+
+export type RenderMetrics = {
+  renderedFrames: number;
+  renderer: string;
+};
+
+type InstrumentedCanvas = HTMLCanvasElement & { __opsisRenderMetrics?: RenderMetrics };
+
+/** Counts completed Three.js render passes for the browser performance gate. */
+function installRenderTelemetry(gl: WebGLRenderer) {
+  const canvas = gl.domElement as InstrumentedCanvas;
+  const context = gl.getContext();
+  const extension = context.getExtension('WEBGL_debug_renderer_info');
+  canvas.__opsisRenderMetrics = {
+    renderedFrames: 0,
+    renderer: String(
+      extension
+        ? context.getParameter(extension.UNMASKED_RENDERER_WEBGL)
+        : context.getParameter(context.RENDERER),
+    ),
+  };
+  const render = gl.render.bind(gl);
+  gl.render = (scene, camera) => {
+    render(scene, camera);
+    if (canvas.__opsisRenderMetrics) canvas.__opsisRenderMetrics.renderedFrames += 1;
+  };
+}
 
 /**
  * Zooms to fit on mount, on resize and when `signal` changes; the caller remounts it when
@@ -78,6 +105,7 @@ export default function SceneCanvas(props: Props) {
         fov: FOV,
       }}
       dpr={[1, 2]}
+      onCreated={({ gl }) => installRenderTelemetry(gl)}
       onPointerMissed={() => props.onSelect(null)}
       aria-hidden
     >
