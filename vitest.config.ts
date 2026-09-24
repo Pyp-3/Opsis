@@ -11,6 +11,7 @@ export default defineConfig({
       'packages/{schema,primitives,ui}',
       'packages/pipeline/*',
       { test: { name: 'golden', include: ['tests/golden/**/*.test.ts'] } },
+      { test: { name: 'schema-fuzz', include: ['tests/schema/**/*.test.ts'] } },
       'tests/lint',
     ],
   },

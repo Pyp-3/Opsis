@@ -4,3 +4,4 @@ coverage/
 PROMPT.md
 .heuresis/
 skills/
+.playwright-cli/
