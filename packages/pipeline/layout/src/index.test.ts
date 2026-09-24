@@ -43,6 +43,7 @@ const BACKDROPS = new Set([
 function graphAndPlan(
   metaphor: MetaphorId,
   count: number,
+  explodableMask = -1,
 ): { sg: SemanticGraph; plan: VisualPlan } {
   const nodeCount = Math.max(2, count);
   const ids = Array.from({ length: nodeCount }, (_, index) => `e_${index}`);
@@ -137,7 +138,9 @@ function graphAndPlan(
             : metaphor === 'scale'
               ? 'object'
               : 'part',
-    ...((metaphor === 'stack' || metaphor === 'container') && index > 0
+    ...((metaphor === 'stack' || metaphor === 'container') &&
+    index > 0 &&
+    (explodableMask & (1 << index)) !== 0
       ? { explodable: true }
       : {}),
   }));
@@ -311,8 +314,9 @@ describe('@opsis/layout', () => {
         fc.constantFrom(...METAPHORS),
         fc.integer({ min: 2, max: 10 }),
         fc.integer(),
-        async (metaphor, count, seed) => {
-          const { sg, plan } = graphAndPlan(metaphor, count);
+        fc.integer({ min: 0, max: 2047 }),
+        async (metaphor, count, seed, explodableMask) => {
+          const { sg, plan } = graphAndPlan(metaphor, count, explodableMask);
           const first = await layoutVisualPlan(plan, sg, { seed });
           expect(await layoutVisualPlan(plan, sg, { seed })).toEqual(first);
           expectGeometry(first);
@@ -321,6 +325,11 @@ describe('@opsis/layout', () => {
       { numRuns: 225 },
     );
   }, 30_000);
+
+  it('keeps mixed explodable and fixed stack parts apart when exploded', async () => {
+    const { sg, plan } = graphAndPlan('stack', 12, 0b10101010100);
+    expectGeometry(await layoutVisualPlan(plan, sg, { seed: 3 }));
+  });
 
   it.each(['sun-east', 'sandwich'])('lays out the %s North Star SG validly', async (fixture) => {
     const sg = JSON.parse(

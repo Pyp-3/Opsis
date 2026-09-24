@@ -135,13 +135,17 @@ function stack(scene: SceneIntent, sg: SemanticGraph): MutablePositionedNode[] {
     node.position = [0, top - node.size[1] / 2, 0];
     top -= node.size[1];
   }
-  let explodedTop = partNodes.reduce((sum, node) => sum + node.size[1] * 2.5, 0) / 2;
-  for (const node of partNodes) {
-    if (node.explodable) {
-      node.explodedPosition = [0, explodedTop - node.size[1] / 2, 0];
-      explodedTop -= node.size[1] * 2.5;
-    }
-  }
+  // Non-explodable parts ride along in the exploded column so they never sit under a moved part.
+  const gaps = partNodes.map((node, index) => {
+    const below = partNodes[index + 1];
+    return below && (node.explodable || below.explodable) ? node.size[1] * 1.5 : 0;
+  });
+  let explodedTop =
+    partNodes.reduce((sum, node, index) => sum + node.size[1] + (gaps[index] ?? 0), 0) / 2;
+  partNodes.forEach((node, index) => {
+    node.explodedPosition = [0, explodedTop - node.size[1] / 2, 0];
+    explodedTop -= node.size[1] + (gaps[index] ?? 0);
+  });
   const maxWidth = Math.max(1, ...partNodes.map((node) => node.size[0]));
   if (!anchor) return partNodes;
   const anchorNode = positioned(anchor, [0, 0, 0]);
