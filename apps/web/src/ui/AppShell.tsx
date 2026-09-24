@@ -73,11 +73,12 @@ export function AppShell() {
                 </p>
               }
             >
-              {viewMode === '2d' ? (
-                <CanvasEditor key={osg.id} osg={osg} />
-              ) : (
+              <div hidden={viewMode !== '2d'}>
+                <CanvasEditor key={osg.id} osg={osg} active={viewMode === '2d'} />
+              </div>
+              {viewMode === '3d' ? (
                 <SceneViewer key={osg.id} osg={osg} reducedMotion={reduceMotion} />
-              )}
+              ) : null}
             </Suspense>
           </>
         ) : status === 'idle' || status === 'error' ? (

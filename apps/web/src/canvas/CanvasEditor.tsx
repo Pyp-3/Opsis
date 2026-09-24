@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { OSG } from '@opsis/schema';
+import { t } from '@opsis/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession, useSessionStore } from '../state/context';
 import { saveOsg, shareOsg } from '../state/api';
@@ -48,7 +49,7 @@ function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
     >
       <Handle type="target" position={Position.Left} />
       <label>
-        <span className="opsis-visually-hidden">Node label</span>
+        <span className="opsis-visually-hidden">{t('canvas.nodeLabel')}</span>
         <input
           key={data.label}
           className="nodrag"
@@ -62,10 +63,12 @@ function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
               event.currentTarget.blur();
             }
           }}
-          aria-label={`Label for ${data.label}`}
+          aria-label={t('canvas.labelFor', { label: data.label })}
         />
       </label>
-      <small>{data.anchor ? 'main' : data.optional ? 'optional' : data.primitive}</small>
+      <small>
+        {data.anchor ? t('canvas.main') : data.optional ? t('canvas.optional') : data.primitive}
+      </small>
       <Handle type="source" position={Position.Right} />
     </div>
   );
@@ -86,7 +89,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /** React Flow editor backed by the same validated OSG object used by the 3D renderer. */
-function CanvasEditorInner({ osg }: { osg: OSG }) {
+function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   const store = useSessionStore();
   const selectedId = useSession((state) => state.selectedId);
   const fitSignal = useSession((state) => state.fitSignal);
@@ -94,7 +97,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
   const replaceCurrentOsg = useSession((state) => state.replaceCurrentOsg);
   const [history] = useState(() => new SnapshotHistory(osg));
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
-  const [label, setLabel] = useState('New idea');
+  const [label, setLabel] = useState(t('canvas.newIdea'));
   const [message, setMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const updateHistoryState = useCallback(
@@ -140,7 +143,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
       if (!snapshot) return;
       replaceCurrentOsg(snapshot);
       setDirty(true);
-      setMessage(direction === 'undo' ? 'Edit undone.' : 'Edit restored.');
+      setMessage(t(direction === 'undo' ? 'canvas.undoDone' : 'canvas.redoDone'));
       updateHistoryState();
     },
     [history, replaceCurrentOsg, updateHistoryState],
@@ -164,6 +167,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
   }, [commit, select, store]);
 
   useEffect(() => {
+    if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTyping(event.target)) return;
       const modifier = event.ctrlKey || event.metaKey;
@@ -180,7 +184,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [removeSelected, restore]);
+  }, [active, removeSelected, restore]);
 
   const save = async () => {
     try {
@@ -188,7 +192,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
       replaceCurrentOsg(saved);
       window.localStorage.setItem(LAST_OSG_STORAGE_KEY, saved.id);
       setDirty(false);
-      setMessage('Saved.');
+      setMessage(t('canvas.saved'));
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     }
@@ -202,17 +206,17 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
       const url = new URL(result.url, window.location.href).href;
       await navigator.clipboard?.writeText(url);
       setDirty(false);
-      setMessage(`Read-only link copied: ${url}`);
+      setMessage(t('canvas.shareCopied', { url }));
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
   return (
-    <section className="opsis-editor" aria-label={`Edit ${osg.title}`}>
-      <div className="opsis-editor__toolbar" role="toolbar" aria-label="2D editing controls">
+    <section className="opsis-editor" aria-label={t('canvas.editRegion', { title: osg.title })}>
+      <div className="opsis-editor__toolbar" role="toolbar" aria-label={t('canvas.toolbar')}>
         <label>
-          <span>Add node</span>
+          <span>{t('canvas.addNode')}</span>
           <input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} />
         </label>
         <button
@@ -223,22 +227,22 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
               select(result.osg.scenes[0]?.nodes.at(-1)?.id ?? null);
           }}
         >
-          Add
+          {t('canvas.add')}
         </button>
         <button type="button" onClick={removeSelected} disabled={!selectedId}>
-          Delete selected
+          {t('canvas.deleteSelected')}
         </button>
         <button type="button" onClick={() => restore('undo')} disabled={!historyState.canUndo}>
-          Undo
+          {t('canvas.undo')}
         </button>
         <button type="button" onClick={() => restore('redo')} disabled={!historyState.canRedo}>
-          Redo
+          {t('canvas.redo')}
         </button>
         <button type="button" onClick={() => void save()} disabled={!dirty}>
-          Save
+          {t('canvas.save')}
         </button>
         <button type="button" onClick={() => void share()}>
-          Share
+          {t('canvas.share')}
         </button>
       </div>
       {message ? (
@@ -274,7 +278,7 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
           }}
         >
           <Background gap={20} />
-          <MiniMap pannable zoomable ariaLabel="Diagram minimap" />
+          <MiniMap pannable zoomable ariaLabel={t('canvas.minimap')} />
           <Controls showInteractive={false} />
           <FitSignal signal={fitSignal} />
         </ReactFlow>
@@ -284,10 +288,10 @@ function CanvasEditorInner({ osg }: { osg: OSG }) {
 }
 
 /** Provides React Flow context for the OSG editor. */
-export default function CanvasEditor(props: { osg: OSG }) {
+export default function CanvasEditor(props: { osg: OSG; active?: boolean }) {
   return (
     <ReactFlowProvider>
-      <CanvasEditorInner {...props} />
+      <CanvasEditorInner osg={props.osg} active={props.active ?? true} />
     </ReactFlowProvider>
   );
 }

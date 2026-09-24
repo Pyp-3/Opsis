@@ -1,4 +1,5 @@
 import { OSGSchema, type OSG, type PositionedNode, type PositionedScene } from '@opsis/schema';
+import { t } from '@opsis/ui';
 import type { Edge, Node } from '@xyflow/react';
 
 export const FLOW_SCALE = 100;
@@ -47,7 +48,7 @@ export function osgToFlow(
         optional: node.optional === true,
         anchor: node.role === 'anchor',
       },
-      ariaLabel: `${node.label}${node.optional ? ', optional' : ''}`,
+      ariaLabel: node.optional ? `${node.label}, ${t('canvas.optional')}` : node.label,
     })),
     edges: scene.edges.map((edge) => ({
       id: edge.id,
@@ -112,7 +113,7 @@ export function addNode(osg: OSG, label: string, id: string): OsgEditResult {
       lemma: cleanLabel.toLocaleLowerCase(),
       kind: 'abstract_concept',
       span: [0, 0],
-      summary: `${cleanLabel} was added to this diagram.`,
+      summary: t('canvas.addedSummary', { label: cleanLabel }),
     });
   });
 }

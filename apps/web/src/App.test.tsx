@@ -11,6 +11,15 @@ import { SAMPLE_SENTENCES } from './ui/Chrome';
 // WebGL is unavailable in jsdom; the canvas chunk is covered by browser checks.
 vi.mock('./scene/SceneCanvas', () => ({ default: () => null }));
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -244,6 +253,30 @@ describe('App', () => {
     );
     fireEvent.click(screen.getByLabelText('Reduce motion'));
     expect(store.getState().reduceMotion).toBe(true);
+  });
+
+  it('keeps unsaved 2D history and dirty state across a 3D round trip', async () => {
+    const { store } = renderApp();
+    await draw('sandwich');
+    fireEvent.click(screen.getByRole('button', { name: '2D' }));
+
+    const initialNodeCount = store.getState().trail.at(-1)?.scenes[0]?.nodes.length;
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
+    expect(store.getState().trail.at(-1)?.scenes[0]?.nodes).toHaveLength(
+      (initialNodeCount ?? 0) + 1,
+    );
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: '3D' }));
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '2D' }));
+
+    const undo = await screen.findByRole('button', { name: 'Undo' });
+    expect(undo.hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(undo);
+    expect(store.getState().trail.at(-1)?.scenes[0]?.nodes).toHaveLength(initialNodeCount ?? 0);
   });
 
   it('has no serious axe violations in the empty, diagram and panel states', async () => {

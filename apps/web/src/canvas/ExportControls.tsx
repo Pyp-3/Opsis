@@ -1,4 +1,5 @@
 import type { OSG } from '@opsis/schema';
+import { t } from '@opsis/ui';
 import { useState } from 'react';
 import { downloadBlob, exportBaseName, osgGlb, osgJson, osgPng, osgSvg } from './export';
 
@@ -30,16 +31,16 @@ export function ExportControls({ osg }: { osg: OSG }) {
   };
 
   return (
-    <span className="opsis-export" role="group" aria-label="Export diagram">
+    <span className="opsis-export" role="group" aria-label={t('export.group')}>
       {(['png', 'svg', 'glb', 'json'] as const).map((format) => (
         <button
           key={format}
           type="button"
           disabled={busy !== null}
           onClick={() => void run(format)}
-          aria-label={`Export ${format.toUpperCase()}`}
+          aria-label={t('export.action', { format: format.toUpperCase() })}
         >
-          {busy === format ? 'Exporting…' : format.toUpperCase()}
+          {busy === format ? t('export.inProgress') : format.toUpperCase()}
         </button>
       ))}
       {error ? <span role="alert">{error}</span> : null}

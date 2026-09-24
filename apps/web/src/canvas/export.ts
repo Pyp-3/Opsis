@@ -1,4 +1,5 @@
 import type { OSG } from '@opsis/schema';
+import { t } from '@opsis/ui';
 import { FLOW_SCALE } from './model';
 
 const xml = (value: string) =>
@@ -59,10 +60,10 @@ export async function osgPng(osg: OSG): Promise<Blob> {
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('PNG export is not supported by this browser.');
+    if (!context) throw new Error(t('export.pngUnsupported'));
     context.drawImage(image, 0, 0);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('Could not create PNG.');
+    if (!blob) throw new Error(t('export.pngFailed'));
     return blob;
   } finally {
     URL.revokeObjectURL(source);
@@ -86,7 +87,7 @@ export async function osgGlb(osg: OSG): Promise<Blob> {
     root.add(mesh);
   }
   const output = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true });
-  if (!(output instanceof ArrayBuffer)) throw new Error('GLB exporter returned JSON.');
+  if (!(output instanceof ArrayBuffer)) throw new Error(t('export.glbFailed'));
   return new Blob([output], { type: 'model/gltf-binary' });
 }
 
