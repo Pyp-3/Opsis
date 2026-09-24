@@ -137,15 +137,24 @@ supersede it with a new one.
     3. No entity drawn in the scene has `attributes.confidence = "low"` and no node is a
        `rule_fallback` placeholder (`abstract_concept`).
     4. The scene has at most 12 nodes (the reveal-plan budget and the unproven 3D FPS gate).
-    5. For `compass`, the 3D renderer passes the screen-space north-up/east-right invariant from
-       the grammar audit (`dot(normalize(vN), [0,-1]) ≥ cos 5°`, `dot(normalize(vE), [1,0]) ≥
-cos 10°`, `|vN| ≥ 24 px`) at fit, at every orbit limit, after resize/explode/drill-down.
-       Until that test exists and passes, compass scenes emit `'2d'`.
-       The test is a pure function of the SG, the primitive catalog and the chosen metaphor. It runs
-       after §10.1 and primitive matching and **never** reads a model answer directly: the LLM may
-       influence which primitive an unknown entity gets (D-003, validated against the registry), but
-       never sets `dimension`. It is unit-tested per condition and snapshotted for all 15 golden
-       cases.
+    5. For `compass`, stage 2 consults a deterministic, versioned renderer-capability manifest in
+       its configuration (initial capability id `compass-3d/v1`). That capability is `false` until
+       the stage-4 invariant suite certifies the screen-space north-up/east-right invariant from the
+       grammar audit: north is within 5° of screen-up, east is within 10° of screen-right, and
+       the projected north vector is at least 24 px long. The suite checks initial fit, every sampled
+       frame and permitted orbit limit, resize, explode, drill-down and breadcrumb back. An absent,
+       unknown or uncertified capability id is `false`, so the scene emits `'2d'`.
+       Stage 2's eligibility decision remains a pure function of the SG, primitive catalog, chosen
+       metaphor and versioned capability manifest. The projection-based certification suite itself
+       is **not** a stage-2 function: it exercises positioned layout, camera, viewport and renderer
+       behaviour in stage 4. At runtime, stage 4 checks the same invariant after initial fitting, at
+       sampled frames during camera movement, and after resize, explode, drill-down and breadcrumb
+       back; any violation immediately fails closed to the 2D renderer for that diagram without
+       mutating the OSG or asking an LLM. All five eligibility conditions are independent of a
+       direct model answer: the LLM may influence which primitive an unknown entity gets (D-003,
+       validated against the registry), but it never sets `dimension`, the capability flag or the
+       runtime fallback. Eligibility is unit-tested per condition and snapshotted for all 15 golden
+       cases; certification and runtime fallback have stage-4 integration tests.
   - **3D-only primitives.** `bowl`, `cell` and `hand` currently declare `dimensions: ['3d']`.
     2D-first requires each to gain a 2D icon before this record is fully implemented; until then
     the canvas shows its generic card with the primitive label (current behaviour).
