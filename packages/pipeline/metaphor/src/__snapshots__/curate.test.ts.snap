@@ -64,11 +64,10 @@ exports[`golden dimension decisions (all 15 cases) > snapshots every decision 1`
     {
       "dimension": "2d",
       "metaphor": "actor_action",
-      "rationale": "2d: actor_action reads best flat; no solid primitive for e_heart, e_blood, e_lung; low confidence in e_pump, e_heart, e_blood, e_lung",
+      "rationale": "2d: actor_action reads best flat; no solid primitive for e_heart, e_blood, e_lung",
       "reasons": [
         "metaphor_not_spatial",
         "flat_primitive",
-        "low_confidence",
       ],
       "sceneId": "scene_1",
     },
@@ -77,11 +76,10 @@ exports[`golden dimension decisions (all 15 cases) > snapshots every decision 1`
     {
       "dimension": "2d",
       "metaphor": "flow",
-      "rationale": "2d: flow reads best flat; low confidence in e_statement; abstract e_statement",
+      "rationale": "2d: flow reads best flat; no solid primitive for e_carbon_dioxide, e_sugar, e_oxygen",
       "reasons": [
         "metaphor_not_spatial",
-        "low_confidence",
-        "abstract_placeholder",
+        "flat_primitive",
       ],
       "sceneId": "scene_1",
     },
@@ -125,11 +123,10 @@ exports[`golden dimension decisions (all 15 cases) > snapshots every decision 1`
   "11-earth-orbits-sun": [
     {
       "dimension": "2d",
-      "metaphor": "actor_action",
-      "rationale": "2d: actor_action reads best flat; low confidence in e_orbit",
+      "metaphor": "flow",
+      "rationale": "2d: flow reads best flat",
       "reasons": [
         "metaphor_not_spatial",
-        "low_confidence",
       ],
       "sceneId": "scene_1",
     },
@@ -138,10 +135,9 @@ exports[`golden dimension decisions (all 15 cases) > snapshots every decision 1`
     {
       "dimension": "2d",
       "metaphor": "container",
-      "rationale": "2d: no solid primitive for e_wheel, e_pedal, e_chain; low confidence in e_bicycle, e_wheel, e_frame, e_pedal, e_chain",
+      "rationale": "2d: no solid primitive for e_wheel, e_pedal, e_chain",
       "reasons": [
         "flat_primitive",
-        "low_confidence",
       ],
       "sceneId": "scene_1",
     },

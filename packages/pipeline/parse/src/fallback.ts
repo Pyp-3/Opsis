@@ -15,6 +15,7 @@ import {
   NUMBER_WORDS,
   PRONOUNS,
   QUANTIFIERS,
+  STATE_CHANGE_VERBS,
   SUMMARY_BY_LEMMA,
   nounLemma,
   verbLemma,
@@ -240,7 +241,7 @@ function genericSummary(draft: Omit<Entity, 'id' | 'summary'>): string {
     case 'event':
       return 'An event described in your sentence.';
     default:
-      return `${capitalise(draft.surface)} is named in your sentence; Opsis has no offline summary for it yet.`;
+      return `“${capitalise(draft.surface)}” appears in your sentence; Opsis has no offline summary for it yet.`;
   }
 }
 
@@ -500,7 +501,9 @@ const subjectVerbObjectRule: Rule = (clause, builder) => {
     const modality = modalityOf(modal?.text, b.negated);
     const agent = builder.noun(a);
     const action = builder.verb(verb);
-    builder.relate('agent_of', agent, action, modality, { evidence: spanOf(subject, verb) });
+    builder.relate(MOTION_VERBS.has(lemma) ? 'moves' : 'agent_of', agent, action, modality, {
+      evidence: spanOf(subject, verb),
+    });
     const objectId = builder.noun(b);
     builder.relate('acts_on', action, objectId, modality, { evidence: spanOf(verb, object) });
     if (c && destination) {
@@ -524,21 +527,137 @@ const transformsRule: Rule = (clause, builder) => {
   const b = after && nounPhrase(after);
   if (!a || !b || !verb || !before || !after) return false;
   const modality = modalityOf(modal?.text);
+  const lemma = verbLemma(verb.text);
   const source = builder.noun(a);
-  builder.annotate(source, { process: verbLemma(verb.text) });
+  builder.annotate(source, { process: lemma });
   const target = builder.noun(b);
   builder.relate('transforms_into', source, target, modality, { evidence: spanOf(before, after) });
+  // A named physical process ("melts") becomes its own node so the condition can point at it.
+  const process = STATE_CHANGE_VERBS.has(lemma) ? builder.verb(verb) : undefined;
+  if (process) {
+    builder.relate('agent_of', source, process, modality, { evidence: spanOf(before, verb) });
+  }
   if (condition) {
-    builder.relate('causes', builder.event(condition), target, modality, {
+    const state = match(
+      `(?:it|they|this|that)\\s+(?:gets?|got|becomes?|became|is|are|was|were|turns?|turned)\\s+(?:too\\s+|very\\s+)?([a-z]+)`,
+      condition,
+    )?.[1];
+    const cause = state
+      ? builder.noun(
+          { surface: state.text, start: state.start, attributes: {}, negated: false },
+          'abstract_concept',
+        )
+      : builder.event(condition);
+    builder.relate('causes', cause, process ?? target, modality, {
       evidence: spanOf(verb, condition),
     });
   }
   return true;
 };
 
+/** Ingredients that supply energy rather than matter: they are used, never turned into products. */
+const ENERGY_INPUTS = new Set(['sunlight', 'light', 'energy', 'heat', 'sun']);
+
+/** "Plants use sunlight, water and carbon dioxide to make sugar and oxygen." */
+const inputsOutputsRule: Rule = (clause, builder) => {
+  const groups = match(
+    `${NP}\\s+(?:${MODAL}\\s+)?(?:uses?|used|takes?\\s+in|took\\s+in|needs?|needed|combines?|combined)\\s+(.+?)\\s+(?:in\\s+order\\s+)?to\\s+(?:make|produce|create|form|build)\\s+(.+)`,
+    clause,
+  );
+  const [, subject, modal, inputList, outputList] = groups ?? [];
+  const agent = subject && nounPhrase(subject);
+  if (!agent || !subject || !inputList || !outputList) return false;
+  const inputs = listItems(inputList).map((item) => ({ item, np: nounPhrase(item) }));
+  const outputs = listItems(outputList).map((item) => ({ item, np: nounPhrase(item) }));
+  const all = [...inputs, ...outputs];
+  if (inputs.length === 0 || outputs.length === 0 || all.some((entry) => entry.np === null)) {
+    return false;
+  }
+  const modality = modalityOf(modal?.text);
+  const agentId = builder.noun(agent);
+  const materials: string[] = [];
+  inputs.forEach(({ item, np }, index) => {
+    if (!np) return;
+    const id = builder.noun(np);
+    builder.relate('acts_on', agentId, id, modality, {
+      order: index + 1,
+      evidence: spanOf(subject, { text: item.text.trimEnd(), start: item.start }),
+    });
+    if (!ENERGY_INPUTS.has(nounLemma(np.surface))) materials.push(id);
+  });
+  // Reactants → products: only matter-carrying inputs become outputs; energy is only used.
+  outputs.forEach(({ item, np }) => {
+    if (!np) return;
+    const product = builder.noun(np);
+    for (const material of materials) {
+      builder.relate('transforms_into', material, product, modality, {
+        evidence: spanOf(inputList, { text: item.text.trimEnd(), start: item.start }),
+      });
+    }
+  });
+  return true;
+};
+
+/**
+ * Curated, textbook cycles the offline parser may close: when a step chain names these processes
+ * the last state returns to the first (the water cycle). Nothing else is ever closed into a loop.
+ */
+const KNOWN_CYCLES: readonly { requires: readonly string[]; oneOf: readonly string[] }[] = [
+  { requires: ['evaporate'], oneOf: ['fall', 'rain', 'precipitate'] },
+];
+
+/** "Water evaporates, forms clouds, and falls as rain." → a chain of state-change steps. */
+const stateChainRule: Rule = (clause, builder) => {
+  const groups = match(`${NP}\\s+(?:${MODAL}\\s+)?([a-z]+(?:\\s*,\\s*|\\s+and\\s+).+)`, clause);
+  const [, subject, modal, rest] = groups ?? [];
+  const np = subject && nounPhrase(subject);
+  if (!np || !subject || !rest) return false;
+  const steps = listItems(rest).map((item) => {
+    const step = match(`([a-z]+)(?:\\s+(?:(?:as|into|to)\\s+)?${NP})?`, item);
+    const verb = step?.[1];
+    const object = step?.[2];
+    return {
+      verb,
+      object: object ? nounPhrase(object) : undefined,
+      valid: verb !== undefined && STATE_CHANGE_VERBS.has(verbLemma(verb.text)),
+      hasObjectText: object !== undefined,
+    };
+  });
+  if (steps.length < 2 || steps.some((step) => !step.valid || (step.hasObjectText && !step.object)))
+    return false;
+  if (!steps.some((step) => step.object)) return false;
+  const modality = modalityOf(modal?.text);
+  const chain = [builder.noun(np)];
+  const lemmas = new Set<string>();
+  for (const step of steps) {
+    if (!step.verb) continue;
+    lemmas.add(verbLemma(step.verb.text));
+    if (step.object) {
+      lemmas.add(nounLemma(step.object.surface));
+      chain.push(builder.noun(step.object));
+    } else {
+      chain.push(builder.verb(step.verb));
+    }
+  }
+  chain.slice(1).forEach((id, index) => {
+    builder.relate('precedes', chain[index] ?? id, id, modality, { order: index + 1 });
+  });
+  const first = chain[0];
+  const last = chain.at(-1);
+  const closes = KNOWN_CYCLES.some(
+    (cycle) =>
+      cycle.requires.every((lemma) => lemmas.has(lemma)) &&
+      cycle.oneOf.some((lemma) => lemmas.has(lemma)),
+  );
+  if (closes && first && last && first !== last) builder.relate('cycle', last, first, modality);
+  return true;
+};
+
 const CLAUSE_RULES: readonly Rule[] = [
   compareRule,
   transformsRule,
+  inputsOutputsRule,
+  stateChainRule,
   directionOfRule,
   motionDirectionRule,
   containsRule,

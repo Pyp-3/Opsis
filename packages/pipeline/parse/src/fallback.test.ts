@@ -195,8 +195,66 @@ describe('rule patterns', () => {
     ]);
     expect(relationsOf('Ice melts into water when it gets warm.')).toEqual([
       'transforms_into/certain',
+      'agent_of/certain',
       'causes/certain',
     ]);
+    const melt = ruleBasedParse('Ice melts into water when it gets warm.').sg;
+    expect(melt.entities.map((entity) => entity.lemma)).toEqual(['ice', 'water', 'melt', 'warm']);
+    expect(melt.relations.find((relation) => relation.type === 'causes')).toMatchObject({
+      source: 'e_warm',
+      target: 'e_melt',
+    });
+    expect(melt.notes).toContainEqual(
+      expect.objectContaining({ kind: 'misconception', targetId: 'e_melt' }),
+    );
+  });
+
+  it('draws motion verbs in "X orbits Y" as moves', () => {
+    expect(relationsOf('The Earth orbits the Sun.')).toEqual(['moves/certain', 'acts_on/certain']);
+    const geocentric = ruleBasedParse('The sun orbits the earth.').sg;
+    expect(geocentric.notes).toContainEqual(
+      expect.objectContaining({ kind: 'misconception', targetId: 'e_orbit' }),
+    );
+  });
+
+  it('chains state changes and closes only curated cycles', () => {
+    const { sg } = ruleBasedParse('Water evaporates, forms clouds, and falls as rain.');
+    expect(sg.entities.map((entity) => entity.id)).toEqual([
+      'e_water',
+      'e_evaporate',
+      'e_cloud',
+      'e_rain',
+    ]);
+    expect(sg.relations.map((r) => `${r.type}:${r.source}>${r.target}`)).toEqual([
+      'precedes:e_water>e_evaporate',
+      'precedes:e_evaporate>e_cloud',
+      'precedes:e_cloud>e_rain',
+      'cycle:e_rain>e_water',
+    ]);
+    expect(sg.notes).toContainEqual(
+      expect.objectContaining({ kind: 'nuance', targetId: 'e_cloud' }),
+    );
+    const open = ruleBasedParse('Water cools, forms ice, and melts.').sg;
+    expect(open.relations.some((relation) => relation.type === 'cycle')).toBe(false);
+    expect(ruleBasedParse('Birds fly and swim.').unmatched).toEqual(['Birds fly and swim']);
+  });
+
+  it('maps inputs to outputs without turning energy into matter', () => {
+    const { sg } = ruleBasedParse(
+      'Plants use sunlight, water and carbon dioxide to make sugar and oxygen.',
+    );
+    const edges = sg.relations.map((r) => `${r.type}:${r.source}>${r.target}`);
+    expect(edges.filter((edge) => edge.startsWith('acts_on'))).toEqual([
+      'acts_on:e_plant>e_sunlight',
+      'acts_on:e_plant>e_water',
+      'acts_on:e_plant>e_carbon_dioxide',
+    ]);
+    expect(edges.filter((edge) => edge.includes('e_sunlight>'))).toEqual([]);
+    expect(edges).toContain('transforms_into:e_carbon_dioxide>e_sugar');
+    expect(sg.entities.every((entity) => entity.attributes?.confidence === undefined)).toBe(true);
+    expect(sg.notes).toContainEqual(
+      expect.objectContaining({ kind: 'misconception', targetId: 'e_carbon_dioxide' }),
+    );
   });
 
   it('splits clauses joined by ", and" and reuses shared entities', () => {

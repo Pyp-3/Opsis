@@ -25,7 +25,7 @@ const sunOrbitsEarth: NoteRule = (graph) =>
   graph.relations
     .filter(
       (relation) =>
-        relation.type === 'agent_of' &&
+        (relation.type === 'agent_of' || relation.type === 'moves') &&
         lemmaOf(graph, relation.source) === 'sun' &&
         ['orbit', 'circle', 'revolve'].includes(lemmaOf(graph, relation.target) ?? ''),
     )
@@ -69,7 +69,46 @@ const flightlessBirds: NoteRule = (graph) =>
       text: 'Most birds can fly, but some, such as penguins, ostriches and kiwis, cannot.',
     }));
 
+const hasLemma = (graph: SemanticGraph, lemma: string) =>
+  graph.entities.some((entity) => entity.lemma.toLowerCase() === lemma);
+
+const entityNote =
+  (lemma: string, requires: string, kind: PedagogyNote['kind'], text: string): NoteRule =>
+  (graph) =>
+    hasLemma(graph, requires)
+      ? graph.entities
+          .filter((entity) => entity.lemma.toLowerCase() === lemma)
+          .map((entity) => ({ targetId: entity.id, kind, text }))
+      : [];
+
+/** P-008: clouds form from vapour but are liquid droplets or ice, not vapour. */
+const cloudsAreDroplets = entityNote(
+  'cloud',
+  'evaporate',
+  'nuance',
+  'Water vapour is an invisible gas. It cools and condenses into the tiny droplets that make a cloud.',
+);
+
+/** P-009: a plant's mass comes mostly from carbon dioxide, not from soil. */
+const plantMassFromAir = entityNote(
+  'carbon dioxide',
+  'plant',
+  'misconception',
+  "Plants do not eat soil: most of a plant's mass comes from carbon dioxide taken in from the air.",
+);
+
+/** P-012: melting is a change of state; nothing disappears. */
+const meltingKeepsWater = entityNote(
+  'melt',
+  'ice',
+  'misconception',
+  'Melting ice does not disappear: the same water changes from solid to liquid.',
+);
+
 const RULES: readonly NoteRule[] = [
+  cloudsAreDroplets,
+  plantMassFromAir,
+  meltingKeepsWater,
   sunApparentMotion,
   sunOrbitsEarth,
   classificationMyths,
