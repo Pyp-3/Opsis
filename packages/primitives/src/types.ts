@@ -1,22 +1,9 @@
 import type { FC } from 'react';
-import type { EntityKind, PrimitiveId } from '@opsis/schema';
+import type { EntityKind } from '@opsis/schema';
 import type { ColorToken } from '@opsis/ui';
+import type { PrimitiveMeta, Vec3 } from './meta';
 
-/** A 3-vector as used throughout the OSG. */
-export type Vec3 = [number, number, number];
-
-/** Broad grouping of primitives (PROMPT.md §9). */
-export type PrimitiveCategory =
-  | 'direction'
-  | 'container'
-  | 'nature'
-  | 'celestial'
-  | 'food'
-  | 'people'
-  | 'flow'
-  | 'shape'
-  | 'measure'
-  | 'generic';
+export type { PrimitiveCategory, PrimitiveMeta, Vec3 } from './meta';
 
 /**
  * Props every primitive renderer receives. 3D primitives are authored inside a unit cube
@@ -39,21 +26,8 @@ export type PrimitiveProps = {
   highlightAnchors?: readonly string[];
 };
 
-/** A registered primitive (PROMPT.md §9). */
-export type PrimitiveDef = {
-  id: PrimitiveId;
-  category: PrimitiveCategory;
-  keywords: string[];
-  dimensions: ('2d' | '3d')[];
-  /** Default colour token when the node carries no `style.colorToken`. */
-  colorToken: ColorToken;
+/** A registered primitive (PROMPT.md §9): catalog metadata plus its renderers. */
+export type PrimitiveDef = PrimitiveMeta & {
   render3D?: FC<PrimitiveProps>;
   render2D?: FC<PrimitiveProps>;
-  /** Attach points in the primitive's unit-cube space. */
-  anchors: Record<string, Vec3>;
-  explodeAxis?: Vec3;
-  /** One-sentence description used when a node has no entity summary (e.g. a compass). */
-  summary?: string;
-  /** Short tags the scene draws at named anchors, e.g. compass letters. */
-  anchorLabels?: Record<string, string>;
 };

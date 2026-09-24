@@ -50,7 +50,7 @@ describe('matchPrimitive', () => {
     });
   });
 
-  it.each(['quasar', 'democracy', 'xylophone', '', '   ', '!!!'])(
+  it.each(['quasar', 'democracy', 'xylophone', 'seat', 'cake', '', '   ', '!!!'])(
     'unknown entity %j falls back to labeled_card',
     (query) => {
       const match = matchPrimitive(query);

@@ -1,4 +1,5 @@
 export * from './anchors';
+export * from './catalog';
 export * from './match';
 export * from './material';
 export * from './registry';

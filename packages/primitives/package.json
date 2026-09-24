@@ -3,9 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "3D + 2D primitive library (PROMPT.md §9)",
+  "description": "3D + 2D primitive library (PROMPT.md \u00a79)",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./match": "./src/pure.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

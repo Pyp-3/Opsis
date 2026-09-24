@@ -1,6 +1,6 @@
 import type { EntityKind, PrimitiveId } from '@opsis/schema';
-import { FALLBACK_PRIMITIVE_ID, PRIMITIVES } from './registry';
-import type { PrimitiveCategory, PrimitiveDef } from './types';
+import { FALLBACK_PRIMITIVE_ID, PRIMITIVE_CATALOG } from './catalog';
+import type { PrimitiveCategory, PrimitiveMeta } from './meta';
 
 /** Minimum score for a keyword match to beat the `labeled_card` fallback (PROMPT.md §9). */
 export const MATCH_THRESHOLD = 0.6;
@@ -65,7 +65,7 @@ function editDistance(a: string, b: string): number {
 /**
  * Scores one term against one keyword:
  * exact (after singularising) 1.0; whole-token hit inside a phrase 0.85;
- * close spelling (≥ 0.75 similarity, words ≥ 4 letters) 0.9 × similarity;
+ * close spelling (≥ 0.75 similarity, words ≥ 5 letters) 0.9 × similarity;
  * shared prefix of ≥ 4 letters 0.7 × length ratio; otherwise 0.
  */
 function scoreTerm(term: string, keyword: string): number {
@@ -80,8 +80,12 @@ function scoreTerm(term: string, keyword: string): number {
   let best = 0;
   for (const token of tokens) {
     if (token.length >= 4 && keyword.length >= 4) {
-      const similarity = 1 - editDistance(token, keyword) / Math.max(token.length, keyword.length);
-      if (similarity >= 0.75) best = Math.max(best, 0.9 * similarity);
+      // One changed letter in a 4-letter word is usually another word (seat/meat, cake/lake).
+      if (Math.min(token.length, keyword.length) >= 5) {
+        const similarity =
+          1 - editDistance(token, keyword) / Math.max(token.length, keyword.length);
+        if (similarity >= 0.75) best = Math.max(best, 0.9 * similarity);
+      }
       const shorter = token.length < keyword.length ? token : keyword;
       const longer = shorter === token ? keyword : token;
       if (longer.startsWith(shorter)) best = Math.max(best, 0.7 * (shorter.length / longer.length));
@@ -98,7 +102,7 @@ function termsOf(query: PrimitiveQuery): string[] {
 
 /** Scores a single primitive definition against a query. */
 export function scorePrimitive(
-  def: PrimitiveDef,
+  def: PrimitiveMeta,
   query: PrimitiveQuery,
 ): { score: number; keyword?: string } {
   const terms = termsOf(query);
@@ -119,7 +123,7 @@ export function scorePrimitive(
 
 /** All non-fallback primitives with a positive score, best first (ties keep registry order). */
 export function rankPrimitives(query: PrimitiveQuery): PrimitiveMatch[] {
-  return PRIMITIVES.filter((def) => def.id !== FALLBACK_PRIMITIVE_ID)
+  return PRIMITIVE_CATALOG.filter((def) => def.id !== FALLBACK_PRIMITIVE_ID)
     .map((def) => ({ def, ...scorePrimitive(def, query) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)

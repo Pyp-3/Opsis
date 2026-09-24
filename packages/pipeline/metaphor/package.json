@@ -9,5 +9,22 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
-  }
+  },
+  "dependencies": {
+    "@opsis/parse": "workspace:*",
+    "@opsis/primitives": "workspace:*",
+    "@opsis/schema": "workspace:*",
+    "graphology": "^0.26.0",
+    "graphology-components": "^1.5.4",
+    "graphology-metrics": "^2.4.2",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "devDependencies": {
+    "graphology-types": "^0.24.8"
+  },
+  "files": [
+    "src",
+    "prompts"
+  ]
 }

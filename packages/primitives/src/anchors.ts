@@ -1,4 +1,4 @@
-import type { Vec3 } from './types';
+import type { Vec3 } from './meta';
 
 /** Generic attach points shared by every primitive (unit-cube space). */
 export const BOX_ANCHORS: Record<string, Vec3> = {

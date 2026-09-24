@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "sg/1",
+  "utterance": "An atom has a nucleus and electrons.",
+  "language": "en",
+  "entities": [
+    {
+      "id": "e_atom",
+      "surface": "atom",
+      "lemma": "atom",
+      "kind": "object",
+      "span": [3, 7],
+      "summary": "Atom is named in your sentence; Opsis has no offline summary for it yet.",
+      "attributes": {
+        "confidence": "low"
+      }
+    },
+    {
+      "id": "e_nucleus",
+      "surface": "nucleus",
+      "lemma": "nucleus",
+      "kind": "object",
+      "span": [14, 21],
+      "summary": "Nucleus is named in your sentence; Opsis has no offline summary for it yet.",
+      "attributes": {
+        "confidence": "low"
+      }
+    },
+    {
+      "id": "e_electron",
+      "surface": "electrons",
+      "lemma": "electron",
+      "kind": "object",
+      "span": [26, 35],
+      "summary": "Electrons is named in your sentence; Opsis has no offline summary for it yet.",
+      "attributes": {
+        "confidence": "low"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "r_atom_has_part_nucleus",
+      "type": "has_part",
+      "source": "e_atom",
+      "target": "e_nucleus",
+      "modality": "certain",
+      "order": 1,
+      "evidenceSpan": [0, 21]
+    },
+    {
+      "id": "r_atom_has_part_electron",
+      "type": "has_part",
+      "source": "e_atom",
+      "target": "e_electron",
+      "modality": "certain",
+      "order": 2,
+      "evidenceSpan": [0, 35]
+    }
+  ]
+}

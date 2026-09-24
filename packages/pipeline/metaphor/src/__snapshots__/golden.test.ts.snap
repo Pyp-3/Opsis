@@ -1,0 +1,539 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 01-sun-east is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "v_compass",
+  "scenes": [
+    {
+      "camera": "iso",
+      "dimension": "3d",
+      "edges": [
+        {
+          "from": "v_compass",
+          "id": "ve_v_compass_e_east",
+          "kind": "line",
+          "to": "e_east",
+        },
+        {
+          "animated": true,
+          "from": "e_sun",
+          "id": "ve_r_sun_moves_rise",
+          "kind": "path",
+          "to": "e_rise",
+        },
+        {
+          "from": "e_rise",
+          "id": "ve_r_rise_direction_east",
+          "kind": "arrow",
+          "to": "e_east",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "compass",
+      "nodes": [
+        {
+          "id": "v_compass",
+          "label": "Compass",
+          "primitive": "compass",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "id": "e_sun",
+          "label": "Sun",
+          "primitive": "sun",
+          "role": "actor",
+        },
+        {
+          "id": "e_rise",
+          "label": "Rise",
+          "primitive": "curved_arrow",
+          "role": "modifier",
+        },
+        {
+          "drillable": true,
+          "id": "e_east",
+          "label": "East",
+          "primitive": "labeled_card",
+          "role": "context",
+          "style": {
+            "emphasis": "highlight",
+          },
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_d016990204169bd9",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 02-sandwich-parts is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "e_sandwich",
+  "scenes": [
+    {
+      "camera": "iso",
+      "dimension": "3d",
+      "edges": [
+        {
+          "from": "e_sandwich",
+          "id": "ve_r_sandwich_contains_bread",
+          "kind": "containment",
+          "label": "optional",
+          "to": "e_bread",
+        },
+        {
+          "from": "e_sandwich",
+          "id": "ve_r_sandwich_contains_tomato",
+          "kind": "containment",
+          "label": "optional",
+          "to": "e_tomato",
+        },
+        {
+          "from": "e_sandwich",
+          "id": "ve_r_sandwich_contains_ham",
+          "kind": "containment",
+          "label": "optional",
+          "to": "e_ham",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "stack",
+      "nodes": [
+        {
+          "drillable": true,
+          "id": "e_sandwich",
+          "label": "Sandwich",
+          "primitive": "group_frame",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "explodable": true,
+          "id": "e_bread",
+          "label": "Bread",
+          "optional": true,
+          "primitive": "bread_slice",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "explodable": true,
+          "id": "e_tomato",
+          "label": "Tomato",
+          "optional": true,
+          "primitive": "round_fruit",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "explodable": true,
+          "id": "e_ham",
+          "label": "Ham",
+          "optional": true,
+          "primitive": "generic_layer",
+          "role": "part",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_27b18f48dec08a80",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 03-water-cycle is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "v_cycle",
+  "scenes": [
+    {
+      "camera": "front",
+      "dimension": "auto",
+      "edges": [
+        {
+          "from": "e_water",
+          "id": "ve_r_1",
+          "kind": "arrow",
+          "label": "becomes",
+          "to": "e_cloud",
+        },
+        {
+          "from": "e_cloud",
+          "id": "ve_r_2",
+          "kind": "arrow",
+          "label": "becomes",
+          "to": "e_rain",
+        },
+        {
+          "from": "e_rain",
+          "id": "ve_r_3",
+          "kind": "arrow",
+          "label": "usually then",
+          "to": "e_water",
+        },
+        {
+          "from": "e_evaporate",
+          "id": "ve_r_4",
+          "kind": "leader",
+          "to": "e_water",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "cycle",
+      "nodes": [
+        {
+          "id": "v_cycle",
+          "label": "Cycle",
+          "primitive": "cycle_ring",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "id": "e_water",
+          "label": "Water",
+          "primitive": "water",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_cloud",
+          "label": "Cloud",
+          "primitive": "cloud",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_rain",
+          "label": "Rain",
+          "primitive": "raindrop",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_evaporate",
+          "label": "Evaporate",
+          "primitive": "labeled_card",
+          "role": "modifier",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_ced6fdc36c1dbda9",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 04-cat-classification is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "e_animal",
+  "scenes": [
+    {
+      "camera": "front",
+      "dimension": "auto",
+      "edges": [
+        {
+          "from": "e_cat",
+          "id": "ve_r_cat_is_a_mammal",
+          "kind": "arrow",
+          "label": "is a",
+          "to": "e_mammal",
+        },
+        {
+          "from": "e_mammal",
+          "id": "ve_r_mammal_is_a_animal",
+          "kind": "arrow",
+          "label": "is a",
+          "to": "e_animal",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "tree",
+      "nodes": [
+        {
+          "drillable": true,
+          "id": "e_animal",
+          "label": "Animal",
+          "primitive": "labeled_card",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "id": "e_cat",
+          "label": "Cat",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_mammal",
+          "label": "Mammal",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_1455b6aa901dcdfa",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 05-elephant-mouse is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "v_scale",
+  "scenes": [
+    {
+      "camera": "front",
+      "dimension": "auto",
+      "edges": [
+        {
+          "from": "v_scale",
+          "id": "ve_v_scale_e_elephant",
+          "kind": "line",
+          "to": "e_elephant",
+        },
+        {
+          "from": "v_scale",
+          "id": "ve_v_scale_e_mouse",
+          "kind": "line",
+          "to": "e_mouse",
+        },
+        {
+          "from": "e_elephant",
+          "id": "ve_r_elephant_compares_mouse",
+          "kind": "line",
+          "label": "heavier",
+          "to": "e_mouse",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "scale",
+      "nodes": [
+        {
+          "id": "v_scale",
+          "label": "Balance",
+          "primitive": "scale_balance",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "id": "e_elephant",
+          "label": "Elephant",
+          "primitive": "labeled_card",
+          "role": "object",
+        },
+        {
+          "drillable": true,
+          "id": "e_mouse",
+          "label": "Mouse",
+          "primitive": "labeled_card",
+          "role": "object",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_53ccc86d9c5f467d",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 09-atom-parts is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "e_atom",
+  "scenes": [
+    {
+      "camera": "iso",
+      "dimension": "3d",
+      "edges": [
+        {
+          "from": "e_atom",
+          "id": "ve_r_atom_has_part_nucleus",
+          "kind": "containment",
+          "to": "e_nucleus",
+        },
+        {
+          "from": "e_atom",
+          "id": "ve_r_atom_has_part_electron",
+          "kind": "containment",
+          "to": "e_electron",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "container",
+      "nodes": [
+        {
+          "drillable": true,
+          "id": "e_atom",
+          "label": "Atom",
+          "primitive": "cell",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "explodable": true,
+          "id": "e_nucleus",
+          "label": "Nucleus",
+          "primitive": "cell",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "explodable": true,
+          "id": "e_electron",
+          "label": "Electron",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_d019fbf76fa9febd",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 10-pasta-timeline is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "v_timeline",
+  "scenes": [
+    {
+      "camera": "front",
+      "dimension": "auto",
+      "edges": [
+        {
+          "from": "e_boil",
+          "id": "ve_r_boil_acts_on_water",
+          "kind": "arrow",
+          "to": "e_water",
+        },
+        {
+          "from": "e_add",
+          "id": "ve_r_add_acts_on_pasta",
+          "kind": "arrow",
+          "to": "e_pasta",
+        },
+        {
+          "from": "e_boil",
+          "id": "ve_r_boil_precedes_add",
+          "kind": "arrow",
+          "label": "then",
+          "to": "e_add",
+        },
+        {
+          "from": "e_drain",
+          "id": "ve_r_drain_acts_on_pasta",
+          "kind": "arrow",
+          "to": "e_pasta",
+        },
+        {
+          "from": "e_add",
+          "id": "ve_r_add_precedes_drain",
+          "kind": "arrow",
+          "label": "then",
+          "to": "e_drain",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "timeline",
+      "nodes": [
+        {
+          "id": "v_timeline",
+          "label": "Timeline",
+          "primitive": "timeline_axis",
+          "role": "anchor",
+        },
+        {
+          "id": "e_boil",
+          "label": "Boil",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+        {
+          "id": "e_add",
+          "label": "Add",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+        {
+          "id": "e_drain",
+          "label": "Drain",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_water",
+          "label": "Water",
+          "primitive": "water",
+          "role": "object",
+        },
+        {
+          "drillable": true,
+          "id": "e_pasta",
+          "label": "Pasta",
+          "primitive": "labeled_card",
+          "role": "object",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_c1cfb0f891859c2d",
+}
+`;
+
+exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 13-ice-melts is deterministic and snapshot-stable 1`] = `
+{
+  "anchor": "e_water",
+  "scenes": [
+    {
+      "camera": "front",
+      "dimension": "auto",
+      "edges": [
+        {
+          "from": "e_ice",
+          "id": "ve_r_ice_transforms_into_water",
+          "kind": "arrow",
+          "label": "becomes",
+          "to": "e_water",
+        },
+        {
+          "from": "e_it_gets_warm",
+          "id": "ve_r_it_gets_warm_causes_water",
+          "kind": "arrow",
+          "label": "leads to",
+          "to": "e_water",
+        },
+      ],
+      "id": "scene_1",
+      "metaphor": "flow",
+      "nodes": [
+        {
+          "drillable": true,
+          "id": "e_water",
+          "label": "Water",
+          "primitive": "water",
+          "role": "anchor",
+        },
+        {
+          "drillable": true,
+          "id": "e_ice",
+          "label": "Ice",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+        {
+          "drillable": true,
+          "id": "e_it_gets_warm",
+          "label": "It gets warm",
+          "primitive": "labeled_card",
+          "role": "part",
+        },
+      ],
+    },
+  ],
+  "schemaVersion": "vp/1",
+  "sgRef": "sg_697e2b99ce476ab6",
+}
+`;

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "sg/1",
+  "utterance": "A cat is a mammal, and a mammal is an animal.",
+  "language": "en",
+  "entities": [
+    {
+      "id": "e_cat",
+      "surface": "cat",
+      "lemma": "cat",
+      "kind": "living_thing",
+      "span": [2, 5],
+      "summary": "A cat is a small furry mammal often kept as a pet."
+    },
+    {
+      "id": "e_mammal",
+      "surface": "mammal",
+      "lemma": "mammal",
+      "kind": "living_thing",
+      "span": [11, 17],
+      "summary": "A mammal is a warm-blooded animal with hair that feeds its young milk."
+    },
+    {
+      "id": "e_animal",
+      "surface": "animal",
+      "lemma": "animal",
+      "kind": "living_thing",
+      "span": [38, 44],
+      "summary": "An animal is a living thing that eats food and can usually move."
+    }
+  ],
+  "relations": [
+    {
+      "id": "r_cat_is_a_mammal",
+      "type": "is_a",
+      "source": "e_cat",
+      "target": "e_mammal",
+      "modality": "certain",
+      "evidenceSpan": [0, 17]
+    },
+    {
+      "id": "r_mammal_is_a_animal",
+      "type": "is_a",
+      "source": "e_mammal",
+      "target": "e_animal",
+      "modality": "certain",
+      "evidenceSpan": [23, 44]
+    }
+  ]
+}
