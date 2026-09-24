@@ -187,3 +187,65 @@ templates.
   `KNOWN_PARTS` list in `src/knowledge.ts` (textbook structure only), then LLM suggestions with
   confidence above `"low"`. If none is available, Opsis says it does not know the parts yet rather
   than guessing.
+
+## Offline parser coverage for golden cases 3, 7, 11 and 13 (release review)
+
+- **Curated cycles only.** A step chain ("Water evaporates, forms clouds, and falls as rain") is
+  closed into a loop only when it matches a curated textbook cycle (`KNOWN_CYCLES` in
+  `packages/pipeline/parse/src/fallback.ts`; today only the water cycle). Other chains stay open, so
+  the offline parser never invents a cycle.
+- **Energy is used, not transformed.** In "X uses A, B and C to make D and E", energy inputs
+  (sunlight, light, energy, heat) are drawn only as used by X. Only matter-carrying inputs get
+  `transforms_into` arrows to the products. Those arrows show the overall reactants → products
+  equation, not which atom goes where.
+- **Process nodes.** "Ice melts into water when it gets warm" draws `melt` as its own node, with
+  `warm` causing it, so the condition points at the process rather than at the water.
+- New SG notes from the offline parser: P-008 (nuance on `cloud` when evaporation is named),
+  P-009 (misconception on `carbon dioxide` when a plant uses it), P-012 (misconception on `melt`
+  when ice melts).
+
+## §14.3 score record: release review, 2026-09-24 (claude-1)
+
+Sample: 20 `level: "explanation"` responses from `POST /v1/explain`, taken from the offline
+pipeline output of all 15 golden cases. The North Star nodes (sun, east, rises, tomato) were always
+included. The other 16 were drawn with a fixed-seed PRNG (seed 20260924), and audiences were
+assigned child → teen → adult in turn. No LLM provider was configured, so every response is the
+deterministic SG-only fallback (`confidence: "low"`, so the "unsure" indicator shows). Scores are
+1–5 for accuracy (Acc), clarity for the audience (Cla), relevance to the utterance (Rel) and
+misconception handling (Mis).
+
+| #   | Case / node | Audience | Acc  | Cla  | Rel  | Mis  | Mean     |
+| --- | ----------- | -------- | ---- | ---- | ---- | ---- | -------- |
+| 1   | 01 sun      | child    | 5    | 4    | 4    | 4    | 4.25     |
+| 2   | 01 east     | teen     | 5    | 5    | 4    | 5    | 4.75     |
+| 3   | 01 rises    | adult    | 5    | 4    | 4    | 5    | 4.50     |
+| 4   | 02 tomato   | child    | 5    | 5    | 5    | 5    | 5.00     |
+| 5   | 02 ham      | teen     | 5    | 5    | 5    | 4    | 4.75     |
+| 6   | 14 bird     | adult    | 5    | 5    | 4    | 5    | 4.75     |
+| 7   | 10 boil     | child    | 5    | 3    | 4    | 4    | 4.00     |
+| 8   | 08 Nairobi  | teen     | 5    | 5    | 4    | 4    | 4.50     |
+| 9   | 13 melt     | adult    | 5    | 5    | 4    | 5    | 4.75     |
+| 10  | 09 electron | child    | 5    | 3    | 4    | 5    | 4.25     |
+| 11  | 07 sugar    | teen     | 5    | 5    | 4    | 4    | 4.50     |
+| 12  | 14 fly      | adult    | 5    | 5    | 4    | 5    | 4.75     |
+| 13  | 04 animal   | child    | 4    | 4    | 4    | 4    | 4.00     |
+| 14  | 03 cloud    | teen     | 5    | 5    | 4    | 5    | 4.75     |
+| 15  | 11 Earth    | adult    | 5    | 5    | 4    | 4    | 4.50     |
+| 16  | 08 Mombasa  | child    | 5    | 4    | 4    | 4    | 4.25     |
+| 17  | 07 plant    | teen     | 5    | 5    | 4    | 5    | 4.75     |
+| 18  | 06 lungs    | adult    | 5    | 5    | 4    | 4    | 4.50     |
+| 19  | 10 add      | child    | 5    | 4    | 4    | 4    | 4.25     |
+| 20  | 02 bread    | teen     | 5    | 5    | 5    | 4    | 4.75     |
+|     | **Mean**    |          | 4.95 | 4.55 | 4.15 | 4.45 | **4.53** |
+
+- **Result: 4.53 / 5 ≥ 4.2 target.** No accuracy score is 1 or 2, so no major pedagogy bug.
+- **Fixed during review.** Before this review, electron and lungs (and every case 6, 9 and 12
+  entity) had the empty, ungrammatical summary "Electrons is named in your sentence…". They would
+  have scored Cla 2 and Rel 3. Curated summaries were added, and the generic template now quotes
+  the word.
+- **Weakest dimension: relevance (4.15).** The offline `whyItMattersHere` is a template ("the word
+  X is linked to Y; the diagram shows how they connect"). It is grounded, but it does not say what
+  the link means. Child clarity drops where a curated summary uses a technical word ("vapour",
+  "negative charge"), because the offline path uses one summary for every audience.
+- **Not sampled.** LLM-written explanations (no provider or harness was configured in this
+  environment). Score them on the first provider-backed run.

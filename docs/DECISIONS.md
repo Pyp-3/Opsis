@@ -241,3 +241,42 @@ supersede it with a new one.
     include `schemaVersion` in the cache-key `config` so versions never share entries; regenerate
     `json-schema.ts` prompt schemas and golden snapshots; and supersede this record with a new
     Decision Record.
+
+## D-005: Release review — offline parser scope, curated cycles, and directed 2D edges
+
+- Date: 2026-09-24
+- Author: claude-1 (coordinator, semantic-parser, pedagogy-reviewer, ux-accessibility)
+- Context: The release review found two open defects that block release under the assignment.
+  (1) `B-QA-001` (major): the offline golden suite stood at 11/15, below the M5 target of 90 %.
+  (2) The 2D canvas drew every edge without an arrowhead, in React Flow's default `#b1b1b7`
+  stroke (about 2:1 on `ui.background`, below WCAG 1.4.11's 3:1). Animated edges were dashed, which
+  clashes with the "dashed = optional" convention in PROMPT.md §10.2. In a 2D-first product
+  (D-004), direction was carried only by position and the text outline.
+- Options considered: (a) lower the M5 golden bar, or accept the flow defect as a known
+  limitation; (b) ask the LLM path to cover the missing cases; (c) extend the deterministic rules
+  and the canvas edge style. **(c) chosen**, because D-004 requires the offline fallback to stand
+  on its own.
+- Decision:
+  - **Parser (`@opsis/parse`).** Three new offline patterns and one changed pattern:
+    - a state-change chain ("X evaporates, forms Y, and falls as Z") → `precedes`;
+    - an inputs → outputs pattern ("X uses A, B to make C, D") → `acts_on` for every input and
+      `transforms_into` from matter inputs only;
+    - a named process node, plus an adjective condition, in "X melts into Y when it gets warm";
+    - a motion verb in subject–verb–object is now `moves` (was `agent_of`), matching
+      `abilityRule` and `motionDirectionRule`.
+      A chain closes into a `cycle` only when it matches a curated entry in `KNOWN_CYCLES`. Energy
+      words never become `transforms_into` sources.
+  - **Directed edges (stage 4, 2D).** `arrow` and `path` edges end in a closed arrowhead.
+    `line`, `leader` and `containment` edges stay plain (a compass bearing is not a direction of
+    flow). Every edge uses `ui.textMuted` at 2 px (about 7:1). Animated edges are solid: dashes
+    are reserved for optional parts.
+- Consequences:
+  - Golden offline pass rate 15/15. The metaphor curation snapshot changed only in its rationale
+    text, plus case 11 moving from `actor_action` to `flow`. Both metaphors are allowed by
+    §14.2, and no `dimension` changed.
+  - Visual baselines `sun-east`, `cycle-flow` and `timeline-flow` were regenerated for the new
+    edge style. Contracts are unchanged.
+  - Known limitation: 2D nodes have fixed left (target) and right (source) handles, so the
+    returning half of a cycle ring crosses itself. This is recorded as minor bug `B-REL-001`.
+  - Found in the same review but not fixed here: in 2D, the rendered card footprint is not part of
+    the layout's size model, so the sun/east cards overlap (`B-REL-002`, major, release-blocking).
