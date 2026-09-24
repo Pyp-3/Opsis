@@ -5,6 +5,7 @@ import type { LLMClient, LLMRequest } from '@opsis/parse';
 import { renderTemplate, stripFences, tryParseJson } from '@opsis/parse';
 import { isPrimitiveId, PRIMITIVE_CATALOG } from '@opsis/primitives/match';
 import type { EntityKind, PrimitiveId, SemanticGraph } from '@opsis/schema';
+import { hasIcon2D } from './primitives';
 
 /** Versioned id of `prompts/primitive-choice.v1.md`. Bump when the template changes. */
 export const PRIMITIVE_PROMPT_ID = 'metaphor-primitive/v1';
@@ -121,6 +122,8 @@ export async function askLLM(
       usage.rejected.push({ id, reason: `unknown primitive "${primitive}"` });
     else if (entity.candidates && !entity.candidates.includes(primitive))
       usage.rejected.push({ id, reason: `"${primitive}" is not one of the tied candidates` });
+    else if (!entity.candidates && !hasIcon2D(primitive))
+      usage.rejected.push({ id, reason: `"${primitive}" has no 2D icon` });
     else {
       answer.primitives.set(id, primitive);
       usage.accepted.push(id);

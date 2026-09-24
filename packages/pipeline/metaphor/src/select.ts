@@ -6,6 +6,7 @@ import {
   type VisualPlan,
 } from '@opsis/schema';
 import { buildPlan } from './build';
+import { curatePlan, type DimensionDecision, type RendererCapabilities } from './curate';
 import { askLLM, openQuestions, type EntityQuestion, type LLMUsage } from './llm';
 import { matchEntities, type PrimitiveChoice } from './primitives';
 import { applyRules, MAX_SCENES, type RuleId, type Selection } from './rules';
@@ -18,11 +19,15 @@ export type MetaphorResult = {
   /** How each entity's primitive was chosen, keyed by entity id. */
   primitives: Record<string, PrimitiveChoice>;
   llm: LLMUsage;
+  /** Why each scene is 2D or 3D (D-004), in scene order. Diagnostics only. */
+  dimensions: DimensionDecision[];
 };
 
 export type SelectOptions = {
   /** Consulted only for anchor ties and unknown/tied entities. Omit to stay fully offline. */
   llm?: LLMClient | null;
+  /** Renderer-capability manifest; defaults to `RENDERER_CAPABILITIES` (compass 3D uncertified). */
+  capabilities?: RendererCapabilities;
 };
 
 /** Thrown when the stage would emit a plan that fails its own contract (a bug, never passed on). */
@@ -56,8 +61,16 @@ function questionsFor({ sg, selection, choices }: Draft) {
   return openQuestions(sg, entities, selection.scenes[0]?.anchorTie);
 }
 
-function finish({ sg, selection, choices }: Draft, llm: LLMUsage): MetaphorResult {
-  const plan = buildPlan(sg, selection, choices);
+function finish(
+  { sg, selection, choices }: Draft,
+  llm: LLMUsage,
+  capabilities: RendererCapabilities | undefined,
+): MetaphorResult {
+  const { plan, dimensions } = curatePlan(buildPlan(sg, selection, choices), {
+    sg,
+    choices,
+    ...(capabilities ? { capabilities } : {}),
+  });
   const checked = visualPlanSchemaFor(sg).safeParse(plan);
   if (!checked.success) {
     throw new MetaphorPlanError(
@@ -69,6 +82,7 @@ function finish({ sg, selection, choices }: Draft, llm: LLMUsage): MetaphorResul
     rule: selection.rule,
     primitives: Object.fromEntries(choices),
     llm,
+    dimensions,
   };
 }
 
@@ -76,8 +90,11 @@ function finish({ sg, selection, choices }: Draft, llm: LLMUsage): MetaphorResul
  * SG → VP using only the deterministic rules: same SG, same plan. Unknown entities render as
  * `labeled_card`; anchor ties go to the earliest entity.
  */
-export function selectMetaphorOffline(sg: SemanticGraph): MetaphorResult {
-  return finish(draft(sg), { consulted: false, accepted: [], rejected: [] });
+export function selectMetaphorOffline(
+  sg: SemanticGraph,
+  options: Pick<SelectOptions, 'capabilities'> = {},
+): MetaphorResult {
+  return finish(draft(sg), { consulted: false, accepted: [], rejected: [] }, options.capabilities);
 }
 
 /**
@@ -92,7 +109,7 @@ export async function selectMetaphor(
   const base = draft(sg);
   const question = options.llm ? questionsFor(base) : null;
   if (!options.llm || !question) {
-    return finish(base, { consulted: false, accepted: [], rejected: [] });
+    return finish(base, { consulted: false, accepted: [], rejected: [] }, options.capabilities);
   }
   const { answer, usage } = await askLLM(options.llm, question);
   const choices = new Map(base.choices);
@@ -109,5 +126,9 @@ export async function selectMetaphor(
         }
       : scene,
   );
-  return finish({ ...base, selection: { ...base.selection, scenes }, choices }, usage);
+  return finish(
+    { ...base, selection: { ...base.selection, scenes }, choices },
+    usage,
+    options.capabilities,
+  );
 }

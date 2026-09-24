@@ -157,7 +157,8 @@ function buildScene(
     nodes,
     edges,
     camera: draft.camera,
-    dimension: draft.dimension,
+    // Placeholder; the curator (curate.ts) decides every scene's dimension.
+    dimension: '2d',
   };
 }
 

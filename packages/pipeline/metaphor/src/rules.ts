@@ -55,7 +55,6 @@ export type SceneDraft = {
   /** Equal-top-degree entities when the anchor was picked by centrality (LLM may break the tie). */
   anchorTie?: string[];
   camera: 'top' | 'front' | 'iso' | 'free';
-  dimension: '2d' | '3d' | 'auto';
 };
 
 export type Selection = { rule: RuleId; scenes: SceneDraft[] };
@@ -146,7 +145,6 @@ function direction({ sg }: RuleContext): Selection | null {
         ],
         anchorEdges: bearings.map((to) => ({ to, kind: 'line' as const })),
         camera: 'iso',
-        dimension: '3d',
       },
     ],
   };
@@ -199,7 +197,6 @@ function composition({ sg, choices }: RuleContext): Selection | null {
         explodeParts: true,
         anchorFallback: 'group_frame',
         camera: 'iso',
-        dimension: '3d',
       },
     ],
   };
@@ -219,7 +216,6 @@ function cycle({ sg }: RuleContext): Selection | null {
         anchor: synthetic(sg, 'cycle', 'cycle_ring', 'Cycle'),
         core: members.map((id) => ({ id, role: 'part' as Role })),
         camera: 'front',
-        dimension: 'auto',
       },
     ],
   };
@@ -244,7 +240,6 @@ function sequence({ sg }: RuleContext): Selection | null {
           anchor: synthetic(sg, 'timeline', 'timeline_axis', 'Timeline'),
           core,
           camera: 'front',
-          dimension: 'auto',
         },
       ],
     };
@@ -259,7 +254,6 @@ function sequence({ sg }: RuleContext): Selection | null {
         anchor: { entity: hub },
         core: core.filter((c) => c.id !== hub),
         camera: 'front',
-        dimension: 'auto',
       },
     ],
   };
@@ -282,7 +276,6 @@ function classification({ sg }: RuleContext): Selection | null {
         anchor: { entity: root },
         core: members.map((id) => ({ id, role: 'part' as Role })),
         camera: 'front',
-        dimension: 'auto',
       },
     ],
   };
@@ -310,7 +303,6 @@ function comparison({ sg }: RuleContext): Selection | null {
       ...(neighbours ? { members: neighbours } : {}),
       anchorEdges: group.map((to) => ({ to, kind: 'line' as const })),
       camera: 'front',
-      dimension: 'auto',
     };
   });
   return { rule: 'comparison', scenes };
@@ -341,7 +333,6 @@ function actorAction({ sg }: RuleContext): Selection | null {
         ],
         anchorFallback: 'arrow',
         camera: 'front',
-        dimension: 'auto',
       },
     ],
   };
@@ -363,7 +354,6 @@ function fallbackFlow({ sg }: RuleContext): Selection {
         core: [],
         ...(tied.length > 1 ? { anchorTie: tied } : {}),
         camera: 'front',
-        dimension: 'auto',
       },
     ],
   };

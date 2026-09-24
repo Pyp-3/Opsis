@@ -2,6 +2,7 @@ import {
   FALLBACK_PRIMITIVE_ID,
   MATCH_THRESHOLD,
   matchPrimitive,
+  PRIMITIVE_CATALOG,
   rankPrimitives,
 } from '@opsis/primitives/match';
 import type { Entity, PrimitiveId } from '@opsis/schema';
@@ -36,6 +37,15 @@ const RESERVED: ReadonlySet<PrimitiveId> = new Set(['compass']);
  */
 const ACTION_THRESHOLD = 0.9;
 
+const ICONS_2D: ReadonlySet<PrimitiveId> = new Set(
+  PRIMITIVE_CATALOG.filter((m) => m.dimensions.includes('2d')).map((m) => m.id),
+);
+
+/** True when the primitive has a 2D icon, so the default (2D) canvas can draw it (D-004). */
+export function hasIcon2D(primitive: PrimitiveId): boolean {
+  return ICONS_2D.has(primitive);
+}
+
 /** Maps an entity to a primitive with the registry keyword matcher (PROMPT.md §9). */
 export function matchEntity(entity: Entity): PrimitiveChoice {
   const query = { lemma: entity.lemma, surface: entity.surface, kind: entity.kind };
@@ -45,11 +55,14 @@ export function matchEntity(entity: Entity): PrimitiveChoice {
     const source = match.fallback ? 'fallback' : 'reserved';
     return { primitive: FALLBACK_PRIMITIVE_ID, source, score: match.score };
   }
-  const tied = rankPrimitives(query)
+  const top = rankPrimitives(query)
     .filter((m) => m.score === match.score)
     .map((m) => m.id);
+  // 2D first: a tie between a 2D icon and a 3D-only model goes to the icon without asking the LLM.
+  const drawable = top.filter(hasIcon2D);
+  const tied = drawable.length > 0 ? drawable : top;
   return {
-    primitive: match.id,
+    primitive: tied[0] ?? match.id,
     source: 'keyword',
     score: match.score,
     ...(tied.length > 1 ? { tied } : {}),

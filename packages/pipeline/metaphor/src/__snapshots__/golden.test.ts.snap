@@ -6,7 +6,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 01-sun-east is det
   "scenes": [
     {
       "camera": "iso",
-      "dimension": "3d",
+      "dimension": "2d",
       "edges": [
         {
           "from": "v_compass",
@@ -149,7 +149,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 03-water-cycle is 
   "scenes": [
     {
       "camera": "front",
-      "dimension": "auto",
+      "dimension": "2d",
       "edges": [
         {
           "from": "e_water",
@@ -230,7 +230,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 04-cat-classificat
   "scenes": [
     {
       "camera": "front",
-      "dimension": "auto",
+      "dimension": "2d",
       "edges": [
         {
           "from": "e_cat",
@@ -285,7 +285,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 05-elephant-mouse 
   "scenes": [
     {
       "camera": "front",
-      "dimension": "auto",
+      "dimension": "2d",
       "edges": [
         {
           "from": "v_scale",
@@ -344,7 +344,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 09-atom-parts is d
   "scenes": [
     {
       "camera": "iso",
-      "dimension": "3d",
+      "dimension": "2d",
       "edges": [
         {
           "from": "e_atom",
@@ -399,7 +399,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 10-pasta-timeline 
   "scenes": [
     {
       "camera": "front",
-      "dimension": "auto",
+      "dimension": "2d",
       "edges": [
         {
           "from": "e_boil",
@@ -489,7 +489,7 @@ exports[`golden SG fixtures → metaphor (PROMPT.md §14.2) > 13-ice-melts is de
   "scenes": [
     {
       "camera": "front",
-      "dimension": "auto",
+      "dimension": "2d",
       "edges": [
         {
           "from": "e_ice",
