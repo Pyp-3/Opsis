@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "osg/1",
+  "id": "10000000-0000-4000-8000-000000000001",
+  "title": "The Sun Rises in the East",
+  "utterance": "The sun rises in the east.",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "seed": 101,
+  "sg": {
+    "schemaVersion": "sg/1",
+    "utterance": "The sun rises in the east.",
+    "language": "en",
+    "entities": [
+      {
+        "id": "e_sun",
+        "surface": "sun",
+        "lemma": "sun",
+        "kind": "celestial_body",
+        "span": [4, 7],
+        "summary": "The Sun is the star at the centre of our solar system."
+      },
+      {
+        "id": "e_rises",
+        "surface": "rises",
+        "lemma": "rise",
+        "kind": "action",
+        "span": [8, 13],
+        "summary": "Rising is the Sun's apparent upward movement above the horizon."
+      },
+      {
+        "id": "e_east",
+        "surface": "east",
+        "lemma": "east",
+        "kind": "direction",
+        "span": [21, 25],
+        "summary": "East is the direction where the Sun appears to rise."
+      }
+    ],
+    "relations": [
+      {
+        "id": "r_sun_moves",
+        "type": "moves",
+        "source": "e_sun",
+        "target": "e_rises",
+        "modality": "certain",
+        "evidenceSpan": [4, 13]
+      },
+      {
+        "id": "r_rise_east",
+        "type": "direction",
+        "source": "e_rises",
+        "target": "e_east",
+        "modality": "certain",
+        "evidenceSpan": [8, 25]
+      }
+    ],
+    "notes": [
+      {
+        "targetId": "e_rises",
+        "kind": "misconception",
+        "text": "The Sun only appears to rise because Earth rotates from west to east."
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "scene_sun_east",
+      "metaphor": "compass",
+      "nodes": [
+        {
+          "id": "v_compass",
+          "primitive": "compass",
+          "label": "Compass",
+          "role": "anchor",
+          "position": [0, 0, 0],
+          "size": [6, 0.3, 6]
+        },
+        {
+          "id": "e_sun",
+          "primitive": "sun",
+          "label": "Sun",
+          "role": "actor",
+          "style": { "emphasis": "highlight", "colorToken": "celestial.sun" },
+          "drillable": true,
+          "position": [3.5, 1, 0],
+          "size": [1.2, 1.2, 1.2]
+        },
+        {
+          "id": "e_east",
+          "primitive": "labeled_card",
+          "label": "East",
+          "role": "context",
+          "style": { "emphasis": "highlight" },
+          "drillable": true,
+          "position": [4.5, 0, 0],
+          "size": [1.4, 0.4, 0.8]
+        },
+        {
+          "id": "e_rises",
+          "primitive": "curved_arrow",
+          "label": "Rises",
+          "role": "modifier",
+          "position": [3.4, 1.8, 0],
+          "size": [1.5, 1, 0.2]
+        },
+        {
+          "id": "v_horizon",
+          "primitive": "horizon",
+          "label": "Horizon",
+          "role": "context",
+          "position": [0, -0.5, 0],
+          "size": [10, 0.1, 1]
+        }
+      ],
+      "edges": [
+        {
+          "id": "ve_motion",
+          "from": "e_sun",
+          "to": "e_rises",
+          "kind": "path",
+          "label": "appears to rise",
+          "animated": true
+        },
+        { "id": "ve_east", "from": "v_compass", "to": "e_east", "kind": "line" }
+      ],
+      "camera": "iso",
+      "dimension": "3d",
+      "bounds": { "min": [-6, -2, -4], "max": [6, 4, 4] }
+    }
+  ],
+  "breadcrumbs": [{ "id": "10000000-0000-4000-8000-000000000001", "label": "Sun and East" }]
+}

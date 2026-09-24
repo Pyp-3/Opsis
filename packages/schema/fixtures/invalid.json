@@ -1,0 +1,27 @@
+[
+  {
+    "schema": "visualizeRequest",
+    "expectedRule": "String must contain at most 500 character(s)",
+    "value": {
+      "utterance": "This fixture is replaced by the test with a deterministic 501-character value."
+    }
+  },
+  {
+    "schema": "explanation",
+    "expectedRule": "summary must contain at most 25 words",
+    "value": {
+      "schemaVersion": "exp/1",
+      "nodeId": "e_tomato",
+      "osgId": "20000000-0000-4000-8000-000000000002",
+      "level": "summary",
+      "audience": "child",
+      "summary": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six",
+      "confidence": "high"
+    }
+  },
+  {
+    "schema": "error",
+    "expectedRule": "Required",
+    "value": { "code": "FAILED", "message": "Failed", "stage": "layout" }
+  }
+]

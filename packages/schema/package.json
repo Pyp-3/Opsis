@@ -8,6 +8,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test:coverage": "pnpm --dir ../.. exec vitest run packages/schema --coverage --coverage.include='packages/schema/src/{contracts,hashing,json-schema}.ts' --coverage.thresholds.lines=100 --coverage.thresholds.branches=100",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.7"
   }
 }

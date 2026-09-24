@@ -1,0 +1,192 @@
+{
+  "schemaVersion": "osg/1",
+  "id": "20000000-0000-4000-8000-000000000002",
+  "title": "A Sandwich and Its Parts",
+  "utterance": "A sandwich can contain bread, tomato, ham.",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "seed": 202,
+  "sg": {
+    "schemaVersion": "sg/1",
+    "utterance": "A sandwich can contain bread, tomato, ham.",
+    "language": "en",
+    "entities": [
+      {
+        "id": "e_sandwich",
+        "surface": "sandwich",
+        "lemma": "sandwich",
+        "kind": "object",
+        "span": [2, 10],
+        "summary": "A sandwich layers fillings between pieces of bread."
+      },
+      {
+        "id": "e_bread_top",
+        "surface": "bread",
+        "lemma": "bread",
+        "kind": "substance",
+        "span": [23, 28],
+        "attributes": { "placement": "top" },
+        "summary": "Bread can form the top layer of a sandwich."
+      },
+      {
+        "id": "e_tomato",
+        "surface": "tomato",
+        "lemma": "tomato",
+        "kind": "substance",
+        "span": [30, 36],
+        "summary": "Tomato adds a juicy vegetable layer to the sandwich."
+      },
+      {
+        "id": "e_ham",
+        "surface": "ham",
+        "lemma": "ham",
+        "kind": "substance",
+        "span": [38, 41],
+        "summary": "Ham is a cured meat that can be a sandwich filling."
+      },
+      {
+        "id": "e_bread_bottom",
+        "surface": "bread",
+        "lemma": "bread",
+        "kind": "substance",
+        "span": [23, 28],
+        "attributes": { "placement": "bottom" },
+        "summary": "Bread can form the bottom layer of a sandwich."
+      }
+    ],
+    "relations": [
+      {
+        "id": "r_bread_top",
+        "type": "contains",
+        "source": "e_sandwich",
+        "target": "e_bread_top",
+        "modality": "possible",
+        "order": 1
+      },
+      {
+        "id": "r_ham",
+        "type": "contains",
+        "source": "e_sandwich",
+        "target": "e_ham",
+        "modality": "possible",
+        "order": 2
+      },
+      {
+        "id": "r_tomato",
+        "type": "contains",
+        "source": "e_sandwich",
+        "target": "e_tomato",
+        "modality": "possible",
+        "order": 3
+      },
+      {
+        "id": "r_bread_bottom",
+        "type": "contains",
+        "source": "e_sandwich",
+        "target": "e_bread_bottom",
+        "modality": "possible",
+        "order": 4
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "scene_sandwich",
+      "metaphor": "stack",
+      "nodes": [
+        {
+          "id": "e_sandwich",
+          "primitive": "group_frame",
+          "label": "Sandwich",
+          "role": "anchor",
+          "position": [0, 1.5, 0],
+          "size": [4.6, 4, 3.2]
+        },
+        {
+          "id": "e_bread_top",
+          "primitive": "bread_slice",
+          "label": "Bread top",
+          "role": "part",
+          "optional": true,
+          "explodable": true,
+          "drillable": true,
+          "position": [0, 3, 0],
+          "size": [4, 0.8, 3],
+          "explodedPosition": [0, 6, 0]
+        },
+        {
+          "id": "e_ham",
+          "primitive": "generic_layer",
+          "label": "Ham",
+          "role": "part",
+          "optional": true,
+          "explodable": true,
+          "drillable": true,
+          "style": { "colorToken": "food.ham" },
+          "position": [0, 2.1, 0],
+          "size": [3.7, 0.35, 2.7],
+          "explodedPosition": [0, 3.5, 0]
+        },
+        {
+          "id": "e_tomato",
+          "primitive": "slice",
+          "label": "Tomato",
+          "role": "part",
+          "optional": true,
+          "explodable": true,
+          "drillable": true,
+          "style": { "colorToken": "food.tomato" },
+          "position": [0, 1.5, 0],
+          "size": [3.5, 0.4, 2.6],
+          "explodedPosition": [0, 1, 0]
+        },
+        {
+          "id": "e_bread_bottom",
+          "primitive": "bread_slice",
+          "label": "Bread bottom",
+          "role": "part",
+          "optional": true,
+          "explodable": true,
+          "drillable": true,
+          "position": [0, 0.5, 0],
+          "size": [4, 0.8, 3],
+          "rotation": [0, 0, 3.14159],
+          "explodedPosition": [0, -1.5, 0]
+        }
+      ],
+      "edges": [
+        {
+          "id": "ve_top",
+          "from": "e_sandwich",
+          "to": "e_bread_top",
+          "kind": "containment",
+          "label": "optional"
+        },
+        {
+          "id": "ve_ham",
+          "from": "e_sandwich",
+          "to": "e_ham",
+          "kind": "containment",
+          "label": "optional"
+        },
+        {
+          "id": "ve_tomato",
+          "from": "e_sandwich",
+          "to": "e_tomato",
+          "kind": "containment",
+          "label": "optional"
+        },
+        {
+          "id": "ve_bottom",
+          "from": "e_sandwich",
+          "to": "e_bread_bottom",
+          "kind": "containment",
+          "label": "optional"
+        }
+      ],
+      "camera": "iso",
+      "dimension": "3d",
+      "bounds": { "min": [-3, -2, -2], "max": [3, 7, 2] }
+    }
+  ],
+  "breadcrumbs": [{ "id": "20000000-0000-4000-8000-000000000002", "label": "Sandwich" }]
+}

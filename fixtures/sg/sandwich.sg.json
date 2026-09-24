@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "sg/1",
+  "utterance": "A sandwich can contain bread, tomato, ham.",
+  "language": "en",
+  "entities": [
+    {
+      "id": "e_sandwich",
+      "surface": "sandwich",
+      "lemma": "sandwich",
+      "kind": "object",
+      "span": [2, 10],
+      "summary": "A sandwich layers fillings between pieces of bread."
+    },
+    {
+      "id": "e_bread_top",
+      "surface": "bread",
+      "lemma": "bread",
+      "kind": "substance",
+      "span": [23, 28],
+      "attributes": { "placement": "top" },
+      "summary": "Bread can form the top layer of a sandwich."
+    },
+    {
+      "id": "e_tomato",
+      "surface": "tomato",
+      "lemma": "tomato",
+      "kind": "substance",
+      "span": [30, 36],
+      "summary": "Tomato adds a juicy vegetable layer to the sandwich."
+    },
+    {
+      "id": "e_ham",
+      "surface": "ham",
+      "lemma": "ham",
+      "kind": "substance",
+      "span": [38, 41],
+      "summary": "Ham is a cured meat that can be a sandwich filling."
+    },
+    {
+      "id": "e_bread_bottom",
+      "surface": "bread",
+      "lemma": "bread",
+      "kind": "substance",
+      "span": [23, 28],
+      "attributes": { "placement": "bottom" },
+      "summary": "Bread can form the bottom layer of a sandwich."
+    }
+  ],
+  "relations": [
+    {
+      "id": "r_bread_top",
+      "type": "contains",
+      "source": "e_sandwich",
+      "target": "e_bread_top",
+      "modality": "possible",
+      "order": 1
+    },
+    {
+      "id": "r_ham",
+      "type": "contains",
+      "source": "e_sandwich",
+      "target": "e_ham",
+      "modality": "possible",
+      "order": 2
+    },
+    {
+      "id": "r_tomato",
+      "type": "contains",
+      "source": "e_sandwich",
+      "target": "e_tomato",
+      "modality": "possible",
+      "order": 3
+    },
+    {
+      "id": "r_bread_bottom",
+      "type": "contains",
+      "source": "e_sandwich",
+      "target": "e_bread_bottom",
+      "modality": "possible",
+      "order": 4
+    }
+  ]
+}
