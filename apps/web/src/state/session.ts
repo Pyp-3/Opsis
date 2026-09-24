@@ -53,6 +53,8 @@ export type SessionState = {
   viewMode: '2d' | '3d';
   /** `/v1/explain` results keyed by `explanationKey`. */
   explanations: Record<string, ExplanationEntry>;
+  /** Node ids known to exist in the API's persisted copy of each diagram. */
+  persistedNodeIds: Record<string, string[]>;
 
   setDraft: (draft: string) => void;
   /** Draws `utterance` (default: the draft) and puts it in the input bar. */
@@ -73,6 +75,8 @@ export type SessionState = {
   setViewMode: (mode: '2d' | '3d') => void;
   /** Replaces the current OSG after a canvas edit has passed shared-schema validation. */
   replaceCurrentOsg: (osg: OSG) => void;
+  /** Records the server-confirmed node set after an explicit save. */
+  markPersisted: (osg: OSG) => void;
   /** Loads a saved diagram by id, used to restore the last explicit save after reload. */
   restoreSaved: (id: string) => void;
 };
@@ -92,6 +96,10 @@ export function explanationKey(
 /** The diagram on screen. */
 export function currentOsg(state: Pick<SessionState, 'trail'>): OSG | undefined {
   return state.trail[state.trail.length - 1];
+}
+
+function persistedNodes(osg: OSG): string[] {
+  return osg.scenes.flatMap((scene) => scene.nodes.map((node) => node.id));
 }
 
 /** True if any node in the scene can explode. */
@@ -124,14 +132,18 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
       (trail) => {
         if (inFlight !== controller) return;
         inFlight = null;
-        set({
+        set((state) => ({
           status: 'ready',
           stage: null,
           trail,
           selectedId: null,
           panelTab: 'summary',
           exploded: false,
-        });
+          persistedNodeIds: {
+            ...state.persistedNodeIds,
+            ...Object.fromEntries(trail.map((osg) => [osg.id, persistedNodes(osg)])),
+          },
+        }));
       },
       (error: unknown) => {
         if (inFlight !== controller) return;
@@ -170,6 +182,7 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
     reduceMotion: null,
     viewMode: '3d',
     explanations: {},
+    persistedNodeIds: {},
 
     setDraft: (draft) => set({ draft }),
 
@@ -201,6 +214,7 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
       const { audience, explanations } = get();
       const osg = currentOsg(get());
       if (!osg) return;
+      if (!get().persistedNodeIds[osg.id]?.includes(nodeId)) return;
       const key = explanationKey(osg.id, nodeId, level, audience);
       const cached = explanations[key];
       if (cached && cached.status !== 'error') return;
@@ -289,6 +303,13 @@ export function createSessionStore(api: SessionApi = defaultApi): SessionStore {
           osg.scenes.some((scene) => scene.nodes.some((n) => n.id === state.selectedId))
             ? state.selectedId
             : null,
+      })),
+    markPersisted: (osg) =>
+      set((state) => ({
+        persistedNodeIds: {
+          ...state.persistedNodeIds,
+          [osg.id]: persistedNodes(osg),
+        },
       })),
     restoreSaved: (id) => {
       if (get().trail.length > 0) return;

@@ -109,6 +109,7 @@ export const en = {
   'panel.openHint': 'See {label} as its own diagram',
   'panel.loading': 'Loading…',
   'panel.error': 'Could not load this explanation.',
+  'panel.saveForExplanation': 'Save this diagram to explain a new node.',
   'panel.optionalBadge': 'optional',
   'panel.optionalHint': 'The sentence says “can”: this part is possible, not required.',
   'panel.unsure': 'Unsure',

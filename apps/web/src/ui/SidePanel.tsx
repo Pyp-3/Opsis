@@ -117,6 +117,7 @@ export function SidePanel({ node, info }: { node: PositionedNode; info: NodeInfo
   const osgId = useSession((s) => currentOsg(s)?.id ?? '');
   const tab = useSession((s) => s.panelTab);
   const audience = useSession((s) => s.audience);
+  const persisted = useSession((s) => s.persistedNodeIds[osgId]?.includes(node.id) ?? false);
   const setTab = useSession((s) => s.setPanelTab);
   const select = useSession((s) => s.select);
   const open = useSession((s) => s.open);
@@ -128,7 +129,9 @@ export function SidePanel({ node, info }: { node: PositionedNode; info: NodeInfo
     explanation: null,
   });
 
-  useEffect(() => request(node.id, tab), [request, node.id, tab, audience]);
+  useEffect(() => {
+    if (persisted) request(node.id, tab);
+  }, [request, node.id, tab, audience, persisted]);
 
   const data = entry?.status === 'ready' ? entry.data : undefined;
   const tabs: Level[] = ['summary', 'explanation'];
@@ -184,10 +187,14 @@ export function SidePanel({ node, info }: { node: PositionedNode; info: NodeInfo
       >
         {tab === 'summary' ? (
           <SummaryTab info={info} data={data} />
+        ) : !persisted ? (
+          <p className="opsis-muted" role="status">
+            {t('panel.saveForExplanation')}
+          </p>
         ) : (
           <ExplanationTab info={info} data={data} />
         )}
-        {tab === 'explanation' || entry?.status !== 'ready' ? (
+        {persisted && (tab === 'explanation' || entry?.status !== 'ready') ? (
           <EntryStatus entry={entry} retry={() => request(node.id, tab)} />
         ) : null}
       </div>

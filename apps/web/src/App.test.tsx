@@ -256,7 +256,7 @@ describe('App', () => {
   });
 
   it('keeps unsaved 2D history and dirty state across a 3D round trip', async () => {
-    const { store } = renderApp();
+    const { store, api } = renderApp();
     await draw('sandwich');
     fireEvent.click(screen.getByRole('button', { name: '2D' }));
 
@@ -270,6 +270,10 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '3D' }));
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getAllByText('New idea was added to this diagram.').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain more' }));
+    expect(screen.getByText('Save this diagram to explain a new node.')).toBeDefined();
+    expect(api.explain).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '2D' }));
 
     const undo = await screen.findByRole('button', { name: 'Undo' });

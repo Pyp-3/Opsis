@@ -95,6 +95,7 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   const fitSignal = useSession((state) => state.fitSignal);
   const select = useSession((state) => state.select);
   const replaceCurrentOsg = useSession((state) => state.replaceCurrentOsg);
+  const markPersisted = useSession((state) => state.markPersisted);
   const [history] = useState(() => new SnapshotHistory(osg));
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [label, setLabel] = useState(t('canvas.newIdea'));
@@ -190,6 +191,7 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
     try {
       const saved = await saveOsg(store.getState().trail.at(-1) ?? osg);
       replaceCurrentOsg(saved);
+      markPersisted(saved);
       window.localStorage.setItem(LAST_OSG_STORAGE_KEY, saved.id);
       setDirty(false);
       setMessage(t('canvas.saved'));
@@ -201,6 +203,8 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   const share = async () => {
     try {
       const saved = await saveOsg(store.getState().trail.at(-1) ?? osg);
+      replaceCurrentOsg(saved);
+      markPersisted(saved);
       const result = await shareOsg(saved.id);
       window.localStorage.setItem(LAST_OSG_STORAGE_KEY, saved.id);
       const url = new URL(result.url, window.location.href).href;

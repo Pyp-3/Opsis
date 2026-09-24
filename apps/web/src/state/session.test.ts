@@ -61,6 +61,32 @@ describe('session store', () => {
     expect(store.getState().explanations[key]).toMatchObject({ status: 'ready' });
   });
 
+  it('does not request an explanation for a locally added node until it is persisted', async () => {
+    const api = fakeApi();
+    const store = createSessionStore(api);
+    store.getState().submit('sandwich');
+    await settle();
+    const osg = structuredClone(currentOsg(store.getState())!);
+    const sourceNode = osg.scenes[0]!.nodes[1]!;
+    osg.scenes[0]!.nodes.push({ ...sourceNode, id: 'user_new', label: 'New idea' });
+    osg.sg.entities.push({
+      ...osg.sg.entities[1]!,
+      id: 'user_new',
+      surface: 'New idea',
+      lemma: 'new idea',
+      summary: 'New idea was added to this diagram.',
+    });
+    store.getState().replaceCurrentOsg(osg);
+
+    store.getState().requestExplanation('user_new', 'summary');
+    expect(api.explain).not.toHaveBeenCalled();
+
+    store.getState().markPersisted(osg);
+    store.getState().requestExplanation('user_new', 'summary');
+    await settle();
+    expect(api.explain).toHaveBeenCalledOnce();
+  });
+
   it('opens a drillable part and goes back up the breadcrumbs', async () => {
     const store = createSessionStore(fakeApi());
     store.getState().submit('sandwich');
