@@ -1,6 +1,6 @@
 import { OSGSchema, type OSG, type PositionedNode, type PositionedScene } from '@opsis/schema';
 import { t } from '@opsis/ui';
-import type { Edge, Node } from '@xyflow/react';
+import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
 export const FLOW_SCALE = 100;
 
@@ -31,6 +31,12 @@ function sceneBounds(nodes: PositionedNode[]): PositionedScene['bounds'] {
   };
 }
 
+/** Edge kinds that carry a direction and therefore end in an arrowhead (oriented-flow grammar). */
+const DIRECTED_EDGE_KINDS: ReadonlySet<string> = new Set(['arrow', 'path']);
+
+/** Edge colour: a token with ≥ 3:1 contrast on the canvas (WCAG 1.4.11). */
+export const FLOW_EDGE_COLOR = 'var(--opsis-ui-textMuted)';
+
 /** Converts a positioned OSG scene to React Flow's node and edge model. */
 export function osgToFlow(
   osg: OSG,
@@ -57,6 +63,9 @@ export function osgToFlow(
       ...(edge.label ? { label: edge.label } : {}),
       ...(edge.animated !== undefined ? { animated: edge.animated } : {}),
       type: edge.kind === 'path' ? 'smoothstep' : 'default',
+      ...(DIRECTED_EDGE_KINDS.has(edge.kind)
+        ? { markerEnd: { type: MarkerType.ArrowClosed, color: FLOW_EDGE_COLOR } }
+        : {}),
       data: { kind: edge.kind },
     })),
   };

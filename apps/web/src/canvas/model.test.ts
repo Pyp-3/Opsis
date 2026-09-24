@@ -6,9 +6,27 @@ import {
   deleteEdge,
   deleteNode,
   moveNode,
+  osgToFlow,
   relabelNode,
   relinkEdge,
 } from './model';
+
+describe('oriented-flow edges', () => {
+  it('ends directed edges in an arrowhead and leaves bearing lines plain', () => {
+    const osg = connectNodes(loadFixture('sandwich'), 'e_sandwich', 'e_tomato', 'user_arrow');
+    expect(osg.success).toBe(true);
+    if (!osg.success) return;
+    const { edges } = osgToFlow(osg.osg);
+    const arrow = edges.find((edge) => edge.id === 'user_arrow');
+    expect(arrow?.markerEnd).toMatchObject({ type: 'arrowclosed' });
+    for (const edge of edges) {
+      const kind = (edge.data as { kind: string }).kind;
+      expect(edge.markerEnd !== undefined, `${edge.id} (${kind})`).toBe(
+        kind === 'arrow' || kind === 'path',
+      );
+    }
+  });
+});
 
 describe('validated OSG edits', () => {
   it('syncs move, label, add, connect, relink and delete edits into a valid OSG', () => {

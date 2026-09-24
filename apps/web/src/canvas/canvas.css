@@ -73,6 +73,15 @@
 .react-flow__edge {
   transition: opacity 260ms ease;
 }
+.react-flow__edge-path {
+  stroke: var(--opsis-ui-textMuted);
+  stroke-width: 2;
+}
+/* Dashes mean "optional" in Opsis, so animated edges stay solid. */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: none;
+  animation: none;
+}
 .opsis-flow-edge--emphasized .react-flow__edge-path {
   stroke: var(--opsis-ui-accent);
   stroke-width: 3;
