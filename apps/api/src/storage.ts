@@ -113,6 +113,20 @@ export class ApiStore {
     return document;
   }
 
+  /**
+   * Stores a pipeline-generated OSG only when its id is new and returns the stored document, so a
+   * user edit saved through PUT survives regeneration with the same deterministic id.
+   */
+  insertOsgIfAbsent(value: OSG): OSG {
+    const document = OSGSchema.parse(value);
+    this.db
+      .insert(osgDocuments)
+      .values({ id: document.id, document: JSON.stringify(document), updatedAt: Date.now() })
+      .onConflictDoNothing({ target: osgDocuments.id })
+      .run();
+    return this.getOsg(document.id) ?? document;
+  }
+
   /** Loads a persisted explanation by its complete request identity. */
   getExplanation(key: string): Explanation | undefined {
     const row = this.db.select().from(explanations).where(eq(explanations.key, key)).get();
@@ -138,6 +152,12 @@ export class ApiStore {
   /** Records a read-only share token for an existing OSG. */
   putShare(token: string, osgId: string): void {
     this.db.insert(shares).values({ token, osgId, createdAt: Date.now() }).run();
+  }
+
+  /** Resolves a share token to the OSG it grants read access to. */
+  getSharedOsg(token: string): OSG | undefined {
+    const row = this.db.select().from(shares).where(eq(shares.token, token)).get();
+    return row ? this.getOsg(row.osgId) : undefined;
   }
 
   /** Closes the SQLite connection. */

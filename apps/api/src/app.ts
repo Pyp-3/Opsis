@@ -35,6 +35,10 @@ import { llmClientFromEnvironment } from './llm.js';
 import { ApiStore } from './storage.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
+/** Share tokens are 24 random bytes encoded as base64url. */
+const ShareTokenParamsSchema = z
+  .object({ token: z.string().regex(/^[A-Za-z0-9_-]{32}$/u) })
+  .strict();
 const HealthResponseSchema = z.object({ status: z.literal('ok') }).strict();
 const ShareResponseSchema = z
   .object({
@@ -123,7 +127,7 @@ async function runVisualize(
     osg = await layoutVisualPlan(plan, sg, { seed: config.seed });
     store.setCache(layoutKey, osg);
   }
-  const persisted = store.putOsg(OSGSchema.parse(osg));
+  const persisted = store.insertOsgIfAbsent(OSGSchema.parse(osg));
   progress('done');
   return persisted;
 }
@@ -260,14 +264,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const body = DrilldownRequestSchema.parse(request.body);
     const key = createCacheKey('drilldown', body, {}, modelId(llm));
     const cached = store.getCache<OSG>(key);
-    if (cached) return OSGSchema.parse(store.putOsg(cached));
+    if (cached) return store.insertOsgIfAbsent(OSGSchema.parse(cached));
     const child = await drilldown(body.osgId, body.nodeId, {
       loadOsg: (id) => store.getOsg(id),
       llm,
     });
     const document = OSGSchema.parse(child);
     store.setCache(key, document);
-    return store.putOsg(document);
+    return store.insertOsgIfAbsent(document);
   });
 
   app.get('/v1/osg/:id', async (request, reply) => {
@@ -302,9 +306,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return ShareResponseSchema.parse({
       token,
       osgId: id,
-      url: `/v1/osg/${id}?share=${token}`,
+      url: `/v1/shared/${token}`,
       readOnly: true,
     });
+  });
+
+  // Read-only by construction: only GET is registered for share tokens.
+  app.get('/v1/shared/:token', async (request, reply) => {
+    const { token } = ShareTokenParamsSchema.parse(request.params);
+    const osg = store.getSharedOsg(token);
+    if (!osg) {
+      return reply
+        .code(404)
+        .send(errorResponse('share_not_found', 'That shared diagram could not be found.', 'share'));
+    }
+    return OSGSchema.parse(osg);
   });
 
   return app;

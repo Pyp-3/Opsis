@@ -161,15 +161,80 @@ describe('Opsis API', () => {
     expect(ErrorResponseSchema.safeParse(invalid.json()).success).toBe(true);
   });
 
-  it('POST /v1/share/:id returns a read-only link and validates the id', async () => {
+  it('keeps a saved edit when the same sentence is visualized again', async () => {
+    const payload = {
+      utterance: 'A bicycle has two wheels, a frame, pedals and a chain.',
+      seed: 8,
+    };
+    const first = OSGSchema.parse(
+      (await app.inject({ method: 'POST', url: '/v1/visualize', payload })).json(),
+    );
+    const saved = await app.inject({
+      method: 'PUT',
+      url: `/v1/osg/${first.id}`,
+      payload: { ...first, title: 'MY EDIT' },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    const again = await app.inject({ method: 'POST', url: '/v1/visualize', payload });
+    expect(again.statusCode).toBe(200);
+    expect(OSGSchema.parse(again.json()).id).toBe(first.id);
+    const loaded = await app.inject({ method: 'GET', url: `/v1/osg/${first.id}` });
+    expect(OSGSchema.parse(loaded.json()).title).toBe('MY EDIT');
+  });
+
+  it('keeps a saved edit when the same drill-down is opened again', async () => {
+    const payload = { osgId: osg.id, nodeId: tomatoId };
+    const child = OSGSchema.parse(
+      (await app.inject({ method: 'POST', url: '/v1/drilldown', payload })).json(),
+    );
+    await app.inject({
+      method: 'PUT',
+      url: `/v1/osg/${child.id}`,
+      payload: { ...child, title: 'MY TOMATO' },
+    });
+    await app.inject({ method: 'POST', url: '/v1/drilldown', payload });
+    const loaded = await app.inject({ method: 'GET', url: `/v1/osg/${child.id}` });
+    expect(OSGSchema.parse(loaded.json()).title).toBe('MY TOMATO');
+  });
+
+  it('POST /v1/share/:id returns a token link that does not expose the editable route', async () => {
     const response = await app.inject({ method: 'POST', url: `/v1/share/${osg.id}` });
     expect(response.statusCode).toBe(200);
+    const share = response.json() as { token: string; url: string };
     expect(response.json()).toMatchObject({ osgId: osg.id, readOnly: true });
-    expect(response.json().url).toContain(response.json().token);
+    expect(share.url).toBe(`/v1/shared/${share.token}`);
+    expect(share.url).not.toContain('/v1/osg/');
 
     const invalid = await app.inject({ method: 'POST', url: '/v1/share/nope' });
     expect(invalid.statusCode).toBe(400);
     expect(ErrorResponseSchema.safeParse(invalid.json()).success).toBe(true);
+  });
+
+  it('GET /v1/shared/:token serves the shared OSG read-only', async () => {
+    const share = (await app.inject({ method: 'POST', url: `/v1/share/${osg.id}` })).json() as {
+      url: string;
+    };
+    const response = await app.inject({ method: 'GET', url: share.url });
+    expect(response.statusCode).toBe(200);
+    expect(OSGSchema.parse(response.json()).id).toBe(osg.id);
+
+    for (const method of ['PUT', 'POST', 'DELETE'] as const) {
+      const write = await app.inject({ method, url: share.url, payload: osg });
+      expect(write.statusCode).toBe(404);
+    }
+  });
+
+  it('GET /v1/shared/:token returns 404 for an unknown token', async () => {
+    const response = await app.inject({ method: 'GET', url: `/v1/shared/${'A'.repeat(32)}` });
+    expect(response.statusCode).toBe(404);
+    expect(ErrorResponseSchema.parse(response.json()).code).toBe('share_not_found');
+  });
+
+  it('GET /v1/shared/:token rejects a malformed token', async () => {
+    const response = await app.inject({ method: 'GET', url: '/v1/shared/not-a-token!' });
+    expect(response.statusCode).toBe(400);
+    expect(ErrorResponseSchema.parse(response.json()).code).toBe('invalid_request');
   });
 });
 
@@ -186,6 +251,16 @@ describe('rate limiting', () => {
       stage: 'request',
       retryable: true,
     });
+    await app.close();
+  });
+
+  it('applies to shared links too', async () => {
+    const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
+    const url = `/v1/shared/${'A'.repeat(32)}`;
+    await app.inject({ method: 'GET', url });
+    const response = await app.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(429);
+    expect(ErrorResponseSchema.parse(response.json()).code).toBe('rate_limit_exceeded');
     await app.close();
   });
 });

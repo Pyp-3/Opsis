@@ -14,6 +14,23 @@ corepack pnpm --filter api dev
 The server binds to `127.0.0.1:8000` by default. `POST /v1/visualize` returns JSON normally;
 send `Accept: text/event-stream` to receive `parsing`, `mapping`, `layout`, and `done` SSE events.
 
+## Persistence and sharing
+
+- `GET /v1/osg/:id` loads a stored diagram. `PUT /v1/osg/:id` saves edits.
+- Pipeline output never overwrites a stored diagram. OSG ids are deterministic per utterance and
+  seed, so visualizing the same sentence again (or reopening the same drill-down) returns the
+  stored document, including any edits the user saved.
+- `POST /v1/share/:id` creates a random share token and returns
+  `{ token, osgId, url: "/v1/shared/<token>", readOnly: true }`.
+- `GET /v1/shared/:token` is the only route that accepts a token, and it only reads. Unknown
+  tokens return `404 share_not_found`. Malformed tokens return `400 invalid_request`. Shared links
+  are rate-limited the same way as every other non-health route.
+
+**MVP limitation:** there are no accounts yet, so the id-based `PUT /v1/osg/:id` is
+unauthenticated. Anyone who knows a diagram's id can overwrite it, and the OSG body served by a
+share link includes that id. The share route is read-only, but full write protection will need a
+separate edit-capability design, such as an edit token issued at creation and required by `PUT`.
+
 ## Environment variables
 
 | Variable                     | Default                      | Purpose                                                                                |
