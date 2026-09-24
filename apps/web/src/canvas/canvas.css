@@ -22,6 +22,11 @@
   border-radius: 0.35rem;
   padding: 0.35rem;
 }
+.opsis-editor__toolbar button:disabled,
+.opsis-editor__toolbar input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .opsis-editor__message {
   margin: 0;
   color: var(--opsis-ui-textMuted);
@@ -44,6 +49,10 @@
   background: var(--opsis-ui-surface);
   color: var(--opsis-ui-text);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  transition:
+    opacity 260ms ease,
+    transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease;
 }
 .opsis-flow-node--selected {
   border-color: var(--opsis-ui-accent);
@@ -51,6 +60,14 @@
 }
 .opsis-flow-node--optional {
   border-style: dashed;
+}
+.react-flow__edge {
+  transition: opacity 260ms ease;
+}
+.opsis-flow-edge--emphasized .react-flow__edge-path {
+  stroke: var(--opsis-ui-accent);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--opsis-ui-accent) 45%, transparent));
 }
 .opsis-flow-node input {
   width: 8rem;
@@ -64,6 +81,33 @@
   display: inline-flex;
   gap: 0.25rem;
   align-items: center;
+}
+.opsis-presentation-controls {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-inline-start: 0.35rem;
+  border-inline-start: 1px solid var(--opsis-ui-outline);
+}
+.opsis-presentation-controls__scrubber {
+  display: inline-flex !important;
+}
+.opsis-presentation-controls__scrubber input {
+  width: clamp(7rem, 16vw, 12rem);
+  padding: 0;
+}
+.opsis-presentation-controls__status {
+  min-width: 9rem;
+  max-width: 16rem;
+  color: var(--opsis-ui-textMuted);
+  font-size: 0.85rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .opsis-flow-node,
+  .react-flow__edge {
+    transition: none;
+  }
 }
 @media (max-width: 640px) {
   .opsis-editor__flow {

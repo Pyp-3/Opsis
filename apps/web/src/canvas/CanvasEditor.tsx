@@ -32,9 +32,16 @@ import {
   type CanvasNodeData,
   type OsgEditResult,
 } from './model';
+import { PresentationControls } from './PresentationControls';
+import { clampPresentationStep, createPresentationPlan } from './presentation';
+import { useCanvasReducedMotion } from './useCanvasReducedMotion';
 import './canvas.css';
 
-type EditorNodeData = CanvasNodeData & { onRelabel: (id: string, label: string) => void };
+type EditorNodeData = CanvasNodeData & {
+  onRelabel: (id: string, label: string) => void;
+  presentationActive: boolean;
+  presentationHidden: boolean;
+};
 
 function editableNodeId(): string {
   const suffix = globalThis.crypto?.randomUUID?.().replaceAll('-', '') ?? String(Date.now());
@@ -45,7 +52,8 @@ function editableNodeId(): string {
 function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
   return (
     <div
-      className={`opsis-flow-node${selected ? ' opsis-flow-node--selected' : ''}${data.optional ? ' opsis-flow-node--optional' : ''}`}
+      className={`opsis-flow-node${selected ? ' opsis-flow-node--selected' : ''}${data.optional ? ' opsis-flow-node--optional' : ''}${data.presentationHidden ? ' opsis-flow-node--presentation-hidden' : ''}`}
+      aria-hidden={data.presentationHidden || undefined}
     >
       <Handle type="target" position={Position.Left} />
       <label>
@@ -54,6 +62,8 @@ function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
           key={data.label}
           className="nodrag"
           defaultValue={data.label}
+          disabled={data.presentationActive}
+          tabIndex={data.presentationHidden ? -1 : undefined}
           onBlur={(event) => {
             if (event.currentTarget.value !== data.label)
               data.onRelabel(id, event.currentTarget.value);
@@ -76,11 +86,23 @@ function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
 
 const nodeTypes = { editable: EditableNode };
 
-function FitSignal({ signal }: { signal: number }) {
+function FitSignal({
+  signal,
+  focusNodeIds,
+  reduceMotion,
+}: {
+  signal: number;
+  focusNodeIds?: readonly string[];
+  reduceMotion: boolean;
+}) {
   const { fitView } = useReactFlow();
   useEffect(() => {
-    void fitView({ padding: 0.1, duration: 250 });
-  }, [fitView, signal]);
+    void fitView({
+      padding: focusNodeIds ? 0.3 : 0.1,
+      duration: reduceMotion ? 0 : 450,
+      ...(focusNodeIds ? { nodes: focusNodeIds.map((id) => ({ id })) } : {}),
+    });
+  }, [fitView, focusNodeIds, reduceMotion, signal]);
   return null;
 }
 
@@ -96,11 +118,18 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   const select = useSession((state) => state.select);
   const replaceCurrentOsg = useSession((state) => state.replaceCurrentOsg);
   const markPersisted = useSession((state) => state.markPersisted);
+  const reduceMotionOverride = useSession((state) => state.reduceMotion);
+  const reduceMotion = useCanvasReducedMotion(reduceMotionOverride);
   const [history] = useState(() => new SnapshotHistory(osg));
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [label, setLabel] = useState(t('canvas.newIdea'));
   const [message, setMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [presentationActive, setPresentationActive] = useState(false);
+  const [presentationPlaying, setPresentationPlaying] = useState(false);
+  const [presentationStep, setPresentationStep] = useState(0);
+  const presentation = useMemo(() => createPresentationPlan(osg), [osg]);
+  const currentStep = presentation.steps[presentationStep];
   const updateHistoryState = useCallback(
     () => setHistoryState({ canUndo: history.canUndo(), canRedo: history.canRedo() }),
     [history],
@@ -127,16 +156,89 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
     [commit, osg],
   );
   const flow = useMemo(() => osgToFlow(osg), [osg]);
+  const visibleNodeIds = useMemo(
+    () => new Set(currentStep?.visibleNodeIds ?? []),
+    [currentStep?.visibleNodeIds],
+  );
+  const visibleEdgeIds = useMemo(
+    () => new Set(currentStep?.visibleEdgeIds ?? []),
+    [currentStep?.visibleEdgeIds],
+  );
+  const emphasizedEdgeIds = useMemo(
+    () => new Set(currentStep?.emphasizedEdgeIds ?? []),
+    [currentStep?.emphasizedEdgeIds],
+  );
   const nodes: Node<EditorNodeData>[] = flow.nodes.map((node) => ({
     ...node,
     type: 'editable',
     selected: node.id === selectedId,
-    data: { ...node.data, onRelabel: relabel },
+    draggable: !presentationActive,
+    connectable: !presentationActive,
+    focusable: !presentationActive || visibleNodeIds.has(node.id),
+    ...(presentationActive
+      ? {
+          style: {
+            opacity: visibleNodeIds.has(node.id) ? 1 : 0,
+            pointerEvents: visibleNodeIds.has(node.id) ? 'auto' : 'none',
+            ...(reduceMotion ? { transitionDuration: '0ms' } : {}),
+          },
+        }
+      : {}),
+    data: {
+      ...node.data,
+      onRelabel: relabel,
+      presentationActive,
+      presentationHidden: presentationActive && !visibleNodeIds.has(node.id),
+    },
   }));
   const edges: Edge[] = flow.edges.map((edge) => ({
     ...edge,
     selected: edge.id === selectedId,
+    focusable: !presentationActive || visibleEdgeIds.has(edge.id),
+    ...(presentationActive
+      ? {
+          animated: emphasizedEdgeIds.has(edge.id) && !reduceMotion,
+          ...(emphasizedEdgeIds.has(edge.id) ? { className: 'opsis-flow-edge--emphasized' } : {}),
+          style: {
+            opacity: visibleEdgeIds.has(edge.id) ? 1 : 0,
+            pointerEvents: visibleEdgeIds.has(edge.id) ? 'auto' : 'none',
+            ...(reduceMotion ? { transitionDuration: '0ms' } : {}),
+          },
+        }
+      : {}),
   }));
+
+  const goToPresentationStep = useCallback(
+    (index: number) => {
+      setPresentationPlaying(false);
+      setPresentationStep(clampPresentationStep(index, presentation.steps.length));
+    },
+    [presentation.steps.length],
+  );
+
+  useEffect(() => {
+    if (!presentationActive) return;
+    select(currentStep?.selectedNodeId ?? null);
+  }, [currentStep?.selectedNodeId, presentationActive, select]);
+
+  useEffect(() => {
+    if (!active || !presentationActive || !presentationPlaying || reduceMotion) return;
+    const timer = window.setTimeout(() => {
+      if (presentationStep >= presentation.steps.length - 1) {
+        setPresentationPlaying(false);
+      } else {
+        setPresentationStep((index) => index + 1);
+      }
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [
+    active,
+    presentation.steps.length,
+    presentationActive,
+    presentationPlaying,
+    presentationStep,
+    reduceMotion,
+  ]);
 
   const restore = useCallback(
     (direction: 'undo' | 'redo') => {
@@ -151,6 +253,7 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
   );
 
   const removeSelected = useCallback(() => {
+    if (presentationActive) return;
     const current = store.getState();
     const currentOsg = current.trail.at(-1);
     const selectedIsEdge = currentOsg?.scenes[0]?.edges.some(
@@ -165,10 +268,10 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
     if (result && commit(result)) {
       select(null);
     }
-  }, [commit, select, store]);
+  }, [commit, presentationActive, select, store]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || presentationActive) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTyping(event.target)) return;
       const modifier = event.ctrlKey || event.metaKey;
@@ -185,7 +288,7 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [active, removeSelected, restore]);
+  }, [active, presentationActive, removeSelected, restore]);
 
   const save = async () => {
     try {
@@ -221,10 +324,16 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
       <div className="opsis-editor__toolbar" role="toolbar" aria-label={t('canvas.toolbar')}>
         <label>
           <span>{t('canvas.addNode')}</span>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} />
+          <input
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            maxLength={80}
+            disabled={presentationActive}
+          />
         </label>
         <button
           type="button"
+          disabled={presentationActive}
           onClick={() => {
             const result = addNode(osg, label, editableNodeId());
             if (commit(result) && result.success)
@@ -233,13 +342,21 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
         >
           {t('canvas.add')}
         </button>
-        <button type="button" onClick={removeSelected} disabled={!selectedId}>
+        <button type="button" onClick={removeSelected} disabled={!selectedId || presentationActive}>
           {t('canvas.deleteSelected')}
         </button>
-        <button type="button" onClick={() => restore('undo')} disabled={!historyState.canUndo}>
+        <button
+          type="button"
+          onClick={() => restore('undo')}
+          disabled={!historyState.canUndo || presentationActive}
+        >
           {t('canvas.undo')}
         </button>
-        <button type="button" onClick={() => restore('redo')} disabled={!historyState.canRedo}>
+        <button
+          type="button"
+          onClick={() => restore('redo')}
+          disabled={!historyState.canRedo || presentationActive}
+        >
           {t('canvas.redo')}
         </button>
         <button type="button" onClick={() => void save()} disabled={!dirty}>
@@ -248,6 +365,41 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
         <button type="button" onClick={() => void share()}>
           {t('canvas.share')}
         </button>
+        <PresentationControls
+          active={presentationActive}
+          playing={presentationPlaying}
+          stepIndex={presentationStep}
+          steps={presentation.steps}
+          onEnter={() => {
+            setPresentationStep(0);
+            setPresentationPlaying(false);
+            setPresentationActive(true);
+          }}
+          onExit={() => {
+            setPresentationPlaying(false);
+            setPresentationActive(false);
+          }}
+          onPlayPause={() => {
+            if (presentationPlaying) {
+              setPresentationPlaying(false);
+            } else if (reduceMotion) {
+              setPresentationStep(Math.max(0, presentation.steps.length - 1));
+            } else {
+              if (presentationStep >= presentation.steps.length - 1) setPresentationStep(0);
+              setPresentationPlaying(true);
+            }
+          }}
+          onReplay={() => {
+            if (reduceMotion) {
+              setPresentationStep(Math.max(0, presentation.steps.length - 1));
+              setPresentationPlaying(false);
+            } else {
+              setPresentationStep(0);
+              setPresentationPlaying(true);
+            }
+          }}
+          onStep={goToPresentationStep}
+        />
       </div>
       {message ? (
         <p className="opsis-editor__message" role="status" aria-live="polite">
@@ -264,27 +416,34 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
           fitView
           fitViewOptions={{ padding: 0.1 }}
           deleteKeyCode={null}
-          nodesConnectable
-          edgesReconnectable
+          nodesConnectable={!presentationActive}
+          edgesReconnectable={!presentationActive}
           onNodeClick={(_event, node) => select(node.id)}
           onEdgeClick={(_event, edge) => select(edge.id)}
           onPaneClick={() => select(null)}
-          onNodeDragStop={(_event, node) =>
-            commit(moveNode(osg, node.id, node.position.x, node.position.y))
-          }
+          onNodeDragStop={(_event, node) => {
+            if (!presentationActive)
+              commit(moveNode(osg, node.id, node.position.x, node.position.y));
+          }}
           onConnect={(connection: Connection) => {
-            if (connection.source && connection.target)
+            if (!presentationActive && connection.source && connection.target)
               commit(connectNodes(osg, connection.source, connection.target, editableNodeId()));
           }}
           onReconnect={(oldEdge, connection) => {
-            if (connection.source && connection.target)
+            if (!presentationActive && connection.source && connection.target)
               commit(relinkEdge(osg, oldEdge.id, connection.source, connection.target));
           }}
         >
           <Background gap={20} />
           <MiniMap pannable zoomable ariaLabel={t('canvas.minimap')} />
           <Controls showInteractive={false} />
-          <FitSignal signal={fitSignal} />
+          <FitSignal
+            signal={fitSignal + (presentationActive ? presentationStep + 1 : 0)}
+            {...(presentationActive && currentStep
+              ? { focusNodeIds: currentStep.focusNodeIds }
+              : {})}
+            reduceMotion={reduceMotion}
+          />
         </ReactFlow>
       </div>
     </section>
