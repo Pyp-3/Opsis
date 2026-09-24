@@ -116,7 +116,14 @@ importers:
 
   packages/pipeline/metaphor: {}
 
-  packages/pipeline/parse: {}
+  packages/pipeline/parse:
+    dependencies:
+      '@opsis/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/primitives:
     dependencies:

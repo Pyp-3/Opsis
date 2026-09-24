@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_NAME } from './index';
+import * as parse from './index';
 
 describe('@opsis/parse', () => {
-  it('exposes its package name', () => {
-    expect(PACKAGE_NAME).toBe('@opsis/parse');
+  it('exposes its package name and public API', () => {
+    expect(parse.PACKAGE_NAME).toBe('@opsis/parse');
+    expect(typeof parse.parseUtterance).toBe('function');
+    expect(typeof parse.ruleBasedParse).toBe('function');
+    expect(typeof parse.MockLLMClient).toBe('function');
   });
 });

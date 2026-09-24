@@ -1,0 +1,235 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden snapshot through the mocked LLM path (§15.7) > A sandwich can contain bread, tomato, ham. 1`] = `
+{
+  "entities": [
+    {
+      "id": "e_sandwich",
+      "kind": "object",
+      "lemma": "sandwich",
+      "span": [
+        2,
+        10,
+      ],
+      "summary": "A sandwich layers fillings between pieces of bread.",
+      "surface": "sandwich",
+    },
+    {
+      "attributes": {
+        "placement": "top",
+      },
+      "id": "e_bread_top",
+      "kind": "substance",
+      "lemma": "bread",
+      "span": [
+        23,
+        28,
+      ],
+      "summary": "Bread can form the top layer of a sandwich.",
+      "surface": "bread",
+    },
+    {
+      "id": "e_tomato",
+      "kind": "substance",
+      "lemma": "tomato",
+      "span": [
+        30,
+        36,
+      ],
+      "summary": "Tomato adds a juicy vegetable layer to the sandwich.",
+      "surface": "tomato",
+    },
+    {
+      "id": "e_ham",
+      "kind": "substance",
+      "lemma": "ham",
+      "span": [
+        38,
+        41,
+      ],
+      "summary": "Ham is a cured meat that can be a sandwich filling.",
+      "surface": "ham",
+    },
+    {
+      "attributes": {
+        "placement": "bottom",
+      },
+      "id": "e_bread_bottom",
+      "kind": "substance",
+      "lemma": "bread",
+      "span": [
+        23,
+        28,
+      ],
+      "summary": "Bread can form the bottom layer of a sandwich.",
+      "surface": "bread",
+    },
+  ],
+  "language": "en",
+  "relations": [
+    {
+      "id": "r_bread_top",
+      "modality": "possible",
+      "order": 1,
+      "source": "e_sandwich",
+      "target": "e_bread_top",
+      "type": "contains",
+    },
+    {
+      "id": "r_ham",
+      "modality": "possible",
+      "order": 2,
+      "source": "e_sandwich",
+      "target": "e_ham",
+      "type": "contains",
+    },
+    {
+      "id": "r_tomato",
+      "modality": "possible",
+      "order": 3,
+      "source": "e_sandwich",
+      "target": "e_tomato",
+      "type": "contains",
+    },
+    {
+      "id": "r_bread_bottom",
+      "modality": "possible",
+      "order": 4,
+      "source": "e_sandwich",
+      "target": "e_bread_bottom",
+      "type": "contains",
+    },
+  ],
+  "schemaVersion": "sg/1",
+  "utterance": "A sandwich can contain bread, tomato, ham.",
+}
+`;
+
+exports[`golden snapshot through the mocked LLM path (§15.7) > Some birds cannot fly. 1`] = `
+{
+  "entities": [
+    {
+      "attributes": {
+        "quantifier": "some",
+      },
+      "id": "e_bird",
+      "kind": "living_thing",
+      "lemma": "bird",
+      "span": [
+        5,
+        10,
+      ],
+      "summary": "Birds are feathered animals with wings that lay eggs.",
+      "surface": "birds",
+    },
+    {
+      "id": "e_fly",
+      "kind": "action",
+      "lemma": "fly",
+      "span": [
+        18,
+        21,
+      ],
+      "summary": "To fly is to move through the air, usually by flapping wings.",
+      "surface": "fly",
+    },
+  ],
+  "language": "en",
+  "notes": [
+    {
+      "kind": "nuance",
+      "targetId": "r_bird_fly",
+      "text": "Most birds can fly, but some, such as penguins, ostriches and kiwis, cannot.",
+    },
+  ],
+  "relations": [
+    {
+      "evidenceSpan": [
+        5,
+        21,
+      ],
+      "id": "r_bird_fly",
+      "modality": "negated",
+      "source": "e_bird",
+      "target": "e_fly",
+      "type": "moves",
+    },
+  ],
+  "schemaVersion": "sg/1",
+  "utterance": "Some birds cannot fly.",
+}
+`;
+
+exports[`golden snapshot through the mocked LLM path (§15.7) > The sun rises in the east. 1`] = `
+{
+  "entities": [
+    {
+      "id": "e_sun",
+      "kind": "celestial_body",
+      "lemma": "sun",
+      "span": [
+        4,
+        7,
+      ],
+      "summary": "The Sun is the star at the centre of our solar system.",
+      "surface": "sun",
+    },
+    {
+      "id": "e_rises",
+      "kind": "action",
+      "lemma": "rise",
+      "span": [
+        8,
+        13,
+      ],
+      "summary": "Rising is the Sun's apparent upward movement above the horizon.",
+      "surface": "rises",
+    },
+    {
+      "id": "e_east",
+      "kind": "direction",
+      "lemma": "east",
+      "span": [
+        21,
+        25,
+      ],
+      "summary": "East is the direction where the Sun appears to rise.",
+      "surface": "east",
+    },
+  ],
+  "language": "en",
+  "notes": [
+    {
+      "kind": "misconception",
+      "targetId": "e_rises",
+      "text": "The Sun only appears to rise because Earth rotates from west to east.",
+    },
+  ],
+  "relations": [
+    {
+      "evidenceSpan": [
+        4,
+        13,
+      ],
+      "id": "r_sun_moves",
+      "modality": "certain",
+      "source": "e_sun",
+      "target": "e_rises",
+      "type": "moves",
+    },
+    {
+      "evidenceSpan": [
+        8,
+        25,
+      ],
+      "id": "r_rise_east",
+      "modality": "certain",
+      "source": "e_rises",
+      "target": "e_east",
+      "type": "direction",
+    },
+  ],
+  "schemaVersion": "sg/1",
+  "utterance": "The sun rises in the east.",
+}
+`;

@@ -44,3 +44,25 @@ supersede it with a new one.
     enforced on every change.
   - Deviation from §16: `tests/lint/` was added beside `tests/{e2e,visual,perf}` to hold tests
     for repository-wide lint rules.
+
+## D-002: Parser confidence, fallback flag and prompt loading
+
+- Date: 2026-09-24
+- Author: claude-1 (semantic-parser)
+- Context: §15 requires prompts to use `"confidence": "low"` instead of inventing facts, and the
+  fallback result to be flagged, but `sg/1` is strict and has no `confidence` or flag field.
+- Decision:
+  - Low confidence is recorded per entity as `attributes.confidence = "low"`. An unparseable
+    sentence becomes one `abstract_concept` entity with low confidence plus an `ambiguity` note.
+  - The flag lives on the stage result, not in the SG: `parseUtterance` returns
+    `{ sg, source: 'llm' | 'llm_repaired' | 'rule_fallback', flagged, fallbackReason, diagnostics }`.
+  - LLM output must echo the utterance exactly and keep spans inside it; failures go into the
+    single repair prompt.
+  - Prompt templates are versioned files in `packages/pipeline/parse/prompts/` (`*.v1.md`,
+    `examples.v1.json`), read at runtime with `node:fs`. `@opsis/parse` is therefore server-only.
+  - `LLMClient` config comes from `OPSIS_LLM_PROVIDER`, `OPSIS_LLM_MODEL`, `OPSIS_LLM_API_KEY`
+    and `OPSIS_LLM_BASE_URL`. Without a key and model, the pipeline runs offline on the rule parser.
+- Consequences:
+  - Metaphor/UI stages show the "unsure" indicator when any entity has `confidence: "low"`.
+  - The API should surface `flagged`/`source` (e.g. a response header or OSG metadata) once the
+    OSG contract has a place for it; bumping to `sg/2` is an alternative for later.
