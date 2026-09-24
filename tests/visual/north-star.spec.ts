@@ -108,11 +108,39 @@ async function openInjectedDiagram(page: Page, osg: OSG): Promise<void> {
   await page.waitForTimeout(500);
 }
 
+async function expectRenderedNodesNotToOverlap(page: Page): Promise<void> {
+  const overlaps = await page.locator('.react-flow__node:visible').evaluateAll((elements) => {
+    const nodes = elements.map((element) => ({
+      id: element.getAttribute('data-id') ?? 'unknown',
+      bounds: element.getBoundingClientRect(),
+    }));
+    return nodes.flatMap((left, index) =>
+      nodes.slice(index + 1).flatMap((right) => {
+        const width =
+          Math.min(left.bounds.right, right.bounds.right) -
+          Math.max(left.bounds.left, right.bounds.left);
+        const height =
+          Math.min(left.bounds.bottom, right.bounds.bottom) -
+          Math.max(left.bounds.top, right.bounds.top);
+        return width > 0.5 && height > 0.5
+          ? [`${left.id}/${right.id}: ${width.toFixed(1)}×${height.toFixed(1)}px`]
+          : [];
+      }),
+    );
+  });
+  expect(overlaps, 'rendered React Flow node bounds must not overlap').toEqual([]);
+}
+
 test.use({ reducedMotion: 'reduce', viewport: { width: 1280, height: 900 } });
 
 test('sun/east North Star scene', async ({ page }) => {
   await openSample(page, 'The sun rises in the east.');
   await expect(page.locator('.opsis-editor__flow')).toBeVisible();
+  await expectRenderedNodesNotToOverlap(page);
+  const compass = page.locator('[data-primitive="compass"]');
+  await expect(compass).toHaveAttribute('data-highlight-anchors', /(^| )E( |$)/u);
+  await expect(compass.getByRole('img', { name: /compass rose; east highlighted/i })).toBeVisible();
+  await expect(page.locator('[data-primitive="sun"] .opsis-flow-primitive__horizon')).toBeVisible();
   await expect(page.locator('.opsis-app')).toHaveScreenshot('sun-east.png');
 });
 
@@ -132,6 +160,7 @@ test('cycle flow', async ({ page }) => {
     labels: ['Evaporate', 'Clouds form', 'Rain falls', 'Water collects'],
   });
   await openInjectedDiagram(page, osg);
+  await expectRenderedNodesNotToOverlap(page);
   await expect(page.locator('.opsis-app')).toHaveScreenshot('cycle-flow.png');
 });
 
@@ -142,5 +171,6 @@ test('timeline flow', async ({ page }) => {
     labels: ['Boil water', 'Add pasta', 'Drain pasta'],
   });
   await openInjectedDiagram(page, osg);
+  await expectRenderedNodesNotToOverlap(page);
   await expect(page.locator('.opsis-app')).toHaveScreenshot('timeline-flow.png');
 });

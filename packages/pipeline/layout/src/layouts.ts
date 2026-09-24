@@ -245,7 +245,7 @@ function compass(
   const radius = Math.max(4.2, others.length * 0.75);
   const used = new Map<number, number>();
   const fallbackPhase = random.angle();
-  const nodeBearing = (node: VisualNode): number | undefined => {
+  const directBearing = (node: VisualNode): number | undefined => {
     const direct = bearing(node.label);
     if (direct !== undefined) return direct;
     for (const relation of sg.relations) {
@@ -256,9 +256,36 @@ function compass(
     }
     return undefined;
   };
+  const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, VisualEdge[]>();
+  for (const edge of scene.edges)
+    outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge]);
+  const pathToBearing = (
+    node: VisualNode,
+    visited: ReadonlySet<string> = new Set(),
+  ): { angle: number; distance: number } | undefined => {
+    const direct = directBearing(node);
+    if (direct !== undefined) return { angle: direct, distance: 0 };
+    if (visited.has(node.id)) return undefined;
+    const nextVisited = new Set(visited).add(node.id);
+    return (outgoing.get(node.id) ?? [])
+      .map((edge) => byId.get(edge.to))
+      .filter((target): target is VisualNode => target !== undefined)
+      .map((target) => pathToBearing(target, nextVisited))
+      .filter((item): item is { angle: number; distance: number } => item !== undefined)
+      .map((item) => ({ ...item, distance: item.distance + 1 }))
+      .sort((left, right) => left.distance - right.distance)[0];
+  };
+  const resolved = new Map(others.map((node) => [node.id, pathToBearing(node)] as const));
+  const bearingGroups = new Map<number, VisualNode[]>();
+  for (const node of others) {
+    const angle = resolved.get(node.id)?.angle;
+    if (angle !== undefined) bearingGroups.set(angle, [...(bearingGroups.get(angle) ?? []), node]);
+  }
   const result = anchor ? [positioned(anchor, [0, 0, -0.45])] : [];
   others.forEach((node, index) => {
-    const semanticBearing = nodeBearing(node);
+    const path = resolved.get(node.id);
+    const semanticBearing = path?.angle;
     let base =
       semanticBearing ?? fallbackPhase + (index * Math.PI * 2) / Math.max(1, others.length);
     if (semanticBearing === undefined) {
@@ -269,12 +296,23 @@ function compass(
         base += 0.45;
       }
     }
-    const duplicate = used.get(base) ?? 0;
-    used.set(base, duplicate + 1);
+    used.set(base, (used.get(base) ?? 0) + 1);
+    const group = semanticBearing === undefined ? [] : (bearingGroups.get(semanticBearing) ?? []);
+    const orderedGroup = [...group].sort((left, right) => {
+      const leftDistance = resolved.get(left.id)?.distance ?? 0;
+      const rightDistance = resolved.get(right.id)?.distance ?? 0;
+      return rightDistance - leftDistance || compareSemantic(sg, left, right);
+    });
+    const radialIndex = Math.max(
+      0,
+      orderedGroup.findIndex((item) => item.id === node.id),
+    );
+    const radialDistance = radius + radialIndex * 2.2;
+    const perpendicularOffset = node.role === 'modifier' ? 1.7 : node.role === 'actor' ? 0.75 : 0;
     result.push(
       positioned(node, [
-        Math.cos(base) * (radius + duplicate * 1.6),
-        Math.sin(base) * (radius + duplicate * 1.6),
+        Math.cos(base) * radialDistance - Math.sin(base) * perpendicularOffset,
+        Math.sin(base) * radialDistance + Math.cos(base) * perpendicularOffset,
         0,
       ]),
     );

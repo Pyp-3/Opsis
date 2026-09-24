@@ -81,7 +81,7 @@
           "role": "actor",
           "style": { "emphasis": "highlight", "colorToken": "celestial.sun" },
           "drillable": true,
-          "position": [3.5, 1, 0],
+          "position": [4.2, 0.75, 0],
           "size": [1.2, 1.2, 1.2]
         },
         {
@@ -91,7 +91,7 @@
           "role": "context",
           "style": { "emphasis": "highlight" },
           "drillable": true,
-          "position": [4.5, 0, 0],
+          "position": [8.6, 0, 0],
           "size": [1.4, 0.4, 0.8]
         },
         {
@@ -99,7 +99,7 @@
           "primitive": "curved_arrow",
           "label": "Rises",
           "role": "modifier",
-          "position": [3.4, 1.8, 0],
+          "position": [6.4, 1.7, 0],
           "size": [1.5, 1, 0.2]
         },
         {
@@ -124,7 +124,7 @@
       ],
       "camera": "iso",
       "dimension": "3d",
-      "bounds": { "min": [-6, -2, -4], "max": [6, 4, 4] }
+      "bounds": { "min": [-6, -2, -4], "max": [10, 4, 4] }
     }
   ],
   "breadcrumbs": [{ "id": "10000000-0000-4000-8000-000000000001", "label": "Sun and East" }]

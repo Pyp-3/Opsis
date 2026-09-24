@@ -26,6 +26,33 @@ describe('oriented-flow edges', () => {
       );
     }
   });
+
+  it('uses rendered footprints and compass primitives without overlapping the North Star', () => {
+    const { nodes, edges } = osgToFlow(loadFixture('sun-east'));
+    const boxes = nodes.map((node) => ({
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      width: Number(node.style?.width),
+      height: Number(node.style?.height),
+    }));
+    for (let index = 0; index < boxes.length; index += 1) {
+      for (const right of boxes.slice(index + 1)) {
+        const left = boxes[index]!;
+        const overlaps =
+          left.x < right.x + right.width &&
+          left.x + left.width > right.x &&
+          left.y < right.y + right.height &&
+          left.y + left.height > right.y;
+        expect(overlaps, `${left.id} overlaps ${right.id}`).toBe(false);
+      }
+    }
+    expect(nodes.find((node) => node.id === 'v_compass')?.data).toMatchObject({
+      primitiveVisual: true,
+      highlightAnchors: ['E'],
+    });
+    expect(edges.find((edge) => edge.source === 'v_compass')?.hidden).toBe(true);
+  });
 });
 
 describe('validated OSG edits', () => {

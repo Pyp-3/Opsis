@@ -280,3 +280,38 @@ supersede it with a new one.
     returning half of a cycle ring crosses itself. This is recorded as minor bug `B-REL-001`.
   - Found in the same review but not fixed here: in 2D, the rendered card footprint is not part of
     the layout's size model, so the sun/east cards overlap (`B-REL-002`, major, release-blocking).
+
+## D-006: Rendered 2D footprints and the compass North Star
+
+- Date: 2026-09-24
+- Author: codex-3 (release reviewer)
+- Context: `B-REL-002` showed that collision-free OSG boxes did not guarantee collision-free React
+  Flow nodes. OSG positions describe node centres, while `osgToFlow` treated them as top-left
+  coordinates and every primitive inherited a fixed card minimum. The default North Star therefore
+  overlapped Sun and East, routed edges under East, and rendered the compass as a text card.
+- Options considered: (a) increase every OSG size to the generic card minimum; (b) measure nodes
+  after React renders and mutate their positions; (c) define deterministic canvas footprints at the
+  OSG → React Flow boundary, centre them on OSG positions, and render spatial compass primitives
+  directly. **(c) chosen.** It preserves the shared OSG and deterministic layout while making the
+  renderer's real geometry explicit and testable without a post-paint jump.
+- Decision:
+  - `canvasNodeFootprint` is the authoritative 2D pixel footprint. Generic cards use their UI
+    minimum or the scaled OSG size, whichever is larger; compass, sun and rise use bounded SVG
+    footprints.
+  - `osgToFlow` converts centre coordinates to top-left coordinates and applies a deterministic
+    collision pass with 24 px separation. Presentation styles must merge with, never replace, these
+    dimensions.
+  - Compass layout resolves a bearing through a relation chain. For the North Star, Sun → Rise →
+    East occupies the east side in causal order; actor and modifier offsets place the Sun on the
+    horizon and its motion arc above it.
+  - The 2D compass renders the registered compass rose with cardinal letters and redundant
+    non-colour emphasis on E. The semantic compass → East line remains in the outline but is hidden
+    on canvas because the spoke already carries the relation and a visible line would cross the
+    eastern-horizon composition.
+- Consequences:
+  - Rendered React Flow rectangles, rather than only OSG boxes, are now a browser release gate for
+    the North Star, cycle and timeline presentations.
+  - `B-REL-002` is resolved. M1 is complete and no release-blocking or major defect remains open.
+  - Contracts and schema versions are unchanged. The deterministic canvas coordinates are a view
+    projection; user drags still convert back to OSG units.
+  - `B-REL-001` remains minor: cycle return edges cross and the canvas chrome still needs polish.

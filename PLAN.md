@@ -5,21 +5,20 @@ Owners use the current agent roster: **claude-1** (coordinator, semantic-parser,
 renderer-3d, explainer, ux-accessibility, pedagogy-reviewer) and **codex-2** (schema, layout,
 canvas-2d, api, qa). Status: ☐ todo · ◐ in progress · ☑ done.
 
-## Release status (2026-09-24, release review by claude-1)
+## Release status (2026-09-24, release review completed by codex-3)
 
 | Milestone | Status | Evidence                                                                                                   |
 | --------- | ------ | ---------------------------------------------------------------------------------------------------------- |
 | M0        | ☑      | Strict typecheck, lint, schema fixtures, API health.                                                       |
-| M1        | ◐      | Sandwich passes. Sun/east renders, but its 2D view overlaps cards (`B-REL-002`).                           |
+| M1        | ☑      | Both North Stars pass; sun/east has a rendered compass rose, eastern horizon, and non-overlapping nodes.   |
 | M2        | ☑      | Offline parse → metaphor → layout through `/v1/visualize`; golden 15/15.                                   |
 | M3        | ☑      | Explain and drill-down E2E; §14.3 pedagogy score 4.53 / 5 (`docs/PEDAGOGY.md`).                            |
 | M4        | ☑      | 2D canvas edit/relink/undo, 2D ↔ 3D persistence, save/share/export E2E.                                    |
 | M5        | ◐      | Axe A/AA, reduced motion, budgets and golden 15/15 pass; 50-node FPS on real hardware is not yet measured. |
 
-**Release blocked by major `B-REL-002`:** in the 2D sun/east view the Sun and East cards overlap,
-and the compass anchor is a plain card (layout and canvas owner). Other open items: hardware FPS
-measurement (renderer owner), minor `B-REL-001` (canvas owner), and an LLM-backed pedagogy sample
-on the first provider run.
+**Release acceptance passed:** `B-REL-002` is resolved and no blocker or major defect remains open.
+The remaining work is non-blocking: hardware FPS measurement (renderer owner), minor `B-REL-001`
+(canvas owner), and an LLM-backed pedagogy sample on the first provider run.
 
 ## M0 — Foundations
 

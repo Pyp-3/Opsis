@@ -23,6 +23,12 @@ function Svg({ label, children }: { label: string | undefined; children: ReactNo
 /** Compass rose; highlighted bearings are drawn longer in the highlight colour. */
 export function Compass2D({ color, tone, label, highlightAnchors = [] }: PrimitiveProps) {
   const mark = tone('direction.mark');
+  const cardinalLabels = [
+    ['N', 50, 12],
+    ['E', 88, 54],
+    ['S', 50, 94],
+    ['W', 12, 54],
+  ] as const;
   return (
     <Svg label={label}>
       <circle cx="50" cy="50" r="44" fill={color} stroke={mark} strokeWidth="3" />
@@ -40,6 +46,25 @@ export function Compass2D({ color, tone, label, highlightAnchors = [] }: Primiti
             stroke={on ? tone('ui.highlight') : point === 'N' ? tone('direction.north') : mark}
             strokeWidth={on ? 7 : i % 2 === 0 ? 5 : 3}
           />
+        );
+      })}
+      {cardinalLabels.map(([point, x, y]) => {
+        const on = highlightAnchors.includes(point);
+        return (
+          <text
+            key={point}
+            x={x}
+            y={y}
+            textAnchor="middle"
+            fontSize={on ? 13 : 10}
+            fontWeight={on ? 800 : 650}
+            fill={on ? tone('ui.highlight') : mark}
+            stroke={color}
+            strokeWidth="3"
+            paintOrder="stroke"
+          >
+            {point}
+          </text>
         );
       })}
     </Svg>

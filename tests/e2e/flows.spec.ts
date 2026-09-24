@@ -98,11 +98,14 @@ test('animated presentation reveals direction, locks edits, then restores editin
   page,
 }) => {
   await draw(page, 'The sun rises in the east.');
-  const label = page.getByRole('textbox', { name: 'Label for Sun' });
+  // Presentation may move a primitive outside React Flow's accessible viewport while fitting the
+  // current step; include it so this assertion checks edit locking rather than viewport culling.
+  const label = page.getByRole('textbox', { name: 'Label for Sun', includeHidden: true });
   await page.getByRole('button', { name: 'Present' }).click();
   await expect(label).toBeDisabled();
+  await page.getByRole('button', { name: 'Next step' }).click();
+  await expect(page.locator('.opsis-flow-edge--emphasized')).toHaveCount(1);
   await page.getByRole('button', { name: 'Play presentation' }).click();
-  await expect(page.locator('.opsis-flow-edge--emphasized')).toHaveCount(1, { timeout: 3_000 });
   await expect(page.getByRole('button', { name: 'Pause presentation' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Exit presentation' }).click();

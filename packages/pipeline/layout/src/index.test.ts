@@ -277,6 +277,33 @@ describe('@opsis/layout', () => {
     expect((angles[0]! - angles[1]! + Math.PI * 2) % (Math.PI * 2)).toBeGreaterThan(0);
   });
 
+  it('places a motion chain along its resolved bearing without stacking its nodes', async () => {
+    const { sg, plan } = graphAndPlan('compass', 4);
+    const [sun, rise, east] = plan.scenes[0]!.nodes.slice(1);
+    if (!sun || !rise || !east) throw new Error('compass fixture needs three semantic nodes');
+    sun.label = 'Sun';
+    sun.role = 'actor';
+    sun.primitive = 'sun';
+    rise.label = 'Rise';
+    rise.role = 'modifier';
+    rise.primitive = 'curved_arrow';
+    east.label = 'East';
+    east.role = 'context';
+    plan.scenes[0]!.edges = [
+      { id: 'sun_rise', from: sun.id, to: rise.id, kind: 'path' },
+      { id: 'rise_east', from: rise.id, to: east.id, kind: 'arrow' },
+    ];
+    const scene = (await layoutVisualPlan(plan, sg, { seed: 3 })).scenes[0]!;
+    const positionedSun = scene.nodes.find((node) => node.id === sun.id)!;
+    const positionedRise = scene.nodes.find((node) => node.id === rise.id)!;
+    const positionedEast = scene.nodes.find((node) => node.id === east.id)!;
+    expect(positionedSun.position[0]).toBeLessThan(positionedRise.position[0]);
+    expect(positionedRise.position[0]).toBeLessThan(positionedEast.position[0]);
+    expect(positionedSun.position[1]).toBeGreaterThan(0);
+    expect(positionedRise.position[1]).toBeGreaterThan(positionedSun.position[1]);
+    expect(positionedEast.position[1]).toBeCloseTo(0);
+  });
+
   it('orients ELK flow left-to-right and trees top-to-bottom', async () => {
     for (const metaphor of ['timeline', 'flow'] as const) {
       const example = graphAndPlan(metaphor, 5);

@@ -35,7 +35,7 @@ describe('North Star fixtures', () => {
 
   it('starts the compass→East edge at the east rim', () => {
     expect(edgeStart(node(sunScene, 'v_compass'), node(sunScene, 'e_east'))).toEqual([3, 0.15, 0]);
-    expect(edgeStart(node(sunScene, 'e_sun'), node(sunScene, 'e_rises'))).toEqual([3.5, 1, 0]);
+    expect(edgeStart(node(sunScene, 'e_sun'), node(sunScene, 'e_rises'))).toEqual([4.2, 0.75, 0]);
   });
 
   it('sandwich is an explodable stack of optional parts', () => {

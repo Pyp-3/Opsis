@@ -13,9 +13,10 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { getPrimitive } from '@opsis/primitives';
 import type { OSG } from '@opsis/schema';
-import { t } from '@opsis/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { resolveColor, t, type ColorToken } from '@opsis/ui';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSession, useSessionStore } from '../state/context';
 import { saveOsg, shareOsg } from '../state/api';
 import { LAST_OSG_STORAGE_KEY } from '../state/session';
@@ -53,36 +54,81 @@ function editableNodeId(): string {
 
 /** An editable, fully labelled React Flow node. */
 function EditableNode({ id, data, selected }: NodeProps<Node<EditorNodeData>>) {
+  const paletteId = useSession((state) => state.paletteId);
+  const primitive = getPrimitive(data.primitive);
+  const Render = primitive.render2D;
+  const tone = useMemo(
+    () => (token: ColorToken) => resolveColor(token, token, paletteId),
+    [paletteId],
+  );
+  const labelEditor = (
+    <label className={data.primitiveVisual ? 'opsis-flow-primitive__label' : undefined}>
+      <span className="opsis-visually-hidden">{t('canvas.nodeLabel')}</span>
+      <input
+        key={data.label}
+        className="nodrag"
+        defaultValue={data.label}
+        disabled={data.presentationActive}
+        tabIndex={data.presentationHidden ? -1 : undefined}
+        onBlur={(event) => {
+          if (event.currentTarget.value !== data.label)
+            data.onRelabel(id, event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+        aria-label={t('canvas.labelFor', { label: data.label })}
+      />
+    </label>
+  );
+  const handles: ReactNode =
+    data.metaphor === 'compass' ? (
+      <>
+        <Handle id="left-target" type="target" position={Position.Left} />
+        <Handle id="top-target" type="target" position={Position.Top} />
+        <Handle id="bottom-target" type="target" position={Position.Bottom} />
+        <Handle id="right-source" type="source" position={Position.Right} />
+        <Handle id="top-source" type="source" position={Position.Top} />
+      </>
+    ) : (
+      <>
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
+      </>
+    );
+
+  if (data.primitiveVisual && Render) {
+    return (
+      <div
+        className={`opsis-flow-primitive opsis-flow-primitive--${data.primitive}${selected ? ' opsis-flow-node--selected' : ''}${data.presentationHidden ? ' opsis-flow-node--presentation-hidden' : ''}`}
+        aria-hidden={data.presentationHidden || undefined}
+        data-primitive={data.primitive}
+        data-highlight-anchors={data.highlightAnchors.join(' ')}
+      >
+        {handles}
+        <Render
+          color={resolveColor(undefined, primitive.colorToken, paletteId)}
+          tone={tone}
+          size={[data.size[0] / 100, data.size[1] / 100, 0.2]}
+          label={data.primitive === 'compass' ? 'Compass rose; East highlighted' : data.label}
+          highlightAnchors={data.highlightAnchors}
+        />
+        {data.primitive === 'sun' ? <span className="opsis-flow-primitive__horizon" /> : null}
+        {labelEditor}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`opsis-flow-node${selected ? ' opsis-flow-node--selected' : ''}${data.optional ? ' opsis-flow-node--optional' : ''}${data.presentationHidden ? ' opsis-flow-node--presentation-hidden' : ''}`}
       aria-hidden={data.presentationHidden || undefined}
     >
-      <Handle type="target" position={Position.Left} />
-      <label>
-        <span className="opsis-visually-hidden">{t('canvas.nodeLabel')}</span>
-        <input
-          key={data.label}
-          className="nodrag"
-          defaultValue={data.label}
-          disabled={data.presentationActive}
-          tabIndex={data.presentationHidden ? -1 : undefined}
-          onBlur={(event) => {
-            if (event.currentTarget.value !== data.label)
-              data.onRelabel(id, event.currentTarget.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-          }}
-          aria-label={t('canvas.labelFor', { label: data.label })}
-        />
-      </label>
+      {handles}
+      {labelEditor}
       <small>
         {data.anchor ? t('canvas.main') : data.optional ? t('canvas.optional') : data.primitive}
       </small>
-      <Handle type="source" position={Position.Right} />
     </div>
   );
 }
@@ -183,6 +229,7 @@ function CanvasEditorInner({ osg, active }: { osg: OSG; active: boolean }) {
     ...(presentationActive
       ? {
           style: {
+            ...node.style,
             opacity: visibleNodeIds.has(node.id) ? 1 : 0,
             pointerEvents: visibleNodeIds.has(node.id) ? 'auto' : 'none',
             ...(reduceMotion ? { transitionDuration: '0ms' } : {}),
