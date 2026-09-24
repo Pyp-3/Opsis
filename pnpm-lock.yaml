@@ -110,7 +110,23 @@ importers:
         specifier: ^7.1.0
         version: 7.3.6(@types/node@22.20.4)(tsx@4.23.15)
 
-  packages/pipeline/explain: {}
+  packages/pipeline/explain:
+    dependencies:
+      '@opsis/layout':
+        specifier: workspace:*
+        version: link:../layout
+      '@opsis/metaphor':
+        specifier: workspace:*
+        version: link:../metaphor
+      '@opsis/parse':
+        specifier: workspace:*
+        version: link:../parse
+      '@opsis/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/pipeline/layout:
     dependencies:
