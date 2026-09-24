@@ -1,8 +1,82 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ruleBasedParse, type LLMClient, type LLMRequest } from '@opsis/parse';
 import { ErrorResponseSchema, ExplanationSchema, OSGSchema } from '@opsis/schema';
 import { loadGoldenCases } from '../../../tests/golden/fixtures';
 import { runGoldenSuite } from '../../../tests/golden/runner';
-import { buildApp } from './app';
+import {
+  buildApp,
+  createLLMStageCacheKey,
+  PIPELINE_PROMPT_IDS,
+  type PipelinePromptIds,
+} from './app';
+
+class SwitchableLLMClient implements LLMClient {
+  readonly model = 'cache-regression-model';
+  readonly identity = 'harness:codex:cache-regression-model:cli-test';
+  failing = true;
+  calls: LLMRequest[] = [];
+
+  async complete(request: LLMRequest): Promise<string> {
+    this.calls.push(request);
+    if (this.failing) throw new Error('provider unavailable');
+    if (request.promptId.startsWith('parse')) {
+      const graph = ruleBasedParse('A sandwich can contain bread, tomato, ham.').sg;
+      const first = graph.entities[0];
+      if (first) first.summary = 'Validated model-derived summary.';
+      return JSON.stringify(graph);
+    }
+    return JSON.stringify({ primitives: {} });
+  }
+}
+
+describe('LLM cache identity', () => {
+  it('includes every stage prompt version in its cache key', () => {
+    for (const stage of ['parse', 'metaphor', 'explain', 'drilldown'] as const) {
+      const current = createLLMStageCacheKey(stage, { input: true }, {}, 'provider');
+      const entries = Object.entries(PIPELINE_PROMPT_IDS[stage]);
+      const [name, version] = entries[0] as [string, string];
+      const changedPrompts = {
+        ...PIPELINE_PROMPT_IDS,
+        [stage]: { ...PIPELINE_PROMPT_IDS[stage], [name]: `${version}-changed` },
+      } as PipelinePromptIds;
+      expect(
+        createLLMStageCacheKey(stage, { input: true }, {}, 'provider', changedPrompts),
+      ).not.toBe(current);
+    }
+  });
+
+  it('caches a provider failure only as offline and retries the later healthy provider', async () => {
+    const payload = {
+      utterance: 'A sandwich can contain bread, tomato, ham.',
+      audience: 'teen' as const,
+      seed: 19,
+    };
+    const client = new SwitchableLLMClient();
+    const providerApp = buildApp({ databasePath: ':memory:', llm: client, rateLimit: 1_000 });
+    const offlineApp = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1_000 });
+
+    try {
+      const degraded = await providerApp.inject({ method: 'POST', url: '/v1/visualize', payload });
+      const offline = await offlineApp.inject({ method: 'POST', url: '/v1/visualize', payload });
+      expect(degraded.statusCode).toBe(200);
+      expect(degraded.body).toBe(offline.body);
+
+      const callsAfterFailure = client.calls.length;
+      expect(callsAfterFailure).toBeGreaterThan(0);
+      client.failing = false;
+
+      const healthy = await providerApp.inject({ method: 'POST', url: '/v1/visualize', payload });
+      expect(healthy.statusCode).toBe(200);
+      expect(client.calls.length).toBeGreaterThan(callsAfterFailure);
+      expect(OSGSchema.parse(healthy.json()).sg.entities[0]?.summary).toBe(
+        'Validated model-derived summary.',
+      );
+    } finally {
+      await providerApp.close();
+      await offlineApp.close();
+    }
+  });
+});
 
 describe('Opsis API', () => {
   const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1_000 });

@@ -54,3 +54,21 @@ describe('§17 stage import boundary', () => {
     expect(ids).toContain('no-restricted-imports');
   });
 });
+
+describe('harness child-process boundary', () => {
+  it('rejects child_process imports outside apps/api/src/harness', async () => {
+    const ids = await ruleIds(
+      `import { spawn } from 'node:child_process';\nspawn('x');\n`,
+      'apps/api/src/not-harness.ts',
+    );
+    expect(ids).toContain('no-restricted-imports');
+  });
+
+  it('allows the audited runner to import child_process', async () => {
+    const ids = await ruleIds(
+      `import { spawn } from 'node:child_process';\nspawn('x');\n`,
+      'apps/api/src/harness/probe.ts',
+    );
+    expect(ids).not.toContain('no-restricted-imports');
+  });
+});

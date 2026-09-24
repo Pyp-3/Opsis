@@ -1,5 +1,5 @@
 import { layoutVisualPlan, uuidFromSeed } from '@opsis/layout';
-import { selectMetaphor } from '@opsis/metaphor';
+import { selectMetaphor, type LLMUsage } from '@opsis/metaphor';
 import { parseUtterance, type Audience, type LLMClient, type ParseSource } from '@opsis/parse';
 import { OSGSchema, type OSG } from '@opsis/schema';
 import { buildNodeContext, type NodeContext } from './context';
@@ -39,6 +39,9 @@ export type DrilldownResult = {
   osg: OSG;
   plan: DrilldownPlan;
   parseSource: ParseSource;
+  partsSource: PartsSource;
+  /** Metaphor-stage provenance used by API cache identity selection. */
+  metaphorLLM: LLMUsage;
   /** True when the child SG came from the rule-based fallback parser. */
   flagged: boolean;
 };
@@ -162,7 +165,8 @@ export async function drilldownDetailed(
     llm: options.llm ?? null,
     ...(options.audience ? { audience: options.audience } : {}),
   });
-  const { plan: visualPlan } = await selectMetaphor(parsed.sg, { llm: options.llm ?? null });
+  const selected = await selectMetaphor(parsed.sg, { llm: options.llm ?? null });
+  const visualPlan = selected.plan;
   const laidOut = await layoutVisualPlan(visualPlan, parsed.sg, {
     seed: parent.seed,
     ...(options.createdAt ? { createdAt: options.createdAt } : {}),
@@ -181,7 +185,14 @@ export async function drilldownDetailed(
     parentId: parent.id,
     breadcrumbs: [...trail, { id, label: plan.label }],
   });
-  return { osg, plan, parseSource: parsed.source, flagged: parsed.flagged };
+  return {
+    osg,
+    plan,
+    parseSource: parsed.source,
+    partsSource: plan.partsSource,
+    metaphorLLM: selected.llm,
+    flagged: parsed.flagged,
+  };
 }
 
 /** `drilldownDetailed` without provenance: parent OSG id + node → child OSG. */

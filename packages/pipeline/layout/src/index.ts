@@ -7,7 +7,7 @@ export {
   zoomToFit,
 } from './geometry';
 export { layoutLabels } from './labels';
-export { layoutScene } from './layouts';
+export { layoutScene, semanticRanks } from './layouts';
 export { assembleOSG, layoutVisualPlan } from './osg';
 export { SeededRandom, timestampFromSeed, uuidFromSeed } from './random';
 export type {

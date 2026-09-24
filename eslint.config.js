@@ -17,6 +17,16 @@ function forbid(packages, message) {
     'no-restricted-imports': [
       'error',
       {
+        paths: [
+          {
+            name: 'node:child_process',
+            message: 'Child processes are restricted to apps/api/src/harness/.',
+          },
+          {
+            name: 'child_process',
+            message: 'Child processes are restricted to apps/api/src/harness/.',
+          },
+        ],
         patterns: [
           { regex: `^@opsis/(${names})(/|$)`, message },
           { regex: `^(\\.\\./)+(pipeline/)?(${names})(/|$)`, message },
@@ -56,6 +66,28 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    name: 'opsis/harness-process-boundary',
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['apps/api/src/harness/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'node:child_process',
+              message: 'Child processes are restricted to apps/api/src/harness/.',
+            },
+            {
+              name: 'child_process',
+              message: 'Child processes are restricted to apps/api/src/harness/.',
+            },
+          ],
+        },
+      ],
+    },
   },
   ...stageBoundaries,
   {

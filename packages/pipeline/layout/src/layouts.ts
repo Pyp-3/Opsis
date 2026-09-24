@@ -45,6 +45,141 @@ function relationOrder(sg: SemanticGraph, id: string): number {
   return sg.relations.find((relation) => relation.target === id)?.order ?? Infinity;
 }
 
+function semanticNodeOrder(sg: SemanticGraph, id: string): [number, number, string] {
+  const relation = sg.relations.find((item) => item.target === id && item.order !== undefined);
+  const entity = sg.entities.find((item) => item.id === id);
+  return [relation?.order ?? Infinity, entity?.span[0] ?? Infinity, id];
+}
+
+function compareSemantic(sg: SemanticGraph, left: VisualNode, right: VisualNode): number {
+  const a = semanticNodeOrder(sg, left.id);
+  const b = semanticNodeOrder(sg, right.id);
+  return a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]);
+}
+
+/**
+ * Assigns a stable longest-path rank to each strongly connected component. Cycles stay together,
+ * while every edge between components advances left-to-right. Sorting by semantic spans and ids
+ * makes the result independent of incidental VP array order (important after canvas edits).
+ */
+export function semanticRanks(scene: SceneIntent, sg: SemanticGraph): ReadonlyMap<string, number> {
+  const ids = [...scene.nodes]
+    .sort((left, right) => compareSemantic(sg, left, right))
+    .map((node) => node.id);
+  const present = new Set(ids);
+  const outgoing = new Map(ids.map((id) => [id, [] as string[]]));
+  for (const edge of scene.edges) {
+    if (present.has(edge.from) && present.has(edge.to) && edge.from !== edge.to)
+      outgoing.get(edge.from)?.push(edge.to);
+  }
+  for (const targets of outgoing.values()) targets.sort();
+
+  let nextIndex = 0;
+  const indices = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const components: string[][] = [];
+  const visit = (id: string): void => {
+    const index = nextIndex++;
+    indices.set(id, index);
+    low.set(id, index);
+    stack.push(id);
+    onStack.add(id);
+    for (const target of outgoing.get(id) ?? []) {
+      if (!indices.has(target)) {
+        visit(target);
+        low.set(id, Math.min(low.get(id)!, low.get(target)!));
+      } else if (onStack.has(target)) low.set(id, Math.min(low.get(id)!, indices.get(target)!));
+    }
+    if (low.get(id) !== indices.get(id)) return;
+    const component: string[] = [];
+    let member: string;
+    do {
+      member = stack.pop()!;
+      onStack.delete(member);
+      component.push(member);
+    } while (member !== id);
+    components.push(component.sort());
+  };
+  ids.forEach((id) => {
+    if (!indices.has(id)) visit(id);
+  });
+
+  const componentOf = new Map<string, number>();
+  components.forEach((component, index) => component.forEach((id) => componentOf.set(id, index)));
+  const componentEdges = new Map(components.map((_, index) => [index, new Set<number>()]));
+  const indegree = new Map(components.map((_, index) => [index, 0]));
+  for (const [source, targets] of outgoing) {
+    const from = componentOf.get(source)!;
+    for (const target of targets) {
+      const to = componentOf.get(target)!;
+      if (from === to || componentEdges.get(from)!.has(to)) continue;
+      componentEdges.get(from)!.add(to);
+      indegree.set(to, indegree.get(to)! + 1);
+    }
+  }
+  const componentKey = (index: number) => components[index]![0]!;
+  const queue = components
+    .map((_, index) => index)
+    .filter((index) => indegree.get(index) === 0)
+    .sort((a, b) => componentKey(a).localeCompare(componentKey(b)));
+  const componentRank = new Map(components.map((_, index) => [index, 0]));
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const target of [...componentEdges.get(current)!].sort((a, b) =>
+      componentKey(a).localeCompare(componentKey(b)),
+    )) {
+      componentRank.set(
+        target,
+        Math.max(componentRank.get(target)!, componentRank.get(current)! + 1),
+      );
+      indegree.set(target, indegree.get(target)! - 1);
+      if (indegree.get(target) === 0) {
+        queue.push(target);
+        queue.sort((a, b) => componentKey(a).localeCompare(componentKey(b)));
+      }
+    }
+  }
+  return new Map(ids.map((id) => [id, componentRank.get(componentOf.get(id)!) ?? 0]));
+}
+
+function placeRanks(
+  scene: SceneIntent,
+  sg: SemanticGraph,
+  ranks: ReadonlyMap<string, number>,
+): MutablePositionedNode[] {
+  const groups = new Map<number, VisualNode[]>();
+  for (const node of scene.nodes) {
+    const rank = ranks.get(node.id) ?? 0;
+    groups.set(rank, [...(groups.get(rank) ?? []), node]);
+  }
+  const rankIds = [...groups.keys()].sort((a, b) => a - b);
+  const widths = new Map(
+    rankIds.map((rank) => [rank, Math.max(...groups.get(rank)!.map((node) => sizeFor(node)[0]))]),
+  );
+  const centres = new Map<number, number>();
+  let cursor = 0;
+  for (const rank of rankIds) {
+    const width = widths.get(rank)!;
+    centres.set(rank, cursor + width / 2);
+    cursor += width + 2.2;
+  }
+  const midpoint = Math.max(0, cursor - 2.2) / 2;
+  const result: MutablePositionedNode[] = [];
+  for (const rank of rankIds) {
+    let lane = 0;
+    for (const node of groups.get(rank)!.sort((a, b) => compareSemantic(sg, a, b))) {
+      const output = positioned(node, [centres.get(rank)! - midpoint, 0, 0]);
+      output.position[1] = -lane - output.size[1] / 2;
+      lane += output.size[1] + 1.1;
+      result.push(output);
+    }
+  }
+  ensureSeparated(result, 'assembled');
+  return result;
+}
+
 function ensureSeparated(nodes: MutablePositionedNode[], state: 'assembled' | 'exploded'): void {
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
@@ -96,26 +231,50 @@ const BEARINGS: Record<string, number> = {
 };
 
 function bearing(label: string): number | undefined {
+  if (!/^[a-z .-]+$/iu.test(label.trim())) return undefined;
   return BEARINGS[label.toLowerCase().replace(/[^a-z]/gu, '')];
 }
 
-function compass(scene: SceneIntent, random: SeededRandom): MutablePositionedNode[] {
+function compass(
+  scene: SceneIntent,
+  sg: SemanticGraph,
+  random: SeededRandom,
+): MutablePositionedNode[] {
   const anchor = scene.nodes.find((node) => node.role === 'anchor');
   const others = scene.nodes.filter((node) => node !== anchor);
   const radius = Math.max(4.2, others.length * 0.75);
   const used = new Map<number, number>();
   const fallbackPhase = random.angle();
+  const nodeBearing = (node: VisualNode): number | undefined => {
+    const direct = bearing(node.label);
+    if (direct !== undefined) return direct;
+    for (const relation of sg.relations) {
+      if (relation.type !== 'direction' || relation.source !== node.id) continue;
+      const target = sg.entities.find((entity) => entity.id === relation.target);
+      const inferred = target ? (bearing(target.lemma) ?? bearing(target.surface)) : undefined;
+      if (inferred !== undefined) return inferred;
+    }
+    return undefined;
+  };
   const result = anchor ? [positioned(anchor, [0, 0, -0.45])] : [];
   others.forEach((node, index) => {
-    const base =
-      bearing(node.label) ?? fallbackPhase + (index * Math.PI * 2) / Math.max(1, others.length);
+    const semanticBearing = nodeBearing(node);
+    let base =
+      semanticBearing ?? fallbackPhase + (index * Math.PI * 2) / Math.max(1, others.length);
+    if (semanticBearing === undefined) {
+      const angularDistance = (left: number, right: number) =>
+        Math.abs(Math.atan2(Math.sin(left - right), Math.cos(left - right)));
+      for (let attempt = 0; attempt < others.length * 2; attempt += 1) {
+        if (![...used.keys()].some((angle) => angularDistance(angle, base) < 0.45)) break;
+        base += 0.45;
+      }
+    }
     const duplicate = used.get(base) ?? 0;
     used.set(base, duplicate + 1);
-    const angle = base + duplicate * 0.2;
     result.push(
       positioned(node, [
-        Math.cos(angle) * (radius + duplicate * 1.6),
-        Math.sin(angle) * (radius + duplicate * 1.6),
+        Math.cos(base) * (radius + duplicate * 1.6),
+        Math.sin(base) * (radius + duplicate * 1.6),
         0,
       ]),
     );
@@ -210,8 +369,10 @@ function cycle(scene: SceneIntent, random: SeededRandom): MutablePositionedNode[
 
 async function layered(
   scene: SceneIntent,
+  sg: SemanticGraph,
   direction: 'RIGHT' | 'DOWN',
 ): Promise<MutablePositionedNode[]> {
+  if (direction === 'RIGHT') return placeRanks(scene, sg, semanticRanks(scene, sg));
   const nodes = scene.nodes.map((node) => ({ node, size: sizeFor(node) }));
   const reverse = scene.metaphor === 'tree';
   const graph = await elk.layout({
@@ -292,40 +453,60 @@ function scale(scene: SceneIntent, sg: SemanticGraph): MutablePositionedNode[] {
   return result;
 }
 
-function actorAction(scene: SceneIntent): MutablePositionedNode[] {
-  const actors = scene.nodes.filter((node) => node.role === 'actor');
-  const objects = scene.nodes.filter((node) => node.role === 'object');
-  const actions = scene.nodes.filter((node) => node.role === 'anchor' || node.role === 'modifier');
-  const remaining = scene.nodes.filter(
-    (node) => !actors.includes(node) && !objects.includes(node) && !actions.includes(node),
-  );
-  const ordered = [...actors, ...actions, ...remaining, ...objects];
-  let cursor = 0;
-  const result = ordered.map((node) => {
-    const next = positioned(node, [0, 0, 0]);
-    next.position = [cursor + next.size[0] / 2, 0, 0];
-    cursor += next.size[0] + 1.5;
-    return next;
-  });
-  const midpoint = cursor / 2;
-  result.forEach((node) => {
-    node.position = [node.position[0] - midpoint, node.position[1], node.position[2]];
-  });
-  return result;
+function actorAction(scene: SceneIntent, sg: SemanticGraph): MutablePositionedNode[] {
+  const graphRanks = semanticRanks(scene, sg);
+  const ranks = new Map<string, number>();
+  for (const node of scene.nodes) {
+    // Roles are the grammar: actors approach actions from the left; objects receive them rightward.
+    ranks.set(
+      node.id,
+      node.role === 'actor'
+        ? 0
+        : node.role === 'anchor' || node.role === 'modifier'
+          ? 1
+          : node.role === 'object'
+            ? 2
+            : (graphRanks.get(node.id) ?? 1),
+    );
+  }
+  return placeRanks(scene, sg, ranks);
 }
 
 /** Runs the metaphor-specific deterministic layout from PROMPT.md §10.2. */
 export async function layoutScene(
-  scene: SceneIntent,
+  input: SceneIntent,
   sg: SemanticGraph,
   seed: number,
 ): Promise<{ nodes: PositionedNode[]; edges: VisualEdge[] }> {
   const random = new SeededRandom(seed);
+  // Every layout (including ELK model order and collision nudging) sees one semantic order, so
+  // positions never depend on incidental VP array order after canvas edits.
+  const semanticIndex = new Map(
+    [...input.nodes]
+      .sort((left, right) => compareSemantic(sg, left, right))
+      .map((node, index) => [node.id, index]),
+  );
+  const edgeKey = (edge: VisualEdge): [number, number, string] => [
+    semanticIndex.get(edge.from) ?? Infinity,
+    semanticIndex.get(edge.to) ?? Infinity,
+    edge.id,
+  ];
+  const scene: SceneIntent = {
+    ...input,
+    nodes: [...input.nodes].sort(
+      (left, right) => semanticIndex.get(left.id)! - semanticIndex.get(right.id)!,
+    ),
+    edges: [...input.edges].sort((left, right) => {
+      const a = edgeKey(left);
+      const b = edgeKey(right);
+      return a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]);
+    }),
+  };
   let nodes: MutablePositionedNode[];
   switch (scene.metaphor) {
     case 'compass':
     case 'map':
-      nodes = compass(scene, random);
+      nodes = compass(scene, sg, random);
       break;
     case 'stack':
       nodes = stack(scene, sg);
@@ -338,16 +519,16 @@ export async function layoutScene(
       break;
     case 'timeline':
     case 'flow':
-      nodes = await layered(scene, 'RIGHT');
+      nodes = await layered(scene, sg, 'RIGHT');
       break;
     case 'tree':
-      nodes = await layered(scene, 'DOWN');
+      nodes = await layered(scene, sg, 'DOWN');
       break;
     case 'scale':
       nodes = scale(scene, sg);
       break;
     case 'actor_action':
-      nodes = actorAction(scene);
+      nodes = actorAction(scene, sg);
       break;
   }
   for (const node of nodes) {
@@ -355,6 +536,9 @@ export async function layoutScene(
       node.explodedPosition = [node.position[0], node.position[1], node.position[2]];
     }
   }
+  // Output keeps the plan's array order; only the geometry is order-independent.
+  const planIndex = new Map(input.nodes.map((node, index) => [node.id, index]));
+  nodes.sort((left, right) => planIndex.get(left.id)! - planIndex.get(right.id)!);
   const anchor = nodes.find((node) => node.role === 'anchor');
   const leaders =
     scene.metaphor === 'stack' && anchor
@@ -367,5 +551,5 @@ export async function layoutScene(
             kind: 'leader' as const,
           }))
       : [];
-  return { nodes, edges: [...scene.edges, ...leaders] };
+  return { nodes, edges: [...input.edges, ...leaders] };
 }

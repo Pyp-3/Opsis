@@ -2,7 +2,13 @@ import type { PositionedNode, SemanticGraph, VisualPlan } from '@opsis/schema';
 
 export type Vector3 = [number, number, number];
 export type Bounds = { min: Vector3; max: Vector3 };
-export type LabelBox = { nodeId: string; position: Vector3; size: [number, number] };
+export type LabelBox = {
+  /** Exactly one owner id is present. Optional fields keep the original node-label API compatible. */
+  nodeId?: string;
+  edgeId?: string;
+  position: Vector3;
+  size: [number, number];
+};
 
 export type LayoutOptions = {
   seed?: number;

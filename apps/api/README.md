@@ -41,10 +41,16 @@ separate edit-capability design, such as an edit token issued at creation and re
 | `OPSIS_MEMORY_CACHE_ENTRIES` | `256`                        | Maximum entries in the in-process LRU front cache.                                     |
 | `OPSIS_RATE_LIMIT`           | `60`                         | Maximum non-health requests per client in one window.                                  |
 | `OPSIS_RATE_WINDOW_MS`       | `60000`                      | Rate-limit window in milliseconds.                                                     |
-| `OPSIS_LLM_PROVIDER`         | `anthropic`                  | `anthropic` or an OpenAI-compatible provider name.                                     |
+| `OPSIS_LLM_PROVIDER`         | `anthropic`                  | HTTP provider, or `harness:claude`, `harness:codex`, or `harness:agy`.                 |
 | `OPSIS_LLM_MODEL`            | unset                        | Provider model id. Required with an API key to enable LLM calls.                       |
 | `OPSIS_LLM_API_KEY`          | unset                        | Provider credential. When absent, the deterministic offline fallback is used.          |
 | `OPSIS_LLM_BASE_URL`         | provider default             | Optional Anthropic or OpenAI-compatible API base URL.                                  |
+| `OPSIS_HARNESS_BIN`          | unset                        | Absolute, allowlisted CLI path; required for a harness provider.                       |
+| `OPSIS_HARNESS_TIMEOUT_MS`   | `30000`                      | Harness deadline from 100 to 300000 milliseconds.                                      |
 
-No key is required for local development or tests. Requests and responses are checked against the
-shared Zod contracts, and all API failures use `{ code, message, stage, retryable }`.
+No key is required for local development or tests. Harness mode uses the CLI's existing session;
+Opsis never reads or stores CLI credential files. The audited paths and initial supported versions
+are Claude `/home/pyp/.local/share/claude/versions/2.1.281` (2.1.x), Codex `/usr/bin/codex`
+(0.156.x), and Agy `/home/pyp/.local/bin/agy` (1.2.x). Invalid or unavailable harness
+configuration fails closed to deterministic offline rules. Requests and responses are checked
+against the shared Zod contracts, and all API failures use `{ code, message, stage, retryable }`.

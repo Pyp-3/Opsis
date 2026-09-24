@@ -16,6 +16,7 @@ import {
   layoutVisualPlan,
   nodeBounds,
   nodesOverlap,
+  semanticRanks,
   zoomToFit,
 } from './index';
 
@@ -250,9 +251,25 @@ describe('@opsis/layout', () => {
 
   it('uses bearing anchors and clockwise cycle order', async () => {
     const compassCase = graphAndPlan('compass', 4);
+    compassCase.sg.relations.push({
+      id: 'r_mover_east',
+      type: 'direction',
+      source: 'e_2',
+      target: 'e_1',
+      modality: 'certain',
+    });
+    compassCase.plan.sgRef = createSgRef(compassCase.sg);
+    compassCase.plan.scenes[0]!.edges.push({
+      id: 've_r_mover_east',
+      from: 'e_2',
+      to: 'e_1',
+      kind: 'arrow',
+    });
     const compass = (await layoutVisualPlan(compassCase.plan, compassCase.sg, { seed: 9 }))
       .scenes[0]!;
     expect(compass.nodes.find((node) => node.id === 'e_1')!.position[0]).toBeGreaterThan(0);
+    expect(compass.nodes.find((node) => node.id === 'e_2')!.position[0]).toBeGreaterThan(0);
+    expect(compass.nodes.find((node) => node.id === 'e_2')!.position[1]).toBeCloseTo(0);
     const cycleCase = graphAndPlan('cycle', 5);
     const cycle = (await layoutVisualPlan(cycleCase.plan, cycleCase.sg, { seed: 9 })).scenes[0]!;
     const members = cycle.nodes.filter((node) => node.role !== 'anchor');
@@ -265,9 +282,10 @@ describe('@opsis/layout', () => {
       const example = graphAndPlan(metaphor, 5);
       const scene = (await layoutVisualPlan(example.plan, example.sg, { seed: 3 })).scenes[0]!;
       for (const relation of example.sg.relations) {
-        expect(scene.nodes.find((node) => node.id === relation.source)!.position[0]).toBeLessThan(
-          scene.nodes.find((node) => node.id === relation.target)!.position[0],
-        );
+        const source = scene.nodes.find((node) => node.id === relation.source)!;
+        const target = scene.nodes.find((node) => node.id === relation.target)!;
+        expect(source.position[0]).toBeLessThan(target.position[0]);
+        expect(nodeBounds(source).max[0]).toBeLessThan(nodeBounds(target).min[0]);
       }
     }
     const tree = graphAndPlan('tree', 5);
@@ -278,6 +296,91 @@ describe('@opsis/layout', () => {
       );
     }
   });
+
+  it('keeps semantic ranks and positions stable when an edited flow arrives in a new array order', async () => {
+    const example = graphAndPlan('flow', 7);
+    example.sg.relations[2]!.type = 'transforms_into';
+    example.plan.sgRef = createSgRef(example.sg);
+    const original = (await layoutVisualPlan(example.plan, example.sg, { seed: 17 })).scenes[0]!;
+    const edited = structuredClone(example.plan);
+    edited.scenes[0]!.nodes.reverse();
+    edited.scenes[0]!.edges.reverse();
+    const reordered = (await layoutVisualPlan(edited, example.sg, { seed: 17 })).scenes[0]!;
+    const positions = (scene: typeof original) =>
+      Object.fromEntries(scene.nodes.map((node) => [node.id, node.position]));
+    expect(positions(reordered)).toEqual(positions(original));
+    const ranks = semanticRanks(edited.scenes[0]!, example.sg);
+    for (const relation of example.sg.relations)
+      expect(ranks.get(relation.target)).toBeGreaterThan(ranks.get(relation.source)!);
+  });
+
+  it('places labelled directional edges without node or label collisions', async () => {
+    const example = graphAndPlan('timeline', 8);
+    example.plan.scenes[0]!.edges.forEach((edge, index) => {
+      edge.label = index % 2 === 0 ? 'then' : 'becomes';
+    });
+    const scene = (await layoutVisualPlan(example.plan, example.sg, { seed: 4 })).scenes[0]!;
+    const labels = layoutLabels(scene);
+    expect(labels.filter((label) => label.edgeId)).toHaveLength(scene.edges.length);
+    for (let left = 0; left < labels.length; left += 1)
+      for (let right = left + 1; right < labels.length; right += 1)
+        expect(labelsOverlap(labels[left]!, labels[right]!)).toBe(false);
+    for (const label of labels)
+      for (const node of scene.nodes) {
+        if (node.role === 'anchor' && BACKDROPS.has(node.primitive)) continue;
+        const bounds = nodeBounds(node);
+        expect(
+          label.position[0] - label.size[0] / 2 < bounds.max[0] &&
+            label.position[0] + label.size[0] / 2 > bounds.min[0] &&
+            label.position[1] - label.size[1] / 2 < bounds.max[1] &&
+            label.position[1] + label.size[1] / 2 > bounds.min[1],
+        ).toBe(false);
+      }
+    for (const label of labels) {
+      expect(label.position[0] - label.size[0] / 2).toBeGreaterThanOrEqual(scene.bounds.min[0]);
+      expect(label.position[0] + label.size[0] / 2).toBeLessThanOrEqual(scene.bounds.max[0]);
+      expect(label.position[1] - label.size[1] / 2).toBeGreaterThanOrEqual(scene.bounds.min[1]);
+      expect(label.position[1] + label.size[1] / 2).toBeLessThanOrEqual(scene.bounds.max[1]);
+    }
+  });
+
+  it('produces valid deterministic OSGs for edge-empty, cyclic, disconnected, and 50-node flows', async () => {
+    const edgeEmpty = graphAndPlan('flow', 2);
+    edgeEmpty.sg.relations = [];
+    edgeEmpty.plan.sgRef = createSgRef(edgeEmpty.sg);
+    edgeEmpty.plan.scenes[0]!.edges = [];
+
+    const cyclic = graphAndPlan('flow', 6);
+    cyclic.sg.relations.push({
+      id: 'r_cycle',
+      type: 'precedes',
+      source: 'e_5',
+      target: 'e_0',
+      modality: 'certain',
+    });
+    cyclic.plan.sgRef = createSgRef(cyclic.sg);
+    cyclic.plan.scenes[0]!.edges.push({
+      id: 've_r_cycle',
+      from: 'e_5',
+      to: 'e_0',
+      kind: 'arrow',
+    });
+
+    const disconnected = graphAndPlan('flow', 9);
+    disconnected.sg.relations = disconnected.sg.relations.filter((_, index) => index % 3 === 0);
+    disconnected.plan.sgRef = createSgRef(disconnected.sg);
+    const retained = new Set(disconnected.sg.relations.map((relation) => `ve_${relation.id}`));
+    disconnected.plan.scenes[0]!.edges = disconnected.plan.scenes[0]!.edges.filter((edge) =>
+      retained.has(edge.id),
+    );
+
+    const fifty = graphAndPlan('flow', 50);
+    for (const input of [edgeEmpty, cyclic, disconnected, fifty]) {
+      const first = await layoutVisualPlan(input.plan, input.sg, { seed: 123 });
+      expectGeometry(first);
+      expect(await layoutVisualPlan(input.plan, input.sg, { seed: 123 })).toEqual(first);
+    }
+  }, 30_000);
 
   it('places actor → action → object and scales balance tilt to numeric difference', async () => {
     const action = graphAndPlan('actor_action', 3);

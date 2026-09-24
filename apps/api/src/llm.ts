@@ -1,5 +1,7 @@
 import type { LLMClient, LLMConfig, LLMRequest } from '@opsis/parse';
 import { readLLMConfig } from '@opsis/parse';
+import { createHarnessLLMClient, HarnessError } from './harness/index.js';
+import type { CreateHarnessOptions } from './harness/index.js';
 
 type OpenAIReply = { choices?: { message?: { content?: string } }[] };
 type AnthropicReply = { content?: { type?: string; text?: string }[] };
@@ -7,9 +9,11 @@ type AnthropicReply = { content?: { type?: string; text?: string }[] };
 /** HTTP implementation of the pipeline LLMClient for Anthropic or OpenAI-compatible APIs. */
 export class EnvironmentLLMClient implements LLMClient {
   readonly model: string;
+  readonly identity: string;
 
   constructor(private readonly config: LLMConfig) {
     this.model = config.model;
+    this.identity = `http:${config.provider.toLowerCase()}:${config.model}`;
   }
 
   /** Sends a provider-shaped completion request and returns its text payload. */
@@ -75,6 +79,37 @@ export class EnvironmentLLMClient implements LLMClient {
 export function llmClientFromEnvironment(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): LLMClient | null {
+  if (env.OPSIS_LLM_PROVIDER?.trim().startsWith('harness:')) return null;
   const config = readLLMConfig(env);
   return config ? new EnvironmentLLMClient(config) : null;
+}
+
+type IdentifiedClient = LLMClient & { readonly identity?: string };
+
+/** Stable provider/model/version identity used by cache keys. */
+export function llmIdentity(client: LLMClient | null): string {
+  return (
+    (client as IdentifiedClient | null)?.identity ?? (client ? `model:${client.model}` : 'offline')
+  );
+}
+
+export type ConfiguredClientOptions = CreateHarnessOptions & {
+  onWarning?: (message: string) => void;
+};
+
+/** Builds HTTP, harness or offline mode; invalid harness startup fails closed to offline. */
+export async function configuredLLMClientFromEnvironment(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  options: ConfiguredClientOptions = {},
+): Promise<LLMClient | null> {
+  if (!env.OPSIS_LLM_PROVIDER?.trim().startsWith('harness:')) {
+    return llmClientFromEnvironment(env);
+  }
+  try {
+    return await createHarnessLLMClient(env, options);
+  } catch (error) {
+    const code = error instanceof HarnessError ? error.code : 'harness_config';
+    options.onWarning?.(`Harness backend disabled (${code}); using offline rules.`);
+    return null;
+  }
 }

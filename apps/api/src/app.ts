@@ -7,10 +7,27 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { ZodError, z } from 'zod';
-import { drilldown, ExplainError, explainNode } from '@opsis/explain';
+import {
+  drilldownDetailed,
+  EXPLAIN_PROMPT_ID,
+  EXPLAIN_REPAIR_PROMPT_ID,
+  ExplainError,
+  explainNode,
+} from '@opsis/explain';
 import { layoutVisualPlan } from '@opsis/layout';
-import { selectMetaphor } from '@opsis/metaphor';
-import { ParseError, parseUtterance, type LLMClient } from '@opsis/parse';
+import {
+  CURATOR_ID,
+  PRIMITIVE_PROMPT_ID,
+  RENDERER_CAPABILITIES,
+  selectMetaphor,
+} from '@opsis/metaphor';
+import {
+  PARSE_PROMPT_ID,
+  ParseError,
+  parseUtterance,
+  REPAIR_PROMPT_ID,
+  type LLMClient,
+} from '@opsis/parse';
 import {
   createCacheKey,
   DrilldownRequestSchema,
@@ -31,7 +48,7 @@ import {
   type VisualizeProgress,
   type VisualizeRequest,
 } from '@opsis/schema';
-import { llmClientFromEnvironment } from './llm.js';
+import { llmClientFromEnvironment, llmIdentity } from './llm.js';
 import { ApiStore } from './storage.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
@@ -60,6 +77,52 @@ export type BuildAppOptions = FastifyServerOptions & {
 
 type PipelineConfig = { audience: 'child' | 'teen' | 'adult'; seed: number };
 
+export type LLMCacheStage = 'parse' | 'metaphor' | 'explain' | 'drilldown';
+
+export type PipelinePromptIds = Readonly<Record<LLMCacheStage, Readonly<Record<string, string>>>>;
+
+/** Prompt versions that participate in each LLM-backed stage's cache identity. */
+export const PIPELINE_PROMPT_IDS: PipelinePromptIds = {
+  parse: { primary: PARSE_PROMPT_ID, repair: REPAIR_PROMPT_ID },
+  metaphor: { primary: PRIMITIVE_PROMPT_ID },
+  explain: { primary: EXPLAIN_PROMPT_ID, repair: EXPLAIN_REPAIR_PROMPT_ID },
+  drilldown: {
+    explain: EXPLAIN_PROMPT_ID,
+    explainRepair: EXPLAIN_REPAIR_PROMPT_ID,
+    parse: PARSE_PROMPT_ID,
+    parseRepair: REPAIR_PROMPT_ID,
+    metaphor: PRIMITIVE_PROMPT_ID,
+  },
+};
+
+/** Stage-2 dimension policy (D-004); a policy bump or a certification change invalidates plans. */
+const CURATION = { curator: CURATOR_ID, capabilities: RENDERER_CAPABILITIES };
+const CURATED_STAGES: ReadonlySet<LLMCacheStage> = new Set(['metaphor', 'drilldown']);
+
+/** Builds an LLM-stage cache key with every applicable prompt version included. */
+export function createLLMStageCacheKey(
+  stage: LLMCacheStage,
+  normalizedInput: unknown,
+  config: Readonly<Record<string, unknown>>,
+  identity: string,
+  promptIds: PipelinePromptIds = PIPELINE_PROMPT_IDS,
+): string {
+  return createCacheKey(
+    stage,
+    normalizedInput,
+    {
+      ...config,
+      promptIds: promptIds[stage],
+      ...(CURATED_STAGES.has(stage) ? { curation: CURATION } : {}),
+    },
+    identity,
+  );
+}
+
+function resultIdentity(modelIdentity: string, modelDerived: boolean): string {
+  return modelDerived ? modelIdentity : 'offline';
+}
+
 function errorResponse(
   code: string,
   message: string,
@@ -83,7 +146,7 @@ function validationError(error: ZodError): ErrorResponse {
 }
 
 function modelId(llm: LLMClient | null): string {
-  return llm?.model ?? 'offline';
+  return llmIdentity(llm);
 }
 
 async function runVisualize(
@@ -97,30 +160,41 @@ async function runVisualize(
   const currentModel = modelId(llm);
 
   progress('parsing');
-  const parseKey = createCacheKey(
-    'parsing',
-    normalized,
-    { audience: config.audience },
-    currentModel,
-  );
+  const parseInput = normalized;
+  const parseConfig = { audience: config.audience };
+  const parseKey = createLLMStageCacheKey('parse', parseInput, parseConfig, currentModel);
   let sg = store.getCache<SemanticGraph>(parseKey);
   if (sg) sg = SemanticGraphSchema.parse(sg);
   if (!sg) {
-    sg = (await parseUtterance(normalized, { llm, audience: config.audience })).sg;
-    store.setCache(parseKey, sg);
+    const parsed = await parseUtterance(normalized, { llm, audience: config.audience });
+    sg = parsed.sg;
+    const writeKey = createLLMStageCacheKey(
+      'parse',
+      parseInput,
+      parseConfig,
+      resultIdentity(currentModel, parsed.source !== 'rule_fallback'),
+    );
+    store.setCache(writeKey, sg);
   }
 
   progress('mapping');
-  const mappingKey = createCacheKey('mapping', sg, {}, currentModel);
+  const mappingKey = createLLMStageCacheKey('metaphor', sg, {}, currentModel);
   let plan = store.getCache<VisualPlan>(mappingKey);
   if (plan) plan = visualPlanSchemaFor(sg).parse(plan);
   if (!plan) {
-    plan = (await selectMetaphor(sg, { llm })).plan;
-    store.setCache(mappingKey, plan);
+    const selected = await selectMetaphor(sg, { llm });
+    plan = selected.plan;
+    const writeKey = createLLMStageCacheKey(
+      'metaphor',
+      sg,
+      {},
+      resultIdentity(currentModel, selected.llm.accepted.length > 0),
+    );
+    store.setCache(writeKey, plan);
   }
 
   progress('layout');
-  const layoutKey = createCacheKey('layout', { sg, plan }, { seed: config.seed }, currentModel);
+  const layoutKey = createCacheKey('layout', { sg, plan }, { seed: config.seed }, 'deterministic');
   let osg = store.getCache<OSG>(layoutKey);
   if (osg) osg = OSGSchema.parse(osg);
   if (!osg) {
@@ -246,7 +320,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         'explain',
       );
     }
-    const key = createCacheKey('explain', body, {}, modelId(llm));
+    const currentModel = modelId(llm);
+    const key = createLLMStageCacheKey('explain', body, {}, currentModel);
     const cached = store.getCache<Explanation>(key);
     if (cached) return ExplanationSchema.parse(cached);
     const persisted = store.getExplanation(key);
@@ -256,21 +331,38 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
     const result = await explainNode(body.nodeId, osg, body.level, body.audience, llm);
     const explanation = ExplanationSchema.parse(result.explanation);
-    store.setCache(key, explanation);
-    return store.putExplanation(key, explanation);
+    const writeKey = createLLMStageCacheKey(
+      'explain',
+      body,
+      {},
+      resultIdentity(currentModel, result.source !== 'fallback'),
+    );
+    store.setCache(writeKey, explanation);
+    return store.putExplanation(writeKey, explanation);
   });
 
   app.post('/v1/drilldown', async (request) => {
     const body = DrilldownRequestSchema.parse(request.body);
-    const key = createCacheKey('drilldown', body, {}, modelId(llm));
+    const currentModel = modelId(llm);
+    const key = createLLMStageCacheKey('drilldown', body, {}, currentModel);
     const cached = store.getCache<OSG>(key);
     if (cached) return store.insertOsgIfAbsent(OSGSchema.parse(cached));
-    const child = await drilldown(body.osgId, body.nodeId, {
+    const result = await drilldownDetailed(body.osgId, body.nodeId, {
       loadOsg: (id) => store.getOsg(id),
       llm,
     });
-    const document = OSGSchema.parse(child);
-    store.setCache(key, document);
+    const document = OSGSchema.parse(result.osg);
+    const modelDerived =
+      result.partsSource === 'llm' ||
+      result.parseSource !== 'rule_fallback' ||
+      result.metaphorLLM.accepted.length > 0;
+    const writeKey = createLLMStageCacheKey(
+      'drilldown',
+      body,
+      {},
+      resultIdentity(currentModel, modelDerived),
+    );
+    store.setCache(writeKey, document);
     return store.insertOsgIfAbsent(document);
   });
 
