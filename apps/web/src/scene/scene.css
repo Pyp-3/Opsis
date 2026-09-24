@@ -1,69 +1,15 @@
-.opsis-viewer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  color: var(--opsis-ui-text);
-  font-family: system-ui, sans-serif;
-}
-.opsis-toolbar {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.opsis-toolbar button,
-.opsis-outline button,
-.opsis-panel button {
-  font: inherit;
-  padding: 0.35rem 0.8rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--opsis-ui-outline);
-  background: var(--opsis-ui-surface);
-  color: var(--opsis-ui-text);
-  cursor: pointer;
-}
-.opsis-toolbar button[aria-pressed='true'],
-.opsis-outline button[aria-pressed='true'] {
-  background: var(--opsis-ui-accent);
-  color: #fff;
-}
-:is(.opsis-viewer) :focus-visible {
-  outline: 3px solid var(--opsis-ui-highlight);
-  outline-offset: 2px;
-}
 .opsis-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 14rem;
+  grid-template-columns: minmax(0, 1fr) 15rem;
   gap: 0.75rem;
-  position: relative;
 }
 .opsis-canvas {
+  position: relative;
   height: min(70vh, 640px);
   border-radius: 0.75rem;
   overflow: hidden;
   background: var(--opsis-ui-background);
   border: 1px solid var(--opsis-ui-outline);
-}
-.opsis-loading {
-  padding: 1rem;
-}
-.opsis-outline h2 {
-  font-size: 1rem;
-  margin: 0 0 0.5rem;
-}
-.opsis-outline ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-.opsis-outline button {
-  width: 100%;
-  text-align: left;
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
 }
 .opsis-label {
   white-space: nowrap;
@@ -92,8 +38,9 @@
   margin: 0;
   padding: 0 0.4rem;
   border-radius: 999px;
-  border: 1px dashed var(--opsis-ui-optional, #6b4fa0);
-  color: var(--opsis-ui-optional, #6b4fa0);
+  border: 2px dashed var(--opsis-ui-optional, #6b4fa0);
+  /* Text uses the body colour: the Okabe–Ito purple is below 4.5:1 on white. */
+  color: var(--opsis-ui-text, #1b1f24);
   background: var(--opsis-ui-surface, #fff);
   font:
     600 0.7rem system-ui,
@@ -131,63 +78,8 @@
   transform: translate(-50%, -50%);
   display: inline-block;
 }
-.opsis-panel {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  width: min(22rem, 80%);
-  background: var(--opsis-ui-surface);
-  border: 1px solid var(--opsis-ui-outline);
-  border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.15);
-  display: grid;
-  gap: 0.5rem;
-}
-.opsis-panel header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.opsis-panel h2 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-.opsis-panel p {
-  margin: 0;
-}
-.opsis-chip {
-  background: color-mix(in srgb, var(--opsis-ui-highlight) 18%, var(--opsis-ui-surface));
-  border-radius: 0.5rem;
-  padding: 0.4rem 0.6rem;
-}
 @media (max-width: 720px) {
   .opsis-stage {
     grid-template-columns: 1fr;
   }
-}
-.opsis-app {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 1rem;
-  font-family: system-ui, sans-serif;
-}
-.opsis-examples {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-}
-.opsis-examples button {
-  font: inherit;
-  padding: 0.35rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid #2b3440;
-  background: #fff;
-  color: #1b1f24;
-  cursor: pointer;
-}
-.opsis-examples button[aria-pressed='true'] {
-  background: #1f6fd1;
-  color: #fff;
 }

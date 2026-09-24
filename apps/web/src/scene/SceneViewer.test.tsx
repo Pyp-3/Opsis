@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SessionProvider } from '../state/context';
+import { fakeApi } from '../state/fakeApi';
+import { createSessionStore } from '../state/session';
+import { loadFixture, type FixtureId } from './fixtures';
 
 // WebGL is unavailable in jsdom; the canvas chunk is covered by browser checks.
 vi.mock('./SceneCanvas', () => ({ default: () => null }));
@@ -9,39 +13,40 @@ const { default: SceneViewer } = await import('./SceneViewer');
 
 afterEach(cleanup);
 
+function renderViewer(fixture: FixtureId) {
+  const osg = loadFixture(fixture);
+  const store = createSessionStore(fakeApi());
+  store.setState({ trail: [osg], status: 'ready' });
+  render(
+    <SessionProvider store={store}>
+      <SceneViewer osg={osg} reducedMotion={false} />
+    </SessionProvider>,
+  );
+  return store;
+}
+
 describe('SceneViewer', () => {
-  it('opens the fixture summary when a node is chosen and closes it again', () => {
-    render(<SceneViewer fixture="sun-east" />);
+  it('opens the summary panel when a node is chosen and closes it again', () => {
+    renderViewer('sun-east');
     fireEvent.click(screen.getByRole('button', { name: 'Sun' }));
-    expect(screen.getByRole('heading', { name: 'Sun' })).toBeDefined();
+    const panel = screen.getByRole('complementary', { name: 'Sun' });
     expect(
-      screen.getByText('The Sun is the star at the centre of our solar system.'),
+      within(panel).getByText('The Sun is the star at the centre of our solar system.'),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Close summary' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
     expect(screen.queryByRole('heading', { name: 'Sun' })).toBeNull();
   });
 
-  it('shows the "Did you know?" chip for rises', () => {
-    render(<SceneViewer fixture="sun-east" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rises' }));
-    expect(screen.getByRole('note').textContent).toMatch(/only appears to rise/);
-  });
-
-  it('offers explode only for the sandwich, toggled by button and E key', () => {
-    render(<SceneViewer fixture="sun-east" />);
-    expect(screen.queryByRole('button', { name: 'Explode' })).toBeNull();
-    cleanup();
-    render(<SceneViewer fixture="sandwich" />);
-    const button = screen.getByRole('button', { name: 'Explode' });
-    fireEvent.click(button);
-    expect(button.textContent).toBe('Assemble');
-    expect(button.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.keyDown(window, { key: 'e' });
-    expect(button.textContent).toBe('Explode');
+  it('only offers Open for drillable nodes', () => {
+    renderViewer('sun-east');
+    fireEvent.click(screen.getByRole('button', { name: 'Compass (main)' }));
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sun' }));
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDefined();
   });
 
   it('badges optional parts in the outline', () => {
-    render(<SceneViewer fixture="sandwich" />);
+    renderViewer('sandwich');
     expect(screen.getAllByText('optional')).toHaveLength(4);
   });
 });
