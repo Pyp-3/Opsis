@@ -1603,3 +1603,55 @@ summary::-webkit-details-marker {
     transition: none !important;
   }
 }
+.generation-review {
+  max-height: 46vh;
+  overflow: auto;
+  background: #fffdf6;
+  color: #263b36;
+  border: 1px solid #c6b77c;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 12px;
+}
+.generation-review button,
+.walkthrough button {
+  background: #f7f8f3;
+  color: #244c40;
+  border: 1px solid #c4cebd;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.review-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.review-columns pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+.walkthrough {
+  position: absolute;
+  left: 24px;
+  top: 130px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-size: 11px;
+  max-width: calc(100% - 48px);
+}
+.confidence-badge {
+  font-size: 10px;
+  color: #ffe2a6;
+}
+.node-caveat {
+  background: #fff5d9;
+  color: #574617;
+  padding: 12px;
+  font-size: 12px;
+}

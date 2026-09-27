@@ -12,7 +12,10 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 - Per-agent model and reasoning-effort controls, custom model IDs, economical defaults, and no automatic upgrade to a larger model.
 - Follow-up prompts that include the current graph and selected concept; existing node positions are retained.
 - Concept explanations, editable labels and icons, searchable navigation, and incoming/outgoing relationship navigation.
-- Undo/redo, current-board autosave, JSON import/export, and SVG export.
+- Named SQLite-backed boards, persistent undo/redo, and browser recovery copies.
+- Explicit review of agent changes to existing content; one bounded invalid-output repair attempt.
+- Topic-specific suggestions, per-concept uncertainty annotations, and a guided walkthrough.
+- JSON/legacy OSG import and JSON, SVG, PNG, and Markdown export.
 - An email-flow demo that works without an agent subscription or model call.
 
 Opsis is a local-first development application. The current interface is entirely 2D; the older renderer and pipeline remain in the repository for compatibility. See [GOALS.md](GOALS.md) for the implemented baseline and prioritized roadmap.
@@ -49,28 +52,39 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 
 ### Configuration
 
-| Variable           | Purpose                             | Default                      |
-| ------------------ | ----------------------------------- | ---------------------------- |
-| `OPSIS_CLAUDE_BIN` | Claude CLI executable               | `~/.local/bin/claude`        |
-| `OPSIS_CODEX_BIN`  | Codex CLI executable                | `/usr/bin/codex`             |
-| `HOST`             | API listen address                  | `127.0.0.1`                  |
-| `PORT`             | API port                            | `8000`                       |
-| `OPSIS_DB_PATH`    | Legacy API SQLite database location | `apps/api/data/opsis.sqlite` |
+| Variable           | Purpose                                  | Default                      |
+| ------------------ | ---------------------------------------- | ---------------------------- |
+| `OPSIS_CLAUDE_BIN` | Claude CLI executable                    | `~/.local/bin/claude`        |
+| `OPSIS_CODEX_BIN`  | Codex CLI executable                     | `/usr/bin/codex`             |
+| `HOST`             | API listen address                       | `127.0.0.1`                  |
+| `PORT`             | API port                                 | `8000`                       |
+| `OPSIS_DB_PATH`    | SQLite database for v2 and legacy boards | `apps/api/data/opsis.sqlite` |
 
 Use absolute executable paths when overriding the CLI locations. Executables and versions are validated by the harness. The `OPSIS_LLM_*` settings described in the [legacy API documentation](apps/api/README.md) configure the older pipeline; the new canvas sends its model selection from the UI.
 
 ## Persistence: what is saved today?
 
-| Data                                                               | Storage                                               | Scope                                            |
-| ------------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------ |
-| Current 2D board, positions and connection sides                   | Browser `localStorage`, key `opsis:board:v2`          | One current board per browser profile and origin |
-| Agent/model/effort preferences                                     | Browser `localStorage`, key `opsis:model-settings:v1` | Per-agent preferences on that browser/origin     |
-| Undo/redo history                                                  | Memory                                                | Current session only                             |
-| Legacy OSG diagrams, cached results, explanations and share tokens | SQLite through `better-sqlite3` and Drizzle           | Local API database                               |
+| Data                                                               | Storage                                                        | Scope                                                  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------ |
+| Named 2D boards, positions, connection sides and history           | SQLite `boards_v2` table                                       | Multiple boards in the local API database              |
+| Active-board recovery snapshot                                     | Browser local/session storage, key `opsis:library-recovery:v1` | Per-tab recovery plus a last-used browser copy         |
+| Agent/model/effort preferences                                     | Browser `localStorage`, key `opsis:model-settings:v1`          | Per-agent preferences on that browser/origin           |
+| Undo/redo history                                                  | SQLite and recovery snapshot                                   | Up to 40 past/future states per board, survives reload |
+| Legacy OSG diagrams, cached results, explanations and share tokens | SQLite through `better-sqlite3` and Drizzle                    | Local API database                                     |
 
-**The new 2D canvas does not yet save its boards to SQLite.** Closing and reopening the same browser/origin restores the current board, but clearing site data removes it. `localhost` and `127.0.0.1` are different storage origins. There is no cross-device sync or named-board library yet.
+Use **Saved boards** to reopen work and **Board name** to rename it. **New canvas** saves the previous board before opening a fresh one. A failed save blocks switching; retry, export, or use **Save as separate board** to recover a write conflict. Revision checks reject stale writes from another tab. Wait for **Saved to SQLite** before treating an edit as durably saved.
 
-Use **Export → JSON** for portable backups and **Import** to reopen them. Export before starting another board if you want to keep the previous one. SVG is for sharing/viewing, not editable round-trip import. Old OSG documents are not automatically migrated to the v2 format. SQLite-backed v2 boards and migration are roadmap priorities.
+The original `opsis:board:v2` browser board is imported on first use when no newer recovery snapshot exists; its old copy is retained. Clearing site data does not delete saved SQLite boards; reopen them from the list. Pending edits can still be lost if both the API save and browser recovery fail. There is no cross-device sync, board deletion/archive UI, or unlimited revision archive yet.
+
+Use **Export → Editable board** for portable JSON backups and **Import** to reopen them. SVG and PNG are images; Markdown includes explanations and outgoing relationships. **Import** also accepts legacy OSG JSON: it creates a separate v2 board and marks flattened concepts as simplified. 3D geometry, animations and drill-down behavior are not preserved; unknown primitives become generic icons. Oversized/invalid imports are rejected, and original files remain unchanged. Existing legacy database records are not bulk-migrated automatically.
+
+## Follow-up safety and learning
+
+The server compares every existing node and connection with the candidate graph. Removals, rewrites and changed metadata trigger a review panel with current/proposed content; nothing is applied until **Apply reviewed changes**. **Keep current board** discards the candidate. Pure additions may apply directly. All existing changes require review, even to the selected concept, because the server cannot reliably infer intended edits from prose alone.
+
+Invalid JSON/schema output gets at most one repair attempt using the same model and effort, with validation feedback and a shared 180-second deadline. This may consume an extra model call. Login, process, cancellation and timeout failures are not automatically retried. Generation displays elapsed time and coarse stages, not percentage completion; nodes are not streamed incrementally yet.
+
+Generated graphs request two or three relevant suggestion prompts, plus qualitative `normal`, `simplified` or `uncertain` annotations and caveats per concept. These are model judgments, not calibrated confidence scores. Old boards without suggestions show no unrelated email chips. **Start walkthrough** visits each concept once through outgoing paths, handling branches and cycles without changing the graph.
 
 ## Development
 
@@ -87,7 +101,7 @@ Targeted new-workspace coverage:
 pnpm exec vitest run apps/web/src/workspace apps/api/src/boards.test.ts
 ```
 
-The repository also contains `pnpm test:browser` and `pnpm test:qa`. Existing browser/visual/3D performance scenarios target the retired interface and need migration; they are not currently a release gate for the new workspace. Current v2 validation combines unit/API tests and direct browser checks. The production build currently emits a large-chunk warning, including for the lazily loaded ELK layout engine.
+`pnpm test:browser` runs the current workspace suite in `tests/workspace`; `pnpm test:qa` builds and runs unit/API and browser tests. Isolated test servers use ports 3100/8100 and an in-memory database; no paid agent calls or credentials are required. Tests cover saved boards/history, review, branching/dragging, exports, walkthrough, accessibility and mobile overflow. Retired scenarios remain under `tests/e2e`, `tests/visual` and `tests/perf` as historical references, excluded from the current default gate. Pixel-perfect screenshot baselines and large-graph performance coverage remain future work. The production build still warns about large chunks, including the lazily loaded ELK engine.
 
 ### Repository layout
 
@@ -96,10 +110,11 @@ apps/web/src/workspace/   Current React Flow canvas, controls, layout and export
 apps/web/src/LegacyApp.tsx Previous application, retained for compatibility
 apps/api/src/boards.ts   Agent discovery and v2 graph generation
 apps/api/src/harness/    Validated local CLI integration
-apps/api/src/storage.ts  Legacy SQLite persistence
+apps/api/src/storage.ts  SQLite persistence for v2 and legacy boards
+apps/api/src/board-library.ts V2 library list/load/save endpoints
 packages/schema/        Shared Zod contracts, including v2 boards
 packages/pipeline/      Legacy parsing, metaphor, layout and explanation pipeline
-tests/                  Shared, golden and legacy browser test suites
+tests/workspace/        Current workspace browser regression suite
 docs/                   Design notes and implementation documentation
 ```
 

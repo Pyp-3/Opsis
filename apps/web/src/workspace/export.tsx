@@ -55,3 +55,53 @@ export function download(content: string, name: string, type: string) {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+export function boardMarkdown(board: BoardDocument): string {
+  const safe = (value: string) => value.replace(/[\\`*_{}[\]<>#|]/g, '\\$&');
+  return (
+    `# ${safe(board.title)}\n\n${safe(board.description)}\n\n` +
+    board.nodes
+      .map((node, index) => {
+        const paths = board.edges
+          .filter((edge) => edge.source === node.id)
+          .map(
+            (edge) =>
+              `- ${safe(edge.label || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}`,
+          )
+          .join('\n');
+        return `## ${index + 1}. ${safe(node.label)}\n\n${safe(node.summary)}\n\n${safe(node.explanation)}\n\n${node.confidence && node.confidence !== 'normal' ? `**${node.confidence}**: ${safe(node.caveat ?? '')}\n\n` : ''}${paths}\n`;
+      })
+      .join('\n')
+  );
+}
+
+export async function downloadPng(board: BoardDocument): Promise<void> {
+  const svg = boardSvg(board);
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const scale = Math.min(2, 4096 / image.width, 4096 / image.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('PNG export is unavailable in this browser.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (value) => (value ? resolve(value) : reject(new Error('PNG encoding failed.'))),
+        'image/png',
+      ),
+    );
+    const pngUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = 'opsis-diagram.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

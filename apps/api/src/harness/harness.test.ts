@@ -193,7 +193,7 @@ describe('HarnessLLMClient', () => {
 describe('SpawnProcessRunner supervision', () => {
   const runner = new SpawnProcessRunner();
   const base = (args: string[], overrides: Partial<ProcessRunRequest> = {}): ProcessRunRequest => ({
-    executable: '/usr/bin/node',
+    executable: process.execPath,
     args,
     stdin: '',
     cwd: '/tmp',

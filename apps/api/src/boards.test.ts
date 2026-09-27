@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoardGraphSchema, EMAIL_DEMO } from '@opsis/schema';
 import { buildApp } from './app.js';
 import type { FastifyInstance } from 'fastify';
+import { HarnessError } from './harness/errors.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
@@ -25,6 +26,96 @@ describe('2D board API', () => {
     apps.push(app);
     return { app, complete, factory };
   }
+  it('repairs invalid JSON once using the same model and validation feedback', async () => {
+    const { app, complete, factory } = setup();
+    complete.mockResolvedValueOnce('not JSON').mockResolvedValueOnce(JSON.stringify(EMAIL_DEMO));
+    const result = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain email' },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(complete).toHaveBeenLastCalledWith(
+      expect.objectContaining({ user: expect.stringContaining('Validation error:') }),
+      expect.any(AbortSignal),
+    );
+  });
+  it('repairs malformed CLI output but never retries authentication/process errors', async () => {
+    const { app, complete } = setup();
+    complete.mockRejectedValueOnce(new HarnessError('harness_malformed'));
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/boards/generate',
+          payload: { agent: 'claude', prompt: 'Email' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(complete).toHaveBeenCalledTimes(2);
+    complete.mockClear().mockRejectedValue(new HarnessError('harness_exit'));
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/boards/generate',
+          payload: { agent: 'claude', prompt: 'Email' },
+        })
+      ).statusCode,
+    ).toBe(502);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+  it('stops after two invalid outputs', async () => {
+    const { app, complete } = setup('{}');
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/v1/boards/generate',
+          payload: { agent: 'claude', prompt: 'Email' },
+        })
+      ).statusCode,
+    ).toBe(502);
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+  it('requires review for dropped and rewritten existing content', async () => {
+    const output = {
+      ...EMAIL_DEMO,
+      nodes: EMAIL_DEMO.nodes.slice(1).map((node) => ({ ...node, label: 'Rewritten' })),
+      edges: EMAIL_DEMO.edges.slice(1),
+    };
+    const { app, complete } = setup(JSON.stringify(output));
+    const result = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: {
+        agent: 'claude',
+        prompt: 'Expand one step',
+        selectedId: 'outgoing',
+        board: document,
+      },
+    });
+    expect(result.statusCode).toBe(409);
+    expect(result.json().changes).toContain('Remove concept: sender');
+    expect(result.json().changes).toContain('Change concept: incoming');
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(result.json().candidate).toEqual(output);
+  });
+  it('caches concurrent readiness probes for 30 seconds, including unavailable clients', async () => {
+    const { app, factory } = setup();
+    await Promise.all([app.inject('/v1/agents'), app.inject('/v1/agents')]);
+    await app.inject('/v1/agents');
+    expect(factory).toHaveBeenCalledTimes(2);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31_000);
+    try {
+      await app.inject('/v1/agents');
+      expect(factory).toHaveBeenCalledTimes(4);
+    } finally {
+      now.mockRestore();
+    }
+  });
   it('sends the current board and selection to the chosen provider', async () => {
     const { app, complete, factory } = setup();
     const reply = await app.inject({

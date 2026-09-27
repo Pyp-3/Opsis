@@ -24,7 +24,6 @@ import {
   Expand,
   FileJson,
   GitBranch,
-  Grid2X2,
   ImageIcon,
   LoaderCircle,
   Mail,
@@ -46,26 +45,24 @@ import {
   BOARD_ICONS,
   BOARD_MODEL_CHOICES,
   BoardAgentsSchema,
-  BoardDocumentSchema,
-  BoardGraphSchema,
   BoardModelSettingsSchema,
   EMAIL_DEMO,
   type BoardAgent,
   type BoardDocument,
 } from '@opsis/schema';
 import { boardIcons } from './icons';
-import {
-  layoutBoard,
-  NODE_HEIGHT,
-  NODE_WIDTH,
-  removeNode,
-  restoreBoard,
-  STORAGE_KEY,
-} from './model';
-import { boardSvg, download } from './export';
+import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
+import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
 import { connectBoard, edgePorts } from './connections';
 import { MODEL_SETTINGS_KEY, readModelPreferences } from './model-settings';
+import { useBoardHistory } from './useBoardHistory';
+import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
+import { useBoardGeneration } from './useBoardGeneration';
+import { GenerationReview } from './GenerationReview';
+import { importBoard } from './migration';
+import { Walkthrough } from './Walkthrough';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
@@ -75,6 +72,7 @@ type DiagramNode = Node<{
   kind: string;
   number: number;
   outgoing: number;
+  confidence: string | undefined;
 }>;
 
 function IconNode({ data, selected }: NodeProps<DiagramNode>) {
@@ -109,6 +107,9 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
         )}
       </div>
       <strong>{data.label}</strong>
+      {data.confidence && data.confidence !== 'normal' && (
+        <span className="confidence-badge">{data.confidence}</span>
+      )}
       <span className="node-hint">
         {selected ? 'Drag a dot to connect' : 'Explore'} <ChevronRight size={11} />
       </span>
@@ -117,56 +118,33 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
 }
 const nodeTypes = { concept: IconNode };
 
-function initialState() {
-  try {
-    return { board: restoreBoard(), error: '' };
-  } catch {
-    return {
-      board: null,
-      error: 'Your saved board could not be opened. Import a backup or start a new board.',
-    };
-  }
-}
-
 function BoardWorkspace() {
-  const [initial] = useState(initialState);
-  const [board, setBoard] = useState<BoardDocument | null>(initial.board);
-  const boardRef = useRef(board);
-  useEffect(() => {
-    boardRef.current = board;
-  }, [board]);
-  const [agent, setAgent] = useState<BoardAgent>(initial.board?.agent ?? 'claude');
+  const [initial] = useState(restoreLibrary);
+  const { board, boardRef, setBoard, commit, history, snapshot, replace, travel } = useBoardHistory(
+    initial.snapshot,
+  );
+  const library = useBoardLibrary(initial, snapshot, replace);
+  const generation = useBoardGeneration(commit);
+  const { error, setError, setBusy } = generation;
+  const busy = generation.busy || library.switching || !!generation.review;
+  const saved = library.status;
+  const [agent, setAgent] = useState<BoardAgent>(initial.snapshot.board?.agent ?? 'claude');
   const [modelPreferences, setModelPreferences] = useState(readModelPreferences);
   const [agents, setAgents] = useState<ReturnType<typeof BoardAgentsSchema.parse>>([]);
   const [connectionError, setConnectionError] = useState('');
   const [prompt, setPrompt] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
-  const [error, setError] = useState(initial.error);
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState('');
-  const [history, setHistory] = useState<{
-    past: (BoardDocument | null)[];
-    future: (BoardDocument | null)[];
-  }>({ past: [], future: [] });
   const [iconSearch, setIconSearch] = useState('');
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
-  const [nodeSearch, setNodeSearch] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const exportMenu = useRef<HTMLDetailsElement>(null);
-  const request = useRef<AbortController | null>(null);
   const dragStart = useRef<BoardDocument | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
   const inspectorOpen = selected !== null || selectedEdge !== null;
-
-  const commit = useCallback((next: BoardDocument | null, before = boardRef.current) => {
-    setHistory((state) => ({ past: [...state.past.slice(-39), before], future: [] }));
-    boardRef.current = next;
-    setBoard(next);
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -181,19 +159,6 @@ function BoardWorkspace() {
       });
     return () => controller.abort();
   }, []);
-  useEffect(() => () => request.current?.abort(), []);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        if (board) localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
-        else if (!initial.error) localStorage.removeItem(STORAGE_KEY);
-        setSaved(board ? 'Saved on this device' : '');
-      } catch {
-        setSaved('Could not save · export a backup');
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [board, initial.error]);
 
   const fit = useCallback(() => {
     void flow.fitView({ padding: 0.22, duration: 300, maxZoom: 1.1 });
@@ -206,20 +171,11 @@ function BoardWorkspace() {
   const undo = useCallback(
     (redo = false) => {
       if (busy) return;
-      const stack = redo ? history.future : history.past;
-      if (!stack.length) return;
-      const next = stack[stack.length - 1] ?? null;
-      setHistory(
-        redo
-          ? { past: [...history.past, board], future: history.future.slice(0, -1) }
-          : { past: history.past.slice(0, -1), future: [...history.future, board] },
-      );
-      boardRef.current = next;
-      setBoard(next);
+      travel(redo);
       setSelected(null);
       setSelectedEdge(null);
     },
-    [board, busy, history],
+    [busy, travel],
   );
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -266,46 +222,8 @@ function BoardWorkspace() {
       setSettingsOpen(true);
       return;
     }
-    const controller = new AbortController();
-    request.current = controller;
-    setBusy(true);
-    setError('');
-    const previous = boardRef.current;
-    try {
-      const response = await fetch('/v1/boards/generate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          prompt: text,
-          agent,
-          ...(agent !== 'demo' ? { settings: modelPreferences[agent] } : {}),
-          ...(previous ? { board: previous } : {}),
-          ...(selected ? { selectedId: selected } : {}),
-        }),
-      });
-      const payload: unknown = await response.json();
-      if (!response.ok)
-        throw new Error(
-          typeof (payload as { message?: unknown })?.message === 'string'
-            ? (payload as { message: string }).message
-            : 'The agent could not complete this request.',
-        );
-      const graph = BoardGraphSchema.parse(payload);
-      const next = await layoutBoard(graph, agent, previous ?? undefined);
-      if (controller.signal.aborted) return;
-      commit(next);
+    if (await generation.generate(text, agent, modelPreferences, boardRef.current, selected))
       setPrompt('');
-      if (selected && !next.nodes.some((node) => node.id === selected)) setSelected(null);
-    } catch (cause) {
-      if (!controller.signal.aborted)
-        setError(cause instanceof Error ? cause.message : 'Could not connect to the agent.');
-    } finally {
-      if (request.current === controller) {
-        request.current = null;
-        setBusy(false);
-      }
-    }
   }
 
   async function demo() {
@@ -313,6 +231,7 @@ function BoardWorkspace() {
     setBusy(true);
     setError('');
     try {
+      if (!(await library.open())) return;
       commit(await layoutBoard(EMAIL_DEMO, 'demo'));
       setAgent('demo');
       setSelected(null);
@@ -339,9 +258,6 @@ function BoardWorkspace() {
       : (BOARD_MODEL_CHOICES[agent].find((choice) => choice.id === modelPreferences[agent].model)
           ?.label ??
         (modelPreferences[agent].model || 'Choose a model'));
-  const visibleNodes =
-    board?.nodes.filter((node) => node.label.toLowerCase().includes(nodeSearch.toLowerCase())) ??
-    [];
   const nodes: DiagramNode[] = useMemo(
     () =>
       board?.nodes.map((node, index) => ({
@@ -358,6 +274,7 @@ function BoardWorkspace() {
           kind: node.kind,
           number: index + 1,
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,
+          confidence: node.confidence,
         },
       })) ?? [],
     [board, selected],
@@ -405,117 +322,29 @@ function BoardWorkspace() {
 
   return (
     <div className={`workspace ${railOpen ? 'rail-open' : 'rail-closed'}`}>
-      <aside className="workspace-rail" aria-label="Workspace">
-        <div className="rail-head">
-          <a href="/" className="brand" aria-label="Opsis home">
-            <span className="brand-symbol">
-              <Grid2X2 size={17} />
-            </span>
-            <span>
-              opsis<span className="brand-dot">.</span>
-            </span>
-          </a>
-        </div>
-        <button
-          className="new-board"
-          disabled={busy || !board}
-          onClick={() => {
-            commit(null);
+      <WorkspaceSidebar
+        board={board}
+        busy={busy}
+        library={library}
+        commit={commit}
+        selected={selected}
+        selectNode={selectNode}
+        demo={() => void demo()}
+        onNew={async () => {
+          if (!(await library.open())) return;
+          setSelected(null);
+          setSelectedEdge(null);
+          setPrompt('');
+          setError('');
+        }}
+        onOpen={async (id) => {
+          if (await library.open(id)) {
             setSelected(null);
             setSelectedEdge(null);
-            setPrompt('');
-            setError('');
-          }}
-        >
-          <Plus size={16} /> New canvas
-        </button>
-        <div className="rail-scroll">
-          <section className="rail-section">
-            <h2 className="rail-section-title">Canvas</h2>
-            <div className="current-board">
-              <span className="current-board-icon">
-                <Grid2X2 size={15} />
-              </span>
-              <span className="current-board-text">
-                <strong>{board?.title ?? 'Untitled canvas'}</strong>
-                <small>
-                  {board
-                    ? `${board.nodes.length} concepts · ${board.edges.length} connections`
-                    : 'Nothing drawn yet'}
-                </small>
-              </span>
-            </div>
-          </section>
-          {board ? (
-            <section className="rail-section rail-concepts">
-              <h2 className="rail-section-title">
-                Concepts <span>{board.nodes.length}</span>
-              </h2>
-              <label className="concept-search">
-                <Search size={14} />
-                <input
-                  aria-label="Find a concept"
-                  placeholder="Find a concept…"
-                  value={nodeSearch}
-                  onChange={(event) => setNodeSearch(event.target.value)}
-                />
-              </label>
-              <nav className="node-list" aria-label="Diagram steps">
-                {visibleNodes.map((node) => {
-                  const Icon = boardIcons[node.icon];
-                  return (
-                    <button
-                      key={node.id}
-                      className={selected === node.id ? 'active' : ''}
-                      aria-current={selected === node.id ? 'true' : undefined}
-                      onClick={() => selectNode(node.id)}
-                    >
-                      <span className="list-number">
-                        {String(board.nodes.indexOf(node) + 1).padStart(2, '0')}
-                      </span>
-                      <Icon size={15} />
-                      <span className="list-label">{node.label}</span>
-                      {board.edges.filter((edge) => edge.source === node.id).length > 1 && (
-                        <GitBranch className="list-branch" size={13} aria-label="Branches" />
-                      )}
-                    </button>
-                  );
-                })}
-                {!visibleNodes.length && (
-                  <p className="rail-empty">No concepts match “{nodeSearch}”.</p>
-                )}
-              </nav>
-            </section>
-          ) : (
-            <div className="rail-intro">
-              <span className="eyebrow">Made for curious minds</span>
-              <h2>Follow the idea. See the connections.</h2>
-              <p>Turn a question into something you can explore, one step at a time.</p>
-            </div>
-          )}
-        </div>
-        <div className="rail-bottom">
-          <button className="sample-card" disabled={busy} onClick={() => void demo()}>
-            <span className="sample-icon">
-              <Mail size={16} />
-            </span>
-            <span>
-              <strong>An email’s journey</strong>
-              <small>Open the example canvas</small>
-            </span>
-            <ArrowRight size={15} />
-          </button>
-          <div className="connection-guide">
-            <GitBranch size={15} />
-            <p>
-              <strong>Ideas can branch.</strong> Drag from any connection dot to another icon.
-            </p>
-          </div>
-          <p className="rail-footnote">
-            <span className="active-dot" /> Private workspace · saved locally
-          </p>
-        </div>
-      </aside>
+            setAgent(boardRef.current?.agent ?? agent);
+          }
+        }}
+      />
 
       <main className="workspace-main">
         <header className="workspace-header">
@@ -552,6 +381,23 @@ function BoardWorkspace() {
                 <Download size={15} /> Export <ChevronDown className="chevron" size={14} />
               </summary>
               <div className="export-menu-panel">
+                <button
+                  disabled={!board}
+                  onClick={() =>
+                    board && exportAs(boardMarkdown(board), 'opsis-notes.md', 'text/markdown')
+                  }
+                >
+                  Markdown notes
+                </button>
+                <button
+                  disabled={!board}
+                  onClick={() => {
+                    if (board) void downloadPng(board).catch((e: Error) => setError(e.message));
+                    if (exportMenu.current) exportMenu.current.open = false;
+                  }}
+                >
+                  PNG image
+                </button>
                 <button
                   disabled={!board}
                   onClick={() =>
@@ -592,7 +438,8 @@ function BoardWorkspace() {
             if (!file) return;
             try {
               if (file.size > 1_000_000) throw new Error('This file is too large.');
-              const next = BoardDocumentSchema.parse(JSON.parse(await file.text()));
+              const next = await importBoard(JSON.parse(await file.text()));
+              if (!(await library.open())) return;
               commit(next);
               setAgent(next.agent);
               setSelected(null);
@@ -600,13 +447,21 @@ function BoardWorkspace() {
               setError('');
             } catch {
               setError(
-                'This file is not a valid Opsis v2 board. Your current canvas is unchanged.',
+                'This file could not be imported as a v2 board or legacy OSG. Your current canvas is unchanged.',
               );
             }
           }}
         />
         <div className="canvas-and-detail">
           <section className="blueprint" aria-label="Interactive diagram canvas">
+            {board && (
+              <Walkthrough
+                key={library.activeId}
+                board={board}
+                onSelect={selectNode}
+                disabled={busy}
+              />
+            )}
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -772,6 +627,30 @@ function BoardWorkspace() {
               {board ? `— ${String(board.nodes.length).padStart(2, '0')} CONCEPTS` : '— 01'}
             </span>
             <div className="composer-wrap">
+              {library.error && (
+                <div className="workspace-error" role="alert">
+                  <span>{library.error}</span>
+                  <button onClick={() => void library.save().catch(() => undefined)}>
+                    Retry save
+                  </button>
+                  {board && (
+                    <button disabled={busy} onClick={() => void library.saveCopy()}>
+                      Save as separate board
+                    </button>
+                  )}
+                </div>
+              )}
+              {generation.review && (
+                <GenerationReview
+                  {...generation.review}
+                  apply={() => {
+                    generation.apply();
+                    setSelected(null);
+                    setSelectedEdge(null);
+                  }}
+                  discard={generation.discard}
+                />
+              )}
               {error && (
                 <div className="workspace-error" role="alert">
                   <CircleAlert size={16} aria-hidden />
@@ -783,26 +662,17 @@ function BoardWorkspace() {
               )}
               {board && !busy && (
                 <div className="followup-chips">
-                  <button
-                    onClick={() => {
-                      setPrompt('Show what happens if delivery fails');
-                      promptInput.current?.focus();
-                    }}
-                  >
-                    <GitBranch size={12} /> Add a failure path
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPrompt(
-                        selected
-                          ? 'Explain this selected step in more detail and add its substeps'
-                          : 'Simplify this diagram',
-                      );
-                      promptInput.current?.focus();
-                    }}
-                  >
-                    {selected ? 'Expand this step' : 'Make it simpler'} <Plus size={12} />
-                  </button>
+                  {(board.suggestions ?? []).map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => {
+                        setPrompt(suggestion);
+                        promptInput.current?.focus();
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
                 </div>
               )}
               <form
@@ -833,15 +703,13 @@ function BoardWorkspace() {
                       }
                     }}
                   />
-                  {busy ? (
+                  {generation.busy ? (
                     <button
                       className="send-prompt"
                       type="button"
                       aria-label="Cancel generation"
                       onClick={() => {
-                        request.current?.abort();
-                        request.current = null;
-                        setBusy(false);
+                        generation.cancel();
                       }}
                     >
                       <Square size={14} fill="currentColor" />
@@ -851,7 +719,9 @@ function BoardWorkspace() {
                       className="send-prompt"
                       type="submit"
                       aria-label="Generate diagram"
-                      disabled={!prompt.trim() || (agent !== 'demo' && status?.available === false)}
+                      disabled={
+                        busy || !prompt.trim() || (agent !== 'demo' && status?.available === false)
+                      }
                     >
                       <ArrowUp size={19} />
                     </button>
@@ -909,10 +779,10 @@ function BoardWorkspace() {
                     </button>
                   )}
                   <span className="agent-status" role="status">
-                    {busy ? (
+                    {generation.busy ? (
                       <>
-                        <LoaderCircle className="spin" size={13} /> Building your visual
-                        explanation…
+                        <LoaderCircle className="spin" size={13} /> {generation.stage} ·{' '}
+                        {generation.elapsed}s
                       </>
                     ) : agent === 'demo' ? (
                       'Sample content · no agent calls'
@@ -955,6 +825,12 @@ function BoardWorkspace() {
                 </button>
               </div>
               <div className="detail-body">
+                {activeNode.confidence && activeNode.confidence !== 'normal' && (
+                  <p className="node-caveat">
+                    <strong>{activeNode.confidence}</strong>:{' '}
+                    {activeNode.caveat || 'This concept needs independent verification.'}
+                  </p>
+                )}
                 <div className="detail-hero">
                   <div className="detail-icon">
                     {(() => {

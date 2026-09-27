@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['e2e/**/*.spec.ts', 'visual/**/*.spec.ts', 'perf/**/*.spec.ts'],
+  testMatch: ['workspace/**/*.spec.ts'],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -14,7 +14,7 @@ export default defineConfig({
     toHaveScreenshot: { animations: 'disabled', maxDiffPixelRatio: 0.01 },
   },
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: 'http://127.0.0.1:3100',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -25,15 +25,15 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'OPSIS_DB_PATH=:memory: OPSIS_RATE_LIMIT=1000 pnpm --filter api exec node --import tsx src/main.ts',
-      url: 'http://127.0.0.1:8000/v1/health',
-      reuseExistingServer: !process.env.CI,
+        'PORT=8100 OPSIS_DB_PATH=:memory: OPSIS_RATE_LIMIT=10000 pnpm --filter api exec node --import tsx src/main.ts',
+      url: 'http://127.0.0.1:8100/v1/health',
+      reuseExistingServer: false,
       timeout: 120_000,
     },
     {
-      command: 'pnpm --filter web dev',
-      url: 'http://127.0.0.1:3000',
-      reuseExistingServer: !process.env.CI,
+      command: 'OPSIS_API_URL=http://127.0.0.1:8100 pnpm --filter web dev --port 3100',
+      url: 'http://127.0.0.1:3100',
+      reuseExistingServer: false,
       timeout: 120_000,
     },
   ],

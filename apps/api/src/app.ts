@@ -51,6 +51,7 @@ import {
 import { llmClientFromEnvironment, llmIdentity } from './llm.js';
 import { ApiStore } from './storage.js';
 import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
+import { registerBoardLibrary } from './board-library.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
 /** Share tokens are 24 random bytes encoded as base64url. */
@@ -233,6 +234,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify(fastifyOptions);
   registerBoardRoutes(app, boardClientFactory);
   const store = new ApiStore(databasePath, memoryCacheEntries);
+  registerBoardLibrary(app, store);
   const llm = providedLlm === undefined ? llmClientFromEnvironment() : providedLlm;
   const requests = new Map<string, number[]>();
 

@@ -5,7 +5,14 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { LRUCache } from 'lru-cache';
-import { ExplanationSchema, OSGSchema, type Explanation, type OSG } from '@opsis/schema';
+import {
+  BoardSnapshotSchema,
+  type BoardSnapshot,
+  ExplanationSchema,
+  OSGSchema,
+  type Explanation,
+  type OSG,
+} from '@opsis/schema';
 
 const cacheEntries = sqliteTable('cache_entries', {
   key: text('key').primaryKey(),
@@ -49,6 +56,10 @@ export class ApiStore {
     this.sqlite = new Database(databasePath(path));
     this.sqlite.pragma('journal_mode = WAL');
     this.sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS boards_v2 (
+        id TEXT PRIMARY KEY, title TEXT NOT NULL, snapshot TEXT NOT NULL,
+        revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS cache_entries (
         key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL
       );
@@ -64,6 +75,48 @@ export class ApiStore {
     `);
     this.db = drizzle(this.sqlite);
     this.memory = new LRUCache({ max: memoryEntries });
+  }
+
+  listBoards() {
+    return this.sqlite
+      .prepare(
+        'SELECT id, title, revision, updated_at AS updatedAt FROM boards_v2 ORDER BY updated_at DESC',
+      )
+      .all();
+  }
+
+  getBoard(id: string) {
+    const row = this.sqlite
+      .prepare('SELECT snapshot, revision FROM boards_v2 WHERE id = ?')
+      .get(id) as { snapshot: string; revision: number } | undefined;
+    return row
+      ? {
+          id,
+          snapshot: BoardSnapshotSchema.parse(JSON.parse(row.snapshot)),
+          revision: row.revision,
+        }
+      : undefined;
+  }
+
+  saveBoard(id: string, snapshot: BoardSnapshot, revision: number) {
+    return this.sqlite.transaction(() => {
+      const current = this.getBoard(id);
+      if ((current?.revision ?? 0) !== revision) return null;
+      const next = revision + 1;
+      this.sqlite
+        .prepare(
+          `INSERT INTO boards_v2 (id,title,snapshot,revision,updated_at) VALUES (?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET title=excluded.title,snapshot=excluded.snapshot,revision=excluded.revision,updated_at=excluded.updated_at`,
+        )
+        .run(
+          id,
+          snapshot.board?.title ?? 'Untitled canvas',
+          JSON.stringify(snapshot),
+          next,
+          Date.now(),
+        );
+      return { id, revision: next };
+    })();
   }
 
   /** Reads a JSON cache entry from memory first, then SQLite. */

@@ -29,3 +29,12 @@ jobs:
         run: pnpm typecheck
       - name: QA gate
         run: pnpm test:qa
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

@@ -75,6 +75,8 @@ export const BoardNodeSchema = z
     summary: z.string().min(1).max(400),
     explanation: z.string().min(1).max(3000),
     kind: z.enum(['step', 'decision', 'note']),
+    confidence: z.enum(['normal', 'simplified', 'uncertain']).optional(),
+    caveat: z.string().max(500).optional(),
   })
   .strict();
 export const BoardEdgeSchema = z
@@ -91,6 +93,7 @@ export const BoardContentSchema = z
     description: z.string().max(500),
     nodes: z.array(BoardNodeSchema).min(1).max(50),
     edges: z.array(BoardEdgeSchema).max(100),
+    suggestions: z.array(z.string().min(1).max(200)).max(3).optional(),
   })
   .strict();
 
@@ -138,15 +141,55 @@ export const BoardAgentsSchema = z.array(
   }),
 );
 export const boardOutputSchema = JSON.stringify(
-  zodToJsonSchema(BoardContentSchema, { $refStrategy: 'none' }),
+  zodToJsonSchema(
+    BoardContentSchema.extend({
+      suggestions: z.array(z.string().min(1).max(200)).min(2).max(3),
+      nodes: z
+        .array(
+          BoardNodeSchema.extend({
+            confidence: z.enum(['normal', 'simplified', 'uncertain']),
+            caveat: z.string().max(500),
+          }),
+        )
+        .min(1)
+        .max(50),
+    }),
+    { $refStrategy: 'none' },
+  ),
 );
 export type BoardGraph = z.infer<typeof BoardGraphSchema>;
 export type BoardDocument = z.infer<typeof BoardDocumentSchema>;
 export type BoardRequest = z.infer<typeof BoardRequestSchema>;
 
+export const BoardSnapshotSchema = z
+  .object({
+    board: BoardDocumentSchema.nullable(),
+    past: z.array(BoardDocumentSchema.nullable()).max(40),
+    future: z.array(BoardDocumentSchema.nullable()).max(40),
+  })
+  .strict();
+export type BoardSnapshot = z.infer<typeof BoardSnapshotSchema>;
+
+/** Every changed or removed existing item requires explicit review, including selected nodes. */
+export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {
+  const changes: string[] = [];
+  for (const key of ['nodes', 'edges'] as const) {
+    for (const item of before[key]) {
+      const next = after[key].find((candidate) => candidate.id === item.id);
+      if (!next) changes.push(`Remove ${key === 'nodes' ? 'concept' : 'connection'}: ${item.id}`);
+      else if (JSON.stringify(item) !== JSON.stringify(next))
+        changes.push(`Change ${key === 'nodes' ? 'concept' : 'connection'}: ${item.id}`);
+    }
+  }
+  if (before.title !== after.title) changes.push('Change title');
+  if (before.description !== after.description) changes.push('Change description');
+  return changes;
+}
+
 export const EMAIL_DEMO: BoardGraph = {
   title: 'An email’s journey',
   description: 'From a thought in your outbox to a message in someone else’s inbox.',
+  suggestions: ['Show what happens if delivery fails'],
   nodes: [
     {
       id: 'sender',

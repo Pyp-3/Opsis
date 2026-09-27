@@ -26,19 +26,30 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Economical defaults, per-agent saved preferences and no silent model upgrade.
 - [x] Validated agent output, bounded execution and failure handling that preserves the board.
 - [x] No-call email demo, including a delivery-failure branch.
-- [x] Current-board browser autosave and JSON import/export.
-- [x] SVG export and session undo/redo.
+- [x] SQLite-backed named boards, browser recovery snapshots and JSON import/export.
+- [x] SVG, PNG and Markdown exports; persistent undo/redo.
+- [x] Server-side follow-up change detection and explicit apply/discard review.
+- [x] One invalid-output repair attempt on the same model within a shared deadline.
+- [x] Model-generated suggestions and per-node uncertainty/simplification caveats.
+- [x] Elapsed generation time and coarse stage feedback.
+- [x] Guided concept walkthrough with branch/cycle handling.
+- [x] Legacy OSG JSON import with flattening warnings and source preservation.
+- [x] Separate history, generation and persistence hooks plus sidebar component.
+- [x] Cached/deduplicated agent readiness probes (30 seconds).
+- [x] Portable harness supervision tests using the running Node executable, not `/usr/bin/node`.
 - [x] Shared schema, API/harness and workspace unit tests; direct browser interaction checks.
 - [x] Legacy SQLite storage retained for OSG documents, cache, explanations and share tokens.
 
 ## Next: persistence and recovery — P0
 
-- [ ] Add a versioned SQLite schema and CRUD endpoints for **v2 boards**.
-- [ ] Add a named-board library: create, rename, duplicate, search, archive and reopen.
-- [ ] Import the existing browser board without overwriting it; confirm the database write before marking migration complete.
-- [ ] Add save-state/error feedback, retry behavior and recovery after interruption.
+- [x] Add a separate v2 SQLite table and revision-checked create/load/update endpoints.
+- [x] Add a named-board library: create, rename and reopen; separate-copy recovery on conflicts.
+- [ ] Extend the library with routine duplicate, search, archive and delete actions.
+- [x] Import the existing browser board without deleting its source; show successful database save status.
+- [x] Add save-state/error feedback, retry behavior and per-tab recovery after interruption.
 - [ ] Add database migrations, backup/restore and documented retention behavior.
-- [ ] Persist useful revision history, with explicit restore actions.
+- [x] Persist bounded undo/redo history, with explicit restore actions.
+- [ ] Add a browsable long-term revision archive.
 
 Acceptance: several boards survive API/browser restarts; edits and connection ports round-trip exactly; migration and backup/restore have automated tests. Browser storage must not be the only copy after a successful migration.
 
@@ -60,7 +71,7 @@ Acceptance: defaults remain inexpensive; each request shows its selected agent/m
 - [ ] Better initial framing and readable labels across small screens and large graphs.
 - [ ] Named branch conditions, clearer decision nodes and optional edge descriptions.
 - [ ] Searchable icon picker with broader categories; evaluate safe custom SVG import.
-- [ ] Preview agent changes as additions/removals before applying large revisions.
+- [x] Preview changes/removals to existing content before applying agent revisions.
 - [ ] Let users pin positions and selectively accept generated changes.
 - [ ] Stronger visual hierarchy and spacing in the composer, settings and sidebars.
 
@@ -69,7 +80,8 @@ Acceptance: a branching process remains understandable at normal zoom; manual la
 ## Future features — P2
 
 - [ ] Nested, collapsible subgraphs with optional group boundaries (no mandatory frames around individual icons).
-- [ ] Multiple views of the same explanation: overview, detail and step-by-step walkthrough.
+- [x] Overview, selected-concept detail and a step-by-step walkthrough.
+- [ ] Incrementally stream validated nodes instead of waiting for the complete graph.
 - [ ] Reusable process templates and a richer no-call example library.
 - [ ] Attach notes, references and source links to concepts.
 - [ ] Document/text import with source attribution and a review step.
@@ -79,12 +91,14 @@ Acceptance: a branching process remains understandable at normal zoom; manual la
 
 ## Quality and release readiness
 
-- [ ] Replace legacy browser scenarios with v2 generation, editing, branching, reconnect, import/export and recovery coverage.
-- [ ] Add automated accessibility and responsive-layout regression checks for the new workspace.
+- [x] Default QA gate now covers v2 saved boards/history, generation review, branching/dragging, exports and walkthrough.
+- [x] Add automated accessibility and mobile-overflow checks for the new workspace.
+- [ ] Expand browser coverage for reconnection, legacy imports, network loss and visual screenshot baselines.
 - [ ] Test larger graphs, long-running generation, cancellation and malformed responses.
 - [ ] Reduce initial bundle cost and investigate the ELK chunk warning.
 - [ ] Verify clean-clone installation, native SQLite setup and supported CLI versions in CI.
-- [ ] Define an OSG-to-v2 migration strategy or explicitly retire legacy formats.
+- [x] Define and test explicit OSG JSON import; keep source records unchanged.
+- [ ] Add bulk legacy-database migration and richer primitive/geometry mapping.
 - [ ] Add authentication/authorization before any non-loopback deployment.
 
 ## Maintenance rules

@@ -1,8 +1,9 @@
 # Opsis API
 
 This page primarily documents the **legacy OSG pipeline**. The current 2D workspace uses
-`GET /v1/agents` and `POST /v1/boards/generate`; its boards currently persist in browser local
-storage, not the SQLite OSG tables described below. See the [project README](../../README.md)
+`GET /v1/agents` and `POST /v1/boards/generate`, plus `GET /v1/boards`, `GET /v1/boards/:id`,
+and revision-checked `PUT /v1/boards/:id` for SQLite v2 snapshots and undo/redo history.
+These use the separate `boards_v2` table, not the OSG tables described below. See the [project README](../../README.md)
 and [2D workspace notes](../../docs/OPSIS-2D.md) for the current application.
 
 Fastify service for the Opsis parse → metaphor → layout pipeline, explanations, drill-down,

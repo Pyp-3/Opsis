@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     proxy: {
-      '/v1': 'http://127.0.0.1:8000',
+      '/v1': process.env.OPSIS_API_URL ?? 'http://127.0.0.1:8000',
     },
   },
 });
