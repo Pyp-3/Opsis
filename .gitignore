@@ -7,6 +7,11 @@ coverage/
 !.env.example
 test-results/
 playwright-report/
+.playwright-cli/
+output/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 # Agent runtime (managed by the Heuresis platform, not part of Opsis)
 .heuresis/

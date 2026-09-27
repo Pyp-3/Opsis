@@ -14,14 +14,14 @@ import { SpawnProcessRunner } from './runner.js';
 import type { HarnessProvider, ProcessRunner } from './types.js';
 
 const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
-  claude: ['/home/pyp/.local/share/claude/versions/2.1.281'],
+  claude: ['/home/pyp/.local/bin/claude'],
   codex: ['/usr/bin/codex'],
   agy: ['/home/pyp/.local/bin/agy'],
 };
 
 const VERSION_PATTERNS: Record<HarnessProvider, RegExp> = {
   claude: /(?:^|\s)2\.1\.\d+(?:\s|$)/u,
-  codex: /(?:^|\s)0\.156\.\d+(?:\s|$)/u,
+  codex: /(?:^|\s)0\.(?:156|157)\.\d+(?:\s|$)/u,
   agy: /(?:^|\s)1\.2\.\d+(?:\s|$)/u,
 };
 
@@ -32,6 +32,7 @@ function parseVersion(provider: HarnessProvider, output: string): string {
 }
 
 export type CreateHarnessOptions = {
+  resultSchema?: string;
   runner?: ProcessRunner;
   executableValidation?: ExecutableValidationOptions;
   processEnv?: NodeJS.ProcessEnv;
@@ -69,7 +70,14 @@ export async function createHarnessLLMClient(
     );
     if (result.exitCode !== 0) throw new HarnessError('harness_exit');
     const version = parseVersion(config.provider, result.stdout);
-    return new HarnessLLMClient({ ...config, executable }, version, runner, options.processEnv);
+    return new HarnessLLMClient(
+      { ...config, executable },
+      version,
+      runner,
+      options.processEnv,
+      undefined,
+      options.resultSchema,
+    );
   } finally {
     await workspace.dispose();
   }

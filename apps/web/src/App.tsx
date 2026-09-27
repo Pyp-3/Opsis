@@ -1,12 +1,5 @@
-import { SessionProvider } from './state/context';
-import type { SessionStore } from './state/session';
-import { AppShell } from './ui/AppShell';
+import { Workspace } from './workspace/Workspace';
 
-/** Root component: one session store around the app shell. */
-export function App({ store }: { store?: SessionStore }) {
-  return (
-    <SessionProvider {...(store ? { store } : {})}>
-      <AppShell />
-    </SessionProvider>
-  );
+export function App() {
+  return <Workspace />;
 }

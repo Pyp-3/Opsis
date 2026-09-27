@@ -7,6 +7,7 @@ export type HarnessProvider = 'claude' | 'codex' | 'agy';
 export type HarnessConfig = {
   provider: HarnessProvider;
   model: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   executable: string;
   timeoutMs: number;
 };

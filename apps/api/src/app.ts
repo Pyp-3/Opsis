@@ -50,6 +50,7 @@ import {
 } from '@opsis/schema';
 import { llmClientFromEnvironment, llmIdentity } from './llm.js';
 import { ApiStore } from './storage.js';
+import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
 /** Share tokens are 24 random bytes encoded as base64url. */
@@ -68,6 +69,7 @@ const ShareResponseSchema = z
 const defaultDatabasePath = fileURLToPath(new URL('../data/opsis.sqlite', import.meta.url));
 
 export type BuildAppOptions = FastifyServerOptions & {
+  boardClientFactory?: BoardClientFactory;
   databasePath?: string;
   llm?: LLMClient | null;
   rateLimit?: number;
@@ -220,6 +222,7 @@ function requestStage(request: FastifyRequest): string {
 /** Builds the Fastify app with all routes registered, without binding a port. */
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const {
+    boardClientFactory,
     databasePath = process.env.OPSIS_DB_PATH ?? defaultDatabasePath,
     llm: providedLlm,
     rateLimit = Number(process.env.OPSIS_RATE_LIMIT ?? 60),
@@ -228,6 +231,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ...fastifyOptions
   } = options;
   const app = Fastify(fastifyOptions);
+  registerBoardRoutes(app, boardClientFactory);
   const store = new ApiStore(databasePath, memoryCacheEntries);
   const llm = providedLlm === undefined ? llmClientFromEnvironment() : providedLlm;
   const requests = new Map<string, number[]>();

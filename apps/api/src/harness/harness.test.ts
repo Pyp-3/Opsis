@@ -82,6 +82,30 @@ describe('sanitized harness envelopes', () => {
 
 describe('HarnessLLMClient', () => {
   it.each([
+    ['claude', 'sonnet', 'medium', 'claude-2.1.281.json'],
+    ['claude', 'haiku', 'low', 'claude-2.1.281.json'],
+    ['codex', 'gpt-6-luna', 'low', 'codex-0.156.0.jsonl'],
+  ] as const)(
+    'forwards explicit model and supported effort for %s/%s',
+    async (provider, model, effort, name) => {
+      const runner = new FakeRunner({ exitCode: 0, stdout: await fixture(name) });
+      const client = new HarnessLLMClient(
+        { ...config(provider), model, effort },
+        'test',
+        runner,
+        {},
+        async () => workspace(),
+      );
+      await client.complete(REQUEST);
+      const args = runner.requests[0]!.args;
+      expect(args[args.indexOf('--model') + 1]).toBe(model);
+      if (provider === 'codex') expect(args).toContain('model_reasoning_effort="low"');
+      else if (model === 'haiku') expect(args).not.toContain('--effort');
+      else expect(args[args.indexOf('--effort') + 1]).toBe('medium');
+      expect(args).not.toContain('--fallback-model');
+    },
+  );
+  it.each([
     ['claude', 'claude-2.1.281.json'],
     ['codex', 'codex-0.156.0.jsonl'],
     ['agy', 'agy-1.2.9.json'],
@@ -275,7 +299,8 @@ describe('harness configuration and offline fallback', () => {
           OPSIS_HARNESS_BIN: '/approved/codex',
         },
         {
-          runner: new FakeRunner({ exitCode: 0, stdout: 'codex-cli 0.157.0' }),
+          runner: new FakeRunner({ exitCode: 0, stdout: 'codex-cli 0.158.0' }),
+          processEnv: {},
           executableValidator: async () => '/approved/codex',
           versionWorkspaceFactory: async () => ({
             directory: '/private/version-check',

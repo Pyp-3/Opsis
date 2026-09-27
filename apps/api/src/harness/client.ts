@@ -19,11 +19,11 @@ export type HarnessWorkspace = {
 };
 
 /** Creates the private, context-free working directory used by a real harness invocation. */
-export async function privateHarnessWorkspace(): Promise<HarnessWorkspace> {
+export async function privateHarnessWorkspace(schema = RESULT_SCHEMA): Promise<HarnessWorkspace> {
   const directory = await mkdtemp(join(tmpdir(), 'opsis-harness-'));
   await chmod(directory, 0o700);
   const schemaPath = join(directory, 'response-schema.json');
-  await writeFile(schemaPath, RESULT_SCHEMA, { mode: 0o600, flag: 'wx' });
+  await writeFile(schemaPath, schema, { mode: 0o600, flag: 'wx' });
   return {
     directory,
     schemaPath,
@@ -60,16 +60,16 @@ function childEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   };
 }
 
-function argv(config: HarnessConfig, schemaPath: string): string[] {
+function argv(config: HarnessConfig, schemaPath: string, schema = RESULT_SCHEMA): string[] {
   if (config.provider === 'claude') {
     return [
       '--print',
       '--output-format',
       'json',
       '--json-schema',
-      RESULT_SCHEMA,
-      '--model',
-      config.model,
+      schema,
+      ...(config.model === 'default' ? [] : ['--model', config.model]),
+      ...(config.effort && !config.model.includes('haiku') ? ['--effort', config.effort] : []),
       '--safe-mode',
       '--restricted',
       '--tools',
@@ -87,8 +87,8 @@ function argv(config: HarnessConfig, schemaPath: string): string[] {
       'never',
       'exec',
       '-',
-      '--model',
-      config.model,
+      ...(config.model === 'default' ? [] : ['--model', config.model]),
+      ...(config.effort ? ['--config', `model_reasoning_effort="${config.effort}"`] : []),
       '--output-schema',
       schemaPath,
       '--json',
@@ -138,7 +138,8 @@ export class HarnessLLMClient implements LLMClient {
     private readonly version: string,
     private readonly runner: ProcessRunner,
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly workspaceFactory: () => Promise<HarnessWorkspace> = privateHarnessWorkspace,
+    private readonly workspaceFactory: (() => Promise<HarnessWorkspace>) | undefined = undefined,
+    private readonly resultSchema = RESULT_SCHEMA,
   ) {
     this.model = config.model;
     this.identity = `harness:${config.provider}:${config.model}:cli-${version}`;
@@ -148,11 +149,12 @@ export class HarnessLLMClient implements LLMClient {
   async complete(request: LLMRequest, signal?: AbortSignal): Promise<string> {
     return harnessSlots.use(async () => {
       try {
-        const workspace = await this.workspaceFactory();
+        const workspace = await (this.workspaceFactory?.() ??
+          privateHarnessWorkspace(this.resultSchema));
         try {
           const result = await this.runner.run({
             executable: this.config.executable,
-            args: argv(this.config, workspace.schemaPath),
+            args: argv(this.config, workspace.schemaPath, this.resultSchema),
             stdin: prompt(request),
             cwd: workspace.directory,
             env: childEnvironment(this.env),

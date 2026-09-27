@@ -20,6 +20,9 @@ export function readHarnessConfig(
   if (!rawProvider?.startsWith('harness:')) return null;
   const provider = rawProvider.slice('harness:'.length) as HarnessProvider;
   const model = env[HARNESS_ENV.model]?.trim() ?? '';
+  const effort = env.OPSIS_LLM_EFFORT?.trim() as HarnessConfig['effort'];
+  if (effort && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort))
+    throw new HarnessError('harness_config');
   const executable = env[HARNESS_ENV.executable]?.trim() ?? '';
   const timeoutText = env[HARNESS_ENV.timeoutMs]?.trim();
   const timeoutMs = timeoutText === undefined || timeoutText === '' ? 30_000 : Number(timeoutText);
@@ -34,5 +37,5 @@ export function readHarnessConfig(
   ) {
     throw new HarnessError('harness_config');
   }
-  return { provider, model, executable, timeoutMs };
+  return { provider, model, executable, timeoutMs, ...(effort ? { effort } : {}) };
 }

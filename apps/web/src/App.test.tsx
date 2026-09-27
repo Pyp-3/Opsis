@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from './App';
+import { LegacyApp as App } from './LegacyApp';
 import { ApiError } from './state/api';
 import { fakeApi } from './state/fakeApi';
 import { createSessionStore } from './state/session';
