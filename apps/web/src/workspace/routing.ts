@@ -4,7 +4,13 @@ import { NODE_WIDTH, wrapLabel, nodeHeight } from './geometry';
 
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; width: number; height: number };
-export type RoutedEdge = { points: Point[]; path: string; label: Rect | null; lines: string[] };
+export type RoutedEdge = {
+  points: Point[];
+  path: string;
+  label: Rect | null;
+  lines: string[];
+  callout?: string;
+};
 const inflate = (rect: Rect, amount: number): Rect => ({
   x: rect.x - amount,
   y: rect.y - amount,
@@ -51,8 +57,11 @@ function simplify(points: Point[]) {
       !i ||
       i === unique.length - 1 ||
       !(
-        (unique[i - 1]!.x === p.x && unique[i + 1]!.x === p.x) ||
-        (unique[i - 1]!.y === p.y && unique[i + 1]!.y === p.y)
+        ((unique[i - 1]!.x === p.x && unique[i + 1]!.x === p.x) ||
+          (unique[i - 1]!.y === p.y && unique[i + 1]!.y === p.y)) &&
+        (p.x - unique[i - 1]!.x) * (unique[i + 1]!.x - p.x) +
+          (p.y - unique[i - 1]!.y) * (unique[i + 1]!.y - p.y) >=
+          0
       ),
   );
 }
@@ -89,14 +98,31 @@ function exitPoint(position: Point, port: BoardPort): Point {
   return { x: position.x + NODE_WIDTH + 28, y: position.y + 80 };
 }
 
-function attachment(position: Point, port: BoardPort, slot: number, count: number): Point[] {
+function attachment(
+  position: Point,
+  port: BoardPort,
+  slot: number,
+  count: number,
+  neighbors: Rect[],
+): Point[] {
   const offset = PORT_OFFSETS[port];
   const anchor = { x: position.x + offset.x, y: position.y + offset.y };
   const spread = (slot - (count - 1) / 2) * Math.min(12, 40 / Math.max(1, count - 1));
   if (port === 'left' || port === 'right') {
     const direction = port === 'left' ? -1 : 1;
     const fan = { x: anchor.x + direction * 14, y: anchor.y + spread };
-    return [anchor, fan, { x: exitPoint(position, port).x + direction * slot * 16, y: fan.y }];
+    let exitX = exitPoint(position, port).x + direction * slot * 16;
+    for (const box of neighbors) {
+      if (fan.y < box.y - 12 || fan.y > box.y + box.height + 12) continue;
+      if (port === 'right' && box.x >= position.x + NODE_WIDTH)
+        exitX = Math.min(exitX, box.x - Math.min(12, (box.x - position.x - NODE_WIDTH) / 2));
+      if (port === 'left' && box.x + box.width <= position.x)
+        exitX = Math.max(
+          exitX,
+          box.x + box.width + Math.min(12, (position.x - box.x - box.width) / 2),
+        );
+    }
+    return [anchor, fan, { x: exitX, y: fan.y }];
   }
   if (port === 'top')
     return [
@@ -137,19 +163,21 @@ function labelPosition(
   const height = lines.length * 16 + 12;
   const candidates: Rect[] = [];
   for (const [a, b] of segments(points).sort((a, b) => length([...b]) - length([...a]))) {
-    for (const fraction of [0.5, 0.3, 0.7]) {
+    for (const fraction of [0.5, 0.3, 0.7, 0.15, 0.85]) {
       const x = a.x + (b.x - a.x) * fraction,
         y = a.y + (b.y - a.y) * fraction;
       if (a.x === b.x && Math.abs(a.y - b.y) >= height + 16) {
-        candidates.push(
-          { x: x + 12, y: y - height / 2, width, height },
-          { x: x - width - 12, y: y - height / 2, width, height },
-        );
+        for (const gap of [12, 28, 48])
+          candidates.push(
+            { x: x + gap, y: y - height / 2, width, height },
+            { x: x - width - gap, y: y - height / 2, width, height },
+          );
       } else if (a.y === b.y && Math.abs(a.x - b.x) >= width + 16) {
-        candidates.push(
-          { x: x - width / 2, y: y + 12, width, height },
-          { x: x - width / 2, y: y - height - 12, width, height },
-        );
+        for (const gap of [12, 28, 48])
+          candidates.push(
+            { x: x - width / 2, y: y + gap, width, height },
+            { x: x - width / 2, y: y - height - gap, width, height },
+          );
       }
     }
   }
@@ -172,6 +200,7 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
     height: nodeHeight(node),
   }));
   const occupiedLabels: Rect[] = [];
+  const nodeObstacles = rectangles.map((rect) => inflate(rect, 12));
   const usedPaths: Point[][] = [];
   const result: Record<string, RoutedEdge> = {};
   const minX = Math.min(...rectangles.map((r) => r.x));
@@ -184,12 +213,13 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
       attachments.set(key, [...(attachments.get(key) ?? []), `${edge.id}:${end}`]);
     }
   }
-  // Short connections first: reserve their labels before routing long bypasses/returns.
+  // Stable topology order: a one-pixel drag must not reshuffle every other lane.
   const edges = [...board.edges].sort((a, b) => {
     const distance = (edge: typeof a) => {
-      const from = board.positions[edge.source],
-        to = board.positions[edge.target];
-      return from && to ? Math.abs(from.x - to.x) + Math.abs(from.y - to.y) : 0;
+      return Math.abs(
+        board.nodes.findIndex((node) => node.id === edge.source) -
+          board.nodes.findIndex((node) => node.id === edge.target),
+      );
     };
     return distance(a) - distance(b) || a.id.localeCompare(b.id);
   });
@@ -200,7 +230,13 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
     const ports = edgePorts(board, edge);
     const stub = (end: 'source' | 'target', position: Point) => {
       const peers = attachments.get(`${edge[end]}:${ports[end]}`)!;
-      return attachment(position, ports[end], peers.indexOf(`${edge.id}:${end}`), peers.length);
+      return attachment(
+        position,
+        ports[end],
+        peers.indexOf(`${edge.id}:${end}`),
+        peers.length,
+        rectangles.filter((_, i) => board.nodes[i]!.id !== edge[end]),
+      );
     };
     const sourceStub = stub('source', from);
     const targetStub = stub('target', to);
@@ -259,19 +295,26 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
           { x: end.x, y },
         ]);
     }
-    const obstacles = [
-      ...rectangles.map((rect) => inflate(rect, 12)),
-      ...occupiedLabels.map((rect) => inflate(rect, 8)),
-    ];
+    const obstacles = [...nodeObstacles, ...occupiedLabels.map((rect) => inflate(rect, 8))];
     const lines = wrapLabel(connectionLabel(edge), 24);
     let best: { score: number; points: Point[]; label: Rect | null } | undefined;
     for (const points of candidates) {
       // The first/last stubs intentionally connect the icon's side through its own footprint.
       const middle = points.slice(sourceStub.length - 1, points.length - targetStub.length + 1);
-      const collisions = segments(middle).reduce(
-        (n, [a, b]) => n + obstacles.filter((rect) => crosses(a, b, rect)).length,
+      const nodeCollisions = segments(middle).reduce(
+        (n, [a, b]) => n + nodeObstacles.filter((rect) => crosses(a, b, rect)).length,
         0,
       );
+      const labelCollisions = segments(middle).reduce(
+        (n, [a, b]) => n + occupiedLabels.filter((rect) => crosses(a, b, inflate(rect, 8))).length,
+        0,
+      );
+      const actualCollisions = segments(middle).reduce(
+        (n, [a, b]) => n + rectangles.filter((rect) => crosses(a, b, rect)).length,
+        0,
+      );
+      const collisionCost = actualCollisions * 1e15 + nodeCollisions * 1e12 + labelCollisions * 1e8;
+      if (best && collisionCost > best.score) continue;
       const clean = simplify(points);
       const label = labelPosition(clean, lines, obstacles, usedPaths);
       const shared = segments(clean).reduce(
@@ -300,7 +343,7 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
         0,
       );
       const score =
-        collisions * 1e7 +
+        collisionCost +
         (lines.length && !label ? 1e6 : 0) +
         shared * 2e6 +
         segments(clean).reduce(
@@ -336,6 +379,30 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
       if (!best || score < best.score) best = { score, points: clean, label };
     }
     const chosen = best!;
+    let callout: string | undefined;
+    // Dense routes must not silently lose text. Use an external callout only
+    // when no adjacent label box fits; the dotted leader identifies its edge.
+    if (!chosen.label && lines.length) {
+      const width =
+        Math.max(
+          ...lines.map((line) =>
+            [...line].reduce((n, c) => n + (c.charCodeAt(0) > 255 ? 15 : 7.5), 0),
+          ),
+        ) + 16;
+      const height = lines.length * 16 + 12;
+      const [a, b] = segments(chosen.points).sort((a, b) => length([...b]) - length([...a]))[0]!;
+      const anchor = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const left =
+        Math.min(
+          ...obstacles.map((box) => box.x),
+          ...usedPaths.flat().map((p) => p.x),
+          ...chosen.points.map((p) => p.x),
+        ) -
+        width -
+        24;
+      chosen.label = { x: left, y: anchor.y - height / 2, width, height };
+      callout = `M${anchor.x},${anchor.y} L${left + width},${anchor.y}`;
+    }
     usedPaths.push(chosen.points);
     if (chosen.label) occupiedLabels.push(chosen.label);
     result[edge.id] = {
@@ -343,6 +410,7 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
       path: roundedPath(chosen.points),
       label: chosen.label,
       lines,
+      ...(callout ? { callout } : {}),
     };
   }
   return result;

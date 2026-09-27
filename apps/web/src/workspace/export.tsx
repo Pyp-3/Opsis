@@ -16,6 +16,12 @@ const escape = (text: string) =>
 export function boardSvg(board: BoardDocument): string {
   const routes = routeBoard(board);
   const points = [
+    ...(board.nodes.length
+      ? []
+      : [
+          { x: 0, y: 0 },
+          { x: 224, y: 124 },
+        ]),
     ...board.nodes.flatMap((node) => {
       const p = board.positions[node.id] ?? { x: 0, y: 0 };
       return [p, { x: p.x + NODE_WIDTH, y: p.y + nodeHeight(node) }];
@@ -43,7 +49,10 @@ export function boardSvg(board: BoardDocument): string {
         ? `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="5" fill="#153b65" stroke="#607e9e"/>${route.lines.map((line, i) => `<text x="${label.x + label.width / 2}" y="${label.y + 18 + i * 16}" text-anchor="middle" font-family="monospace" font-size="12" fill="#e4edfa">${escape(line)}</text>`).join('')}`
         : '';
       const style = connectionStyle(edge);
-      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${edge.kind ?? 'flow'})"/>${text}`;
+      const callout = route.callout
+        ? `<path d="${route.callout}" fill="none" stroke="${style.color}" stroke-width="1" stroke-dasharray="2 5" opacity=".7"/>`
+        : '';
+      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${edge.kind ?? 'flow'})"/>${callout}${text}`;
     })
     .join('');
   const nodes = board.nodes

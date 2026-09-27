@@ -1,10 +1,14 @@
 import { BoardDocumentSchema, OSGSchema, type BoardDocument } from '@opsis/schema';
 import { boardIcons } from './icons';
+import { layoutBoard } from './model';
 
 /** Explicit file import, never overwrites or deletes the legacy source. */
 export async function importBoard(value: unknown): Promise<BoardDocument> {
   const current = BoardDocumentSchema.safeParse(value);
-  if (current.success) return current.data;
+  if (current.success)
+    return current.data.nodes.some((node) => !current.data.positions[node.id])
+      ? layoutBoard(current.data, current.data.agent, current.data)
+      : current.data;
   const osg = OSGSchema.parse(value);
   const nodes: BoardDocument['nodes'] = [];
   const edges: BoardDocument['edges'] = [];

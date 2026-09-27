@@ -119,6 +119,7 @@ export const BoardGraphSchema = BoardContentSchema.superRefine(validateBoardRefe
 export const BoardPortSchema = z.enum(['left', 'right', 'top', 'bottom']);
 export type BoardPort = z.infer<typeof BoardPortSchema>;
 export const BoardDocumentSchema = BoardContentSchema.extend({
+  nodes: z.array(BoardNodeSchema).max(50),
   version: z.literal(2),
   positions: z.record(z.object({ x: z.number().finite(), y: z.number().finite() }).strict()),
   agent: BoardAgentSchema,

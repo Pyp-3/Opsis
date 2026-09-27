@@ -36,7 +36,7 @@ export function Walkthrough({
   return (
     <div className="walkthrough" aria-label="Guided walkthrough">
       {step === null ? (
-        <button disabled={disabled} onClick={() => go(0)}>
+        <button disabled={disabled || !order.length} onClick={() => go(0)}>
           Start walkthrough
         </button>
       ) : (

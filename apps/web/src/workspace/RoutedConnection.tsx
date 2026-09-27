@@ -23,6 +23,17 @@ export function RoutedConnection({
       />
       {route.label && (
         <g className="connection-label" aria-label={route.lines.join(' ')}>
+          {route.callout && (
+            <path
+              d={route.callout}
+              fill="none"
+              stroke={style?.stroke ?? '#b9d1ef'}
+              strokeWidth={1}
+              strokeDasharray="2 5"
+              opacity={0.7}
+              pointerEvents="none"
+            />
+          )}
           <rect
             {...route.label}
             rx={5}

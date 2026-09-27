@@ -60,6 +60,7 @@ export class ApiStore {
         id TEXT PRIMARY KEY, title TEXT NOT NULL, snapshot TEXT NOT NULL,
         revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS deleted_boards_v2 (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS cache_entries (
         key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL
       );
@@ -100,6 +101,7 @@ export class ApiStore {
 
   saveBoard(id: string, snapshot: BoardSnapshot, revision: number) {
     return this.sqlite.transaction(() => {
+      if (this.sqlite.prepare('SELECT id FROM deleted_boards_v2 WHERE id = ?').get(id)) return null;
       const current = this.getBoard(id);
       if ((current?.revision ?? 0) !== revision) return null;
       const next = revision + 1;
@@ -116,6 +118,17 @@ export class ApiStore {
           Date.now(),
         );
       return { id, revision: next };
+    })();
+  }
+
+  deleteBoard(id: string, revision: number) {
+    return this.sqlite.transaction(() => {
+      const current = this.getBoard(id);
+      if (!current) return 'missing' as const;
+      if (current.revision !== revision) return 'conflict' as const;
+      this.sqlite.prepare('INSERT INTO deleted_boards_v2 (id) VALUES (?)').run(id);
+      this.sqlite.prepare('DELETE FROM boards_v2 WHERE id = ?').run(id);
+      return 'deleted' as const;
     })();
   }
 

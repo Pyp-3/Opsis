@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { ArrowRight, GitBranch, Grid2X2, Mail, Plus, Search } from 'lucide-react';
+import { FolderOpen, Grid2X2, Plus, Search } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
-import { CONNECTION_STYLES } from './connections';
+import { BoardManager } from './BoardManager';
 
-// Legend colors and patterns are shared with live routes and exported diagrams.
 export function WorkspaceSidebar({
   board,
   busy,
@@ -29,7 +28,10 @@ export function WorkspaceSidebar({
   demo: () => void;
   dnsDemo: () => void;
 }) {
-  const [nodeSearch, setNodeSearch] = useState('');
+  const [search, setSearch] = useState({ boardId: library.activeId, query: '' });
+  const nodeSearch =
+    search.boardId === library.activeId && (board?.nodes.length ?? 0) > 5 ? search.query : '';
+  const [managerOpen, setManagerOpen] = useState(false);
   const visibleNodes =
     board?.nodes.filter((node) => node.label.toLowerCase().includes(nodeSearch.toLowerCase())) ??
     [];
@@ -45,14 +47,21 @@ export function WorkspaceSidebar({
           </span>
         </a>
       </div>
-      <button className="new-board" disabled={busy || !board} onClick={onNew}>
-        <Plus size={16} /> New canvas
-      </button>
+      <div className="rail-board-actions">
+        <button className="new-board" disabled={busy || !board} onClick={onNew}>
+          <Plus size={16} /> New canvas
+        </button>
+        <button className="manage-boards" disabled={busy} onClick={() => setManagerOpen(true)}>
+          <FolderOpen size={16} /> Manage boards
+        </button>
+      </div>
       <div className="rail-scroll">
-        <section className="rail-section">
-          <h2 className="rail-section-title">Saved boards</h2>
+        <details className="rail-section" open>
+          <summary className="rail-section-title">
+            Recent boards <span>{library.entries.length}</span>
+          </summary>
           <nav className="node-list" aria-label="Saved boards">
-            {library.entries.map((entry) => (
+            {library.entries.slice(0, 5).map((entry) => (
               <button
                 key={entry.id}
                 disabled={busy}
@@ -63,10 +72,13 @@ export function WorkspaceSidebar({
               </button>
             ))}
           </nav>
-        </section>
-        <section className="rail-section">
-          <h2 className="rail-section-title">Canvas</h2>
-          {board && (
+          {!library.entries.length && (
+            <p className="rail-empty">Your saved boards will appear here.</p>
+          )}
+        </details>
+        {board && (
+          <section className="rail-section">
+            <h2 className="rail-section-title">Current board</h2>
             <label className="concept-search">
               <input
                 key={library.activeId + board.title}
@@ -80,113 +92,69 @@ export function WorkspaceSidebar({
                 }}
               />
             </label>
-          )}
-          <div className="current-board">
-            <span className="current-board-icon">
-              <Grid2X2 size={15} />
-            </span>
-            <span className="current-board-text">
-              <strong>{board?.title ?? 'Untitled canvas'}</strong>
-              <small>
-                {board
-                  ? `${board.nodes.length} concepts · ${board.edges.length} connections`
-                  : 'Nothing drawn yet'}
-              </small>
-            </span>
-          </div>
-        </section>
-        {board ? (
-          <section className="rail-section rail-concepts">
-            <h2 className="rail-section-title">
-              Concepts <span>{board.nodes.length}</span>
-            </h2>
-            <label className="concept-search">
-              <Search size={14} />
-              <input
-                aria-label="Find a concept"
-                placeholder="Find a concept…"
-                value={nodeSearch}
-                onChange={(event) => setNodeSearch(event.target.value)}
-              />
-            </label>
-            <nav className="node-list" aria-label="Diagram steps">
-              {visibleNodes.map((node) => {
-                const Icon = boardIcons[node.icon];
-                return (
-                  <button
-                    key={node.id}
-                    className={selected === node.id ? 'active' : ''}
-                    aria-current={selected === node.id ? 'true' : undefined}
-                    onClick={() => selectNode(node.id)}
-                  >
-                    <span className="list-number">
-                      {String(board.nodes.indexOf(node) + 1).padStart(2, '0')}
-                    </span>
-                    <Icon size={15} />
-                    <span className="list-label">{node.label}</span>
-                    {board.edges.filter((edge) => edge.source === node.id).length > 1 && (
-                      <GitBranch className="list-branch" size={13} aria-label="Branches" />
-                    )}
-                  </button>
-                );
-              })}
-              {!visibleNodes.length && (
-                <p className="rail-empty">No concepts match “{nodeSearch}”.</p>
+            <details open className="rail-concepts">
+              <summary className="rail-section-title">
+                Concepts <span>{board.nodes.length}</span>
+              </summary>
+              {board.nodes.length > 5 && (
+                <label className="concept-search">
+                  <Search size={14} />
+                  <input
+                    aria-label="Find a concept"
+                    placeholder="Find a concept…"
+                    value={nodeSearch}
+                    onChange={(event) =>
+                      setSearch({ boardId: library.activeId, query: event.target.value })
+                    }
+                  />
+                </label>
               )}
-            </nav>
+              <nav className="node-list" aria-label="Diagram steps">
+                {visibleNodes.map((node) => {
+                  const Icon = boardIcons[node.icon];
+                  return (
+                    <button
+                      key={node.id}
+                      className={selected === node.id ? 'active' : ''}
+                      aria-current={selected === node.id ? 'true' : undefined}
+                      onClick={() => selectNode(node.id)}
+                    >
+                      <Icon size={15} />
+                      <span className="list-label">{node.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+              {!visibleNodes.length && (
+                <p className="rail-empty">
+                  {board.nodes.length
+                    ? 'No matching concepts.'
+                    : 'Add a concept or ask your agent to draw.'}
+                </p>
+              )}
+            </details>
           </section>
-        ) : (
-          <div className="rail-intro">
-            <span className="eyebrow">Made for curious minds</span>
-            <h2>Follow the idea. See the connections.</h2>
-            <p>Turn a question into something you can explore, one step at a time.</p>
-          </div>
         )}
       </div>
       <div className="rail-bottom">
-        <button className="sample-card" disabled={busy} onClick={dnsDemo}>
-          <GitBranch size={16} />
-          <span>
-            <strong>DNS requests &amp; responses</strong>
-            <small>Explore two-way interactions</small>
-          </span>
-          <ArrowRight size={15} />
-        </button>
-        <button className="sample-card" disabled={busy} onClick={() => void demo()}>
-          <span className="sample-icon">
-            <Mail size={16} />
-          </span>
-          <span>
-            <strong>An email’s journey</strong>
-            <small>Open the example canvas</small>
-          </span>
-          <ArrowRight size={15} />
-        </button>
-        <div className="connection-guide">
-          <GitBranch size={15} />
-          <p>
-            <strong>Ideas can branch.</strong> Drag from any connection dot to another icon.
-          </p>
-        </div>
-        <div className="connection-legend" aria-label="Connection color legend">
-          {Object.entries(CONNECTION_STYLES).map(([kind, style]) => (
-            <span key={kind} style={{ color: style.color }}>
-              <svg width="24" height="10" aria-hidden="true">
-                <path
-                  d="M0 5H24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeDasharray={style.dash}
-                />
-              </svg>
-              {kind}
-            </span>
-          ))}
-        </div>
+        <details>
+          <summary className="rail-section-title">Examples</summary>
+          <div className="node-list">
+            <button disabled={busy} onClick={demo}>
+              An email’s journey
+            </button>
+            <button disabled={busy} onClick={dnsDemo}>
+              DNS requests &amp; responses
+            </button>
+          </div>
+        </details>
         <p className="rail-footnote">
           <span className="active-dot" /> Private workspace · saved locally
         </p>
       </div>
+      {managerOpen && (
+        <BoardManager library={library} onOpen={onOpen} onClose={() => setManagerOpen(false)} />
+      )}
     </aside>
   );
 }

@@ -1,0 +1,143 @@
+{
+  "title": "Parcel Delivery with Confirmation",
+  "description": "A sender asks a carrier to deliver a parcel. The carrier hands it to the recipient, who signs, and the delivery confirmation goes back to the sender.",
+  "nodes": [
+    {
+      "id": "sender",
+      "label": "Sender",
+      "icon": "user",
+      "summary": "Books the shipment and hands the parcel to the carrier.",
+      "explanation": "The sender books a shipment, pays for it, packs the parcel and gives it to the carrier. At the end, the sender gets tracking updates and a delivery confirmation.",
+      "kind": "step",
+      "confidence": "normal",
+      "caveat": ""
+    },
+    {
+      "id": "carrier",
+      "label": "Carrier",
+      "icon": "send",
+      "summary": "Accepts the parcel, issues tracking and moves it through its network.",
+      "explanation": "The carrier accepts the booking, gives the sender a tracking number, and moves the parcel through its depots. It then tries to deliver the parcel to the recipient.",
+      "kind": "step",
+      "confidence": "simplified",
+      "caveat": "Hubs, sorting centres, handoffs to other carriers and customs are shown here as one actor."
+    },
+    {
+      "id": "delivery_attempt",
+      "label": "Recipient available?",
+      "icon": "split",
+      "summary": "The courier checks whether someone can take the parcel.",
+      "explanation": "If the recipient is there, the courier hands over the parcel. If not, the carrier may leave it in a safe place, drop it at a pickup point, or try again another day.",
+      "kind": "decision",
+      "confidence": "simplified",
+      "caveat": "What happens after a failed attempt depends on the carrier and the service level."
+    },
+    {
+      "id": "recipient",
+      "label": "Recipient",
+      "icon": "inbox",
+      "summary": "Receives the parcel and signs or is photographed as proof.",
+      "explanation": "The recipient takes the parcel. Proof of delivery can be a signature, a PIN, or a photo, depending on the service.",
+      "kind": "step",
+      "confidence": "normal",
+      "caveat": ""
+    },
+    {
+      "id": "confirmation",
+      "label": "Delivery Confirmation",
+      "icon": "check",
+      "summary": "The carrier records proof of delivery and tells the sender.",
+      "explanation": "The courier's device sends the proof of delivery to the carrier's system. The carrier then notifies the sender by email, SMS, or tracking status.",
+      "kind": "step",
+      "confidence": "normal",
+      "caveat": ""
+    },
+    {
+      "id": "delivery_failed",
+      "label": "Delivery failed: fixable?",
+      "icon": "alert",
+      "summary": "Handover failed for another reason, such as a bad address or no access. Can it be fixed and retried?",
+      "explanation": "Examples include a wrong address, a locked building or a refused parcel. If the problem can be fixed, the carrier tries again. If not, it usually returns the parcel to the sender (not shown).",
+      "kind": "decision",
+      "confidence": "simplified",
+      "caveat": "Failure reasons, how many retries are allowed and return rules vary by carrier. The return-to-sender path is left out."
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "sender",
+      "target": "carrier",
+      "label": "Booking + parcel handover",
+      "kind": "request"
+    },
+    {
+      "id": "e2",
+      "source": "carrier",
+      "target": "sender",
+      "label": "Receipt + tracking number",
+      "kind": "response"
+    },
+    {
+      "id": "e3",
+      "source": "carrier",
+      "target": "delivery_attempt",
+      "label": "Out for delivery",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "source": "delivery_attempt",
+      "target": "recipient",
+      "label": "Yes: hand over parcel",
+      "kind": "request"
+    },
+    {
+      "id": "e5",
+      "source": "delivery_attempt",
+      "target": "carrier",
+      "label": "No: reattempt later",
+      "kind": "retry"
+    },
+    {
+      "id": "e6",
+      "source": "recipient",
+      "target": "carrier",
+      "label": "Signature / proof of delivery",
+      "kind": "response"
+    },
+    {
+      "id": "e7",
+      "source": "carrier",
+      "target": "confirmation",
+      "label": "Record delivery",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "source": "confirmation",
+      "target": "sender",
+      "label": "Delivery confirmed notice",
+      "kind": "response"
+    },
+    {
+      "id": "e9",
+      "source": "delivery_attempt",
+      "target": "delivery_failed",
+      "label": "Handover problem (address, access, refusal)",
+      "kind": "flow"
+    },
+    {
+      "id": "e10",
+      "source": "delivery_failed",
+      "target": "carrier",
+      "label": "Fixable: retry delivery",
+      "kind": "retry"
+    }
+  ],
+  "suggestions": [
+    "Add the unfixable-failure path: return to sender after too many attempts",
+    "Show how the carrier tells the sender or recipient about a failed attempt and lets them reschedule",
+    "Add damaged-parcel and lost-parcel claims as separate failure paths"
+  ]
+}

@@ -17,7 +17,7 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Scroll-through reading at a stable zoom; explicit overview and undoable downward rearrangement.
 - [x] Icon-attached ports, including bottom connections routed above labels; shared canvas/export geometry.
 - [x] Typed request/response/feedback/retry paths, distinct return styling, and a two-way DNS example. Agent instructions distinguish actor interactions from chronological stages.
-- [x] Fan-out lanes, overlap/crossing penalties, crossing knockouts, and a labeled color/pattern legend for connection types.
+- [x] Fan-out lanes, overlap/crossing penalties, crossing knockouts, and connection type colors/patterns. The sidebar legend was removed to reduce clutter.
 - [x] Compact label-sized node footprints and row spacing calculated from relationship labels and connection density, instead of fixed 360px rows.
 - [x] Wrapped labels, reserved text footprints, and obstacle-aware rounded orthogonal routes shared by canvas and exports.
 - [x] Curved directional connections that follow moving nodes.
@@ -34,6 +34,9 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Validated agent output, bounded execution and failure handling that preserves the board.
 - [x] No-call email demo, including a delivery-failure branch.
 - [x] SQLite-backed named boards, browser recovery snapshots and JSON import/export.
+- [x] Dedicated board manager: create empty named boards, search, rename and confirm permanent deletion. Revision checks and deletion tombstones prevent stale-tab resurrection.
+- [x] Minimal grouped sidebar: board actions, five recent boards, current concepts and collapsed examples.
+- [x] Transactional drags, no-op history protection, persistent undo/redo and Ctrl/Cmd+Z, Shift+Z and Y shortcuts.
 - [x] SVG, PNG and Markdown exports; persistent undo/redo.
 - [x] Server-side follow-up change detection and explicit apply/discard review.
 - [x] One invalid-output repair attempt on the same model within a shared deadline.
@@ -51,7 +54,8 @@ The current experience is close to the intended visual direction. This checklist
 
 - [x] Add a separate v2 SQLite table and revision-checked create/load/update endpoints.
 - [x] Add a named-board library: create, rename and reopen; separate-copy recovery on conflicts.
-- [ ] Extend the library with routine duplicate, search, archive and delete actions.
+- [x] Board search and confirmed deletion.
+- [ ] Routine duplicate and archive actions (separate-copy conflict recovery already exists).
 - [x] Import the existing browser board without deleting its source; show successful database save status.
 - [x] Add save-state/error feedback, retry behavior and per-tab recovery after interruption.
 - [ ] Add database migrations, backup/restore and documented retention behavior.

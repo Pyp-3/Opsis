@@ -197,5 +197,61 @@ export function useBoardLibrary(
       setSwitching(false);
     }
   };
-  return { entries, status, switching, error, activeId, open, save, saveCopy };
+  const managing = useRef(false);
+  const manage = async (
+    action: 'create' | 'rename' | 'delete',
+    entry?: z.infer<typeof List>[number],
+    title?: string,
+  ) => {
+    if (managing.current) return false;
+    managing.current = true;
+    setSwitching(true);
+    try {
+      await save();
+      const isActive = entry?.id === active.current.id;
+      const response = await fetch(action === 'create' ? '/v1/boards' : `/v1/boards/${entry!.id}`, {
+        method: action === 'create' ? 'POST' : action === 'rename' ? 'PATCH' : 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...(action === 'delete' ? {} : { title }),
+          ...(action === 'create'
+            ? {}
+            : { revision: isActive ? active.current.revision : entry!.revision }),
+        }),
+      });
+      if (!response.ok)
+        throw new Error((await response.json()).message ?? 'Board operation failed.');
+      if (
+        action === 'create' ||
+        (action === 'rename' && isActive) ||
+        (action === 'delete' && isActive)
+      ) {
+        const next =
+          action === 'delete'
+            ? {
+                id: crypto.randomUUID(),
+                revision: 0,
+                snapshot: { board: null, past: [], future: [] } as BoardSnapshot,
+              }
+            : Entry.parse(await response.json());
+        active.current = { id: next.id, revision: next.revision };
+        current.current = next.snapshot;
+        lastSaved.current = next.snapshot;
+        setActiveId(next.id);
+        replace(next.snapshot);
+        writeRecovery(next);
+        setStatus(action === 'delete' ? '' : 'Saved to SQLite');
+      }
+      await refresh();
+      setError('');
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Board operation failed.');
+      return false;
+    } finally {
+      managing.current = false;
+      setSwitching(false);
+    }
+  };
+  return { entries, status, switching, error, activeId, open, save, saveCopy, refresh, manage };
 }

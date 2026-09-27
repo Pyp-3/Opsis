@@ -54,7 +54,6 @@ import {
   DNS_DEMO,
   type BoardGraph,
   type BoardAgent,
-  type BoardDocument,
 } from '@opsis/schema';
 import { boardIcons } from './icons';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
@@ -138,13 +137,13 @@ const edgeTypes = { routed: RoutedConnection };
 
 function BoardWorkspace() {
   const [initial] = useState(restoreLibrary);
-  const { board, boardRef, setBoard, commit, history, snapshot, replace, travel } = useBoardHistory(
-    initial.snapshot,
-  );
+  const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
+    useBoardHistory(initial.snapshot);
   const library = useBoardLibrary(initial, snapshot, replace);
   const generation = useBoardGeneration(commit);
   const { error, setError, setBusy } = generation;
-  const busy = generation.busy || library.switching || !!generation.review;
+  const [arranging, setArranging] = useState(false);
+  const busy = generation.busy || library.switching || !!generation.review || arranging;
   const saved = library.status;
   const [agent, setAgent] = useState<BoardAgent>(initial.snapshot.board?.agent ?? 'claude');
   const [modelPreferences, setModelPreferences] = useState(readModelPreferences);
@@ -158,12 +157,17 @@ function BoardWorkspace() {
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const exportMenu = useRef<HTMLDetailsElement>(null);
-  const dragStart = useRef<BoardDocument | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
-  const [arranging, setArranging] = useState(false);
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // The library can switch externally through board-manager creation/deletion.
+    setAgent(boardRef.current?.agent ?? 'claude');
+    setSelected(null);
+    setSelectedEdge(null);
+  }, [library.activeId, boardRef]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -236,6 +240,10 @@ function BoardWorkspace() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         undo(event.shiftKey);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        undo(true);
       }
       if (event.key === 'Escape') {
         setSelected(null);
@@ -565,15 +573,15 @@ function BoardWorkspace() {
                 setSelectedEdge(null);
               }}
               onNodeDragStart={() => {
-                dragStart.current = boardRef.current;
+                begin();
               }}
               onNodeDragStop={(_, node) => {
                 const current = boardRef.current;
                 if (current)
-                  commit(
-                    { ...current, positions: { ...current.positions, [node.id]: node.position } },
-                    dragStart.current,
-                  );
+                  end({
+                    ...current,
+                    positions: { ...current.positions, [node.id]: node.position },
+                  });
               }}
               onConnect={(connection) => {
                 if (board && !busy) commit(connectBoard(board, connection, crypto.randomUUID()));
@@ -672,10 +680,13 @@ function BoardWorkspace() {
                   if (!board) return;
                   const id = crypto.randomUUID();
                   const x = Math.min(...Object.values(board.positions).map((p) => p.x), 24);
-                  const y =
-                    Math.max(...Object.values(board.positions).map((p) => p.y), 0) +
-                    NODE_HEIGHT +
-                    ROW_GAP;
+                  const y = board.nodes.length
+                    ? Math.max(
+                        ...board.nodes.map(
+                          (node) => (board.positions[node.id]?.y ?? 0) + nodeHeight(node),
+                        ),
+                      ) + ROW_GAP
+                    : 24;
                   commit({
                     ...board,
                     nodes: [
@@ -819,10 +830,12 @@ function BoardWorkspace() {
                   />
                   {generation.busy ? (
                     <button
+                      key="cancel-generation"
                       className="send-prompt"
                       type="button"
                       aria-label="Cancel generation"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.preventDefault();
                         generation.cancel();
                       }}
                     >
@@ -830,6 +843,7 @@ function BoardWorkspace() {
                     </button>
                   ) : (
                     <button
+                      key="submit-generation"
                       className="send-prompt"
                       type="submit"
                       aria-label="Generate diagram"
@@ -1080,7 +1094,7 @@ function BoardWorkspace() {
                       <button
                         type="button"
                         className="delete-concept"
-                        disabled={board.nodes.length <= 1}
+                        disabled={busy}
                         onClick={() => {
                           commit(removeNode(board, activeNode.id));
                           setSelected(null);
