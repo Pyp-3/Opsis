@@ -36,6 +36,14 @@ describe('2D board API', () => {
     });
     expect(result.statusCode).toBe(200);
     expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          'Downward visual layout does NOT mean interactions only go forward',
+        ),
+      }),
+      expect.any(AbortSignal),
+    );
     expect(factory).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenLastCalledWith(
       expect.objectContaining({ user: expect.stringContaining('Validation error:') }),

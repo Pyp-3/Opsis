@@ -1,11 +1,30 @@
 import { BoardPortSchema, type BoardDocument, type BoardPort } from '@opsis/schema';
+import { NODE_WIDTH } from './geometry';
 
 export const PORT_OFFSETS = {
-  left: { x: 40, y: 44 },
-  right: { x: 138, y: 44 },
-  top: { x: 89, y: -5 },
-  bottom: { x: 89, y: 93 },
+  left: { x: NODE_WIDTH / 2 - 24, y: 44 },
+  right: { x: NODE_WIDTH / 2 + 24, y: 44 },
+  top: { x: NODE_WIDTH / 2, y: 20 },
+  bottom: { x: NODE_WIDTH / 2, y: 68 },
 } as const;
+
+export const isReturnEdge = (edge: BoardDocument['edges'][number]) =>
+  ['response', 'feedback', 'retry'].includes(edge.kind ?? 'flow');
+export const connectionLabel = (edge: BoardDocument['edges'][number]) =>
+  edge.kind && edge.kind !== 'flow'
+    ? `${edge.kind[0]!.toUpperCase()}${edge.kind.slice(1)}: ${edge.label}`
+    : edge.label;
+
+// High-contrast on the blueprint background; type labels/patterns also encode meaning.
+export const CONNECTION_STYLES = {
+  flow: { color: '#c4d7ed', dash: '' },
+  request: { color: '#75d9f3', dash: '' },
+  response: { color: '#f2cc79', dash: '8 4' },
+  feedback: { color: '#d6b0fa', dash: '3 4' },
+  retry: { color: '#ffad8f', dash: '10 3 2 3' },
+} as const;
+export const connectionStyle = (edge: BoardDocument['edges'][number]) =>
+  CONNECTION_STYLES[edge.kind ?? 'flow'];
 
 /** Unpinned edges choose the nearest sides as objects move; manual ports stay pinned. */
 export function edgePorts(
@@ -15,12 +34,13 @@ export function edgePorts(
   const pinned = board.edgePorts?.[edge.id];
   if (pinned) return pinned;
   if (edge.source === edge.target) return { source: 'right', target: 'top' };
+  if (isReturnEdge(edge)) return { source: 'left', target: 'left' };
   const from = board.positions[edge.source] ?? { x: 0, y: 0 };
   const to = board.positions[edge.target] ?? { x: 0, y: 0 };
   const dx = to.x - from.x,
     dy = to.y - from.y;
   if (Math.abs(dy) > Math.abs(dx))
-    return dy > 0 ? { source: 'bottom', target: 'top' } : { source: 'top', target: 'bottom' };
+    return dy > 0 ? { source: 'right', target: 'top' } : { source: 'left', target: 'left' };
   return dx >= 0 ? { source: 'right', target: 'left' } : { source: 'left', target: 'right' };
 }
 
@@ -44,7 +64,7 @@ export function connectBoard(
     return board;
   const existing = board.edges.find((edge) => edge.id === id);
   if (!existing && board.edges.length >= 100) return board;
-  const edge = { id, source, target, label: existing?.label ?? '' };
+  const edge = { ...existing, id, source, target, label: existing?.label ?? '' };
   const automatic = edgePorts({ ...board, edgePorts: {} }, edge);
   const sourcePort = BoardPortSchema.safeParse(connection.sourceHandle);
   const targetPort = BoardPortSchema.safeParse(connection.targetHandle);

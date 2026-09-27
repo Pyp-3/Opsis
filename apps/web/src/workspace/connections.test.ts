@@ -48,7 +48,7 @@ describe('branching connections', () => {
     const edge = board.edges.find((item) => item.id === 'transfer')!;
     expect(edgePorts(board, edge)).toEqual({ source: 'right', target: 'left' });
     const moved = { ...board, positions: { ...board.positions, incoming: { x: 0, y: 400 } } };
-    expect(edgePorts(moved, edge)).toEqual({ source: 'bottom', target: 'top' });
+    expect(edgePorts(moved, edge)).toEqual({ source: 'right', target: 'top' });
     const pinned = connectBoard(
       moved,
       { source: 'outgoing', target: 'incoming', sourceHandle: 'right', targetHandle: 'left' },

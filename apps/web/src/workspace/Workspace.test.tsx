@@ -7,7 +7,14 @@ import { Workspace } from './Workspace';
 
 vi.mock('@xyflow/react', async (original) => {
   const actual = await original<typeof import('@xyflow/react')>();
-  const flow = { fitView: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn() };
+  const flow = {
+    fitView: vi.fn(),
+    setViewport: vi.fn(),
+    setCenter: vi.fn(),
+    getZoom: () => 1,
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+  };
   return {
     ...actual,
     useReactFlow: () => flow,

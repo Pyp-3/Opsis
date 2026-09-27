@@ -98,6 +98,11 @@ test('mobile canvas remains usable without horizontal page overflow', async ({ p
 
 test('reuses ports for branches and keeps arrows attached while dragging', async ({ page }) => {
   await page.getByRole('button', { name: 'Explore the email example' }).click();
+  // Reading mode intentionally keeps distant nodes offscreen at a legible zoom.
+  // Use the explicit overview for this whole-graph connection-editing scenario.
+  await expect(page.getByText('Saved to SQLite')).toBeVisible();
+  await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
+  await page.waitForTimeout(400); // The overview transition lasts 300ms.
   const port = (node: string, side: string) =>
     page.locator(`[data-id="${node}"] [data-handleid="${side}"]`);
   for (const target of ['sender', 'recipient']) {
@@ -114,6 +119,27 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   }
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
   const edge = page.locator('[data-id="transfer"] .react-flow__edge-path');
+  const expectAttached = async () => {
+    const gaps = await edge.evaluate((element) => {
+      const path = element as SVGPathElement;
+      const matrix = path.getScreenCTM()!;
+      return [
+        { point: path.getPointAtLength(0), node: 'outgoing', side: 'right' },
+        { point: path.getPointAtLength(path.getTotalLength()), node: 'incoming', side: 'top' },
+      ].map(({ point, node, side }) => {
+        const anchor = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+        const handle = document
+          .querySelector(`[data-id="${node}"] [data-handleid="${side}"]`)!
+          .getBoundingClientRect();
+        return Math.hypot(
+          anchor.x - handle.x - handle.width / 2,
+          anchor.y - handle.y - handle.height / 2,
+        );
+      });
+    });
+    gaps.forEach((gap) => expect(gap).toBeLessThan(1));
+  };
+  await expectAttached();
   const before = await edge.getAttribute('d');
   const icon = await page.locator('[data-id="outgoing"] .node-symbol').boundingBox();
   await page.mouse.move(icon!.x + icon!.width / 2, icon!.y + icon!.height / 2);
@@ -123,6 +149,7 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   });
   await expect(edge).not.toHaveAttribute('d', before!);
   await page.mouse.up();
+  await expectAttached();
   await expect(page.getByText('Saved to SQLite')).toBeVisible();
   await page.reload();
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);

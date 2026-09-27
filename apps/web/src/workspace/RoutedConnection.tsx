@@ -1,0 +1,51 @@
+import { BaseEdge, type Edge, type EdgeProps } from '@xyflow/react';
+import type { RoutedEdge } from './routing';
+
+export function RoutedConnection({
+  id,
+  data,
+  markerEnd,
+  style,
+  selected,
+}: EdgeProps<Edge<{ route: RoutedEdge }>>) {
+  const route = data?.route;
+  if (!route) return null;
+  return (
+    <>
+      {/* A small knockout at unavoidable crossings makes clear these are not junctions. */}
+      <path d={route.path} fill="none" stroke="#153b65" strokeWidth={7} pointerEvents="none" />
+      <BaseEdge
+        id={id}
+        path={route.path}
+        {...(markerEnd ? { markerEnd } : {})}
+        style={style}
+        interactionWidth={24}
+      />
+      {route.label && (
+        <g className="connection-label" aria-label={route.lines.join(' ')}>
+          <rect
+            {...route.label}
+            rx={5}
+            fill="#153b65"
+            stroke={selected ? '#ffffff' : (style?.stroke ?? '#607e9e')}
+            strokeWidth={0.6}
+          />
+          <text
+            x={route.label.x + route.label.width / 2}
+            y={route.label.y + 18}
+            fill="#e4edfa"
+            fontSize={12}
+            fontFamily="monospace"
+            textAnchor="middle"
+          >
+            {route.lines.map((line, i) => (
+              <tspan key={i} x={route.label!.x + route.label!.width / 2} dy={i ? 16 : 0}>
+                {line}
+              </tspan>
+            ))}
+          </text>
+        </g>
+      )}
+    </>
+  );
+}

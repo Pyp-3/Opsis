@@ -79,12 +79,14 @@ export const BoardNodeSchema = z
     caveat: z.string().max(500).optional(),
   })
   .strict();
+export const BoardEdgeKindSchema = z.enum(['flow', 'request', 'response', 'feedback', 'retry']);
 export const BoardEdgeSchema = z
   .object({
     id,
     source: id,
     target: id,
     label: z.string().max(100),
+    kind: BoardEdgeKindSchema.optional(),
   })
   .strict();
 export const BoardContentSchema = z
@@ -144,6 +146,7 @@ export const boardOutputSchema = JSON.stringify(
   zodToJsonSchema(
     BoardContentSchema.extend({
       suggestions: z.array(z.string().min(1).max(200)).min(2).max(3),
+      edges: z.array(BoardEdgeSchema.extend({ kind: BoardEdgeKindSchema })).max(100),
       nodes: z
         .array(
           BoardNodeSchema.extend({

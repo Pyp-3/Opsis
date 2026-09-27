@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BoardDocument } from '@opsis/schema';
 import { boardIcons } from './icons';
-import { NODE_HEIGHT, NODE_WIDTH } from './model';
-import { getBezierPath, Position } from '@xyflow/react';
-import { edgePorts, PORT_OFFSETS } from './connections';
+import { NODE_WIDTH } from './model';
+import { routeBoard } from './routing';
+import { wrapLabel, nodeHeight } from './geometry';
+import { connectionStyle, PORT_OFFSETS, connectionLabel, CONNECTION_STYLES } from './connections';
 
 const escape = (text: string) =>
   text.replace(
@@ -13,38 +14,63 @@ const escape = (text: string) =>
   );
 
 export function boardSvg(board: BoardDocument): string {
-  const points = board.nodes.map((node) => board.positions[node.id] ?? { x: 0, y: 0 });
+  const routes = routeBoard(board);
+  const points = [
+    ...board.nodes.flatMap((node) => {
+      const p = board.positions[node.id] ?? { x: 0, y: 0 };
+      return [p, { x: p.x + NODE_WIDTH, y: p.y + nodeHeight(node) }];
+    }),
+    ...Object.values(routes).flatMap((route) => [
+      ...route.points,
+      ...(route.label
+        ? [
+            { x: route.label.x, y: route.label.y },
+            { x: route.label.x + route.label.width, y: route.label.y + route.label.height },
+          ]
+        : []),
+    ]),
+  ];
   const minX = Math.min(...points.map((p) => p.x)) - 50;
   const minY = Math.min(...points.map((p) => p.y)) - 80;
-  const width = Math.max(...points.map((p) => p.x)) - minX + NODE_WIDTH + 50;
-  const height = Math.max(...points.map((p) => p.y)) - minY + NODE_HEIGHT + 50;
+  const width = Math.max(...points.map((p) => p.x)) - minX + 50;
+  const height = Math.max(...points.map((p) => p.y)) - minY + 50;
   const edges = board.edges
     .map((edge) => {
-      const from = board.positions[edge.source];
-      const to = board.positions[edge.target];
-      if (!from || !to) return '';
-      const ports = edgePorts(board, edge);
-      const source = PORT_OFFSETS[ports.source],
-        target = PORT_OFFSETS[ports.target];
-      const [path, labelX, labelY] = getBezierPath({
-        sourceX: from.x + source.x,
-        sourceY: from.y + source.y,
-        sourcePosition: ports.source as Position,
-        targetX: to.x + target.x,
-        targetY: to.y + target.y,
-        targetPosition: ports.target as Position,
-      });
-      return `<path d="${path}" fill="none" stroke="#a9c7eb" stroke-width="2" marker-end="url(#arrow)"/><text x="${labelX}" y="${labelY - 12}" text-anchor="middle" font-size="11" fill="#d4e5fa">${escape(edge.label)}</text>`;
+      const route = routes[edge.id];
+      if (!route) return '';
+      const label = route.label;
+      const text = label
+        ? `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="5" fill="#153b65" stroke="#607e9e"/>${route.lines.map((line, i) => `<text x="${label.x + label.width / 2}" y="${label.y + 18 + i * 16}" text-anchor="middle" font-family="monospace" font-size="12" fill="#e4edfa">${escape(line)}</text>`).join('')}`
+        : '';
+      const style = connectionStyle(edge);
+      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${edge.kind ?? 'flow'})"/>${text}`;
     })
     .join('');
   const nodes = board.nodes
     .map((node) => {
       const p = board.positions[node.id] ?? { x: 0, y: 0 };
       const Icon = boardIcons[node.icon];
-      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(65 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g><text x="89" y="105" fill="white" text-anchor="middle" font-size="13">${escape(node.label)}</text><title>${escape(node.explanation)}</title></g>`;
+      const label = wrapLabel(node.label)
+        .map(
+          (line, i) =>
+            `<text x="${NODE_WIDTH / 2}" y="${110 + i * 18}" fill="white" text-anchor="middle" font-size="14">${escape(line)}</text>`,
+        )
+        .join('');
+      const ports = Object.values(PORT_OFFSETS)
+        .map(
+          (port) => `<circle cx="${port.x}" cy="${port.y}" r="4" fill="#224d78" stroke="#a8c6e5"/>`,
+        )
+        .join('');
+      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g>${ports}${label}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10" fill="#a9c7eb"/></marker></defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#153c68"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="white" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;
+  const markers = Object.entries(CONNECTION_STYLES)
+    .map(
+      ([kind, style]) =>
+        `<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10" fill="${style.color}"/></marker>`,
+    )
+    .join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#153c68"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="white" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;
 }
 
 export function download(content: string, name: string, type: string) {
@@ -66,7 +92,7 @@ export function boardMarkdown(board: BoardDocument): string {
           .filter((edge) => edge.source === node.id)
           .map(
             (edge) =>
-              `- ${safe(edge.label || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}`,
+              `- ${safe(connectionLabel(edge) || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}`,
           )
           .join('\n');
         return `## ${index + 1}. ${safe(node.label)}\n\n${safe(node.summary)}\n\n${safe(node.explanation)}\n\n${node.confidence && node.confidence !== 'normal' ? `**${node.confidence}**: ${safe(node.caveat ?? '')}\n\n` : ''}${paths}\n`;

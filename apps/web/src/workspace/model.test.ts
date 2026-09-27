@@ -36,6 +36,7 @@ describe('2D workspace documents', () => {
     const svg = boardSvg(board);
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&lt;script&gt;');
-    expect(svg).toContain('marker-end="url(#arrow)"');
+    expect(svg).toContain('marker-end="url(#arrow-flow)"');
+    expect(svg).toContain('id="arrow-response"');
   });
 });

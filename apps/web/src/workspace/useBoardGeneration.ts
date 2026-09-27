@@ -54,7 +54,12 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         throw new Error(payload.message ?? 'Could not generate a diagram.');
       setStage('Validating and arranging concepts');
       const graph = BoardGraphSchema.parse(needsReview ? payload.candidate : payload);
-      const candidate = await layoutBoard(graph, agent, previous ?? undefined);
+      const candidate = await layoutBoard(
+        graph,
+        agent,
+        previous ?? undefined,
+        document.querySelector('.blueprint')?.clientWidth ?? 900,
+      );
       if (controller.signal.aborted) return false;
       if (needsReview) setReview({ candidate, before: previous, changes: payload.changes });
       else commit(candidate);

@@ -6,6 +6,7 @@ import {
   Handle,
   MarkerType,
   Position,
+  PanOnScrollMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -40,13 +41,18 @@ import {
   X,
   ZoomIn,
   ZoomOut,
+  ListTree,
+  ArrowDownToLine,
 } from 'lucide-react';
 import {
   BOARD_ICONS,
   BOARD_MODEL_CHOICES,
   BoardAgentsSchema,
   BoardModelSettingsSchema,
+  BoardEdgeKindSchema,
   EMAIL_DEMO,
+  DNS_DEMO,
+  type BoardGraph,
   type BoardAgent,
   type BoardDocument,
 } from '@opsis/schema';
@@ -54,7 +60,7 @@ import { boardIcons } from './icons';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
-import { connectBoard, edgePorts } from './connections';
+import { connectBoard, edgePorts, PORT_OFFSETS, connectionStyle } from './connections';
 import { MODEL_SETTINGS_KEY, readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
 import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
@@ -63,6 +69,9 @@ import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
 import { Walkthrough } from './Walkthrough';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
+import { routeBoard } from './routing';
+import { RoutedConnection } from './RoutedConnection';
+import { wrapLabel, ROW_GAP, nodeHeight } from './geometry';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
@@ -97,6 +106,13 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
               }[side]
             }
             title={`${data.label}: ${side} connection`}
+            style={{
+              left: PORT_OFFSETS[side].x - (NODE_WIDTH - 88) / 2,
+              top: PORT_OFFSETS[side].y,
+              right: 'auto',
+              bottom: 'auto',
+              transform: 'translate(-50%, -50%)',
+            }}
           />
         ))}
         {data.outgoing > 1 && (
@@ -106,17 +122,19 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
           </span>
         )}
       </div>
-      <strong>{data.label}</strong>
+      <strong title={data.label}>
+        {wrapLabel(data.label).map((line, i) => (
+          <span key={i}>{line}</span>
+        ))}
+      </strong>
       {data.confidence && data.confidence !== 'normal' && (
         <span className="confidence-badge">{data.confidence}</span>
       )}
-      <span className="node-hint">
-        {selected ? 'Drag a dot to connect' : 'Explore'} <ChevronRight size={11} />
-      </span>
     </div>
   );
 }
 const nodeTypes = { concept: IconNode };
+const edgeTypes = { routed: RoutedConnection };
 
 function BoardWorkspace() {
   const [initial] = useState(restoreLibrary);
@@ -144,7 +162,8 @@ function BoardWorkspace() {
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
-  const inspectorOpen = selected !== null || selectedEdge !== null;
+  const [arranging, setArranging] = useState(false);
+  const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -161,12 +180,42 @@ function BoardWorkspace() {
   }, []);
 
   const fit = useCallback(() => {
+    if (readingTimer.current) clearTimeout(readingTimer.current);
     void flow.fitView({ padding: 0.22, duration: 300, maxZoom: 1.1 });
   }, [flow]);
+  const readingView = useCallback(() => {
+    const current = boardRef.current;
+    if (!current) return;
+    const positions = current.nodes.map((node) => current.positions[node.id]).filter((p) => !!p);
+    if (!positions.length) return;
+    const top = Math.min(...positions.map((p) => p.y));
+    const firstRow = positions.filter((p) => p.y < top + NODE_HEIGHT);
+    const center =
+      (Math.min(...firstRow.map((p) => p.x)) + Math.max(...firstRow.map((p) => p.x)) + NODE_WIDTH) /
+      2;
+    const width = document.querySelector('.blueprint')?.clientWidth ?? 900;
+    void flow.setViewport({ x: width / 2 - center, y: 210 - top, zoom: 1 }, { duration: 250 });
+  }, [flow, boardRef]);
+  const hasBoard = !!board;
   useEffect(() => {
-    const timer = setTimeout(fit, 100);
+    const timer = setTimeout(readingView, 100);
+    readingTimer.current = timer;
     return () => clearTimeout(timer);
-  }, [board?.nodes.length, fit, inspectorOpen, railOpen]);
+  }, [hasBoard, library.activeId, readingView]);
+  async function arrangeDownward() {
+    if (!board || busy || arranging) return;
+    setArranging(true);
+    try {
+      const width = document.querySelector('.blueprint')?.clientWidth ?? 900;
+      // Explicit arrangement is undoable; normal follow-ups still preserve hand-placed nodes.
+      commit(await layoutBoard(board, board.agent, undefined, width));
+      readingView();
+    } catch {
+      setError('Could not arrange this board. Your current layout is unchanged.');
+    } finally {
+      setArranging(false);
+    }
+  }
 
   const undo = useCallback(
     (redo = false) => {
@@ -226,13 +275,20 @@ function BoardWorkspace() {
       setPrompt('');
   }
 
-  async function demo() {
+  async function demo(graph: BoardGraph = EMAIL_DEMO) {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
       if (!(await library.open())) return;
-      commit(await layoutBoard(EMAIL_DEMO, 'demo'));
+      commit(
+        await layoutBoard(
+          graph,
+          'demo',
+          undefined,
+          document.querySelector('.blueprint')?.clientWidth ?? 900,
+        ),
+      );
       setAgent('demo');
       setSelected(null);
       setSelectedEdge(null);
@@ -248,6 +304,16 @@ function BoardWorkspace() {
     setSelectedEdge(null);
     setShowIcons(false);
     setIconSearch('');
+    const point = boardRef.current?.positions[id];
+    if (point) {
+      // Sidebar/walkthrough selections can be several screens below the current view.
+      requestAnimationFrame(() => {
+        void flow.setCenter(point.x + NODE_WIDTH / 2, point.y + NODE_HEIGHT / 2, {
+          zoom: Math.max(0.8, flow.getZoom()),
+          duration: 250,
+        });
+      });
+    }
   };
   const activeNode = board?.nodes.find((node) => node.id === selected);
   const activeEdge = board?.edges.find((edge) => edge.id === selectedEdge);
@@ -266,7 +332,7 @@ function BoardWorkspace() {
         position: board.positions[node.id] ?? { x: 0, y: index * 200 },
         selected: selected === node.id,
         width: NODE_WIDTH,
-        height: NODE_HEIGHT,
+        height: nodeHeight(node),
         ariaLabel: `${node.label}. ${node.summary}`,
         data: {
           label: node.label,
@@ -279,22 +345,35 @@ function BoardWorkspace() {
       })) ?? [],
     [board, selected],
   );
+  const routes = useMemo(() => (board ? routeBoard(board) : {}), [board]);
   const edges = useMemo(
     () =>
       board?.edges.map((edge) => ({
         ...edge,
-        type: 'default',
+        type: 'routed',
+        data: { route: routes[edge.id]! },
         sourceHandle: edgePorts(board, edge).source,
         targetHandle: edgePorts(board, edge).target,
         interactionWidth: 24,
         selected: selectedEdge === edge.id,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#b9d1ef', width: 18, height: 18 },
-        style: { stroke: selectedEdge === edge.id ? '#f0cf95' : '#b9d1ef', strokeWidth: 1.5 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: connectionStyle(edge).color,
+          width: 22,
+          height: 22,
+        },
+        style: {
+          stroke: selectedEdge === edge.id ? '#ffffff' : connectionStyle(edge).color,
+          strokeWidth: 2,
+          strokeLinecap: 'round' as const,
+          strokeLinejoin: 'round' as const,
+          strokeDasharray: connectionStyle(edge).dash,
+        },
         labelStyle: { fill: '#e4edfa', fontSize: 10, fontFamily: 'monospace' },
         labelBgStyle: { fill: '#153b65', fillOpacity: 0.95 },
         labelBgPadding: [7, 5] as [number, number],
       })) ?? [],
-    [board, selectedEdge],
+    [board, selectedEdge, routes],
   );
   const changePositions = (changes: NodeChange<DiagramNode>[]) => {
     if (busy) return;
@@ -330,6 +409,7 @@ function BoardWorkspace() {
         selected={selected}
         selectNode={selectNode}
         demo={() => void demo()}
+        dnsDemo={() => void demo(DNS_DEMO)}
         onNew={async () => {
           if (!(await library.open())) return;
           setSelected(null);
@@ -466,6 +546,7 @@ function BoardWorkspace() {
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               connectionMode={ConnectionMode.Loose}
               connectionRadius={28}
               reconnectRadius={24}
@@ -504,8 +585,10 @@ function BoardWorkspace() {
               snapGrid={[24, 24]}
               minZoom={0.25}
               maxZoom={1.7}
-              fitView
-              fitViewOptions={{ padding: 0.22, maxZoom: 1.1 }}
+              panOnScroll
+              panOnScrollMode={PanOnScrollMode.Vertical}
+              zoomOnScroll={false}
+              zoomOnPinch
             >
               <Background
                 id="fine"
@@ -565,6 +648,21 @@ function BoardWorkspace() {
               <button aria-label="Fit diagram" title="Fit diagram" onClick={fit}>
                 <Expand size={16} />
               </button>
+              <button
+                aria-label="Read from top"
+                title="Read from top at 100%"
+                onClick={readingView}
+              >
+                <ArrowDownToLine size={16} />
+              </button>
+              <button
+                aria-label="Arrange downward"
+                title="Arrange downward (undoable)"
+                disabled={busy || arranging || !board}
+                onClick={() => void arrangeDownward()}
+              >
+                <ListTree size={16} />
+              </button>
               <span />
               <button
                 aria-label="Add a concept"
@@ -573,7 +671,11 @@ function BoardWorkspace() {
                 onClick={() => {
                   if (!board) return;
                   const id = crypto.randomUUID();
-                  const x = Math.max(...Object.values(board.positions).map((p) => p.x), 0) + 288;
+                  const x = Math.min(...Object.values(board.positions).map((p) => p.x), 24);
+                  const y =
+                    Math.max(...Object.values(board.positions).map((p) => p.y), 0) +
+                    NODE_HEIGHT +
+                    ROW_GAP;
                   commit({
                     ...board,
                     nodes: [
@@ -587,7 +689,7 @@ function BoardWorkspace() {
                         kind: 'step',
                       },
                     ],
-                    positions: { ...board.positions, [id]: { x, y: 0 } },
+                    positions: { ...board.positions, [id]: { x, y } },
                   });
                   selectNode(id);
                 }}
@@ -662,6 +764,18 @@ function BoardWorkspace() {
               )}
               {board && !busy && (
                 <div className="followup-chips">
+                  {agent !== 'demo' && (
+                    <button
+                      onClick={() => {
+                        setPrompt(
+                          'Audit the actual interactions in this diagram. Add genuine response, acknowledgment, feedback or retry edges to their actual recipients, with explicit kinds and labels. Do not invent reverse flows. Preserve unrelated content and IDs; explain any necessary correction to existing relationships.',
+                        );
+                        promptInput.current?.focus();
+                      }}
+                    >
+                      Show return paths
+                    </button>
+                  )}
                   {(board.suggestions ?? []).map((suggestion) => (
                     <button
                       key={suggestion}
@@ -761,7 +875,7 @@ function BoardWorkspace() {
                     >
                       <option value="claude">Claude</option>
                       <option value="codex">Codex</option>
-                      <option value="demo">Demo · email example</option>
+                      <option value="demo">Demo · built-in examples</option>
                     </select>
                   </label>
                   {agent !== 'demo' && (
@@ -808,7 +922,7 @@ function BoardWorkspace() {
                 ) : (
                   <>
                     <kbd>Enter</kbd> to draw · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line ·
-                    Drag to arrange
+                    Scroll to follow the flow · Drag to arrange
                   </>
                 )}
               </p>
@@ -1035,6 +1149,28 @@ function BoardWorkspace() {
                   {board.nodes.find((node) => node.id === activeEdge.target)?.label ?? 'End'}
                 </p>
                 <section className="detail-section">
+                  <label>
+                    Connection type
+                    <select
+                      value={activeEdge.kind ?? 'flow'}
+                      disabled={busy}
+                      onChange={(event) => {
+                        const kind = BoardEdgeKindSchema.parse(event.target.value);
+                        commit({
+                          ...board,
+                          edges: board.edges.map((edge) =>
+                            edge.id === activeEdge.id ? { ...edge, kind } : edge,
+                          ),
+                        });
+                      }}
+                    >
+                      {BoardEdgeKindSchema.options.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label>
                     Relationship
                     <input

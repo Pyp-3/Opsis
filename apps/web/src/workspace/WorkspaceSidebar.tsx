@@ -3,7 +3,9 @@ import { ArrowRight, GitBranch, Grid2X2, Mail, Plus, Search } from 'lucide-react
 import type { BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
+import { CONNECTION_STYLES } from './connections';
 
+// Legend colors and patterns are shared with live routes and exported diagrams.
 export function WorkspaceSidebar({
   board,
   busy,
@@ -14,6 +16,7 @@ export function WorkspaceSidebar({
   selected,
   selectNode,
   demo,
+  dnsDemo,
 }: {
   board: BoardDocument | null;
   busy: boolean;
@@ -24,6 +27,7 @@ export function WorkspaceSidebar({
   selected: string | null;
   selectNode: (id: string) => void;
   demo: () => void;
+  dnsDemo: () => void;
 }) {
   const [nodeSearch, setNodeSearch] = useState('');
   const visibleNodes =
@@ -140,6 +144,14 @@ export function WorkspaceSidebar({
         )}
       </div>
       <div className="rail-bottom">
+        <button className="sample-card" disabled={busy} onClick={dnsDemo}>
+          <GitBranch size={16} />
+          <span>
+            <strong>DNS requests &amp; responses</strong>
+            <small>Explore two-way interactions</small>
+          </span>
+          <ArrowRight size={15} />
+        </button>
         <button className="sample-card" disabled={busy} onClick={() => void demo()}>
           <span className="sample-icon">
             <Mail size={16} />
@@ -155,6 +167,21 @@ export function WorkspaceSidebar({
           <p>
             <strong>Ideas can branch.</strong> Drag from any connection dot to another icon.
           </p>
+        </div>
+        <div className="connection-legend" aria-label="Connection color legend">
+          {Object.entries(CONNECTION_STYLES).map(([kind, style]) => (
+            <span key={kind} style={{ color: style.color }}>
+              <svg width="24" height="10" aria-hidden="true">
+                <path
+                  d="M0 5H24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray={style.dash}
+                />
+              </svg>
+              {kind}
+            </span>
+          ))}
         </div>
         <p className="rail-footnote">
           <span className="active-dot" /> Private workspace · saved locally

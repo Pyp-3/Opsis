@@ -8,6 +8,8 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 
 - Frameless Lucide icons on a pannable, zoomable engineering-style grid.
 - Curved arrows that follow dragged icons, four reusable connection ports, branching and merging, and endpoint reconnection.
+- Downward, bounded-width layout: long processes grow vertically, with wrapped labels and obstacle-aware arrow routing. Scroll to follow the flow without automatically shrinking it. Use **Arrange downward** for existing boards (undoable), **Read from top** for 100% reading, and **Fit diagram** for an explicit overview.
+- Two-way interactions: requests, responses, feedback and retries have explicit connection types. Return paths use dashed amber arrows and type labels. Edit a connection’s type in its details panel. The DNS example shows queries and replies without using a model; **Show return paths** prepares an agent follow-up for existing boards (review before submitting; normal model usage applies).
 - Claude and Codex integration through locally installed, authenticated CLIs.
 - Per-agent model and reasoning-effort controls, custom model IDs, economical defaults, and no automatic upgrade to a larger model.
 - Follow-up prompts that include the current graph and selected concept; existing node positions are retained.

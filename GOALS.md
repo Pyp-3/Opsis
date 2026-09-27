@@ -13,6 +13,13 @@ The current experience is close to the intended visual direction. This checklist
 - [x] 2D blueprint canvas as the primary application, without a 3D toggle.
 - [x] Frameless icons from a shared icon library, with short labels.
 - [x] Pan, zoom, fit-to-view, and manual node movement.
+- [x] Bounded-width top-to-bottom arrangement with overflow branches placed on later rows.
+- [x] Scroll-through reading at a stable zoom; explicit overview and undoable downward rearrangement.
+- [x] Icon-attached ports, including bottom connections routed above labels; shared canvas/export geometry.
+- [x] Typed request/response/feedback/retry paths, distinct return styling, and a two-way DNS example. Agent instructions distinguish actor interactions from chronological stages.
+- [x] Fan-out lanes, overlap/crossing penalties, crossing knockouts, and a labeled color/pattern legend for connection types.
+- [x] Compact label-sized node footprints and row spacing calculated from relationship labels and connection density, instead of fixed 360px rows.
+- [x] Wrapped labels, reserved text footprints, and obstacle-aware rounded orthogonal routes shared by canvas and exports.
 - [x] Curved directional connections that follow moving nodes.
 - [x] Four reusable connection ports; multiple incoming/outgoing paths and endpoint reconnection.
 - [x] Connection-side metadata preserved in saved v2 documents and SVG exports.
@@ -67,7 +74,8 @@ Acceptance: defaults remain inexpensive; each request shows its selected agent/m
 ## Improve: canvas and explanations — P1
 
 - [ ] More discoverable connection/reconnection affordances and keyboard-accessible connection editing.
-- [ ] Reduce crossing arrows and label overlap in dense, branching and cyclic graphs.
+- [x] Route common chains, branching bypasses and returns around node/text footprints and separate edge labels from arrows.
+- [ ] Further optimize crossings and routing performance for very dense or overlapping hand-arranged graphs.
 - [ ] Better initial framing and readable labels across small screens and large graphs.
 - [ ] Named branch conditions, clearer decision nodes and optional edge descriptions.
 - [ ] Searchable icon picker with broader categories; evaluate safe custom SVG import.
