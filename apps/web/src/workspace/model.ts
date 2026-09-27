@@ -61,11 +61,29 @@ export async function layoutBoard(
   for (const layer of layers) {
     for (let offset = 0; offset < layer.length; offset += columns) {
       const chunk = layer.slice(offset, offset + columns);
+      // Sit each row under the objects that feed it (barycentre of placed parents), so
+      // arrows drop straight down instead of zig-zagging to a centred row.
+      const step = NODE_WIDTH + COLUMN_GAP;
+      const target = (id: string) => {
+        const parents = graph.edges
+          .filter((edge) => edge.target === id && !isReturnEdge(edge) && automatic[edge.source])
+          .map((edge) => automatic[edge.source]!.x);
+        return parents.length ? parents.reduce((a, b) => a + b, 0) / parents.length : null;
+      };
+      const wanted = chunk.map((node) => target(node.id));
+      let start = (usedColumns - chunk.length) / 2;
+      if (wanted.some((x) => x !== null)) {
+        let bestCost = Infinity;
+        for (let s = 0; s <= usedColumns - chunk.length + 1e-9; s += 0.5) {
+          const cost = wanted.reduce<number>(
+            (sum, x, i) => sum + (x === null ? 0 : Math.abs(24 + (s + i) * step - x)),
+            Math.abs(s - (usedColumns - chunk.length) / 2) * 0.01,
+          );
+          if (cost < bestCost) [bestCost, start] = [cost, s];
+        }
+      }
       chunk.forEach((node, index) => {
-        automatic[node.id] = {
-          x: 24 + ((usedColumns - chunk.length) / 2 + index) * (NODE_WIDTH + COLUMN_GAP),
-          y: nextY,
-        };
+        automatic[node.id] = { x: 24 + (start + index) * step, y: nextY };
       });
       const incident = graph.edges.filter((edge) =>
         chunk.some((node) => node.id === edge.source || node.id === edge.target),
@@ -115,7 +133,12 @@ export async function layoutBoard(
       );
     }),
   );
-  return BoardDocumentSchema.parse({ ...graph, version: 2, agent, positions, edgePorts });
+  // Agents never return colours; keep the reader's choices on edges that survive an update.
+  const edges = graph.edges.map((edge) => {
+    const color = previous?.edges.find((item) => item.id === edge.id)?.color;
+    return color && !edge.color ? { ...edge, color } : edge;
+  });
+  return BoardDocumentSchema.parse({ ...graph, edges, version: 2, agent, positions, edgePorts });
 }
 
 export function restoreBoard(): BoardDocument | null {

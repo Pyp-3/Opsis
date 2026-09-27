@@ -3,7 +3,6 @@ import { FolderOpen, Grid2X2, Plus, Search } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
-import { BoardManager } from './BoardManager';
 
 export function WorkspaceSidebar({
   board,
@@ -11,6 +10,7 @@ export function WorkspaceSidebar({
   library,
   onNew,
   onOpen,
+  onManage,
   commit,
   selected,
   selectNode,
@@ -22,6 +22,7 @@ export function WorkspaceSidebar({
   library: ReturnType<typeof useBoardLibrary>;
   onNew: () => void;
   onOpen: (id: string) => void;
+  onManage: () => void;
   commit: (board: BoardDocument) => void;
   selected: string | null;
   selectNode: (id: string) => void;
@@ -31,7 +32,6 @@ export function WorkspaceSidebar({
   const [search, setSearch] = useState({ boardId: library.activeId, query: '' });
   const nodeSearch =
     search.boardId === library.activeId && (board?.nodes.length ?? 0) > 5 ? search.query : '';
-  const [managerOpen, setManagerOpen] = useState(false);
   const visibleNodes =
     board?.nodes.filter((node) => node.label.toLowerCase().includes(nodeSearch.toLowerCase())) ??
     [];
@@ -51,9 +51,17 @@ export function WorkspaceSidebar({
         <button className="new-board" disabled={busy || !board} onClick={onNew}>
           <Plus size={16} /> New canvas
         </button>
-        <button className="manage-boards" disabled={busy} onClick={() => setManagerOpen(true)}>
+        <a
+          href="/boards"
+          className="manage-boards"
+          aria-disabled={busy || undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            if (!busy) onManage();
+          }}
+        >
           <FolderOpen size={16} /> Manage boards
-        </button>
+        </a>
       </div>
       <div className="rail-scroll">
         <details className="rail-section" open>
@@ -152,9 +160,6 @@ export function WorkspaceSidebar({
           <span className="active-dot" /> Private workspace · saved locally
         </p>
       </div>
-      {managerOpen && (
-        <BoardManager library={library} onOpen={onOpen} onClose={() => setManagerOpen(false)} />
-      )}
     </aside>
   );
 }

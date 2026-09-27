@@ -1,5 +1,5 @@
 import type { BoardDocument, BoardPort } from '@opsis/schema';
-import { edgePorts, PORT_OFFSETS, connectionLabel } from './connections';
+import { edgePorts, PORT_OFFSETS, connectionLabel, isReturnEdge, replyLead } from './connections';
 import { NODE_WIDTH, wrapLabel, nodeHeight } from './geometry';
 
 export type Point = { x: number; y: number };
@@ -11,6 +11,18 @@ export type RoutedEdge = {
   lines: string[];
   callout?: string;
 };
+
+/** Clearance kept between arrows and every object footprint (icon + wrapped title). */
+const PAD = 16;
+/** Cost of one turn, in pixels of extra length. High enough that arrows prefer straight runs. */
+const BEND = 70;
+/** Crossing another arrow is allowed but should only win over a real detour. */
+const CROSS = 90;
+/** Running on top of another arrow; nudging separates survivors into parallel lanes. */
+const SHARE = 30;
+/** Spacing of parallel lanes after nudging. */
+const LANE = 10;
+
 const inflate = (rect: Rect, amount: number): Rect => ({
   x: rect.x - amount,
   y: rect.y - amount,
@@ -46,8 +58,10 @@ export function crosses(a: Point, b: Point, rect: Rect): boolean {
 }
 const segments = (points: Point[]) =>
   points.slice(1).map((point, index) => [points[index]!, point] as const);
-const length = (points: Point[]) =>
-  segments(points).reduce((sum, [a, b]) => sum + Math.abs(a.x - b.x) + Math.abs(a.y - b.y), 0);
+const length = (points: readonly Point[]) =>
+  segments([...points]).reduce((sum, [a, b]) => sum + Math.abs(a.x - b.x) + Math.abs(a.y - b.y), 0);
+
+/** Drop duplicate points and collinear midpoints. */
 function simplify(points: Point[]) {
   const unique = points.filter(
     (p, i) => !i || p.x !== points[i - 1]!.x || p.y !== points[i - 1]!.y,
@@ -57,11 +71,8 @@ function simplify(points: Point[]) {
       !i ||
       i === unique.length - 1 ||
       !(
-        ((unique[i - 1]!.x === p.x && unique[i + 1]!.x === p.x) ||
-          (unique[i - 1]!.y === p.y && unique[i + 1]!.y === p.y)) &&
-        (p.x - unique[i - 1]!.x) * (unique[i + 1]!.x - p.x) +
-          (p.y - unique[i - 1]!.y) * (unique[i + 1]!.y - p.y) >=
-          0
+        (unique[i - 1]!.x === p.x && unique[i + 1]!.x === p.x) ||
+        (unique[i - 1]!.y === p.y && unique[i + 1]!.y === p.y)
       ),
   );
 }
@@ -74,7 +85,7 @@ function roundedPath(points: Point[]): string {
       next = points[i + 1]!;
     const before = Math.hypot(corner.x - previous.x, corner.y - previous.y);
     const after = Math.hypot(next.x - corner.x, next.y - corner.y);
-    const radius = Math.min(10, before / 2, after / 2);
+    const radius = Math.min(12, before / 2, after / 2);
     if (!radius) continue;
     const a = {
       x: corner.x - ((corner.x - previous.x) * radius) / before,
@@ -89,69 +100,228 @@ function roundedPath(points: Point[]): string {
   const last = points[points.length - 1]!;
   return `${path} L${last.x},${last.y}`;
 }
-function exitPoint(position: Point, port: BoardPort): Point {
-  const offset = PORT_OFFSETS[port];
-  if (port === 'left') return { x: position.x - 28, y: position.y + offset.y };
-  if (port === 'right') return { x: position.x + NODE_WIDTH + 28, y: position.y + offset.y };
-  if (port === 'top') return { x: position.x + offset.x, y: position.y - 28 };
-  // Turn below the icon but above its title, before joining the outer corridor.
-  return { x: position.x + NODE_WIDTH + 28, y: position.y + 80 };
-}
 
-function attachment(
-  position: Point,
-  port: BoardPort,
-  slot: number,
-  count: number,
-  neighbors: Rect[],
-): Point[] {
+type Footprint = Rect & { id: string };
+
+/**
+ * The fixed part of a connection next to its object: the port on the icon, a short fan-out
+ * so several arrows on one side stay distinct, and the exit just outside the footprint.
+ * Bottom ports turn below the icon (above the title) because the title sits underneath.
+ */
+function stub(box: Footprint, port: BoardPort, slot: number, count: number): Point[] {
   const offset = PORT_OFFSETS[port];
-  const anchor = { x: position.x + offset.x, y: position.y + offset.y };
+  const anchor = { x: box.x + offset.x, y: box.y + offset.y };
   const spread = (slot - (count - 1) / 2) * Math.min(12, 40 / Math.max(1, count - 1));
   if (port === 'left' || port === 'right') {
     const direction = port === 'left' ? -1 : 1;
-    const fan = { x: anchor.x + direction * 14, y: anchor.y + spread };
-    let exitX = exitPoint(position, port).x + direction * slot * 16;
-    for (const box of neighbors) {
-      if (fan.y < box.y - 12 || fan.y > box.y + box.height + 12) continue;
-      if (port === 'right' && box.x >= position.x + NODE_WIDTH)
-        exitX = Math.min(exitX, box.x - Math.min(12, (box.x - position.x - NODE_WIDTH) / 2));
-      if (port === 'left' && box.x + box.width <= position.x)
-        exitX = Math.max(
-          exitX,
-          box.x + box.width + Math.min(12, (position.x - box.x - box.width) / 2),
-        );
-    }
-    return [anchor, fan, { x: exitX, y: fan.y }];
+    const exitX = port === 'left' ? box.x - PAD : box.x + box.width + PAD;
+    return [
+      anchor,
+      { x: anchor.x + direction * 14, y: anchor.y + spread },
+      { x: exitX, y: anchor.y + spread },
+    ];
   }
   if (port === 'top')
     return [
       anchor,
       { x: anchor.x + spread, y: anchor.y - 14 },
-      { x: anchor.x + spread, y: position.y - 28 - slot * 16 },
+      { x: anchor.x + spread, y: box.y - PAD },
     ];
-  return port === 'bottom'
-    ? [
-        anchor,
-        {
-          x: anchor.x + spread,
-          y: position.y + 76 + slot * Math.min(6, 12 / Math.max(1, count - 1)),
-        },
-        {
-          x: position.x + NODE_WIDTH + 28 + slot * 16,
-          y: position.y + 76 + slot * Math.min(6, 12 / Math.max(1, count - 1)),
-        },
-      ]
-    : [anchor, exitPoint(position, port)];
+  const turnY = box.y + 78 + spread / 4;
+  return [anchor, { x: anchor.x + spread, y: turnY }, { x: box.x + box.width + PAD, y: turnY }];
 }
 
-function labelPosition(
-  points: Point[],
-  lines: string[],
-  obstacles: Rect[],
-  usedPaths: Point[][],
-): Rect | null {
-  if (!lines.length) return null;
+// Direction indices: 0 right, 1 down, 2 left, 3 up.
+const DX = [1, 0, -1, 0];
+const DY = [0, 1, 0, -1];
+const outward = (port: BoardPort) =>
+  port === 'right' ? 0 : port === 'left' ? 2 : port === 'top' ? 3 : 0;
+
+class Heap {
+  private items: { f: number; order: number; state: number }[] = [];
+  get size() {
+    return this.items.length;
+  }
+  push(item: { f: number; order: number; state: number }) {
+    const items = this.items;
+    items.push(item);
+    let i = items.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (Heap.less(items[parent]!, items[i]!)) break;
+      [items[parent], items[i]] = [items[i]!, items[parent]!];
+      i = parent;
+    }
+  }
+  pop() {
+    const items = this.items;
+    const top = items[0]!;
+    const last = items.pop()!;
+    if (items.length) {
+      items[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1,
+          r = l + 1;
+        let m = i;
+        if (l < items.length && Heap.less(items[l]!, items[m]!)) m = l;
+        if (r < items.length && Heap.less(items[r]!, items[m]!)) m = r;
+        if (m === i) break;
+        [items[m], items[i]] = [items[i]!, items[m]!];
+        i = m;
+      }
+    }
+    return top;
+  }
+  private static less(a: { f: number; order: number }, b: { f: number; order: number }) {
+    return a.f < b.f || (a.f === b.f && a.order < b.order);
+  }
+}
+
+/** Existing arrows, indexed by their exact line so A* can price overlaps and crossings. */
+class Occupancy {
+  horizontal = new Map<number, [number, number][]>();
+  vertical = new Map<number, [number, number][]>();
+  add(points: Point[]) {
+    for (const [a, b] of segments(points)) {
+      if (a.y === b.y && a.x !== b.x) this.push(this.horizontal, a.y, a.x, b.x);
+      else if (a.x === b.x && a.y !== b.y) this.push(this.vertical, a.x, a.y, b.y);
+    }
+  }
+  private push(map: Map<number, [number, number][]>, key: number, a: number, b: number) {
+    const list = map.get(key) ?? [];
+    list.push([Math.min(a, b), Math.max(a, b)]);
+    map.set(key, list);
+  }
+  /** Cost of moving from a to b (adjacent grid points on one axis). */
+  cost(a: Point, b: Point): number {
+    let cost = 0;
+    const along = a.y === b.y ? this.horizontal.get(a.y) : this.vertical.get(a.x);
+    const [lo, hi] =
+      a.y === b.y
+        ? [Math.min(a.x, b.x), Math.max(a.x, b.x)]
+        : [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+    for (const [s, e] of along ?? []) {
+      const shared = Math.min(hi, e) - Math.max(lo, s);
+      if (shared > 0) cost += SHARE + shared * 0.5;
+    }
+    // Crossing: a perpendicular arrow passing strictly through the point we arrive at.
+    const across = a.y === b.y ? this.vertical.get(b.x) : this.horizontal.get(b.y);
+    const at = a.y === b.y ? b.y : b.x;
+    for (const [s, e] of across ?? []) if (at > s && at < e) cost += CROSS;
+    return cost;
+  }
+}
+
+function search(
+  start: Point,
+  startDirection: number,
+  goal: Point,
+  goalDirection: number,
+  boxes: Rect[],
+  xsBase: number[],
+  ysBase: number[],
+  occupancy: Occupancy,
+): Point[] | null {
+  // Objects that contain an end (hand-overlapped objects) must not trap the search.
+  const blocking = boxes.filter(
+    (box) =>
+      !(
+        start.x > box.x &&
+        start.x < box.x + box.width &&
+        start.y > box.y &&
+        start.y < box.y + box.height
+      ) &&
+      !(
+        goal.x > box.x &&
+        goal.x < box.x + box.width &&
+        goal.y > box.y &&
+        goal.y < box.y + box.height
+      ),
+  );
+  const xs = [...new Set([...xsBase, start.x, goal.x])].sort((a, b) => a - b);
+  const ys = [...new Set([...ysBase, start.y, goal.y])].sort((a, b) => a - b);
+  const W = xs.length,
+    H = ys.length;
+  const rowBlocks = new Map<number, [number, number][]>();
+  const colBlocks = new Map<number, [number, number][]>();
+  const blocks = (horizontal: boolean, at: number) => {
+    const cache = horizontal ? rowBlocks : colBlocks;
+    let list = cache.get(at);
+    if (!list) {
+      list = blocking
+        .filter((box) =>
+          horizontal ? at > box.y && at < box.y + box.height : at > box.x && at < box.x + box.width,
+        )
+        .map((box) => (horizontal ? [box.x, box.x + box.width] : [box.y, box.y + box.height]));
+      cache.set(at, list);
+    }
+    return list;
+  };
+  const free = (a: Point, b: Point) => {
+    const horizontal = a.y === b.y;
+    const lo = horizontal ? Math.min(a.x, b.x) : Math.min(a.y, b.y);
+    const hi = horizontal ? Math.max(a.x, b.x) : Math.max(a.y, b.y);
+    return blocks(horizontal, horizontal ? a.y : a.x).every(([s, e]) => hi <= s || lo >= e);
+  };
+  const sx = xs.indexOf(start.x),
+    sy = ys.indexOf(start.y),
+    gx = xs.indexOf(goal.x),
+    gy = ys.indexOf(goal.y);
+  const index = (x: number, y: number, d: number) => (y * W + x) * 4 + d;
+  const best = new Float64Array(W * H * 4).fill(Infinity);
+  const parent = new Int32Array(W * H * 4).fill(-1);
+  const heap = new Heap();
+  let order = 0;
+  const h = (x: number, y: number) => Math.abs(xs[x]! - goal.x) + Math.abs(ys[y]! - goal.y);
+  const first = index(sx, sy, startDirection);
+  best[first] = 0;
+  heap.push({ f: h(sx, sy), order: order++, state: first });
+  let found = -1;
+  while (heap.size) {
+    const { state, f } = heap.pop();
+    const d = state & 3;
+    const cell = state >> 2;
+    const x = cell % W,
+      y = (cell - x) / W;
+    const g = best[state]!;
+    if (f - h(x, y) > g + 1e-6) continue;
+    if (x === gx && y === gy) {
+      // The turn into the port was already priced on arrival, so the first pop is optimal.
+      found = state;
+      break;
+    }
+    for (let nd = 0; nd < 4; nd++) {
+      if (nd === ((d + 2) & 3)) continue;
+      const nx = x + DX[nd]!,
+        ny = y + DY[nd]!;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const a = { x: xs[x]!, y: ys[y]! },
+        b = { x: xs[nx]!, y: ys[ny]! };
+      if (!free(a, b)) continue;
+      const step =
+        Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + (nd === d ? 0 : BEND) + occupancy.cost(a, b);
+      const next = index(nx, ny, nd);
+      const total = g + step + (nx === gx && ny === gy && nd !== goalDirection ? BEND : 0);
+      if (total < best[next]!) {
+        best[next] = total;
+        parent[next] = state;
+        heap.push({ f: total + h(nx, ny), order: order++, state: next });
+      }
+    }
+  }
+  if (found < 0) return null;
+  const path: Point[] = [];
+  for (let state = found; state >= 0; state = parent[state]!) {
+    const cell = state >> 2;
+    const x = cell % W;
+    path.push({ x: xs[x]!, y: ys[(cell - x) / W]! });
+    if (state === first) break;
+  }
+  return path.reverse();
+}
+
+function labelSize(lines: string[]) {
   const width =
     Math.ceil(
       Math.max(
@@ -160,20 +330,33 @@ function labelPosition(
         ),
       ) * 7.5,
     ) + 16;
-  const height = lines.length * 16 + 12;
+  return { width, height: lines.length * 16 + 12 };
+}
+
+function labelPosition(
+  points: Point[],
+  lines: string[],
+  obstacles: Rect[],
+  paths: Point[][],
+): Rect | null {
+  if (!lines.length) return null;
+  const { width, height } = labelSize(lines);
   const candidates: Rect[] = [];
-  for (const [a, b] of segments(points).sort((a, b) => length([...b]) - length([...a]))) {
-    for (const fraction of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+  // Prefer the middle of the longest runs, then move outwards along the arrow. A label may
+  // overhang a short run; it only has to stay clear of objects, other labels and lines.
+  for (const [a, b] of segments(points)
+    .slice(1, -1)
+    .sort((a, b) => length(b) - length(a))) {
+    for (const fraction of [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9]) {
       const x = a.x + (b.x - a.x) * fraction,
         y = a.y + (b.y - a.y) * fraction;
-      if (a.x === b.x && Math.abs(a.y - b.y) >= height + 16) {
-        for (const gap of [12, 28, 48])
+      for (const gap of [8, 20, 36, 56]) {
+        if (a.x === b.x)
           candidates.push(
             { x: x + gap, y: y - height / 2, width, height },
             { x: x - width - gap, y: y - height / 2, width, height },
           );
-      } else if (a.y === b.y && Math.abs(a.x - b.x) >= width + 16) {
-        for (const gap of [12, 28, 48])
+        else
           candidates.push(
             { x: x - width / 2, y: y + gap, width, height },
             { x: x - width / 2, y: y - height - gap, width, height },
@@ -184,231 +367,342 @@ function labelPosition(
   return (
     candidates.find(
       (rect) =>
-        !obstacles.some((node) => overlaps(rect, node)) &&
-        ![points, ...usedPaths].some((path) =>
-          segments(path).some(([a, b]) => crosses(a, b, inflate(rect, 5))),
-        ),
+        !obstacles.some((box) => overlaps(rect, box)) &&
+        !paths.some((path) => segments(path).some(([a, b]) => crosses(a, b, inflate(rect, 5)))),
     ) ?? null
   );
 }
 
-/** Orthogonal corridors outside full icon/text footprints. Labels have their own reserved boxes. */
+/** Shift an orthogonal polyline sideways by d, keeping every corner square. */
+function offsetPolyline(points: Point[], d: number): Point[] {
+  const normals = segments(points).map(([a, b]) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: (-(b.y - a.y) / len) * d, y: ((b.x - a.x) / len) * d };
+  });
+  return points.map((p, i) => {
+    const before = normals[i - 1],
+      after = normals[i];
+    if (!before) return { x: p.x + after!.x, y: p.y + after!.y };
+    if (!after) return { x: p.x + before.x, y: p.y + before.y };
+    const collinear = before.x === after.x && before.y === after.y;
+    return collinear
+      ? { x: p.x + after.x, y: p.y + after.y }
+      : { x: p.x + before.x + after.x, y: p.y + before.y + after.y };
+  });
+}
+
+/**
+ * Separate arrows that share a line into parallel lanes. Only segments between the two
+ * stubs move, and only perpendicular to themselves, so every arrow stays orthogonal and
+ * attached to its ports. A nudge that would touch an object is reduced or skipped.
+ */
+function nudge(
+  routes: { points: Point[]; stubs: [number, number]; fixed?: boolean }[],
+  boxes: Footprint[],
+  ends: string[][],
+) {
+  type Ref = {
+    route: number;
+    i: number;
+    vertical: boolean;
+    at: number;
+    lo: number;
+    hi: number;
+    key: number;
+  };
+  const refs: Ref[] = [];
+  routes.forEach((route, r) => {
+    if (route.fixed) return;
+    const { points } = route;
+    const [from, to] = route.stubs;
+    for (let i = from; i < to; i++) {
+      const a = points[i]!,
+        b = points[i + 1]!;
+      const vertical = a.x === b.x;
+      // A segment touching a stub exit may only slide along that stub's direction.
+      const stubBefore = i === from ? [points[i - 1]!, a] : null;
+      const stubAfter = i + 1 === to ? [b, points[i + 2]!] : null;
+      const perpendicular = (s: Point[] | null) =>
+        !s || (vertical ? s[0]!.y === s[1]!.y : s[0]!.x === s[1]!.x);
+      if (!perpendicular(stubBefore) || !perpendicular(stubAfter)) continue;
+      const prev = points[i - 1]!,
+        next = points[i + 2]!;
+      refs.push({
+        route: r,
+        i,
+        vertical,
+        at: vertical ? a.x : a.y,
+        lo: vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x),
+        hi: vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x),
+        key: vertical ? (prev.x + next.x) / 2 : (prev.y + next.y) / 2,
+      });
+    }
+  });
+  const groups = new Map<string, Ref[]>();
+  for (const ref of refs) {
+    const id = `${ref.vertical ? 'v' : 'h'}${ref.at}`;
+    groups.set(id, [...(groups.get(id) ?? []), ref]);
+  }
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.lo - b.lo);
+    // Cluster segments whose ranges overlap on this line.
+    const clusters: Ref[][] = [];
+    let end = -Infinity;
+    for (const ref of group) {
+      if (ref.lo < end && clusters.length) clusters[clusters.length - 1]!.push(ref);
+      else clusters.push([ref]);
+      end = Math.max(end, ref.hi);
+    }
+    for (const cluster of clusters) {
+      if (cluster.length < 2) continue;
+      cluster.sort((a, b) => a.key - b.key || a.route - b.route);
+      cluster.forEach((ref, j) => {
+        const offset = (j - (cluster.length - 1) / 2) * LANE;
+        if (!offset) return;
+        const points = routes[ref.route]!.points;
+        for (const scale of [1, 0.5]) {
+          const moved = points.map((p, k) =>
+            k === ref.i || k === ref.i + 1
+              ? ref.vertical
+                ? { x: p.x + offset * scale, y: p.y }
+                : { x: p.x, y: p.y + offset * scale }
+              : p,
+          );
+          const touched = segments(moved).slice(Math.max(0, ref.i - 1), ref.i + 2);
+          const own = ends[ref.route]!;
+          const clear = touched.every(([a, b]) =>
+            boxes.every((box) => {
+              const rect = own.includes(box.id)
+                ? { ...box, y: box.y + 90, height: box.height - 90 }
+                : box;
+              return !crosses(a, b, rect);
+            }),
+          );
+          if (clear) {
+            routes[ref.route]!.points = moved;
+            break;
+          }
+        }
+      });
+    }
+  }
+}
+
+/** Orthogonal arrows that route around objects with few turns, then share corridors as lanes. */
 export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
-  const rectangles = board.nodes.map((node) => ({
+  const boxes: Footprint[] = board.nodes.map((node) => ({
+    id: node.id,
     ...(board.positions[node.id] ?? { x: 0, y: 0 }),
     width: NODE_WIDTH,
     height: nodeHeight(node),
   }));
-  const occupiedLabels: Rect[] = [];
-  const nodeObstacles = rectangles.map((rect) => inflate(rect, 12));
-  const usedPaths: Point[][] = [];
-  const result: Record<string, RoutedEdge> = {};
-  const minX = Math.min(...rectangles.map((r) => r.x));
-  const maxX = Math.max(...rectangles.map((r) => r.x + r.width));
-  const attachments = new Map<string, string[]>();
-  for (const edge of [...board.edges].sort((a, b) => a.id.localeCompare(b.id))) {
-    const ports = edgePorts(board, edge);
+  const byId = new Map(boxes.map((box) => [box.id, box]));
+  const padded = boxes.map((box) => inflate(box, PAD));
+  // Candidate corridors: object edges plus the middle of every gap between them.
+  const axis = (values: number[], margin: number) => {
+    const sorted = [...new Set(values)].sort((a, b) => a - b);
+    const mids = sorted.slice(1).map((v, i) => (v + sorted[i]!) / 2);
+    return [...new Set([...sorted, ...mids, sorted[0]! - margin, sorted.at(-1)! + margin])];
+  };
+  const xsBase = boxes.length
+    ? axis(
+        padded.flatMap((r) => [r.x, r.x + r.width]),
+        48,
+      )
+    : [];
+  const ysBase = boxes.length
+    ? axis(
+        padded.flatMap((r) => [r.y, r.y + r.height]),
+        48,
+      )
+    : [];
+
+  // Order arrows on each side by where their other end is, so fans never cross at the port.
+  const ports = new Map(board.edges.map((edge) => [edge.id, edgePorts(board, edge)]));
+  // A reply drawn as a parallel twin of its lead: same sides, mirrored direction.
+  const twins = new Map<string, string>();
+  for (const edge of board.edges) {
+    const lead = replyLead(board, edge);
+    const p = ports.get(edge.id)!,
+      q = lead && ports.get(lead.id);
+    if (lead && q && p.source === q.target && p.target === q.source) twins.set(lead.id, edge.id);
+  }
+  const twinIds = new Set(twins.values());
+  const attachments = new Map<string, { id: string; key: number }[]>();
+  for (const edge of board.edges) {
+    if (twinIds.has(edge.id)) continue;
+    const p = ports.get(edge.id)!;
     for (const end of ['source', 'target'] as const) {
-      const key = `${edge[end]}:${ports[end]}`;
-      attachments.set(key, [...(attachments.get(key) ?? []), `${edge.id}:${end}`]);
+      const other = byId.get(edge[end === 'source' ? 'target' : 'source'])!;
+      const side = p[end];
+      if (!other) continue;
+      const key = side === 'left' || side === 'right' ? other.y : other.x;
+      const list = attachments.get(`${edge[end]}:${side}`) ?? [];
+      list.push({ id: `${edge.id}:${end}`, key: key + (end === 'source' ? 0.1 : 0) });
+      attachments.set(`${edge[end]}:${side}`, list);
     }
   }
-  // Stable topology order: a one-pixel drag must not reshuffle every other lane.
-  const edges = [...board.edges].sort((a, b) => {
-    const distance = (edge: typeof a) => {
-      return Math.abs(
-        board.nodes.findIndex((node) => node.id === edge.source) -
-          board.nodes.findIndex((node) => node.id === edge.target),
-      );
-    };
-    return distance(a) - distance(b) || a.id.localeCompare(b.id);
-  });
-  for (const edge of edges) {
-    const from = board.positions[edge.source],
-      to = board.positions[edge.target];
-    if (!from || !to) continue;
-    const ports = edgePorts(board, edge);
-    const stub = (end: 'source' | 'target', position: Point) => {
-      const peers = attachments.get(`${edge[end]}:${ports[end]}`)!;
-      return attachment(
-        position,
-        ports[end],
-        peers.indexOf(`${edge.id}:${end}`),
-        peers.length,
-        rectangles.filter((_, i) => board.nodes[i]!.id !== edge[end]),
-      );
-    };
-    const sourceStub = stub('source', from);
-    const targetStub = stub('target', to);
-    const start = sourceStub[sourceStub.length - 1]!,
-      end = targetStub[targetStub.length - 1]!;
-    const candidates: Point[][] = [];
-    const add = (middle: Point[]) =>
-      candidates.push([...sourceStub, ...middle, ...[...targetStub].reverse()]);
-    add([{ x: start.x, y: end.y }]);
-    add([{ x: end.x, y: start.y }]);
-    add([
-      { x: start.x, y: (start.y + end.y) / 2 },
-      { x: end.x, y: (start.y + end.y) / 2 },
-    ]);
-    const lanes = new Set([start.x, end.x, (start.x + end.x) / 2]);
-    rectangles.forEach((rect) => {
-      lanes.add(rect.x - 40);
-      lanes.add(rect.x + rect.width + 40);
-    });
-    for (let lane = 0; lane < Math.min(24, Math.max(8, board.edges.length)); lane++) {
-      lanes.add(minX - 64 - lane * 40);
-      lanes.add(maxX + 64 + lane * 40);
-    }
-    for (const x of lanes)
-      add([
-        { x, y: start.y },
-        { x, y: end.y },
-      ]);
-    // Escape a row before crossing it: a single L/Z can cut through a sibling
-    // when several actors occupy the same layer (e.g. DNS servers).
-    for (const x of lanes) {
-      for (const y of [
-        from.y - 32,
-        from.y + nodeHeight(board.nodes.find((node) => node.id === edge.source)!) + 32,
-      ])
-        add([
-          { x: start.x, y },
-          { x, y },
-          { x, y: end.y },
-        ]);
-      for (const y of [
-        to.y - 32,
-        to.y + nodeHeight(board.nodes.find((node) => node.id === edge.target)!) + 32,
-      ])
-        add([
-          { x, y: start.y },
-          { x, y },
-          { x: end.x, y },
-        ]);
-    }
-    if (['left', 'right'].includes(ports.source) || ['left', 'right'].includes(ports.target)) {
-      const rows = new Set(rectangles.flatMap((rect) => [rect.y - 48, rect.y + rect.height + 48]));
-      for (const y of rows)
-        add([
-          { x: start.x, y },
-          { x: end.x, y },
-        ]);
-    }
-    const obstacles = [...nodeObstacles, ...occupiedLabels.map((rect) => inflate(rect, 8))];
-    const lines = wrapLabel(connectionLabel(edge), 24);
-    let best: { score: number; points: Point[]; label: Rect | null } | undefined;
-    for (const points of candidates) {
-      // The first/last stubs intentionally connect the icon's side through its own footprint.
-      const middle = points.slice(sourceStub.length - 1, points.length - targetStub.length + 1);
-      const nodeCollisions = segments(middle).reduce(
-        (n, [a, b]) => n + nodeObstacles.filter((rect) => crosses(a, b, rect)).length,
-        0,
-      );
-      const labelCollisions = segments(middle).reduce(
-        (n, [a, b]) => n + occupiedLabels.filter((rect) => crosses(a, b, inflate(rect, 8))).length,
-        0,
-      );
-      const actualCollisions = segments(middle).reduce(
-        (n, [a, b]) => n + rectangles.filter((rect) => crosses(a, b, rect)).length,
-        0,
-      );
-      const collisionCost = actualCollisions * 1e15 + nodeCollisions * 1e12 + labelCollisions * 1e8;
-      if (best && collisionCost > best.score) continue;
-      const clean = simplify(points);
-      const label = labelPosition(clean, lines, obstacles, usedPaths);
-      const shared = segments(clean).reduce(
-        (sum, [a, b]) =>
-          sum +
-          usedPaths.reduce(
-            (n, path) =>
-              n +
-              segments(path).filter(([c, d]) => {
-                if (a.x === b.x && c.x === d.x && a.x === c.x)
-                  return (
-                    Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) -
-                      Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)) >
-                    16
-                  );
-                if (a.y === b.y && c.y === d.y && a.y === c.y)
-                  return (
-                    Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) -
-                      Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) >
-                    16
-                  );
-                return false;
-              }).length,
-            0,
-          ),
-        0,
-      );
-      const score =
-        collisionCost +
-        (lines.length && !label ? 1e6 : 0) +
-        shared * 2e6 +
-        segments(clean).reduce(
-          (sum, [a, b]) =>
-            sum +
-            usedPaths.reduce(
-              (total, path) =>
-                total +
-                segments(path).filter(([c, d]) => {
-                  if (a.x === b.x && c.y === d.y)
-                    return (
-                      a.x > Math.min(c.x, d.x) &&
-                      a.x < Math.max(c.x, d.x) &&
-                      c.y > Math.min(a.y, b.y) &&
-                      c.y < Math.max(a.y, b.y)
-                    );
-                  if (a.y === b.y && c.x === d.x)
-                    return (
-                      c.x > Math.min(a.x, b.x) &&
-                      c.x < Math.max(a.x, b.x) &&
-                      a.y > Math.min(c.y, d.y) &&
-                      a.y < Math.max(c.y, d.y)
-                    );
-                  return false;
-                }).length,
-              0,
+  for (const list of attachments.values())
+    list.sort((a, b) => a.key - b.key || a.id.localeCompare(b.id));
+
+  // Stable order: forward flow first by topology distance, returns last. A one-pixel drag
+  // never reshuffles which arrow claims a corridor.
+  const indexOf = new Map(board.nodes.map((node, i) => [node.id, i]));
+  const edges = [...board.edges]
+    .filter((edge) => byId.has(edge.source) && byId.has(edge.target) && !twinIds.has(edge.id))
+    .sort(
+      (a, b) =>
+        Number(isReturnEdge(a)) - Number(isReturnEdge(b)) ||
+        Math.abs(indexOf.get(a.source)! - indexOf.get(a.target)!) -
+          Math.abs(indexOf.get(b.source)! - indexOf.get(b.target)!) ||
+        a.id.localeCompare(b.id),
+    );
+  const occupancy = new Occupancy();
+  const routed: { id: string; points: Point[]; stubs: [number, number]; fixed?: boolean }[] = [];
+  const clearOf = (points: Point[], ends: string[]) =>
+    segments(points)
+      .slice(1, -1)
+      .every(([a, b]) =>
+        boxes.every(
+          (box) =>
+            !crosses(
+              a,
+              b,
+              ends.includes(box.id) ? { ...box, y: box.y + 90, height: box.height - 90 } : box,
             ),
-          0,
-        ) *
-          2500 +
-        length(clean) +
-        clean.length * 15;
-      if (!best || score < best.score) best = { score, points: clean, label };
+        ),
+      );
+  for (const edge of edges) {
+    const p = ports.get(edge.id)!;
+    const stubFor = (end: 'source' | 'target') => {
+      const peers = attachments.get(`${edge[end]}:${p[end]}`)!;
+      return stub(
+        byId.get(edge[end])!,
+        p[end],
+        peers.findIndex((peer) => peer.id === `${edge.id}:${end}`),
+        peers.length,
+      );
+    };
+    const from = stubFor('source');
+    const to = stubFor('target');
+    const start = from[2]!,
+      goal = to[2]!;
+    const startDirection = outward(p.source);
+    const goalDirection = (outward(p.target) + 2) & 3;
+    const middle = search(
+      start,
+      startDirection,
+      goal,
+      goalDirection,
+      padded,
+      xsBase,
+      ysBase,
+      occupancy,
+    ) ?? [start, { x: goal.x, y: start.y }, goal];
+    const inner = simplify(middle);
+    const points = [from[0]!, from[1]!, ...inner, to[1]!, to[0]!];
+    occupancy.add(inner);
+    const twinId = twins.get(edge.id);
+    const twin = twinId && board.edges.find((item) => item.id === twinId);
+    if (!twin) {
+      routed.push({ id: edge.id, points, stubs: [2, points.length - 3] });
+      continue;
     }
-    const chosen = best!;
+    // Parallel copies never cross each other, so a request and its reply read as one channel.
+    const body = points.slice(1, -1);
+    const copy = [LANE, -LANE]
+      .map((d) => [points.at(-1)!, ...offsetPolyline(body, d).reverse(), points[0]!])
+      .find((candidate) => clearOf(candidate, [edge.source, edge.target]));
+    if (copy) {
+      routed.push({ id: edge.id, points, stubs: [2, points.length - 3], fixed: true });
+      routed.push({ id: twin.id, points: copy, stubs: [2, copy.length - 3], fixed: true });
+      occupancy.add(copy.slice(1, -1));
+      continue;
+    }
+    routed.push({ id: edge.id, points, stubs: [2, points.length - 3] });
+    // No room for a twin lane: the reply gets its own route.
+    const tp = ports.get(twin.id)!;
+    const back = [
+      stub(byId.get(twin.source)!, tp.source, 0, 1),
+      stub(byId.get(twin.target)!, tp.target, 0, 1),
+    ];
+    const route = search(
+      back[0]![2]!,
+      outward(tp.source),
+      back[1]![2]!,
+      (outward(tp.target) + 2) & 3,
+      padded,
+      xsBase,
+      ysBase,
+      occupancy,
+    ) ?? [back[0]![2]!, back[1]![2]!];
+    const reply = [back[0]![0]!, back[0]![1]!, ...simplify(route), back[1]![1]!, back[1]![0]!];
+    occupancy.add(simplify(route));
+    routed.push({ id: twin.id, points: reply, stubs: [2, reply.length - 3] });
+  }
+  nudge(
+    routed,
+    boxes,
+    routed.map((route) => {
+      const edge = board.edges.find((item) => item.id === route.id)!;
+      return [edge.source, edge.target];
+    }),
+  );
+
+  // Labels are placed once every arrow is final, so none can land on a later line.
+  const paths = routed.map((route) => route.points);
+  const placed: Rect[] = [];
+  const result: Record<string, RoutedEdge> = {};
+  const nodeObstacles = boxes.map((box) => inflate(box, 6));
+  for (const route of routed) {
+    const edge = board.edges.find((item) => item.id === route.id)!;
+    const points = route.points.filter(
+      (p, i) => !i || p.x !== route.points[i - 1]!.x || p.y !== route.points[i - 1]!.y,
+    );
+    const lines = wrapLabel(connectionLabel(edge), 24);
+    let label = labelPosition(
+      points,
+      lines,
+      [...nodeObstacles, ...placed.map((r) => inflate(r, 6))],
+      paths,
+    );
     let callout: string | undefined;
-    // Dense routes must not silently lose text. Use an external callout only
-    // when no adjacent label box fits; the dotted leader identifies its edge.
-    if (!chosen.label && lines.length) {
-      const width =
-        Math.max(
-          ...lines.map((line) =>
-            [...line].reduce((n, c) => n + (c.charCodeAt(0) > 255 ? 15 : 7.5), 0),
-          ),
-        ) + 16;
-      const height = lines.length * 16 + 12;
-      const [a, b] = segments(chosen.points).sort((a, b) => length([...b]) - length([...a]))[0]!;
+    // Dense boards must not silently lose text: fall back to a dotted leader to a free margin.
+    if (!label && lines.length) {
+      const { width, height } = labelSize(lines);
+      const [a, b] = segments(points).sort((a, b) => length(b) - length(a))[0]!;
       const anchor = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const left =
-        Math.min(
-          ...obstacles.map((box) => box.x),
-          ...usedPaths.flat().map((p) => p.x),
-          ...chosen.points.map((p) => p.x),
-        ) -
-        width -
-        24;
-      chosen.label = { x: left, y: anchor.y - height / 2, width, height };
-      callout = `M${anchor.x},${anchor.y} L${left + width},${anchor.y}`;
+      const free = (rect: Rect) =>
+        !nodeObstacles.some((box) => overlaps(rect, box)) &&
+        !placed.some((r) => overlaps(inflate(r, 6), rect)) &&
+        !paths.some((path) => segments(path).some(([p, q]) => crosses(p, q, inflate(rect, 5))));
+      let spot: Rect | undefined;
+      for (let radius = 60; !spot && radius <= 600; radius += 30)
+        for (let step = 0; step < 16 && !spot; step++) {
+          const angle = (step / 16) * Math.PI * 2;
+          const rect = {
+            x: anchor.x + Math.cos(angle) * radius - width / 2,
+            y: anchor.y + Math.sin(angle) * radius - height / 2,
+            width,
+            height,
+          };
+          if (free(rect)) spot = rect;
+        }
+      label = spot ?? {
+        x: Math.min(...boxes.map((box) => box.x), ...paths.flat().map((p) => p.x)) - width - 24,
+        y: anchor.y - height / 2,
+        width,
+        height,
+      };
+      const cx = Math.max(label.x, Math.min(anchor.x, label.x + label.width));
+      const cy = Math.max(label.y, Math.min(anchor.y, label.y + label.height));
+      callout = `M${anchor.x},${anchor.y} L${cx},${cy}`;
     }
-    usedPaths.push(chosen.points);
-    if (chosen.label) occupiedLabels.push(chosen.label);
+    if (label) placed.push(label);
     result[edge.id] = {
-      points: chosen.points,
-      path: roundedPath(chosen.points),
-      label: chosen.label,
+      points,
+      path: roundedPath(points),
+      label,
       lines,
       ...(callout ? { callout } : {}),
     };

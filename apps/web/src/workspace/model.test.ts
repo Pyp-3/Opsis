@@ -36,7 +36,9 @@ describe('2D workspace documents', () => {
     const svg = boardSvg(board);
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&lt;script&gt;');
-    expect(svg).toContain('marker-end="url(#arrow-flow)"');
-    expect(svg).toContain('id="arrow-response"');
+    // Every arrow's head references a marker drawn in its own colour.
+    const used = [...svg.matchAll(/marker-end="url\(#(arrow-[0-9a-f]{6})\)"/g)].map((m) => m[1]);
+    expect(used.length).toBe(board.edges.length);
+    for (const id of new Set(used)) expect(svg).toContain(`id="${id}"`);
   });
 });
