@@ -58,32 +58,34 @@ test('board manager stays usable on a narrow mobile viewport and removes the sid
   await page.reload();
   await page.getByRole('button', { name: 'Show sidebar' }).click();
   await expect(page.getByLabel('Connection color legend')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Manage boards' }).click();
-  await expect(page.getByRole('dialog', { name: 'Your boards' })).toBeVisible();
+  await page.getByRole('link', { name: 'Manage boards' }).click();
+  await expect(page).toHaveURL(/\/boards$/);
+  await expect(page.getByRole('heading', { name: 'Your boards', level: 1 })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByLabel('New board name').fill(`Mobile ${Date.now()}`);
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'Your boards' })).toHaveCount(0);
 });
 
 test('manager creates, renames, cancels deletion, deletes and never resurrects a board', async ({
   page,
 }) => {
   const name = `Managed ${Date.now()}`;
-  await page.getByRole('button', { name: 'Manage boards' }).click();
+  await page.getByRole('link', { name: 'Manage boards' }).click();
   await page.getByLabel('New board name').fill(name);
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect(page.getByLabel('Board name')).toHaveValue(name);
   await saved(page);
   expect((await snapshot(page)).board.nodes).toHaveLength(0);
-  await expect(page.getByRole('button', { name: 'Start walkthrough' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Play the process' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Add a concept' }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
   await page.getByRole('button', { name: 'Close details' }).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(0);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
-  await page.getByRole('button', { name: 'Manage boards' }).click();
+  await page.getByRole('link', { name: 'Manage boards' }).click();
   await page.getByRole('button', { name: `Rename ${name}`, exact: true }).click();
   await page.getByLabel('Rename board', { exact: true }).fill(`${name} renamed`);
   await page.getByRole('button', { name: 'Save name' }).click();
@@ -100,9 +102,9 @@ test('manager creates, renames, cancels deletion, deletes and never resurrects a
   await expect(
     page.getByRole('button', { name: `Delete ${name} renamed`, exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close board manager' }).click();
+  await page.getByRole('link', { name: 'Back to workspace' }).click();
   await page.reload();
-  await expect(page.getByText('Understand it by seeing it.')).toBeVisible();
+  await expect(page.getByText('Understand anything by seeing it.')).toBeVisible();
   expect((await page.request.get('/v1/boards')).ok()).toBe(true);
   await expect(
     page

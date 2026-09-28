@@ -27,8 +27,10 @@ import {
   GitBranch,
   ImageIcon,
   LoaderCircle,
-  Mail,
+  MessageSquareText,
+  Network,
   PanelLeft,
+  Play,
   Pencil,
   SlidersHorizontal,
   Plus,
@@ -45,11 +47,11 @@ import {
   ArrowDownToLine,
 } from 'lucide-react';
 import {
-  BOARD_ICONS,
   BOARD_MODEL_CHOICES,
   BoardAgentsSchema,
   BoardModelSettingsSchema,
   BoardEdgeKindSchema,
+  EDGE_COLORS,
   EMAIL_DEMO,
   DNS_DEMO,
   type BoardGraph,
@@ -59,14 +61,24 @@ import { boardIcons } from './icons';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
-import { connectBoard, edgePorts, PORT_OFFSETS, connectionStyle } from './connections';
+import {
+  connectBoard,
+  edgePorts,
+  PORT_OFFSETS,
+  connectionStyle,
+  EDGE_COLOR_VALUES,
+} from './connections';
 import { MODEL_SETTINGS_KEY, readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
 import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
-import { Walkthrough } from './Walkthrough';
+import { ProcessPlayer } from './ProcessPlayer';
+import { IconPicker } from './IconPicker';
+import { BoardsPage } from './BoardsPage';
+import { navigate, usePath } from '../router';
+import { revealed, type Beat } from './playback';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { routeBoard } from './routing';
 import { RoutedConnection } from './RoutedConnection';
@@ -152,14 +164,21 @@ function BoardWorkspace() {
   const [prompt, setPrompt] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
-  const [iconSearch, setIconSearch] = useState('');
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [playback, setPlayback] = useState<{
+    nodes: Set<string>;
+    edges: Set<string>;
+    nodeId: string | null;
+    edgeId: string | null;
+  } | null>(null);
   const exportMenu = useRef<HTMLDetailsElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
+  const path = usePath();
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -167,6 +186,8 @@ function BoardWorkspace() {
     setAgent(boardRef.current?.agent ?? 'claude');
     setSelected(null);
     setSelectedEdge(null);
+    setPlayerOpen(false);
+    setPlayback(null);
   }, [library.activeId, boardRef]);
 
   useEffect(() => {
@@ -311,7 +332,6 @@ function BoardWorkspace() {
     setSelected(id);
     setSelectedEdge(null);
     setShowIcons(false);
-    setIconSearch('');
     const point = boardRef.current?.positions[id];
     if (point) {
       // Sidebar/walkthrough selections can be several screens below the current view.
@@ -323,6 +343,40 @@ function BoardWorkspace() {
       });
     }
   };
+  const followBeat = useCallback(
+    (beats: Beat[], index: number) => {
+      const beat = beats[index]!;
+      // The opening overview shows the whole board; later steps reveal it progressively.
+      setPlayback(
+        beat.nodeId
+          ? { ...revealed(beats, index), nodeId: beat.nodeId, edgeId: beat.edgeId }
+          : null,
+      );
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      const point = beat.nodeId ? boardRef.current?.positions[beat.nodeId] : null;
+      if (!point) {
+        void flow.fitView({ padding: 0.22, duration: still ? 0 : 500, maxZoom: 1.1 });
+        return;
+      }
+      // Keep the current step above the player bar that covers the bottom of the canvas.
+      void flow.setCenter(point.x + NODE_WIDTH / 2, point.y + 130, {
+        zoom: Math.max(0.85, flow.getZoom()),
+        duration: still ? 0 : 650,
+      });
+    },
+    [flow, boardRef],
+  );
+  const openBoard = async (id: string) => {
+    if (id !== library.activeId && !(await library.open(id))) return false;
+    setSelected(null);
+    setSelectedEdge(null);
+    setAgent(boardRef.current?.agent ?? agent);
+    return true;
+  };
+  const closePlayer = useCallback(() => {
+    setPlayerOpen(false);
+    setPlayback(null);
+  }, []);
   const activeNode = board?.nodes.find((node) => node.id === selected);
   const activeEdge = board?.edges.find((edge) => edge.id === selectedEdge);
   const status = agents.find((entry) => entry.id === agent);
@@ -339,8 +393,21 @@ function BoardWorkspace() {
         type: 'concept',
         position: board.positions[node.id] ?? { x: 0, y: index * 200 },
         selected: selected === node.id,
+        ...(playback
+          ? {
+              className:
+                playback.nodeId === node.id
+                  ? 'is-current'
+                  : playback.nodes.has(node.id)
+                    ? ''
+                    : 'is-dimmed',
+            }
+          : {}),
         width: NODE_WIDTH,
         height: nodeHeight(node),
+        // Supplying the known footprint keeps React Flow from treating every dragged
+        // position update as an unmeasured node, which unmounted all edges for a frame.
+        measured: { width: NODE_WIDTH, height: nodeHeight(node) },
         ariaLabel: `${node.label}. ${node.summary}`,
         data: {
           label: node.label,
@@ -351,7 +418,7 @@ function BoardWorkspace() {
           confidence: node.confidence,
         },
       })) ?? [],
-    [board, selected],
+    [board, selected, playback],
   );
   const routes = useMemo(() => (board ? routeBoard(board) : {}), [board]);
   const edges = useMemo(
@@ -364,6 +431,16 @@ function BoardWorkspace() {
         targetHandle: edgePorts(board, edge).target,
         interactionWidth: 24,
         selected: selectedEdge === edge.id,
+        ...(playback
+          ? {
+              className:
+                playback.edgeId === edge.id
+                  ? 'is-current'
+                  : playback.edges.has(edge.id)
+                    ? ''
+                    : 'is-dimmed',
+            }
+          : {}),
         markerEnd: {
           type: MarkerType.ArrowClosed,
           color: connectionStyle(edge).color,
@@ -381,7 +458,7 @@ function BoardWorkspace() {
         labelBgStyle: { fill: '#153b65', fillOpacity: 0.95 },
         labelBgPadding: [7, 5] as [number, number],
       })) ?? [],
-    [board, selectedEdge, routes],
+    [board, selectedEdge, routes, playback],
   );
   const changePositions = (changes: NodeChange<DiagramNode>[]) => {
     if (busy) return;
@@ -407,6 +484,16 @@ function BoardWorkspace() {
       });
   };
 
+  if (path === '/boards')
+    return (
+      <BoardsPage
+        library={library}
+        onBack={() => navigate('/')}
+        onOpen={async (id) => {
+          if (await openBoard(id)) navigate('/');
+        }}
+      />
+    );
   return (
     <div className={`workspace ${railOpen ? 'rail-open' : 'rail-closed'}`}>
       <WorkspaceSidebar
@@ -425,13 +512,8 @@ function BoardWorkspace() {
           setPrompt('');
           setError('');
         }}
-        onOpen={async (id) => {
-          if (await library.open(id)) {
-            setSelected(null);
-            setSelectedEdge(null);
-            setAgent(boardRef.current?.agent ?? agent);
-          }
-        }}
+        onOpen={openBoard}
+        onManage={() => navigate('/boards')}
       />
 
       <main className="workspace-main">
@@ -541,14 +623,22 @@ function BoardWorkspace() {
           }}
         />
         <div className="canvas-and-detail">
-          <section className="blueprint" aria-label="Interactive diagram canvas">
-            {board && (
-              <Walkthrough
-                key={library.activeId}
-                board={board}
-                onSelect={selectNode}
+          <section
+            className={`blueprint ${playerOpen ? 'is-playing' : ''}`}
+            aria-label="Interactive diagram canvas"
+          >
+            {board && !playerOpen && board.nodes.length > 0 && (
+              <button
+                className="play-process"
                 disabled={busy}
-              />
+                onClick={() => {
+                  setSelected(null);
+                  setSelectedEdge(null);
+                  setPlayerOpen(true);
+                }}
+              >
+                <Play size={13} fill="currentColor" /> Play the process
+              </button>
             )}
             <ReactFlow
               nodes={nodes}
@@ -613,14 +703,16 @@ function BoardWorkspace() {
                 lineWidth={1}
               />
             </ReactFlow>
-            <div className="canvas-heading">
-              <span className="canvas-kicker">
-                <span />
-                {board ? 'THE BIG PICTURE' : 'ROOM TO THINK'}
-              </span>
-              <h2>{board?.title ?? 'Every idea has a shape.'}</h2>
-              <p>{board?.description ?? 'Let’s find yours.'}</p>
-            </div>
+            {board && (
+              <div className="canvas-heading">
+                <span className="canvas-kicker">
+                  <span />
+                  THE BIG PICTURE
+                </span>
+                <h2>{board.title}</h2>
+                <p>{board.description}</p>
+              </div>
+            )}
             <div className="canvas-tools" role="toolbar" aria-label="Canvas tools">
               <button
                 aria-label="Undo"
@@ -710,29 +802,86 @@ function BoardWorkspace() {
             </div>
             {!board && (
               <div className="canvas-welcome">
-                <div className="welcome-symbols">
-                  <span>
-                    <Mail size={28} />
-                  </span>
-                  <i />
-                  <span>
-                    <boardIcons.server size={28} />
-                  </span>
-                  <i />
-                  <span>
-                    <boardIcons.inbox size={28} />
-                  </span>
-                </div>
-                <h3>Understand it by seeing it.</h3>
+                <span className="welcome-kicker">Visual explanations</span>
+                <h3>Understand anything by seeing it.</h3>
                 <p>
-                  Ask a question. Your agent connects the dots.
-                  <br />
-                  Click any concept to look a little closer.
+                  Ask a question and your agent draws the objects involved and how they connect.
+                  Then explore each part, rearrange it, or play it back as a narrated walkthrough.
                 </p>
-                <button onClick={() => void demo()} disabled={busy}>
-                  Explore the email example <ArrowRight size={15} />
-                </button>
-                <small>INTERACTIVE DEMO · NO AGENT REQUIRED</small>
+                <ol className="welcome-steps">
+                  <li>
+                    <span>
+                      <MessageSquareText size={18} />
+                    </span>
+                    <strong>Ask</strong>
+                    <small>Any process, system or idea</small>
+                  </li>
+                  <li>
+                    <span>
+                      <Network size={18} />
+                    </span>
+                    <strong>See</strong>
+                    <small>Objects, arrows and labels, laid out for you</small>
+                  </li>
+                  <li>
+                    <span>
+                      <Play size={18} />
+                    </span>
+                    <strong>Play</strong>
+                    <small>Step through it, with a British narrator</small>
+                  </li>
+                </ol>
+                <div className="welcome-examples">
+                  {(
+                    [
+                      [
+                        'An email’s journey',
+                        'From outbox to inbox in five steps',
+                        EMAIL_DEMO,
+                        'email',
+                      ],
+                      ['DNS lookups', 'Requests and replies between servers', DNS_DEMO, 'DNS'],
+                    ] as const
+                  ).map(([title, detail, graph, topic]) => (
+                    <button
+                      key={title}
+                      aria-label={`Explore the ${topic} example`}
+                      disabled={busy}
+                      onClick={() => void demo(graph)}
+                    >
+                      <span className="welcome-example-icons" aria-hidden>
+                        {graph.nodes.slice(0, 4).map((node) => {
+                          const Icon = boardIcons[node.icon];
+                          return <Icon key={node.id} size={18} />;
+                        })}
+                      </span>
+                      <strong>{title}</strong>
+                      <small>{detail}</small>
+                      <span className="welcome-open">
+                        Open example <ArrowRight size={14} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="welcome-prompts">
+                  <span>Or try asking</span>
+                  {[
+                    'How does a vaccine train the immune system?',
+                    'What happens when I tap my card to pay?',
+                    'How does the water cycle work?',
+                  ].map((question) => (
+                    <button
+                      key={question}
+                      disabled={busy}
+                      onClick={() => {
+                        setPrompt(question);
+                        promptInput.current?.focus();
+                      }}
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             <span className="canvas-coordinate">
@@ -773,173 +922,187 @@ function BoardWorkspace() {
                   </button>
                 </div>
               )}
-              {board && !busy && (
-                <div className="followup-chips">
-                  {agent !== 'demo' && (
-                    <button
-                      onClick={() => {
-                        setPrompt(
-                          'Audit the actual interactions in this diagram. Add genuine response, acknowledgment, feedback or retry edges to their actual recipients, with explicit kinds and labels. Do not invent reverse flows. Preserve unrelated content and IDs; explain any necessary correction to existing relationships.',
-                        );
-                        promptInput.current?.focus();
-                      }}
-                    >
-                      Show return paths
-                    </button>
+              {board && playerOpen ? (
+                <ProcessPlayer
+                  key={library.activeId}
+                  board={board}
+                  disabled={busy}
+                  onBeat={followBeat}
+                  onClose={closePlayer}
+                />
+              ) : (
+                <>
+                  {board && !busy && (
+                    <div className="followup-chips">
+                      {agent !== 'demo' && (
+                        <button
+                          onClick={() => {
+                            setPrompt(
+                              'Audit the actual interactions in this diagram. Add genuine response, acknowledgment, feedback or retry edges to their actual recipients, with explicit kinds and labels. Do not invent reverse flows. Preserve unrelated content and IDs; explain any necessary correction to existing relationships.',
+                            );
+                            promptInput.current?.focus();
+                          }}
+                        >
+                          Show return paths
+                        </button>
+                      )}
+                      {(board.suggestions ?? []).map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => {
+                            setPrompt(suggestion);
+                            promptInput.current?.focus();
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  {(board.suggestions ?? []).map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => {
-                        setPrompt(suggestion);
-                        promptInput.current?.focus();
-                      }}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <form
-                className={`composer ${busy ? 'is-busy' : ''}`}
-                onSubmit={(event) => void generate(event)}
-              >
-                <div className="composer-input">
-                  <label className="sr-only" htmlFor="visual-prompt">
-                    What would you like to understand?
-                  </label>
-                  <textarea
-                    ref={promptInput}
-                    id="visual-prompt"
-                    value={prompt}
-                    maxLength={4000}
-                    rows={2}
-                    placeholder={
-                      board
-                        ? 'Ask a follow-up, or change something on the canvas…'
-                        : 'What would you like to understand?'
-                    }
-                    disabled={busy}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void generate();
-                      }
-                    }}
-                  />
-                  {generation.busy ? (
-                    <button
-                      key="cancel-generation"
-                      className="send-prompt"
-                      type="button"
-                      aria-label="Cancel generation"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        generation.cancel();
-                      }}
-                    >
-                      <Square size={14} fill="currentColor" />
-                    </button>
-                  ) : (
-                    <button
-                      key="submit-generation"
-                      className="send-prompt"
-                      type="submit"
-                      aria-label="Generate diagram"
-                      disabled={
-                        busy || !prompt.trim() || (agent !== 'demo' && status?.available === false)
-                      }
-                    >
-                      <ArrowUp size={19} />
-                    </button>
-                  )}
-                </div>
-                {agent !== 'demo' && settingsOpen && (
-                  <div className="model-settings" id="model-settings">
-                    <ModelControls
-                      agent={agent}
-                      value={modelPreferences[agent]}
-                      disabled={busy}
-                      onChange={(value) => {
-                        const next = { ...modelPreferences, [agent]: value };
-                        setModelPreferences(next);
-                        try {
-                          localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(next));
-                        } catch {
-                          setError(
-                            'Model settings apply to this session, but could not be saved on this device.',
-                          );
+                  <form
+                    className={`composer ${busy ? 'is-busy' : ''}`}
+                    onSubmit={(event) => void generate(event)}
+                  >
+                    <div className="composer-input">
+                      <label className="sr-only" htmlFor="visual-prompt">
+                        What would you like to understand?
+                      </label>
+                      <textarea
+                        ref={promptInput}
+                        id="visual-prompt"
+                        value={prompt}
+                        maxLength={4000}
+                        rows={2}
+                        placeholder={
+                          board
+                            ? 'Ask a follow-up, or change something on the canvas…'
+                            : 'What would you like to understand?'
                         }
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="composer-footer">
-                  <label className="agent-picker">
-                    <span
-                      className={`agent-indicator ${status?.available === false ? 'offline' : ''}`}
-                    />
-                    <span className="sr-only">Agent</span>
-                    <select
-                      aria-label="Agent"
-                      value={agent}
-                      disabled={busy}
-                      onChange={(event) => setAgent(event.target.value as BoardAgent)}
-                    >
-                      <option value="claude">Claude</option>
-                      <option value="codex">Codex</option>
-                      <option value="demo">Demo · built-in examples</option>
-                    </select>
-                  </label>
-                  {agent !== 'demo' && (
-                    <button
-                      type="button"
-                      className="model-toggle"
-                      aria-expanded={settingsOpen}
-                      aria-controls="model-settings"
-                      aria-label={`Model settings: ${modelLabel}`}
-                      onClick={() => setSettingsOpen(!settingsOpen)}
-                    >
-                      <SlidersHorizontal size={13} />
-                      {modelLabel}
-                      <ChevronDown className="chevron" size={13} />
-                    </button>
-                  )}
-                  <span className="agent-status" role="status">
-                    {generation.busy ? (
-                      <>
-                        <LoaderCircle className="spin" size={13} /> {generation.stage} ·{' '}
-                        {generation.elapsed}s
-                      </>
-                    ) : agent === 'demo' ? (
-                      'Sample content · no agent calls'
-                    ) : (
-                      connectionError || status?.detail || 'Checking local agent…'
+                        disabled={busy}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            void generate();
+                          }
+                        }}
+                      />
+                      {generation.busy ? (
+                        <button
+                          key="cancel-generation"
+                          className="send-prompt"
+                          type="button"
+                          aria-label="Cancel generation"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            generation.cancel();
+                          }}
+                        >
+                          <Square size={14} fill="currentColor" />
+                        </button>
+                      ) : (
+                        <button
+                          key="submit-generation"
+                          className="send-prompt"
+                          type="submit"
+                          aria-label="Generate diagram"
+                          disabled={
+                            busy ||
+                            !prompt.trim() ||
+                            (agent !== 'demo' && status?.available === false)
+                          }
+                        >
+                          <ArrowUp size={19} />
+                        </button>
+                      )}
+                    </div>
+                    {agent !== 'demo' && settingsOpen && (
+                      <div className="model-settings" id="model-settings">
+                        <ModelControls
+                          agent={agent}
+                          value={modelPreferences[agent]}
+                          disabled={busy}
+                          onChange={(value) => {
+                            const next = { ...modelPreferences, [agent]: value };
+                            setModelPreferences(next);
+                            try {
+                              localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(next));
+                            } catch {
+                              setError(
+                                'Model settings apply to this session, but could not be saved on this device.',
+                              );
+                            }
+                          }}
+                        />
+                      </div>
                     )}
-                  </span>
-                  {selected && (
-                    <button
-                      type="button"
-                      className="selection-pill"
-                      aria-label="Clear selected step"
-                      onClick={() => setSelected(null)}
-                    >
-                      1 step selected <X size={12} />
-                    </button>
-                  )}
-                </div>
-              </form>
-              <p className="composer-hint">
-                {busy ? (
-                  'You can cancel at any time. Your current canvas stays here.'
-                ) : (
-                  <>
-                    <kbd>Enter</kbd> to draw · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line ·
-                    Scroll to follow the flow · Drag to arrange
-                  </>
-                )}
-              </p>
+                    <div className="composer-footer">
+                      <label className="agent-picker">
+                        <span
+                          className={`agent-indicator ${status?.available === false ? 'offline' : ''}`}
+                        />
+                        <span className="sr-only">Agent</span>
+                        <select
+                          aria-label="Agent"
+                          value={agent}
+                          disabled={busy}
+                          onChange={(event) => setAgent(event.target.value as BoardAgent)}
+                        >
+                          <option value="claude">Claude</option>
+                          <option value="codex">Codex</option>
+                          <option value="demo">Demo · built-in examples</option>
+                        </select>
+                      </label>
+                      {agent !== 'demo' && (
+                        <button
+                          type="button"
+                          className="model-toggle"
+                          aria-expanded={settingsOpen}
+                          aria-controls="model-settings"
+                          aria-label={`Model settings: ${modelLabel}`}
+                          onClick={() => setSettingsOpen(!settingsOpen)}
+                        >
+                          <SlidersHorizontal size={13} />
+                          {modelLabel}
+                          <ChevronDown className="chevron" size={13} />
+                        </button>
+                      )}
+                      <span className="agent-status" role="status">
+                        {generation.busy ? (
+                          <>
+                            <LoaderCircle className="spin" size={13} /> {generation.stage} ·{' '}
+                            {generation.elapsed}s
+                          </>
+                        ) : agent === 'demo' ? (
+                          'Sample content · no agent calls'
+                        ) : (
+                          connectionError || status?.detail || 'Checking local agent…'
+                        )}
+                      </span>
+                      {selected && (
+                        <button
+                          type="button"
+                          className="selection-pill"
+                          aria-label="Clear selected step"
+                          onClick={() => setSelected(null)}
+                        >
+                          1 step selected <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  <p className="composer-hint">
+                    {busy ? (
+                      'You can cancel at any time. Your current canvas stays here.'
+                    ) : (
+                      <>
+                        <kbd>Enter</kbd> to draw · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new
+                        line · Scroll to follow the flow · Drag to arrange
+                      </>
+                    )}
+                  </p>
+                </>
+              )}
             </div>
           </section>
           {activeNode && board && (
@@ -1104,36 +1267,13 @@ function BoardWorkspace() {
                       </button>
                     </div>
                     {showIcons && (
-                      <div className="icon-picker">
-                        <input
-                          aria-label="Search icons"
-                          placeholder="Search icons…"
-                          value={iconSearch}
-                          onChange={(event) => setIconSearch(event.target.value)}
-                        />
-                        <div>
-                          {BOARD_ICONS.filter((name) =>
-                            name.includes(iconSearch.toLowerCase()),
-                          ).map((name) => {
-                            const Icon = boardIcons[name];
-                            return (
-                              <button
-                                type="button"
-                                key={name}
-                                aria-label={`Use ${name} icon`}
-                                aria-pressed={activeNode.icon === name}
-                                title={name}
-                                onClick={() => {
-                                  editNode({ icon: name });
-                                  setShowIcons(false);
-                                }}
-                              >
-                                <Icon size={18} />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <IconPicker
+                        value={activeNode.icon}
+                        onPick={(icon) => {
+                          editNode({ icon });
+                          setShowIcons(false);
+                        }}
+                      />
                     )}
                   </fieldset>
                 </details>
@@ -1185,6 +1325,38 @@ function BoardWorkspace() {
                       ))}
                     </select>
                   </label>
+                  <fieldset className="color-picker" disabled={busy}>
+                    <legend>Arrow colour</legend>
+                    {([undefined, ...EDGE_COLORS] as const).map((color) => (
+                      <button
+                        type="button"
+                        key={color ?? 'auto'}
+                        className={color ? '' : 'is-auto'}
+                        aria-pressed={activeEdge.color === color}
+                        aria-label={color ? `${color} arrow` : 'Automatic colour (by type)'}
+                        title={color ?? 'By type'}
+                        style={{
+                          ['--swatch' as string]: color
+                            ? EDGE_COLOR_VALUES[color]
+                            : connectionStyle({ ...activeEdge, color: undefined }).color,
+                        }}
+                        onClick={() =>
+                          commit({
+                            ...board,
+                            edges: board.edges.map((edge) => {
+                              if (edge.id !== activeEdge.id) return edge;
+                              const next: typeof edge = { ...edge };
+                              if (color) next.color = color;
+                              else delete next.color;
+                              return next;
+                            }),
+                          })
+                        }
+                      >
+                        {!color && 'Auto'}
+                      </button>
+                    ))}
+                  </fieldset>
                   <label>
                     Relationship
                     <input

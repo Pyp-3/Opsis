@@ -4,7 +4,7 @@ import { boardIcons } from './icons';
 import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
 import { wrapLabel, nodeHeight } from './geometry';
-import { connectionStyle, PORT_OFFSETS, connectionLabel, CONNECTION_STYLES } from './connections';
+import { connectionStyle, PORT_OFFSETS, connectionLabel } from './connections';
 
 const escape = (text: string) =>
   text.replace(
@@ -52,7 +52,7 @@ export function boardSvg(board: BoardDocument): string {
       const callout = route.callout
         ? `<path d="${route.callout}" fill="none" stroke="${style.color}" stroke-width="1" stroke-dasharray="2 5" opacity=".7"/>`
         : '';
-      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${edge.kind ?? 'flow'})"/>${callout}${text}`;
+      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${style.color.slice(1)})"/>${callout}${text}`;
     })
     .join('');
   const nodes = board.nodes
@@ -73,10 +73,10 @@ export function boardSvg(board: BoardDocument): string {
       return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g>${ports}${label}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
-  const markers = Object.entries(CONNECTION_STYLES)
+  const markers = [...new Set(board.edges.map((edge) => connectionStyle(edge).color))]
     .map(
-      ([kind, style]) =>
-        `<marker id="arrow-${kind}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10" fill="${style.color}"/></marker>`,
+      (color) =>
+        `<marker id="arrow-${color.slice(1)}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10" fill="${color}"/></marker>`,
     )
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#153c68"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="white" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;

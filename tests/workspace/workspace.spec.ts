@@ -29,18 +29,22 @@ test('keeps named boards and undo history after reload, exports and walks throug
   await expect(page.getByLabel('Board name')).toHaveValue(EMAIL_DEMO.title);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
-  await expect(page.getByText('Understand it by seeing it.')).toBeVisible();
+  await expect(page.getByText('Understand anything by seeing it.')).toBeVisible();
   await page
     .getByRole('navigation', { name: 'Saved boards' })
     .getByRole('button', { name: title, exact: true })
     .click();
   await expect(page.getByLabel('Board name')).toHaveValue(title);
-  await page.getByRole('button', { name: 'Start walkthrough' }).click();
-  await expect(page.getByRole('complementary', { name: 'Details for You write' })).toBeVisible();
-  await page.getByRole('button', { name: 'Next concept' }).click();
-  await expect(page.getByRole('complementary', { name: 'Details for Email app' })).toBeVisible();
-  await page.getByRole('button', { name: 'End walkthrough' }).click();
-  await page.getByRole('button', { name: 'Close details' }).click();
+  await page.getByRole('button', { name: 'Play the process' }).click();
+  const timeline = page.getByRole('slider', { name: 'Process timeline' });
+  await expect(timeline).toHaveAttribute('aria-valuetext', /^Step 1 of 6/);
+  await page.getByRole('button', { name: 'Next step' }).click();
+  await expect(page.locator('.react-flow__node.is-current')).toContainText('You write');
+  await page.getByRole('button', { name: 'Next step' }).click();
+  await expect(page.locator('.react-flow__node.is-current')).toContainText('Email app');
+  await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Close player' }).click();
+  await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(0);
   for (const name of ['Markdown notes', 'PNG image']) {
     await page.locator('.export-menu summary').click();
     const download = page.waitForEvent('download');
@@ -89,7 +93,7 @@ test('mobile canvas remains usable without horizontal page overflow', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await page.getByRole('button', { name: 'Explore the email example' }).click();
-  await expect(page.getByRole('button', { name: 'Start walkthrough' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Play the process' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
