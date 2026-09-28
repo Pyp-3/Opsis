@@ -162,13 +162,14 @@ describe('process player', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: 'Narrator' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Voice' }), {
-      target: { value: 'Google UK English Male' },
+      target: { value: 'system:Google UK English Male' },
     });
     fireEvent.change(screen.getByRole('combobox', { name: 'Playback speed' }), {
       target: { value: '1.25' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-    expect(speech.spoken.at(-1)).toMatchObject({ rate: 1.25 });
+    // "1×" is the engine's 1.5, which reads at a natural walkthrough pace.
+    expect(speech.spoken.at(-1)).toMatchObject({ rate: 1.25 * 1.5 });
     expect(speech.spoken.at(-1)!.voice?.name).toBe('Google UK English Male');
   });
 

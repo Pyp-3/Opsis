@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'PORT=8100 OPSIS_DB_PATH=:memory: OPSIS_RATE_LIMIT=10000 pnpm --filter api exec node --import tsx src/main.ts',
+        'PORT=8100 OPSIS_DB_PATH=:memory: OPSIS_RATE_LIMIT=10000 OPSIS_SPEECH=off pnpm --filter api exec node --import tsx src/main.ts',
       url: 'http://127.0.0.1:8100/v1/health',
       reuseExistingServer: false,
       timeout: 120_000,

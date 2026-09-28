@@ -75,6 +75,7 @@ import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
 import { ProcessPlayer } from './ProcessPlayer';
+import { NextSteps, RETURN_PATHS } from './NextSteps';
 import { IconPicker } from './IconPicker';
 import { BoardsPage } from './BoardsPage';
 import { navigate, usePath } from '../router';
@@ -627,19 +628,6 @@ function BoardWorkspace() {
             className={`blueprint ${playerOpen ? 'is-playing' : ''}`}
             aria-label="Interactive diagram canvas"
           >
-            {board && !playerOpen && board.nodes.length > 0 && (
-              <button
-                className="play-process"
-                disabled={busy}
-                onClick={() => {
-                  setSelected(null);
-                  setSelectedEdge(null);
-                  setPlayerOpen(true);
-                }}
-              >
-                <Play size={13} fill="currentColor" /> Play the process
-              </button>
-            )}
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -711,6 +699,20 @@ function BoardWorkspace() {
                 </span>
                 <h2>{board.title}</h2>
                 <p>{board.description}</p>
+                {/* In the heading's flow, so it always sits below the text rather than over it. */}
+                {!playerOpen && board.nodes.length > 0 && (
+                  <button
+                    className="play-process"
+                    disabled={busy}
+                    onClick={() => {
+                      setSelected(null);
+                      setSelectedEdge(null);
+                      setPlayerOpen(true);
+                    }}
+                  >
+                    <Play size={13} fill="currentColor" /> Play the process
+                  </button>
+                )}
               </div>
             )}
             <div className="canvas-tools" role="toolbar" aria-label="Canvas tools">
@@ -933,31 +935,16 @@ function BoardWorkspace() {
               ) : (
                 <>
                   {board && !busy && (
-                    <div className="followup-chips">
-                      {agent !== 'demo' && (
-                        <button
-                          onClick={() => {
-                            setPrompt(
-                              'Audit the actual interactions in this diagram. Add genuine response, acknowledgment, feedback or retry edges to their actual recipients, with explicit kinds and labels. Do not invent reverse flows. Preserve unrelated content and IDs; explain any necessary correction to existing relationships.',
-                            );
-                            promptInput.current?.focus();
-                          }}
-                        >
-                          Show return paths
-                        </button>
-                      )}
-                      {(board.suggestions ?? []).map((suggestion) => (
-                        <button
-                          key={suggestion}
-                          onClick={() => {
-                            setPrompt(suggestion);
-                            promptInput.current?.focus();
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
+                    <NextSteps
+                      suggestions={[
+                        ...(agent !== 'demo' ? [RETURN_PATHS] : []),
+                        ...(board.suggestions ?? []).map((text) => ({ label: text, prompt: text })),
+                      ]}
+                      onPick={(suggestion) => {
+                        setPrompt(suggestion.prompt);
+                        promptInput.current?.focus();
+                      }}
+                    />
                   )}
                   <form
                     className={`composer ${busy ? 'is-busy' : ''}`}

@@ -18,6 +18,8 @@ test.beforeEach(async ({ page }) => {
       ],
     }),
   );
+  // The natural voice model must never download in tests; without it the player falls back.
+  await page.context().route(/huggingface\.co|cdn\.jsdelivr\.net/, (route) => route.abort());
   // Browsers in CI have no voices, so a recording speech engine stands in. It fires the
   // same start/end events a real engine does, letting the player's pacing be verified.
   await page.addInitScript(() => {
@@ -77,9 +79,9 @@ test('plays the DNS process with a British narrator, in message order, to the en
   await expect(page.locator('.canvas-heading')).toHaveCSS('opacity', '0');
   await expect(page.getByLabel('What would you like to understand?')).toHaveCount(0);
   await page.getByRole('button', { name: 'Narrator' }).click();
-  await expect(page.getByRole('combobox', { name: 'Voice' })).toHaveValue(
-    'Google UK English Female',
-  );
+  const voice = page.getByRole('combobox', { name: 'Voice' });
+  await voice.selectOption('system:Google UK English Female');
+  await expect(voice).toHaveValue('system:Google UK English Female');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible({ timeout: 20_000 });
   await expect(timeline).toHaveAttribute('aria-valuetext', /^Step 10 of 10: 8\. Return/);
@@ -100,6 +102,66 @@ test('plays the DNS process with a British narrator, in message order, to the en
   await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(0);
   const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(scan.violations).toEqual([]);
+});
+
+/** A tenth of a second of silence: a real WAV the browser can play to its end. */
+function silentWav() {
+  const rate = 8000,
+    samples = rate / 10,
+    wav = Buffer.alloc(44 + samples * 2);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(samples * 2, 40);
+  return wav;
+}
+
+test('narrates with the natural voice from the Opsis API, sentence by sentence', async ({
+  page,
+}) => {
+  const lines: { text: string; voice: string }[] = [];
+  await page.route('**/v1/speech/warm', (route) => route.fulfill({ json: { state: 'ready' } }));
+  await page.route('**/v1/speech', (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { state: 'ready' } });
+    lines.push(route.request().postDataJSON());
+    return route.fulfill({ body: silentWav(), contentType: 'audio/wav' });
+  });
+  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Play the process' }).click();
+  await page.getByRole('button', { name: 'Narrator' }).click();
+  await expect(page.getByRole('combobox', { name: 'Voice' })).toHaveValue('natural:bf_emma');
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible({ timeout: 20_000 });
+  expect(lines.every((line) => line.voice === 'bf_emma')).toBe(true);
+  // Every sentence of the walkthrough was spoken, and no line is sent as more than one sentence.
+  expect(lines.length).toBeGreaterThan(EMAIL_DEMO.nodes.length);
+  for (const line of lines) expect(line.text.trim()).not.toMatch(/[.!?]\s+\S/);
+  // The browser's own speech was never used.
+  expect(
+    await page.evaluate(() => (window as unknown as { __spoken: unknown[] }).__spoken),
+  ).toEqual([]);
+});
+
+test('falls back to a device voice when the natural voice cannot load', async ({ page }) => {
+  await page.route('**/v1/speech', (route) => route.fulfill({ json: { state: 'off' } }));
+  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Play the process' }).click();
+  await page.getByRole('button', { name: 'Narrator' }).click();
+  await expect(page.locator('.player-voice [role=status]')).toContainText(
+    'device voice is reading instead',
+    { timeout: 20_000 },
+  );
+  await expect(page.getByRole('combobox', { name: 'Voice' })).toHaveValue(
+    'system:Google UK English Female',
+  );
 });
 
 test('scrubs the timeline with the keyboard and dims what has not happened yet', async ({

@@ -59,7 +59,13 @@ function setup(candidate?: typeof EMAIL_DEMO) {
 describe('current workspace integration', () => {
   it('shows topic suggestions and prepares them without generating', async () => {
     const fetch = setup();
+    // Suggestions stay tucked away until asked for, so they never cover the diagram.
+    expect(
+      screen.queryByRole('button', { name: 'Show what happens if delivery fails' }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Next steps/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Show what happens if delivery fails' }));
+    expect(screen.queryByRole('group', { name: 'Next steps' })).toBeNull();
     expect(
       (screen.getByLabelText('What would you like to understand?') as HTMLTextAreaElement).value,
     ).toBe('Show what happens if delivery fails');

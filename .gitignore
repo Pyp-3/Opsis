@@ -16,3 +16,6 @@ output/
 # Agent runtime (managed by the Heuresis platform, not part of Opsis)
 .heuresis/
 skills/
+
+# Natural narrator speech model (downloaded on first use)
+apps/api/data/models/

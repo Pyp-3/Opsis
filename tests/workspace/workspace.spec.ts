@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
 
@@ -81,12 +81,58 @@ test('reviews changed content, keeps existing board on discard, and uses generat
   await page.getByLabel('What would you like to understand?').fill('Try again');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
   await page.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await page.getByRole('button', { name: /Next steps/ }).click();
   await expect(page.getByRole('button', { name: 'Explain encryption', exact: true })).toBeVisible();
   await expect(
     page
       .getByRole('navigation', { name: 'Diagram steps' })
       .getByRole('button', { name: /You write/ }),
   ).toHaveCount(0);
+});
+
+/** Fails if two on-canvas controls or texts cover each other. */
+async function expectApart(a: Locator, b: Locator) {
+  const [boxA, boxB] = [await a.boundingBox(), await b.boundingBox()];
+  expect(boxA && boxB).toBeTruthy();
+  const overlap =
+    boxA!.x < boxB!.x + boxB!.width &&
+    boxB!.x < boxA!.x + boxA!.width &&
+    boxA!.y < boxB!.y + boxB!.height &&
+    boxB!.y < boxA!.y + boxA!.height;
+  expect(overlap, `${await a.textContent()} overlaps ${await b.textContent()}`).toBe(false);
+}
+
+for (const [width, height] of [
+  [1440, 900],
+  [900, 800],
+  [390, 844],
+] as const)
+  test(`heading, play button and tools never overlap at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.reload();
+    await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+    const play = page.getByRole('button', { name: 'Play the process' });
+    await expect(play).toBeVisible();
+    const tools = page.getByRole('toolbar', { name: 'Canvas tools' });
+    const title = page.locator('.canvas-heading h2');
+    const description = page.locator('.canvas-heading p');
+    await expectApart(play, description);
+    await expectApart(tools, description);
+    await expectApart(tools, title);
+    await expectApart(tools, play);
+  });
+
+test('next steps stay tucked away until opened, and remember being opened', async ({ page }) => {
+  await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+  const toggle = page.getByRole('button', { name: /Next steps/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
+  await toggle.click();
+  await expect(page.getByRole('group', { name: 'Next steps' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('group', { name: 'Next steps' })).toBeVisible();
+  await page.getByRole('button', { name: 'Hide next steps' }).click();
+  await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
 });
 
 test('mobile canvas remains usable without horizontal page overflow', async ({ page }) => {

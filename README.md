@@ -16,7 +16,8 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 - Concept explanations, editable labels and icons, searchable navigation, and incoming/outgoing relationship navigation.
 - Named SQLite-backed boards, persistent undo/redo, and browser recovery copies.
 - Explicit review of agent changes to existing content; one bounded invalid-output repair attempt.
-- Topic-specific suggestions, per-concept uncertainty annotations, and a guided walkthrough.
+- Topic-specific next steps in a small menu above the composer (hidden until opened), per-concept uncertainty annotations, and a guided walkthrough.
+- **Play the process**: a scrubbable, video-like playback with captions and an optional British narrator. The natural voices (Emma, George, Isabella, Fable) come from the open [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) speech model, run locally by the API. The model (about 330 MB) downloads on first use into `apps/api/data/models/`. If the API has speech turned off, the browser runs a smaller copy of the model itself, which is slower. If neither is available, your device's own voices are used.
 - JSON/legacy OSG import and JSON, SVG, PNG, and Markdown export.
 - An email-flow demo that works without an agent subscription or model call.
 
@@ -54,13 +55,15 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 
 ### Configuration
 
-| Variable           | Purpose                                  | Default                      |
-| ------------------ | ---------------------------------------- | ---------------------------- |
-| `OPSIS_CLAUDE_BIN` | Claude CLI executable                    | `~/.local/bin/claude`        |
-| `OPSIS_CODEX_BIN`  | Codex CLI executable                     | `/usr/bin/codex`             |
-| `HOST`             | API listen address                       | `127.0.0.1`                  |
-| `PORT`             | API port                                 | `8000`                       |
-| `OPSIS_DB_PATH`    | SQLite database for v2 and legacy boards | `apps/api/data/opsis.sqlite` |
+| Variable           | Purpose                                   | Default                      |
+| ------------------ | ----------------------------------------- | ---------------------------- |
+| `OPSIS_CLAUDE_BIN` | Claude CLI executable                     | `~/.local/bin/claude`        |
+| `OPSIS_CODEX_BIN`  | Codex CLI executable                      | `/usr/bin/codex`             |
+| `HOST`             | API listen address                        | `127.0.0.1`                  |
+| `PORT`             | API port                                  | `8000`                       |
+| `OPSIS_DB_PATH`    | SQLite database for v2 and legacy boards  | `apps/api/data/opsis.sqlite` |
+| `OPSIS_SPEECH`     | `off` disables the API's natural narrator | on                           |
+| `OPSIS_MODEL_DIR`  | Where the narrator's speech model is kept | `apps/api/data/models`       |
 
 Use absolute executable paths when overriding the CLI locations. Executables and versions are validated by the harness. The `OPSIS_LLM_*` settings described in the [legacy API documentation](apps/api/README.md) configure the older pipeline; the new canvas sends its model selection from the UI.
 

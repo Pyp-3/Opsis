@@ -83,7 +83,7 @@ describe('process playback timeline', () => {
 
 describe('narration timing and voice', () => {
   it('holds silent beats long enough to read and respects speed', () => {
-    expect(beatDuration('Short.', 1)).toBe(2200);
+    expect(beatDuration('Short.', 1)).toBeCloseTo(2200 / 1.5);
     const long = 'word '.repeat(40);
     expect(beatDuration(long, 1)).toBeGreaterThan(beatDuration(long, 1.5));
     expect(beatDuration(long, 0.75)).toBeGreaterThan(beatDuration(long, 1));

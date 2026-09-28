@@ -118,10 +118,16 @@ export function revealed(beats: Beat[], index: number) {
   return { nodes, edges };
 }
 
+/**
+ * What "1×" means for each way of telling the process. Speech engines' own 1.0 drags for a
+ * walkthrough (their 1.5 felt like a natural 1), so the player's scale sits above them.
+ */
+export const PACE = { captions: 1.5, system: 1.5, natural: 1.15 } as const;
+
 /** Silent playback holds each beat long enough to read its caption. */
 export function beatDuration(text: string, speed: number) {
   const words = text.split(/\s+/).filter(Boolean).length;
-  return Math.max(2200, words * 330 + 900) / speed;
+  return Math.max(2200, words * 330 + 900) / (speed * PACE.captions);
 }
 
 /**

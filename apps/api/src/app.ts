@@ -52,6 +52,7 @@ import { llmClientFromEnvironment, llmIdentity } from './llm.js';
 import { ApiStore } from './storage.js';
 import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 import { registerBoardLibrary } from './board-library.js';
+import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
 /** Share tokens are 24 random bytes encoded as base64url. */
@@ -76,6 +77,8 @@ export type BuildAppOptions = FastifyServerOptions & {
   rateLimit?: number;
   rateWindowMs?: number;
   memoryCacheEntries?: number;
+  /** The natural narrator; null turns it off. Defaults to Kokoro unless OPSIS_SPEECH=off. */
+  speech?: SpeechEngine | null;
 };
 
 type PipelineConfig = { audience: 'child' | 'teen' | 'adult'; seed: number };
@@ -229,18 +232,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     rateLimit = Number(process.env.OPSIS_RATE_LIMIT ?? 60),
     rateWindowMs = Number(process.env.OPSIS_RATE_WINDOW_MS ?? 60_000),
     memoryCacheEntries = Number(process.env.OPSIS_MEMORY_CACHE_ENTRIES ?? 256),
+    speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine(),
     ...fastifyOptions
   } = options;
   const app = Fastify(fastifyOptions);
   registerBoardRoutes(app, boardClientFactory);
   const store = new ApiStore(databasePath, memoryCacheEntries);
   registerBoardLibrary(app, store);
+  registerSpeech(app, speech);
   const llm = providedLlm === undefined ? llmClientFromEnvironment() : providedLlm;
   const requests = new Map<string, number[]>();
 
   app.addHook('onClose', async () => store.close());
   app.addHook('onRequest', async (request, reply) => {
-    if (request.url === '/v1/health') return;
+    // Speech is local work with its own bounded queue; a narrated board makes many requests.
+    if (request.url === '/v1/health' || request.url.startsWith('/v1/speech')) return;
     const now = Date.now();
     const recent = (requests.get(request.ip) ?? []).filter((time) => now - time < rateWindowMs);
     if (recent.length >= rateLimit) {
