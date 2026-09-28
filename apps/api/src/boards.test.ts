@@ -139,10 +139,55 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v2' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v3' }),
       expect.any(AbortSignal),
     );
     expect(BoardGraphSchema.safeParse(reply.json()).success).toBe(true);
+  });
+  it('asks the agent to write spoken narration for the process player', async () => {
+    const { app, complete } = setup(JSON.stringify(EMAIL_DEMO));
+    await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain email delivery' },
+    });
+    const [request] = complete.mock.calls[0] as unknown as [{ system: string }];
+    expect(request.system).toMatch(/narrated film/);
+    expect(request.system).toMatch(/grammatical sentences/);
+    // The output schema makes narration required on the board, every node and every edge.
+    const schema = JSON.parse(request.system.slice(request.system.indexOf('Schema: ') + 8));
+    expect(schema.required).toContain('narration');
+    expect(schema.properties.nodes.items.required).toContain('narration');
+    expect(schema.properties.edges.items.required).toContain('narration');
+  });
+  it('lets the agent re-word narration so the story flows, without asking for review', async () => {
+    const reworded = {
+      ...EMAIL_DEMO,
+      nodes: EMAIL_DEMO.nodes.map((node) => ({ ...node, narration: `Now, ${node.summary}` })),
+      edges: EMAIL_DEMO.edges.map((edge) => ({ ...edge, narration: 'Then it moves on.' })),
+    };
+    const { app } = setup(JSON.stringify(reworded));
+    const reply = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Smooth the narration', board: document },
+    });
+    expect(reply.statusCode).toBe(200);
+    expect(reply.json().edges[0].narration).toBe('Then it moves on.');
+    // A real content change alongside it still needs review.
+    const { app: second } = setup(
+      JSON.stringify({
+        ...reworded,
+        nodes: [{ ...reworded.nodes[0]!, summary: 'Changed.' }, ...reworded.nodes.slice(1)],
+      }),
+    );
+    const changed = await second.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Smooth the narration', board: document },
+    });
+    expect(changed.statusCode).toBe(409);
+    expect(changed.json().changes).toEqual(['Change concept: sender']);
   });
   it('never silently substitutes demo content on an agent error', async () => {
     const { app } = setup(new Error('private provider details'));

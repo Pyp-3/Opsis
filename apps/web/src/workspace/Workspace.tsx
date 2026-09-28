@@ -51,6 +51,7 @@ import {
   BoardAgentsSchema,
   BoardModelSettingsSchema,
   BoardEdgeKindSchema,
+  withoutNarration,
   EDGE_COLORS,
   EMAIL_DEMO,
   DNS_DEMO,
@@ -480,7 +481,11 @@ function BoardWorkspace() {
       commit({
         ...board,
         nodes: board.nodes.map((node) =>
-          node.id === activeNode.id ? { ...node, ...patch } : node,
+          node.id !== activeNode.id
+            ? node
+            : 'label' in patch || 'summary' in patch
+              ? withoutNarration({ ...node, ...patch })
+              : { ...node, ...patch },
         ),
       });
   };
@@ -1300,7 +1305,7 @@ function BoardWorkspace() {
                         commit({
                           ...board,
                           edges: board.edges.map((edge) =>
-                            edge.id === activeEdge.id ? { ...edge, kind } : edge,
+                            edge.id === activeEdge.id ? withoutNarration({ ...edge, kind }) : edge,
                           ),
                         });
                       }}
@@ -1358,7 +1363,7 @@ function BoardWorkspace() {
                             ...board,
                             edges: board.edges.map((edge) =>
                               edge.id === activeEdge.id
-                                ? { ...edge, label: event.target.value }
+                                ? withoutNarration({ ...edge, label: event.target.value })
                                 : edge,
                             ),
                           });

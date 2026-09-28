@@ -1,4 +1,10 @@
-import { BoardPortSchema, type BoardDocument, type BoardPort, type EdgeColor } from '@opsis/schema';
+import {
+  BoardPortSchema,
+  withoutNarration,
+  type BoardDocument,
+  type BoardPort,
+  type EdgeColor,
+} from '@opsis/schema';
 import { NODE_WIDTH } from './geometry';
 
 export const PORT_OFFSETS = {
@@ -117,7 +123,15 @@ export function connectBoard(
     return board;
   const existing = board.edges.find((edge) => edge.id === id);
   if (!existing && board.edges.length >= 100) return board;
-  const edge = { ...existing, id, source, target, label: existing?.label ?? '' };
+  const moved = existing && (existing.source !== source || existing.target !== target);
+  // A reconnected arrow joins different objects, so its spoken line no longer fits.
+  const edge = {
+    ...(existing && moved ? withoutNarration(existing) : existing),
+    id,
+    source,
+    target,
+    label: existing?.label ?? '',
+  };
   const automatic = edgePorts({ ...board, edgePorts: {} }, edge);
   const sourcePort = BoardPortSchema.safeParse(connection.sourceHandle);
   const targetPort = BoardPortSchema.safeParse(connection.targetHandle);

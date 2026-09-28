@@ -14,6 +14,18 @@ const board: BoardDocument = {
   },
 };
 describe('branching connections', () => {
+  it('drops a reconnected arrow’s spoken line, but keeps it when only the ports change', () => {
+    const moved = connectBoard(board, { source: 'outgoing', target: 'recipient' }, 'transfer');
+    expect(moved.edges.find((edge) => edge.id === 'transfer')!.narration).toBeUndefined();
+    const turned = connectBoard(
+      board,
+      { source: 'outgoing', target: 'incoming', sourceHandle: 'bottom', targetHandle: 'top' },
+      'transfer',
+    );
+    expect(turned.edges.find((edge) => edge.id === 'transfer')!.narration).toBe(
+      EMAIL_DEMO.edges.find((edge) => edge.id === 'transfer')!.narration,
+    );
+  });
   it('allows several connections from the same port and several connections to one object', () => {
     const first = connectBoard(
       board,

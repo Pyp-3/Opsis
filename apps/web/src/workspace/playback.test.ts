@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { DNS_DEMO, EMAIL_DEMO, type BoardDocument, type BoardGraph } from '@opsis/schema';
-import { beatDuration, britishVoice, playbackTimeline, revealed } from './playback';
+import {
+  DNS_DEMO,
+  EMAIL_DEMO,
+  withoutNarration,
+  type BoardDocument,
+  type BoardGraph,
+} from '@opsis/schema';
+import { beatDuration, britishVoice, playbackTimeline, revealed, spokenName } from './playback';
 
 const doc = (graph: BoardGraph): BoardDocument => ({
   ...graph,
   version: 2,
   agent: 'demo',
   positions: Object.fromEntries(graph.nodes.map((node, i) => [node.id, { x: 0, y: i * 200 }])),
+});
+/** A board from before narration existed: playback must still speak in sentences. */
+const unnarrated = (graph: BoardGraph): BoardGraph => ({
+  ...withoutNarration(graph),
+  nodes: graph.nodes.map(withoutNarration),
+  edges: graph.edges.map(withoutNarration),
 });
 const voice = (name: string, lang: string, localService = true) =>
   ({ name, lang, localService, default: false, voiceURI: name }) as SpeechSynthesisVoice;
@@ -15,7 +27,7 @@ describe('process playback timeline', () => {
   it('follows numbered arrows in message order, like a sequence diagram', () => {
     const beats = playbackTimeline(doc(DNS_DEMO));
     expect(beats[0]).toMatchObject({ id: 'intro', nodeId: null, edgeId: null });
-    expect(beats[0]!.narration).toContain(DNS_DEMO.title);
+    expect(beats[0]!.narration).toBe(DNS_DEMO.narration);
     const steps = beats
       .filter((beat) => beat.edgeId)
       .map((beat) => DNS_DEMO.edges.find((edge) => edge.id === beat.edgeId)!.label);
@@ -28,13 +40,48 @@ describe('process playback timeline', () => {
     );
     for (const beat of beats.filter((b) => b.edgeId))
       expect(DNS_DEMO.edges.find((edge) => edge.id === beat.edgeId)!.target).toBe(beat.nodeId);
-    expect(beats.find((beat) => beat.edgeId)!.narration).toMatch(/^Step 1: /);
+    // The arrow's line, then the line introducing the object it reaches for the first time.
+    const [query] = DNS_DEMO.edges;
+    const resolver = DNS_DEMO.nodes.find((node) => node.id === query!.target)!;
+    expect(beats.find((beat) => beat.edgeId)!.narration).toBe(
+      `${query!.narration} ${resolver.narration}`,
+    );
+  });
+
+  it('words older, unnarrated boards as grammatical sentences', () => {
+    const beats = playbackTimeline(doc(unnarrated(DNS_DEMO)));
+    expect(beats[0]!.narration).toBe(DNS_DEMO.description);
+    expect(beats[1]!.narration).toBe('Client asks for the address of google.com.');
+    const steps = beats.filter((beat) => beat.edgeId).map((beat) => beat.narration);
+    expect(steps[0]).toBe(
+      'First, client asks the recursive resolver: address for google.com? ' +
+        'The recursive resolver follows referrals on behalf of the client.',
+    );
+    expect(steps[2]).toBe(
+      'The root server replies to the recursive resolver: refer to .com servers.',
+    );
+    expect(steps.at(-1)).toBe(
+      'Finally, the recursive resolver replies to Client: return the answer.',
+    );
+    for (const line of beats.map((beat) => beat.narration)) {
+      expect(line).not.toMatch(/Step \d|\.\.|\?\./);
+      expect(line).toMatch(/[.!?]$/);
+      for (const node of DNS_DEMO.nodes) expect(line).not.toMatch(new RegExp(`^${node.label}:`));
+    }
+  });
+
+  it('says labels the way a person would', () => {
+    expect(spokenName('Recursive resolver')).toBe('the recursive resolver');
+    expect(spokenName('Sending server')).toBe('the sending server');
+    expect(spokenName('Their inbox')).toBe('their inbox');
+    for (const label of ['Client', '.com TLD server', 'Google Cloud', 'DNS'])
+      expect(spokenName(label)).toBe(label);
   });
 
   it('follows the flow from the start when arrows are not numbered', () => {
     const beats = playbackTimeline(doc(EMAIL_DEMO));
     expect(beats).toHaveLength(EMAIL_DEMO.nodes.length + 1);
-    expect(beats[1]!.narration).toMatch(/^It starts with /);
+    expect(beats[1]!.narration).toBe(EMAIL_DEMO.nodes[0]!.narration);
     const seen = new Set<string>();
     for (const beat of beats.slice(1)) {
       if (beat.edgeId) {
@@ -60,13 +107,31 @@ describe('process playback timeline', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('narrates short, complete sentences built from summaries', () => {
-    for (const beat of playbackTimeline(doc(EMAIL_DEMO)).slice(1)) {
+  it('narrates complete sentences built from summaries when a board has no narration', () => {
+    const beats = playbackTimeline(doc(unnarrated(EMAIL_DEMO)));
+    expect(beats[1]!.narration).toBe('First, a message starts with you.');
+    for (const beat of beats.slice(1)) {
       expect(beat.narration).toMatch(/[.!?]$/);
       expect(beat.narration).not.toMatch(/\.\./);
       const node = EMAIL_DEMO.nodes.find((item) => item.id === beat.nodeId)!;
-      expect(beat.narration).toContain(node.summary.replace(/[.!?]$/, ''));
+      expect(beat.narration.toLowerCase()).toContain(
+        node.summary.replace(/[.!?]$/, '').toLowerCase(),
+      );
+      // Labels are captions, never read out as "Label: summary".
+      expect(beat.narration).not.toContain(`${node.label}:`);
     }
+  });
+
+  it('speaks the agent’s narration for every step of a narrated board', () => {
+    const beats = playbackTimeline(doc(EMAIL_DEMO));
+    expect(beats.map((beat) => beat.narration)).toEqual([
+      EMAIL_DEMO.narration,
+      EMAIL_DEMO.nodes[0]!.narration,
+      ...EMAIL_DEMO.edges.map(
+        (edge) =>
+          `${edge.narration} ${EMAIL_DEMO.nodes.find((node) => node.id === edge.target)!.narration}`,
+      ),
+    ]);
   });
 
   it('reveals only what has been reached so far', () => {

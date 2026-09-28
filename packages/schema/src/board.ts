@@ -227,6 +227,8 @@ export const BoardNodeSchema = z
     kind: z.enum(['step', 'decision', 'note']),
     confidence: z.enum(['normal', 'simplified', 'uncertain']).optional(),
     caveat: z.string().max(500).optional(),
+    /** What the process player's narrator says when it first reaches this object. */
+    narration: z.string().max(400).optional(),
   })
   .strict();
 export const BoardEdgeKindSchema = z.enum(['flow', 'request', 'response', 'feedback', 'retry']);
@@ -241,6 +243,8 @@ export const BoardEdgeSchema = z
     label: z.string().max(100),
     kind: BoardEdgeKindSchema.optional(),
     color: z.enum(EDGE_COLORS).optional(),
+    /** What the narrator says as playback follows this arrow. */
+    narration: z.string().max(300).optional(),
   })
   .strict();
 export const BoardContentSchema = z
@@ -250,6 +254,8 @@ export const BoardContentSchema = z
     nodes: z.array(BoardNodeSchema).min(1).max(50),
     edges: z.array(BoardEdgeSchema).max(100),
     suggestions: z.array(z.string().min(1).max(200)).max(3).optional(),
+    /** The narrator's opening line before playback walks through the board. */
+    narration: z.string().max(600).optional(),
   })
   .strict();
 
@@ -301,15 +307,22 @@ export const boardOutputSchema = JSON.stringify(
   zodToJsonSchema(
     BoardContentSchema.extend({
       suggestions: z.array(z.string().min(1).max(200)).min(2).max(3),
+      narration: z.string().min(1).max(600),
       // Colours are a reader's styling choice; agents describe structure only.
       edges: z
-        .array(BoardEdgeSchema.omit({ color: true }).extend({ kind: BoardEdgeKindSchema }))
+        .array(
+          BoardEdgeSchema.omit({ color: true }).extend({
+            kind: BoardEdgeKindSchema,
+            narration: z.string().min(1).max(300),
+          }),
+        )
         .max(100),
       nodes: z
         .array(
           BoardNodeSchema.extend({
             confidence: z.enum(['normal', 'simplified', 'uncertain']),
             caveat: z.string().max(500),
+            narration: z.string().min(1).max(400),
           }),
         )
         .min(1)
@@ -331,6 +344,20 @@ export const BoardSnapshotSchema = z
   .strict();
 export type BoardSnapshot = z.infer<typeof BoardSnapshotSchema>;
 
+/**
+ * A hand edit to what an object or arrow says makes the agent's spoken line stale, so it is
+ * dropped; playback then words that step from the edited label and summary instead.
+ */
+export function withoutNarration<T extends { narration?: string | undefined }>(item: T): T {
+  const copy = { ...item };
+  delete copy.narration;
+  return copy;
+}
+
+/** Narration is spoken presentation; agents may re-word it so the story flows, without review. */
+const content = (item: { narration?: string | undefined }) =>
+  JSON.stringify({ ...item, narration: undefined });
+
 /** Every changed or removed existing item requires explicit review, including selected nodes. */
 export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {
   const changes: string[] = [];
@@ -338,7 +365,7 @@ export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {
     for (const item of before[key]) {
       const next = after[key].find((candidate) => candidate.id === item.id);
       if (!next) changes.push(`Remove ${key === 'nodes' ? 'concept' : 'connection'}: ${item.id}`);
-      else if (JSON.stringify(item) !== JSON.stringify(next))
+      else if (content(item) !== content(next))
         changes.push(`Change ${key === 'nodes' ? 'concept' : 'connection'}: ${item.id}`);
     }
   }
@@ -350,6 +377,8 @@ export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {
 export const EMAIL_DEMO: BoardGraph = {
   title: 'An email’s journey',
   description: 'From a thought in your outbox to a message in someone else’s inbox.',
+  narration:
+    'Let’s follow an email from the moment you write it to the moment it lands in someone else’s inbox.',
   suggestions: ['Show what happens if delivery fails'],
   nodes: [
     {
@@ -360,6 +389,7 @@ export const EMAIL_DEMO: BoardGraph = {
       summary: 'A message starts with you.',
       explanation:
         'You choose a recipient, write a subject and compose the message. The recipient’s address identifies a mailbox and its domain.',
+      narration: 'It begins with you, writing a message and choosing who it’s for.',
     },
     {
       id: 'app',
@@ -369,6 +399,7 @@ export const EMAIL_DEMO: BoardGraph = {
       summary: 'Your app submits the message.',
       explanation:
         'When you press Send, your app submits the message to your mail provider. Mail clients typically use authenticated SMTP; a webmail interface may use HTTPS to its provider.',
+      narration: 'It can wait there as a draft for as long as you like.',
     },
     {
       id: 'outgoing',
@@ -378,6 +409,7 @@ export const EMAIL_DEMO: BoardGraph = {
       summary: 'Your provider finds the destination.',
       explanation:
         'The sending server looks up the recipient domain’s MX records in DNS, then attempts to transfer the message to a receiving server using SMTP. Temporary failures can lead to queued retries.',
+      narration: 'Your provider’s sending server looks up where the recipient’s mail should go.',
     },
     {
       id: 'incoming',
@@ -387,6 +419,8 @@ export const EMAIL_DEMO: BoardGraph = {
       summary: 'The destination checks and accepts it.',
       explanation:
         'The receiving provider checks the address and applies authentication and spam checks. Accepted mail is routed to the appropriate mailbox, sometimes into a spam folder.',
+      narration:
+        'The receiving server checks the address, screens for spam and accepts the message.',
     },
     {
       id: 'recipient',
@@ -396,12 +430,37 @@ export const EMAIL_DEMO: BoardGraph = {
       summary: 'The recipient can read your message.',
       explanation:
         'The recipient’s app retrieves or synchronizes the mailbox through IMAP, a provider API or webmail. Delivery does not mean the message has been read.',
+      narration: 'It’s now waiting in their inbox, ready for them to read.',
     },
   ],
   edges: [
-    { id: 'compose', source: 'sender', target: 'app', label: 'Compose' },
-    { id: 'submit', source: 'app', target: 'outgoing', label: 'Submit' },
-    { id: 'transfer', source: 'outgoing', target: 'incoming', label: 'SMTP' },
-    { id: 'deliver', source: 'incoming', target: 'recipient', label: 'Deliver' },
+    {
+      id: 'compose',
+      source: 'sender',
+      target: 'app',
+      label: 'Compose',
+      narration: 'Once it’s written, the message sits in your email app.',
+    },
+    {
+      id: 'submit',
+      source: 'app',
+      target: 'outgoing',
+      label: 'Submit',
+      narration: 'When you press send, the app submits it to your mail provider.',
+    },
+    {
+      id: 'transfer',
+      source: 'outgoing',
+      target: 'incoming',
+      label: 'SMTP',
+      narration: 'The sending server then hands the message over to the recipient’s server.',
+    },
+    {
+      id: 'deliver',
+      source: 'incoming',
+      target: 'recipient',
+      label: 'Deliver',
+      narration: 'Finally, the message is delivered to their mailbox.',
+    },
   ],
 };

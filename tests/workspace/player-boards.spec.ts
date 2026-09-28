@@ -93,11 +93,12 @@ test('plays the DNS process with a British narrator, in message order, to the en
     expect(utterance.lang).toBe('en-GB');
     expect(utterance.voice?.lang).toBe('en-GB');
   }
-  const steps = spoken
-    .map((u) => /^Step (\d+):/.exec(u.text)?.[1])
-    .filter(Boolean)
-    .map(Number);
-  expect(steps).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  // The narrator reads the board's own spoken lines, arrow by arrow in message order.
+  const arrows = DNS_DEMO.edges.map((edge) => edge.narration!);
+  const told = arrows.map((line) => spoken.findIndex((u) => u.text.startsWith(line)));
+  expect(told.every((at) => at > 0)).toBe(true);
+  expect(told).toEqual([...told].sort((a, b) => a - b));
+  expect(spoken[0]!.text).toBe(DNS_DEMO.narration);
   // Everything has been reached, so nothing stays dimmed at the end.
   await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(0);
   const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
@@ -182,7 +183,8 @@ test('scrubs the timeline with the keyboard and dims what has not happened yet',
     EMAIL_DEMO.nodes.length - 2,
   );
   await expect(page.locator('.react-flow__edge.is-current')).toHaveCount(1);
-  await expect(page.locator('.player-caption')).toContainText(EMAIL_DEMO.nodes[1]!.summary);
+  // Captions show what the narrator says: the arrow's line, then the object's.
+  await expect(page.locator('.player-caption')).toContainText(EMAIL_DEMO.nodes[1]!.narration!);
   await page.getByRole('button', { name: 'Close player' }).click();
   await expect(page.getByLabel('What would you like to understand?')).toBeVisible();
 });

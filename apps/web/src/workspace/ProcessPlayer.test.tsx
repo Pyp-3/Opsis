@@ -175,7 +175,7 @@ describe('process player', () => {
 
   it('stops speaking when paused, scrubbed, muted or closed', () => {
     const speech = fakeSpeech(BRITISH);
-    const { slider } = setup();
+    const { slider, beats } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Narrator' }));
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     speech.start();
@@ -187,7 +187,7 @@ describe('process player', () => {
     before = cancels();
     fireEvent.change(slider, { target: { value: '6' } });
     expect(cancels()).toBeGreaterThan(before);
-    expect(speech.spoken.at(-1)!.text).toContain('Step'); // resumed at the new step
+    expect(speech.spoken.at(-1)!.text).toBe(beats[6]!.narration); // resumed at the new step
     before = cancels();
     fireEvent.click(screen.getByRole('button', { name: 'Narrator' }));
     expect(cancels()).toBeGreaterThan(before);
