@@ -226,9 +226,6 @@ summary::-webkit-details-marker {
   place-items: center;
   width: 30px;
   height: 30px;
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-radius: var(--radius);
 }
 .brand-dot {
   color: var(--ok);

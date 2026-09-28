@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { FolderOpen, Grid2X2, Plus, Search } from 'lucide-react';
+import { FolderOpen, Plus, Search } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
+import { BrandMark } from './BrandMark';
 
 export function WorkspaceSidebar({
   board,
@@ -40,7 +41,7 @@ export function WorkspaceSidebar({
       <div className="rail-head">
         <a href="/" className="brand" aria-label="Opsis home">
           <span className="brand-symbol">
-            <Grid2X2 size={17} />
+            <BrandMark />
           </span>
           <span>
             opsis<span className="brand-dot">.</span>

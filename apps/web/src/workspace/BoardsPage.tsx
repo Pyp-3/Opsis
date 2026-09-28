@@ -10,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
+import { BrandMark } from './BrandMark';
 
 const relative = new Intl.RelativeTimeFormat('en-GB', { numeric: 'auto' });
 export function updatedLabel(updatedAt: number, now = Date.now()) {
@@ -69,7 +70,7 @@ export function BoardsPage({
           }}
         >
           <span className="brand-symbol">
-            <Grid2X2 size={17} />
+            <BrandMark />
           </span>
           <span>
             opsis<span className="brand-dot">.</span>
