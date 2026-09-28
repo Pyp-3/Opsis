@@ -7,7 +7,7 @@ export function RoutedConnection({
   markerEnd,
   style,
   selected,
-}: EdgeProps<Edge<{ route: RoutedEdge }>>) {
+}: EdgeProps<Edge<{ route: RoutedEdge; current?: boolean }>>) {
   const route = data?.route;
   if (!route) return null;
   return (
@@ -21,6 +21,24 @@ export function RoutedConnection({
         style={style}
         interactionWidth={24}
       />
+      {data.current && (
+        // Keyed by path so the draw-in and travelling packet restart for every step.
+        <g key={route.path} className="edge-motion" pointerEvents="none" aria-hidden="true">
+          <path
+            className="edge-motion-trace"
+            d={route.path}
+            pathLength={1}
+            fill="none"
+            stroke={style?.stroke ?? '#e8d4a3'}
+          />
+          <circle
+            className="edge-motion-packet"
+            r={5}
+            fill={style?.stroke ?? '#e8d4a3'}
+            style={{ offsetPath: `path('${route.path}')` }}
+          />
+        </g>
+      )}
       {route.label && (
         <g className="connection-label" aria-label={route.lines.join(' ')}>
           {route.callout && (

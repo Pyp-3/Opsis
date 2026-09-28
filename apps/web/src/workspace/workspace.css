@@ -1220,6 +1220,72 @@ summary::-webkit-details-marker {
 .composer textarea::placeholder {
   color: var(--ink-3);
 }
+.attach-document {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--ink-3);
+  background: transparent;
+  border-radius: 10px;
+}
+.attach-document:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--sunken);
+}
+.attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px 0;
+  list-style: none;
+}
+.attachment-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 8px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  animation: chip-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.attachment-size {
+  color: var(--ink-3);
+}
+.attachment-chips button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3);
+  border-radius: 5px;
+}
+.attachment-chips button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--line);
+}
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .attachment-chips li {
+    animation: none;
+  }
+}
 .send-prompt {
   width: 36px;
   height: 36px;
@@ -2102,12 +2168,100 @@ summary::-webkit-details-marker {
 }
 .blueprint .react-flow__edge.is-current .react-flow__edge-path {
   stroke-width: 3.5 !important;
-  stroke-dasharray: 10 6 !important;
-  animation: player-flow 700ms linear infinite;
 }
-@keyframes player-flow {
+.blueprint .react-flow__node.is-current .node-symbol {
+  animation: node-arrive 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.blueprint .react-flow__node.is-current .node-symbol::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 2px solid rgb(232 212 163 / 0.8);
+  pointer-events: none;
+  animation: node-ripple 1400ms ease-out 250ms infinite;
+  opacity: 0;
+}
+@keyframes node-arrive {
+  0% {
+    transform: scale(0.82);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes node-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* Motion graphics: the current arrow draws itself in, then a packet travels its length.
+   A solid trace is used, because dashes mean "optional" or "return" in Opsis. */
+.edge-motion-trace {
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.55;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: edge-draw 650ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.edge-motion-packet {
+  offset-distance: 0%;
+  offset-rotate: 0deg;
+  filter: drop-shadow(0 0 6px rgb(255 255 255 / 0.9));
+  animation: edge-packet 1600ms cubic-bezier(0.45, 0, 0.55, 1) 500ms infinite;
+  opacity: 0;
+}
+@keyframes edge-draw {
   to {
-    stroke-dashoffset: -16;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes edge-packet {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+/* New boards assemble one concept at a time, in reading order. */
+.blueprint-node {
+  animation: node-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--enter-index, 0) * 70ms);
+}
+.blueprint .react-flow__edge {
+  animation: edge-enter 500ms ease backwards;
+  animation-delay: 350ms;
+}
+@keyframes node-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+}
+@keyframes edge-enter {
+  from {
+    opacity: 0;
   }
 }
 @media (max-width: 760px) {
@@ -2120,8 +2274,18 @@ summary::-webkit-details-marker {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .blueprint .react-flow__edge.is-current .react-flow__edge-path {
+  .blueprint-node,
+  .blueprint .react-flow__edge,
+  .blueprint .react-flow__node.is-current .node-symbol,
+  .blueprint .react-flow__node.is-current .node-symbol::after {
     animation: none;
+  }
+  .edge-motion-trace {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .edge-motion-packet {
+    display: none;
   }
 }
 

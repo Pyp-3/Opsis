@@ -140,7 +140,7 @@ describe('HarnessLLMClient', () => {
       });
       expect(call).toMatchObject({
         cwd: '/private/context-free',
-        maxStdinBytes: 65_536,
+        maxStdinBytes: 786_432,
         maxStdoutBytes: 1_048_576,
         maxStderrBytes: 65_536,
       });

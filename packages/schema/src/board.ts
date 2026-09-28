@@ -287,6 +287,21 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
     .record(z.object({ source: BoardPortSchema, target: BoardPortSchema }).strict())
     .optional(),
 }).superRefine(validateBoardReferences);
+/** Largest single upload, in bytes; base64 inflates it by a third on the wire. */
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 5;
+/** A document the user uploads for the agent to work from, base64-encoded. */
+export const BoardAttachmentSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    mediaType: z.string().max(200),
+    data: z
+      .string()
+      .max(Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 4)
+      .regex(/^[A-Za-z0-9+/]*={0,2}$/u),
+  })
+  .strict();
+export type BoardAttachment = z.infer<typeof BoardAttachmentSchema>;
 export const BoardRequestSchema = z
   .object({
     prompt: z.string().trim().min(1).max(4000),
@@ -294,6 +309,7 @@ export const BoardRequestSchema = z
     settings: BoardModelSettingsSchema.optional(),
     board: BoardDocumentSchema.optional(),
     selectedId: id.optional(),
+    attachments: z.array(BoardAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
   })
   .strict();
 export const BoardAgentsSchema = z.array(

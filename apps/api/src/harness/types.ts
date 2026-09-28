@@ -34,5 +34,12 @@ export interface ProcessRunner {
   run(request: ProcessRunRequest): Promise<ProcessRunResult>;
 }
 
+/** An uploaded file staged in the private workspace for the agent to read itself. */
+export type HarnessFile = { name: string; data: Buffer; kind: 'image' | 'pdf' };
+
 /** Concrete client signature adds caller cancellation without changing the shared interface. */
-export type HarnessComplete = (request: LLMRequest, signal?: AbortSignal) => Promise<string>;
+export type HarnessComplete = (
+  request: LLMRequest,
+  signal?: AbortSignal,
+  files?: readonly HarnessFile[],
+) => Promise<string>;

@@ -88,4 +88,11 @@ export { readHarnessConfig } from './config.js';
 export { HarnessLLMClient } from './client.js';
 export { SpawnProcessRunner } from './runner.js';
 export { extractHarnessResult } from './envelope.js';
-export type { HarnessConfig, HarnessProvider, ProcessRunner, ProcessRunRequest } from './types.js';
+export { pdfText } from './pdf.js';
+export type {
+  HarnessConfig,
+  HarnessFile,
+  HarnessProvider,
+  ProcessRunner,
+  ProcessRunRequest,
+} from './types.js';

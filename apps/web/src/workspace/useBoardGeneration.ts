@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { BoardGraphSchema, type BoardAgent, type BoardDocument } from '@opsis/schema';
+import {
+  BoardGraphSchema,
+  type BoardAgent,
+  type BoardAttachment,
+  type BoardDocument,
+} from '@opsis/schema';
 import { layoutBoard } from './model';
 import type { ModelPreferences } from './model-settings';
 
@@ -27,6 +32,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     preferences: ModelPreferences,
     previous: BoardDocument | null,
     selected: string | null,
+    attachments: BoardAttachment[] = [],
   ) {
     if (request.current || review) return false;
     const controller = new AbortController();
@@ -34,7 +40,11 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     setBusy(true);
     setError('');
     setElapsed(0);
-    setStage('Waiting for agent; validating output may include one repair attempt');
+    setStage(
+      attachments.length
+        ? `Agent is reading ${attachments.length} document${attachments.length > 1 ? 's' : ''}; validating output may include one repair attempt`
+        : 'Waiting for agent; validating output may include one repair attempt',
+    );
     try {
       const response = await fetch('/v1/boards/generate', {
         method: 'POST',
@@ -46,6 +56,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
           ...(agent !== 'demo' ? { settings: preferences[agent] } : {}),
           ...(previous ? { board: previous } : {}),
           ...(selected ? { selectedId: selected } : {}),
+          ...(attachments.length ? { attachments } : {}),
         }),
       });
       const payload = await response.json();

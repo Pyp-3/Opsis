@@ -43,11 +43,13 @@ describe('2D board API', () => {
         ),
       }),
       expect.any(AbortSignal),
+      [],
     );
     expect(factory).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenLastCalledWith(
       expect.objectContaining({ user: expect.stringContaining('Validation error:') }),
       expect.any(AbortSignal),
+      [],
     );
   });
   it('repairs malformed CLI output but never retries authentication/process errors', async () => {
@@ -141,6 +143,7 @@ describe('2D board API', () => {
     expect(complete).toHaveBeenCalledWith(
       expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v3' }),
       expect.any(AbortSignal),
+      [],
     );
     expect(BoardGraphSchema.safeParse(reply.json()).success).toBe(true);
   });

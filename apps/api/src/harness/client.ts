@@ -1,13 +1,14 @@
-import { chmod, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { accessSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { LLMClient, LLMRequest } from '@opsis/parse';
 import { HarnessError } from './errors.js';
 import { extractHarnessResult } from './envelope.js';
-import type { HarnessConfig, ProcessRunner, ProcessRunRequest } from './types.js';
+import type { HarnessConfig, HarnessFile, ProcessRunner, ProcessRunRequest } from './types.js';
 
-const MAX_STDIN_BYTES = 64 * 1024;
+// Room for extracted document text as well as the current diagram.
+const MAX_STDIN_BYTES = 768 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const RESULT_SCHEMA = JSON.stringify({ type: 'object' });
@@ -60,8 +61,31 @@ function childEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   };
 }
 
-function argv(config: HarnessConfig, schemaPath: string, schema = RESULT_SCHEMA): string[] {
+/** Writes uploads into `attachments/` inside the private workspace and returns their paths. */
+async function stageFiles(directory: string, files: readonly HarnessFile[]): Promise<string[]> {
+  if (!files.length) return [];
+  const folder = join(directory, 'attachments');
+  await mkdir(folder, { mode: 0o700 });
+  return Promise.all(
+    files.map(async (file) => {
+      const path = join(folder, file.name);
+      await writeFile(path, file.data, { mode: 0o600, flag: 'wx' });
+      return path;
+    }),
+  );
+}
+
+function argv(
+  config: HarnessConfig,
+  schemaPath: string,
+  schema = RESULT_SCHEMA,
+  files: readonly HarnessFile[] = [],
+  paths: readonly string[] = [],
+): string[] {
   if (config.provider === 'claude') {
+    // Tools stay off unless files were uploaded; then only the read-only Read tool is offered,
+    // which reads PDFs and images natively from the private workspace.
+    const tools = files.length ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--tools', ''];
     return [
       '--print',
       '--output-format',
@@ -72,8 +96,7 @@ function argv(config: HarnessConfig, schemaPath: string, schema = RESULT_SCHEMA)
       ...(config.effort && !config.model.includes('haiku') ? ['--effort', config.effort] : []),
       '--safe-mode',
       '--restricted',
-      '--tools',
-      '',
+      ...tools,
       '--disable-slash-commands',
       '--strict-mcp-config',
       '--permission-prompts',
@@ -89,6 +112,10 @@ function argv(config: HarnessConfig, schemaPath: string, schema = RESULT_SCHEMA)
       '-',
       ...(config.model === 'default' ? [] : ['--model', config.model]),
       ...(config.effort ? ['--config', `model_reasoning_effort="${config.effort}"`] : []),
+      // Codex attaches images natively; other documents arrive as extracted text.
+      ...paths
+        .filter((_, index) => files[index]?.kind === 'image')
+        .map((path) => `--image=${path}`),
       '--output-schema',
       schemaPath,
       '--json',
@@ -146,15 +173,20 @@ export class HarnessLLMClient implements LLMClient {
   }
 
   /** Runs a JSON-only completion; temperature and token limits are unsupported by these CLIs. */
-  async complete(request: LLMRequest, signal?: AbortSignal): Promise<string> {
+  async complete(
+    request: LLMRequest,
+    signal?: AbortSignal,
+    files: readonly HarnessFile[] = [],
+  ): Promise<string> {
     return harnessSlots.use(async () => {
       try {
         const workspace = await (this.workspaceFactory?.() ??
           privateHarnessWorkspace(this.resultSchema));
         try {
+          const paths = await stageFiles(workspace.directory, files);
           const result = await this.runner.run({
             executable: this.config.executable,
-            args: argv(this.config, workspace.schemaPath, this.resultSchema),
+            args: argv(this.config, workspace.schemaPath, this.resultSchema, files, paths),
             stdin: prompt(request),
             cwd: workspace.directory,
             env: childEnvironment(this.env),

@@ -57,6 +57,7 @@ import {
   DNS_DEMO,
   type BoardGraph,
   type BoardAgent,
+  type BoardAttachment,
 } from '@opsis/schema';
 import { boardIcons } from './icons';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
@@ -84,6 +85,7 @@ import { revealed, type Beat } from './playback';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { routeBoard } from './routing';
 import { RoutedConnection } from './RoutedConnection';
+import { AttachButton, AttachmentChips } from './Attachments';
 import { wrapLabel, ROW_GAP, nodeHeight } from './geometry';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
@@ -102,6 +104,8 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
   return (
     <div
       className={`blueprint-node ${selected ? 'is-selected' : ''} ${data.kind === 'decision' ? 'is-decision' : ''}`}
+      // Staggers the entrance so a new board assembles in reading order.
+      style={{ ['--enter-index' as string]: Math.min(data.number - 1, 14) }}
     >
       <div className="node-symbol">
         <Icon size={48} strokeWidth={1.35} />
@@ -170,6 +174,7 @@ function BoardWorkspace() {
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
+  const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
   const [playback, setPlayback] = useState<{
     nodes: Set<string>;
     edges: Set<string>;
@@ -302,8 +307,19 @@ function BoardWorkspace() {
       setSettingsOpen(true);
       return;
     }
-    if (await generation.generate(text, agent, modelPreferences, boardRef.current, selected))
+    if (
+      await generation.generate(
+        text,
+        agent,
+        modelPreferences,
+        boardRef.current,
+        selected,
+        agent === 'demo' ? [] : attachments,
+      )
+    ) {
       setPrompt('');
+      setAttachments([]);
+    }
   }
 
   async function demo(graph: BoardGraph = EMAIL_DEMO) {
@@ -428,7 +444,7 @@ function BoardWorkspace() {
       board?.edges.map((edge) => ({
         ...edge,
         type: 'routed',
-        data: { route: routes[edge.id]! },
+        data: { route: routes[edge.id]!, current: playback?.edgeId === edge.id },
         sourceHandle: edgePorts(board, edge).source,
         targetHandle: edgePorts(board, edge).target,
         interactionWidth: 24,
@@ -955,6 +971,13 @@ function BoardWorkspace() {
                     className={`composer ${busy ? 'is-busy' : ''}`}
                     onSubmit={(event) => void generate(event)}
                   >
+                    {agent !== 'demo' && (
+                      <AttachmentChips
+                        attachments={attachments}
+                        disabled={busy}
+                        onChange={setAttachments}
+                      />
+                    )}
                     <div className="composer-input">
                       <label className="sr-only" htmlFor="visual-prompt">
                         What would you like to understand?
@@ -979,6 +1002,14 @@ function BoardWorkspace() {
                           }
                         }}
                       />
+                      {agent !== 'demo' && (
+                        <AttachButton
+                          attachments={attachments}
+                          disabled={busy}
+                          onChange={setAttachments}
+                          onError={setError}
+                        />
+                      )}
                       {generation.busy ? (
                         <button
                           key="cancel-generation"
