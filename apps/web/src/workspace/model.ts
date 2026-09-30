@@ -138,7 +138,37 @@ export async function layoutBoard(
     const color = previous?.edges.find((item) => item.id === edge.id)?.color;
     return color && !edge.color ? { ...edge, color } : edge;
   });
-  return BoardDocumentSchema.parse({ ...graph, edges, version: 2, agent, positions, edgePorts });
+  // Nor do they return drawings; an object keeps its illustration while it keeps its icon.
+  const nodes = graph.nodes.map((node) => {
+    const before = previous?.nodes.find((item) => item.id === node.id);
+    return before?.illustration && !node.illustration && before.icon === node.icon
+      ? { ...node, illustration: before.illustration }
+      : node;
+  });
+  return BoardDocumentSchema.parse({
+    ...graph,
+    nodes,
+    edges,
+    version: 2,
+    agent,
+    positions,
+    edgePorts,
+  });
+}
+
+/**
+ * Drawings are large and only matter to playback, so agents are sent the board without them;
+ * they are restored afterwards by `layoutBoard`.
+ */
+export function withoutIllustrations(board: BoardDocument): BoardDocument {
+  return {
+    ...board,
+    nodes: board.nodes.map((node) => {
+      const copy = { ...node };
+      delete copy.illustration;
+      return copy;
+    }),
+  };
 }
 
 export function restoreBoard(): BoardDocument | null {

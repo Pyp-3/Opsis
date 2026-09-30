@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
+import {
+  Brush,
+  LoaderCircle,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  X,
+} from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import { beatDuration, britishVoice, PACE, playbackTimeline, type Beat } from './playback';
 import {
@@ -55,6 +65,26 @@ function useBritishVoices() {
   return { synth, british, preferred: britishVoice(voices) };
 }
 
+/** The agent drawing illustrations the icons evolve into; it runs alongside playback. */
+export type IllustrationControl = {
+  busy: boolean;
+  elapsed: number;
+  message: string;
+  available: boolean;
+  /** Every object already has a drawing, so asking again redraws them all. */
+  redraw: boolean;
+  onIllustrate: () => void;
+};
+
+/**
+ * The timeline only changes when what is told changes. Drawings arriving mid-playback update
+ * the board, and must not restart the step being spoken.
+ */
+function useTimeline(board: BoardDocument) {
+  const told = useMemo(() => JSON.stringify(playbackTimeline(board)), [board]);
+  return useMemo(() => JSON.parse(told) as Beat[], [told]);
+}
+
 /**
  * Plays a board as a short film: a scrubbable timeline of steps, captions for each, and an
  * optional British English narrator. The canvas follows along through `onBeat`.
@@ -64,13 +94,15 @@ export function ProcessPlayer({
   disabled,
   onBeat,
   onClose,
+  illustration,
 }: {
   board: BoardDocument;
   disabled: boolean;
   onBeat: (beats: Beat[], index: number) => void;
   onClose: () => void;
+  illustration?: IllustrationControl;
 }) {
-  const beats = useMemo(() => playbackTimeline(board), [board]);
+  const beats = useTimeline(board);
   const [position, setPosition] = useState(0);
   const index = Math.min(position, beats.length - 1);
   const [playing, setPlaying] = useState(false);
@@ -279,10 +311,37 @@ export function ProcessPlayer({
           {narrate ? <Volume2 size={16} /> : <VolumeX size={16} />}
           <span>Narrator</span>
         </button>
+        {illustration && (
+          <button
+            className="player-illustrate"
+            aria-busy={illustration.busy}
+            disabled={disabled || illustration.busy || !illustration.available}
+            title={
+              illustration.available
+                ? 'Ask the agent to draw animated illustrations that the icons evolve into (uses the selected model)'
+                : 'The selected agent is unavailable'
+            }
+            onClick={illustration.onIllustrate}
+          >
+            {illustration.busy ? <LoaderCircle size={16} className="spin" /> : <Brush size={16} />}
+            <span>
+              {illustration.busy
+                ? `Drawing… ${illustration.elapsed}s`
+                : illustration.redraw
+                  ? 'Redraw'
+                  : 'Illustrate'}
+            </span>
+          </button>
+        )}
         <button aria-label="Close player" onClick={onClose}>
           <X size={16} />
         </button>
       </div>
+      {illustration?.message && !illustration.busy && (
+        <p className="player-illustration-status" role="status">
+          {illustration.message}
+        </p>
+      )}
       {narrate && (
         <div className="player-voice">
           {naturalSupported || british.length > 1 ? (

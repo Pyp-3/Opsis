@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BoardGraphSchema, EMAIL_DEMO } from '@opsis/schema';
+import {
+  BoardGraphSchema,
+  EMAIL_DEMO,
+  EMAIL_DEMO_ILLUSTRATIONS,
+  illustrateOutputSchema,
+} from '@opsis/schema';
 import { buildApp } from './app.js';
 import type { FastifyInstance } from 'fastify';
 import { HarnessError } from './harness/errors.js';
@@ -279,5 +284,70 @@ describe('2D board API', () => {
       payload: { agent: 'demo', prompt: 'Explain photosynthesis' },
     });
     expect(reply.statusCode).toBe(400);
+  });
+
+  describe('illustrations', () => {
+    const drawing = EMAIL_DEMO_ILLUSTRATIONS.sender!;
+    const illustrate = (app: FastifyInstance, payload: object) =>
+      app.inject({ method: 'POST', url: '/v1/boards/illustrate', payload });
+    it('draws the email demo without calling an agent', async () => {
+      const { app, factory } = setup();
+      const reply = await illustrate(app, { agent: 'demo', board: document });
+      expect(reply.statusCode).toBe(200);
+      expect(Object.keys(reply.json().illustrations)).toEqual(EMAIL_DEMO.nodes.map((n) => n.id));
+      expect(reply.json().skipped).toEqual([]);
+      expect(factory).not.toHaveBeenCalled();
+    });
+    it('keeps valid drawings for the requested objects and skips the rest', async () => {
+      const { app, complete, factory } = setup(
+        JSON.stringify({
+          illustrations: [
+            { id: 'sender', illustration: drawing },
+            { id: 'app', illustration: { layers: [{ shape: 'circle' }] } },
+            { id: 'outgoing', illustration: drawing },
+          ],
+        }),
+      );
+      const reply = await illustrate(app, {
+        agent: 'claude',
+        board: document,
+        nodeIds: ['sender', 'app'],
+      });
+      expect(reply.statusCode).toBe(200);
+      expect(reply.json()).toEqual({ illustrations: { sender: drawing }, skipped: ['app'] });
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(factory).toHaveBeenCalledWith('claude', expect.anything(), illustrateOutputSchema);
+      const request = (complete.mock.calls[0] as unknown as [{ user: string }])[0];
+      expect(JSON.parse(request.user).draw.map((item: { id: string }) => item.id)).toEqual([
+        'sender',
+        'app',
+      ]);
+    });
+    it('asks once for a repair when no drawing is valid', async () => {
+      const { app, complete } = setup();
+      complete
+        .mockResolvedValueOnce(
+          JSON.stringify({ illustrations: [{ id: 'sender', illustration: { layers: [] } }] }),
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ illustrations: [{ id: 'sender', illustration: drawing }] }),
+        );
+      const reply = await illustrate(app, { agent: 'codex', board: document, nodeIds: ['sender'] });
+      expect(reply.statusCode).toBe(200);
+      expect(complete).toHaveBeenCalledTimes(2);
+      expect(complete).toHaveBeenLastCalledWith(
+        expect.objectContaining({ user: expect.stringContaining('None of your illustrations') }),
+        expect.any(AbortSignal),
+      );
+    });
+    it('rejects objects that are not on the board', async () => {
+      const { app } = setup();
+      const reply = await illustrate(app, {
+        agent: 'claude',
+        board: document,
+        nodeIds: ['nowhere'],
+      });
+      expect(reply.statusCode).toBe(400);
+    });
   });
 });

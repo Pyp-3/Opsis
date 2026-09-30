@@ -5,7 +5,7 @@ import {
   type BoardAttachment,
   type BoardDocument,
 } from '@opsis/schema';
-import { layoutBoard } from './model';
+import { layoutBoard, withoutIllustrations } from './model';
 import type { ModelPreferences } from './model-settings';
 
 export function useBoardGeneration(commit: (board: BoardDocument) => void) {
@@ -54,7 +54,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
           prompt: text,
           agent,
           ...(agent !== 'demo' ? { settings: preferences[agent] } : {}),
-          ...(previous ? { board: previous } : {}),
+          ...(previous ? { board: withoutIllustrations(previous) } : {}),
           ...(selected ? { selectedId: selected } : {}),
           ...(attachments.length ? { attachments } : {}),
         }),

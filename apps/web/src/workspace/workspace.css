@@ -2118,6 +2118,25 @@ summary::-webkit-details-marker {
   background: var(--accent-soft);
   border-color: transparent;
 }
+.player-controls .player-illustrate {
+  width: auto;
+  padding: 0 10px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.player-controls .player-illustrate[aria-busy='true'] {
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.player-illustration-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bp-ink-2);
+  text-align: center;
+}
 .player-voice {
   display: flex;
   flex-wrap: wrap;
@@ -2241,6 +2260,176 @@ summary::-webkit-details-marker {
   }
 }
 
+/* Evolving icons: during playback an illustrated icon gives way to its agent-drawn picture,
+   which animates while current and rests once passed. Both share one grid cell. */
+.node-symbol > .node-icon,
+.node-symbol > .illustration {
+  grid-area: 1 / 1;
+}
+.node-symbol > .node-icon {
+  transition:
+    opacity 450ms ease,
+    transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.node-symbol.is-evolved > .node-icon {
+  opacity: 0;
+  transform: scale(0.55) rotate(-8deg);
+}
+.blueprint .react-flow__node.is-current .illustration {
+  animation: illustration-in 650ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+}
+@keyframes illustration-in {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+    filter: blur(3px);
+  }
+}
+
+/* Living icons: without a drawing, the current icon still moves the way its subject does. */
+.node-symbol[data-motion] > .node-icon {
+  transform-origin: 50% 50%;
+}
+.node-symbol[data-motion='draw'] > .node-icon > * {
+  stroke-dasharray: 150;
+  animation: icon-draw 1100ms cubic-bezier(0.65, 0, 0.35, 1) backwards;
+}
+.node-symbol[data-motion='flow'] > .node-icon > * {
+  stroke-dasharray: 4 2.5;
+  animation: icon-flow 900ms linear infinite;
+}
+.node-symbol[data-motion='spin'] > .node-icon {
+  animation: icon-spin 7s linear infinite;
+}
+.node-symbol[data-motion='beat'] > .node-icon {
+  animation: icon-beat 1100ms ease-in-out infinite;
+}
+.node-symbol[data-motion='flicker'] > .node-icon {
+  transform-origin: 50% 90%;
+  animation: icon-flicker 900ms steps(6, jump-none) infinite;
+}
+.node-symbol[data-motion='fall'] > .node-icon {
+  animation: icon-fall 1300ms ease-in infinite;
+}
+.node-symbol[data-motion='rise'] > .node-icon {
+  animation: icon-rise 1500ms ease-in-out infinite;
+}
+.node-symbol[data-motion='sway'] > .node-icon {
+  transform-origin: 50% 95%;
+  animation: icon-sway 2400ms ease-in-out infinite;
+}
+.node-symbol[data-motion='grow'] > .node-icon {
+  transform-origin: 50% 95%;
+  animation:
+    icon-grow 1200ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+    icon-sway 2400ms ease-in-out 1200ms infinite;
+}
+.node-symbol[data-motion='ring'] > .node-icon {
+  transform-origin: 50% 10%;
+  animation: icon-ring 1600ms ease-in-out infinite;
+}
+@keyframes icon-draw {
+  from {
+    stroke-dashoffset: 150;
+  }
+}
+@keyframes icon-flow {
+  to {
+    stroke-dashoffset: -13;
+  }
+}
+@keyframes icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes icon-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.14);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.08);
+  }
+}
+@keyframes icon-flicker {
+  0%,
+  100% {
+    transform: scale(1, 1);
+    opacity: 1;
+  }
+  33% {
+    transform: scale(0.96, 1.06);
+    opacity: 0.85;
+  }
+  66% {
+    transform: scale(1.03, 0.97);
+    opacity: 1;
+  }
+}
+@keyframes icon-fall {
+  0% {
+    transform: translateY(-4px);
+    opacity: 0.4;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(4px);
+    opacity: 0.6;
+  }
+}
+@keyframes icon-rise {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes icon-sway {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes icon-grow {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+@keyframes icon-ring {
+  0%,
+  50%,
+  100% {
+    transform: rotate(0);
+  }
+  10% {
+    transform: rotate(-14deg);
+  }
+  20% {
+    transform: rotate(11deg);
+  }
+  30% {
+    transform: rotate(-7deg);
+  }
+  40% {
+    transform: rotate(4deg);
+  }
+}
+
 /* New boards assemble one concept at a time, in reading order. */
 .blueprint-node {
   animation: node-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
@@ -2266,7 +2455,8 @@ summary::-webkit-details-marker {
   .player-count {
     display: none;
   }
-  .player-controls .player-narrator span {
+  .player-controls .player-narrator span,
+  .player-controls .player-illustrate span {
     display: none;
   }
 }
@@ -2283,6 +2473,16 @@ summary::-webkit-details-marker {
   }
   .edge-motion-packet {
     display: none;
+  }
+  .node-symbol > .node-icon,
+  .node-symbol[data-motion] > .node-icon,
+  .node-symbol[data-motion] > .node-icon > *,
+  .blueprint .react-flow__node.is-current .illustration {
+    animation: none;
+    transition: none;
+  }
+  .node-symbol[data-motion] > .node-icon > * {
+    stroke-dasharray: none;
   }
 }
 

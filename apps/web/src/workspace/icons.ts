@@ -814,3 +814,60 @@ export function searchIcons(query: string, category: IconCategory | 'All' = 'All
     return words.every((word) => haystack.includes(word));
   });
 }
+
+/**
+ * How an icon comes alive while the process player is on it, before (or without) an agent's
+ * illustration: wind streams, gears turn, hearts beat. Anything unlisted draws itself in.
+ */
+export type IconMotion =
+  'draw' | 'flow' | 'spin' | 'beat' | 'flicker' | 'fall' | 'rise' | 'sway' | 'grow' | 'ring';
+const ICON_MOTIONS: Partial<Record<BoardIcon, IconMotion>> = {
+  wind: 'flow',
+  waves: 'flow',
+  route: 'flow',
+  workflow: 'flow',
+  cable: 'flow',
+  activity: 'flow',
+  pulse: 'flow',
+  wifi: 'flow',
+  radio: 'flow',
+  exchange: 'flow',
+  settings: 'spin',
+  refresh: 'spin',
+  recycle: 'spin',
+  repeat: 'spin',
+  atom: 'spin',
+  orbit: 'spin',
+  sun: 'spin',
+  compass: 'spin',
+  globe: 'spin',
+  heart: 'beat',
+  brain: 'beat',
+  target: 'beat',
+  flame: 'flicker',
+  zap: 'flicker',
+  lightbulb: 'flicker',
+  siren: 'flicker',
+  storm: 'flicker',
+  rain: 'fall',
+  snowflake: 'fall',
+  droplet: 'fall',
+  download: 'fall',
+  upload: 'rise',
+  rocket: 'rise',
+  plane: 'rise',
+  send: 'rise',
+  tree: 'sway',
+  leaf: 'sway',
+  flag: 'sway',
+  fish: 'sway',
+  bird: 'sway',
+  ship: 'sway',
+  sprout: 'grow',
+  wheat: 'grow',
+  bell: 'ring',
+  alert: 'ring',
+  megaphone: 'ring',
+  phone: 'ring',
+};
+export const iconMotion = (icon: BoardIcon): IconMotion => ICON_MOTIONS[icon] ?? 'draw';

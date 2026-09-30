@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { IllustrationSchema } from './illustration';
 
 /** Icon names agents and readers may use; see apps/web icons for labels and search terms. */
 export const BOARD_ICONS = [
@@ -229,6 +230,8 @@ export const BoardNodeSchema = z
     caveat: z.string().max(500).optional(),
     /** What the process player's narrator says when it first reaches this object. */
     narration: z.string().max(400).optional(),
+    /** An animated drawing the process player evolves the icon into; see illustration.ts. */
+    illustration: IllustrationSchema.optional(),
   })
   .strict();
 export const BoardEdgeKindSchema = z.enum(['flow', 'request', 'response', 'feedback', 'retry']);
@@ -335,7 +338,8 @@ export const boardOutputSchema = JSON.stringify(
         .max(100),
       nodes: z
         .array(
-          BoardNodeSchema.extend({
+          // Illustrations are drawn on request by the illustrate route, not with the diagram.
+          BoardNodeSchema.omit({ illustration: true }).extend({
             confidence: z.enum(['normal', 'simplified', 'uncertain']),
             caveat: z.string().max(500),
             narration: z.string().min(1).max(400),
@@ -348,6 +352,37 @@ export const boardOutputSchema = JSON.stringify(
   ),
 );
 export type BoardGraph = z.infer<typeof BoardGraphSchema>;
+
+/** Asks an agent to draw animated illustrations for some or all of a board's objects. */
+export const IllustrateRequestSchema = z
+  .object({
+    agent: BoardAgentSchema,
+    settings: BoardModelSettingsSchema.optional(),
+    board: BoardDocumentSchema,
+    nodeIds: z.array(id).min(1).max(50).optional(),
+  })
+  .strict();
+export type IllustrateRequest = z.infer<typeof IllustrateRequestSchema>;
+export const IllustrateResponseSchema = z
+  .object({
+    illustrations: z.record(id, IllustrationSchema),
+    /** Objects the agent drew something invalid for; they keep their icons. */
+    skipped: z.array(id),
+  })
+  .strict();
+export type IllustrateResponse = z.infer<typeof IllustrateResponseSchema>;
+/** What the agent returns: a list, because JSON schemas describe keyed maps poorly. */
+export const illustrateOutputSchema = JSON.stringify(
+  zodToJsonSchema(
+    z.object({
+      illustrations: z
+        .array(z.object({ id, illustration: IllustrationSchema }).strict())
+        .min(1)
+        .max(50),
+    }),
+    { $refStrategy: 'none' },
+  ),
+);
 export type BoardDocument = z.infer<typeof BoardDocumentSchema>;
 export type BoardRequest = z.infer<typeof BoardRequestSchema>;
 
@@ -370,9 +405,12 @@ export function withoutNarration<T extends { narration?: string | undefined }>(i
   return copy;
 }
 
-/** Narration is spoken presentation; agents may re-word it so the story flows, without review. */
-const content = (item: { narration?: string | undefined }) =>
-  JSON.stringify({ ...item, narration: undefined });
+/**
+ * Narration and illustrations are presentation; agents may re-word or redraw them so the story
+ * flows, without review.
+ */
+const content = (item: { narration?: string | undefined; illustration?: unknown }) =>
+  JSON.stringify({ ...item, narration: undefined, illustration: undefined });
 
 /** Every changed or removed existing item requires explicit review, including selected nodes. */
 export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {

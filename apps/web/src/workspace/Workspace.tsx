@@ -58,8 +58,11 @@ import {
   type BoardGraph,
   type BoardAgent,
   type BoardAttachment,
+  type Illustration,
 } from '@opsis/schema';
-import { boardIcons } from './icons';
+import { boardIcons, iconMotion } from './icons';
+import { IllustrationView, usePrefersReducedMotion } from './Illustration';
+import { useIllustrator } from './useIllustrator';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
@@ -97,18 +100,35 @@ type DiagramNode = Node<{
   number: number;
   outgoing: number;
   confidence: string | undefined;
+  illustration: Illustration | undefined;
+  /** Where playback is: on this object, past it, or not playing (or not reached). */
+  stage: 'current' | 'revealed' | null;
 }>;
 
 function IconNode({ data, selected }: NodeProps<DiagramNode>) {
   const Icon = boardIcons[data.icon] ?? boardIcons.box;
+  const still = usePrefersReducedMotion();
+  // During playback an illustrated icon evolves into its drawing, which stays once reached.
+  const evolved = data.illustration && data.stage;
   return (
     <div
       className={`blueprint-node ${selected ? 'is-selected' : ''} ${data.kind === 'decision' ? 'is-decision' : ''}`}
       // Staggers the entrance so a new board assembles in reading order.
       style={{ ['--enter-index' as string]: Math.min(data.number - 1, 14) }}
     >
-      <div className="node-symbol">
-        <Icon size={48} strokeWidth={1.35} />
+      <div
+        className={`node-symbol ${evolved ? 'is-evolved' : ''}`}
+        data-motion={data.stage === 'current' && !evolved ? iconMotion(data.icon) : undefined}
+      >
+        <Icon className="node-icon" size={48} strokeWidth={1.35} />
+        {evolved && (
+          // Remounted on each visit, so the drawing plays from the start every time.
+          <IllustrationView
+            key={data.stage}
+            illustration={data.illustration!}
+            animate={data.stage === 'current' && !still}
+          />
+        )}
         {(['left', 'right', 'top', 'bottom'] as const).map((side) => (
           <Handle
             key={side}
@@ -159,7 +179,9 @@ function BoardWorkspace() {
     useBoardHistory(initial.snapshot);
   const library = useBoardLibrary(initial, snapshot, replace);
   const generation = useBoardGeneration(commit);
+  const illustrator = useIllustrator(boardRef, setBoard);
   const { error, setError, setBusy } = generation;
+  const { cancel: cancelIllustration } = illustrator;
   const [arranging, setArranging] = useState(false);
   const busy = generation.busy || library.switching || !!generation.review || arranging;
   const saved = library.status;
@@ -195,7 +217,8 @@ function BoardWorkspace() {
     setSelectedEdge(null);
     setPlayerOpen(false);
     setPlayback(null);
-  }, [library.activeId, boardRef]);
+    cancelIllustration();
+  }, [library.activeId, boardRef, cancelIllustration]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -434,6 +457,13 @@ function BoardWorkspace() {
           number: index + 1,
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,
           confidence: node.confidence,
+          illustration: node.illustration,
+          stage:
+            playback?.nodeId === node.id
+              ? 'current'
+              : playback?.nodes.has(node.id)
+                ? 'revealed'
+                : null,
         },
       })) ?? [],
     [board, selected, playback],
@@ -501,7 +531,10 @@ function BoardWorkspace() {
             ? node
             : 'label' in patch || 'summary' in patch
               ? withoutNarration({ ...node, ...patch })
-              : { ...node, ...patch },
+              : 'icon' in patch && patch.icon !== node.icon
+                ? // A new icon replaces the picture, so the drawing of the old one goes.
+                  { ...node, ...patch, illustration: undefined }
+                : { ...node, ...patch },
         ),
       });
   };
@@ -952,6 +985,14 @@ function BoardWorkspace() {
                   disabled={busy}
                   onBeat={followBeat}
                   onClose={closePlayer}
+                  illustration={{
+                    busy: illustrator.busy,
+                    elapsed: illustrator.elapsed,
+                    message: illustrator.message,
+                    available: agent === 'demo' || status?.available !== false,
+                    redraw: board.nodes.every((node) => node.illustration),
+                    onIllustrate: () => void illustrator.illustrate(agent, modelPreferences),
+                  }}
                 />
               ) : (
                 <>
