@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import type { LLMRequest } from '@opsis/parse';
 import {
@@ -197,7 +198,7 @@ describe('SpawnProcessRunner supervision', () => {
     executable: process.execPath,
     args,
     stdin: '',
-    cwd: '/tmp',
+    cwd: tmpdir(),
     env: { PATH: '/usr/bin:/bin' },
     timeoutMs: 1_000,
     maxStdinBytes: 64,
@@ -267,6 +268,7 @@ describe('harness configuration and offline fallback', () => {
   it.each([
     ['claude', 'claude 2.1.281', '2.1.281'],
     ['codex', 'codex-cli 0.156.0', '0.156.0'],
+    ['codex', 'codex-cli 0.159.3', '0.159.3'],
     ['agy', 'agy 1.2.9', '1.2.9'],
   ] as const)(
     'accepts only the audited %s version family at startup',

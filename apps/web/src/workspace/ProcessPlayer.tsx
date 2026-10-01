@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
-import { AgentActivity } from './AgentActivity';
+import { AgentActivity } from './AgentActivityView';
 import type { AgentActivity as AgentActivityState } from './agentActivity';
 import { beatDuration, britishVoice, PACE, playbackTimeline, type Beat } from './playback';
 import {

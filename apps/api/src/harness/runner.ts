@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { HarnessError } from './errors.js';
 import type { ProcessRunner, ProcessRunRequest, ProcessRunResult } from './types.js';
+import { executableCommand } from '../cli-executable.js';
 
 const KILL_GRACE_MS = 2_000;
 
@@ -18,8 +19,10 @@ export class SpawnProcessRunner implements ProcessRunner {
     if (request.signal?.aborted) return Promise.reject(new HarnessError('harness_cancelled'));
 
     return new Promise((resolve, reject) => {
-      const child = spawn(request.executable, [...request.args], {
+      const command = executableCommand(request.executable, request.args);
+      const child = spawn(command.executable, command.args, {
         shell: false,
+        windowsHide: true,
         cwd: request.cwd,
         env: { ...request.env },
         stdio: ['pipe', 'pipe', 'pipe'],

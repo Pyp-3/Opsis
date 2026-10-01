@@ -1,5 +1,3 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { LLMClient, LLMRequest } from '@opsis/parse';
 import {
@@ -27,6 +25,7 @@ import {
   type HarnessProgress,
 } from './harness/index.js';
 import { AttachmentError, attachmentInstructions, prepareAttachments } from './attachments.js';
+import { resolveAgentExecutable } from './cli-executable.js';
 
 export type BoardClient = LLMClient & {
   complete(
@@ -47,9 +46,7 @@ export const localBoardClient: BoardClientFactory = async (
   settings = DEFAULT_BOARD_MODELS[agent],
   resultSchema = boardOutputSchema,
 ) => {
-  const executable =
-    process.env[`OPSIS_${agent.toUpperCase()}_BIN`] ??
-    (agent === 'claude' ? join(homedir(), '.local/bin/claude') : '/usr/bin/codex');
+  const executable = await resolveAgentExecutable(agent);
   const client = await createHarnessLLMClient(
     {
       OPSIS_LLM_PROVIDER: `harness:${agent}`,

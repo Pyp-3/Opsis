@@ -21,7 +21,7 @@ const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
 
 const VERSION_PATTERNS: Record<HarnessProvider, RegExp> = {
   claude: /(?:^|\s)2\.1\.\d+(?:\s|$)/u,
-  codex: /(?:^|\s)0\.(?:156|157)\.\d+(?:\s|$)/u,
+  codex: /(?:^|\s)0\.(?:156|157|159)\.\d+(?:\s|$)/u,
   agy: /(?:^|\s)1\.2\.\d+(?:\s|$)/u,
 };
 

@@ -55,13 +55,32 @@ class Semaphore {
 
 const harnessSlots = new Semaphore(2);
 
-function childEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
-  return {
+export function childEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const result: Record<string, string> = {
     HOME: env.HOME ?? '',
     LANG: env.LANG ?? 'C.UTF-8',
     TMPDIR: env.TMPDIR ?? tmpdir(),
-    PATH: '/usr/local/bin:/usr/bin:/bin',
+    PATH: env.PATH ?? env.Path ?? '/usr/local/bin:/usr/bin:/bin',
   };
+  // Keep platform paths needed by native CLIs and their existing local login.
+  // Deliberately omit API keys and unrelated application environment variables.
+  for (const name of [
+    'USERPROFILE',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'SystemRoot',
+    'COMSPEC',
+    'TEMP',
+    'TMP',
+    'XDG_CONFIG_HOME',
+    'XDG_DATA_HOME',
+  ]) {
+    const value = Object.entries(env).find(
+      ([key]) => key.toUpperCase() === name.toUpperCase(),
+    )?.[1];
+    if (value !== undefined) result[name] = value;
+  }
+  return result;
 }
 
 /** Writes uploads into `attachments/` inside the private workspace and returns their paths. */
@@ -242,9 +261,14 @@ export async function validateExecutable(
     const allowed = await Promise.all(options.allowedPaths.map((path) => realpath(path)));
     if (!allowed.includes(resolved)) throw new HarnessError('harness_config');
     const metadata = await stat(resolved);
-    if (!metadata.isFile() || (metadata.mode & 0o022) !== 0)
+    if (!metadata.isFile() || (process.platform !== 'win32' && (metadata.mode & 0o022) !== 0))
       throw new HarnessError('harness_config');
-    accessSync(resolved, constants.X_OK);
+    accessSync(
+      resolved,
+      process.platform === 'win32' || /\.[cm]?js$/iu.test(resolved)
+        ? constants.F_OK
+        : constants.X_OK,
+    );
   } catch (error) {
     if (error instanceof HarnessError) throw error;
     throw new HarnessError('harness_missing');

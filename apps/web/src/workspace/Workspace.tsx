@@ -62,7 +62,7 @@ import {
 import { boardIcons, iconMotion } from './icons';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
-import { AgentActivity } from './AgentActivity';
+import { AgentActivity } from './AgentActivityView';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentActivity } from './AgentActivity';
+import { AgentActivity } from './AgentActivityView';
 import { applyProgress, startActivity, VERBS, type AgentActivity as State } from './agentActivity';
 
 beforeEach(() => vi.useFakeTimers());

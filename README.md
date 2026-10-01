@@ -60,8 +60,8 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 
 | Variable           | Purpose                                   | Default                      |
 | ------------------ | ----------------------------------------- | ---------------------------- |
-| `OPSIS_CLAUDE_BIN` | Claude CLI executable                     | `~/.local/bin/claude`        |
-| `OPSIS_CODEX_BIN`  | Codex CLI executable                      | `/usr/bin/codex`             |
+| `OPSIS_CLAUDE_BIN` | Claude CLI executable override            | Auto-discovered              |
+| `OPSIS_CODEX_BIN`  | Codex CLI executable override             | Auto-discovered              |
 | `HOST`             | API listen address                        | `127.0.0.1`                  |
 | `PORT`             | API port                                  | `8000`                       |
 | `OPSIS_DB_PATH`    | SQLite database for v2 and legacy boards  | `apps/api/data/opsis.sqlite` |
@@ -69,6 +69,8 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 | `OPSIS_MODEL_DIR`  | Where the narrator's speech model is kept | `apps/api/data/models`       |
 
 Use absolute executable paths when overriding the CLI locations. Executables and versions are validated by the harness. The `OPSIS_LLM_*` settings described in the [legacy API documentation](apps/api/README.md) configure the older pipeline; the new canvas sends its model selection from the UI.
+
+CLI discovery searches the API process's `PATH`, then common user/system installation locations on Windows, Linux, and macOS (including Apple Silicon Homebrew). Windows npm installs are resolved to their package's native executable or JavaScript entry point; `.cmd`/`.ps1` npm overrides are supported without invoking a shell. Custom shell wrappers are unsupported. Restart the API after installing a CLI or changing its `PATH`. An explicit override takes precedence and fails if invalid instead of silently selecting another installation. Readiness checks do not verify login or model entitlement.
 
 ## Persistence: what is saved today?
 
