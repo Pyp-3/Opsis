@@ -39,7 +39,7 @@ afterEach(() => {
   sessionStorage.clear();
 });
 const board: BoardDocument = { ...EMAIL_DEMO, version: 2, agent: 'claude', positions: {} };
-function setup(candidate?: typeof EMAIL_DEMO) {
+function setup(candidate?: typeof EMAIL_DEMO, responseStatus = 409) {
   localStorage.setItem('opsis:board:v2', JSON.stringify(board));
   const fetch = vi.fn(async (url: string, options?: RequestInit) => {
     if (url === '/v1/agents')
@@ -47,9 +47,14 @@ function setup(candidate?: typeof EMAIL_DEMO) {
     if (url === '/v1/boards') return Response.json([]);
     if (options?.method === 'PUT') return Response.json({ revision: 1 });
     if (url === '/v1/boards/generate')
-      return Response.json(candidate ? { candidate, changes: ['Remove concept: sender'] } : board, {
-        status: candidate ? 409 : 200,
-      });
+      return Response.json(
+        candidate && responseStatus === 409
+          ? { candidate, changes: ['Remove concept: sender'] }
+          : (candidate ?? board),
+        {
+          status: candidate ? responseStatus : 200,
+        },
+      );
     throw new Error(`Unexpected request ${url}`);
   });
   vi.stubGlobal('fetch', fetch);
@@ -132,11 +137,62 @@ describe('current workspace integration', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
     await screen.findByRole('region', { name: 'Review proposed changes' });
+    expect(screen.getByRole('img', { name: `Proposed diagram: ${candidate.title}` })).toBeDefined();
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     expect(within(steps).getByRole('button', { name: /You write/ })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed changes' }));
     expect(within(steps).queryByRole('button', { name: /You write/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(within(steps).getByRole('button', { name: /You write/ })).toBeDefined();
+  });
+  it('previews additive replies, compares layouts, and discards without saving changes', async () => {
+    const candidate = {
+      ...EMAIL_DEMO,
+      nodes: [
+        ...EMAIL_DEMO.nodes,
+        { ...EMAIL_DEMO.nodes[0]!, id: 'archive', label: 'Archive copy' },
+      ],
+      edges: [
+        ...EMAIL_DEMO.edges,
+        {
+          id: 'archive-path',
+          source: 'recipient',
+          target: 'archive',
+          label: 'Archive',
+          kind: 'flow' as const,
+        },
+      ],
+    };
+    const fetch = setup(candidate, 200);
+    await screen.findByText('Fixture ready');
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([, options]) => options?.method === 'PUT')).toBe(true),
+    );
+    const savesBefore = fetch.mock.calls.filter(([, options]) => options?.method === 'PUT').length;
+    fireEvent.change(screen.getByLabelText('What would you like to understand?'), {
+      target: { value: 'Add an archive' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
+    const review = await screen.findByRole('region', { name: 'Review proposed changes' });
+    const proposed = within(review).getByRole('img') as HTMLImageElement;
+    expect(decodeURIComponent(proposed.src)).toContain('Archive copy');
+    expect(within(review).getByText('Add concept: Archive copy')).toBeDefined();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Diagram steps' })).queryByRole('button', {
+        name: 'Archive copy',
+      }),
+    ).toBeNull();
+    fireEvent.click(within(review).getByRole('button', { name: 'Current' }));
+    expect(
+      decodeURIComponent((within(review).getByRole('img') as HTMLImageElement).src),
+    ).not.toContain('Archive copy');
+    fireEvent.click(within(review).getByRole('button', { name: 'Proposed' }));
+    fireEvent.click(within(review).getByRole('button', { name: 'Zoom in preview' }));
+    expect((within(review).getByRole('img') as HTMLImageElement).style.width).toBe('150%');
+    fireEvent.click(within(review).getByRole('button', { name: 'Keep current board' }));
+    expect(screen.queryByRole('region', { name: 'Review proposed changes' })).toBeNull();
+    expect(fetch.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(
+      savesBefore,
+    );
   });
 });

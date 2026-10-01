@@ -1997,32 +1997,116 @@ summary::-webkit-details-marker {
   }
 }
 .generation-review {
-  max-height: 46vh;
+  position: fixed;
+  z-index: 100;
+  inset: 6vh max(16px, calc((100vw - 1000px) / 2)) auto;
+  max-height: 88vh;
   overflow: auto;
-  background: #fffdf6;
-  color: #263b36;
-  border: 1px solid #c6b77c;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 16px 80px rgb(0 0 0 / 0.4);
   font-size: 12px;
 }
 .generation-review button {
-  background: #f7f8f3;
-  color: #244c40;
-  border: 1px solid #c4cebd;
+  background: var(--sunken);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   cursor: pointer;
 }
-.review-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.review-header,
+.review-toolbar,
+.review-actions,
+.review-tabs,
+.review-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.review-columns pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 10px;
+.review-header {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.review-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.review-header p {
+  margin: 0;
+  color: var(--ink-3);
+}
+.generation-review .review-apply {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.review-toolbar {
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.review-toolbar > span {
+  color: var(--ink-3);
+}
+.review-zoom {
+  margin-left: auto;
+}
+.review-tabs button[aria-pressed='true'] {
+  border-color: var(--ink-2);
+  background: var(--hover);
+}
+.review-zoom button {
+  display: flex;
+  padding: 7px;
+}
+.review-zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.review-layout {
+  height: min(52vh, 480px);
+  min-height: 220px;
+  overflow: auto;
+  background: #153c68;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.review-layout img {
+  display: block;
+  max-width: none;
+  object-fit: contain;
+}
+.review-changes {
+  margin-top: 12px;
+}
+.review-changes summary {
+  cursor: pointer;
+}
+.review-changes ul {
+  padding-left: 20px;
+}
+@media (max-width: 600px) {
+  .generation-review {
+    padding: 12px;
+    inset: 12px 12px auto;
+    max-height: calc(100dvh - 24px);
+  }
+  .review-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .review-actions {
+    width: 100%;
+  }
+  .review-actions button {
+    flex: 1;
+  }
+  .review-toolbar > span {
+    width: 100%;
+    order: 3;
+  }
 }
 .confidence-badge {
   font-size: 10px;

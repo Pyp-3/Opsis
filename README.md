@@ -100,7 +100,7 @@ Use **Export → Editable board** for portable JSON backups and **Import** to re
 
 ## Follow-up safety and learning
 
-The server compares every existing node and connection with the candidate graph. Removals, rewrites and changed metadata trigger a review panel with current/proposed content; nothing is applied until **Apply reviewed changes**. **Keep current board** discards the candidate. Pure additions may apply directly. All existing changes require review, even to the selected concept, because the server cannot reliably infer intended edits from prose alone.
+The server compares every existing node and connection with the candidate graph. Removals, rewrites and changed metadata require review. The workspace also previews pure additions and other prompt updates to nonempty boards before applying them. **Proposed** shows the actual candidate layout, icons, arrows and command captions; switch to **Current** to compare, or zoom and scroll for detail. Nothing is saved until **Apply reviewed changes**; **Keep current board** discards the candidate. First-time generation on an empty canvas still opens directly.
 
 Invalid JSON/schema output gets at most one repair attempt using the same model and effort, with validation feedback and a shared 180-second deadline. This may consume an extra model call. Login, process, cancellation and timeout failures are not automatically retried. Generation displays elapsed time and coarse stages, not percentage completion; nodes are not streamed incrementally yet.
 

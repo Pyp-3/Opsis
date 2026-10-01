@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BoardGraphSchema,
+  boardChanges,
   terminalExampleFor,
   type BoardAgent,
   type BoardAttachment,
@@ -95,9 +96,18 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         document.querySelector('.blueprint')?.clientWidth ?? 900,
       );
       if (controller.signal.aborted) return false;
-      if (needsReview)
-        setReview({ candidate, before: previous, changes: payload.changes as string[] });
-      else commit(candidate);
+      if (previous?.nodes.length) {
+        const changes = boardChanges(previous, graph);
+        for (const node of graph.nodes) {
+          if (!previous.nodes.some((item) => item.id === node.id))
+            changes.push(`Add concept: ${node.label}`);
+        }
+        for (const edge of graph.edges) {
+          if (!previous.edges.some((item) => item.id === edge.id))
+            changes.push(`Add connection: ${edge.label || edge.id}`);
+        }
+        setReview({ candidate, before: previous, changes });
+      } else commit(candidate);
       return true;
     } catch (e) {
       if (!controller.signal.aborted)
