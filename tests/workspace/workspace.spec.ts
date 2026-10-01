@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 test('keeps named boards and undo history after reload, exports and walks through them', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await expect(page.getByText('Saved to SQLite')).toBeVisible();
   const title = `Email ${Date.now()}`;
   await page.getByLabel('Board name').fill(title);
@@ -29,7 +29,7 @@ test('keeps named boards and undo history after reload, exports and walks throug
   await expect(page.getByLabel('Board name')).toHaveValue(EMAIL_DEMO.title);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
-  await expect(page.getByText('Understand anything by seeing it.')).toBeVisible();
+  await expect(page.getByText('Start with a question')).toBeVisible();
   await page
     .getByRole('navigation', { name: 'Saved boards' })
     .getByRole('button', { name: title, exact: true })
@@ -58,7 +58,7 @@ test('keeps named boards and undo history after reload, exports and walks throug
 test('reviews changed content, keeps existing board on discard, and uses generated suggestions', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   const candidate = {
     ...EMAIL_DEMO,
@@ -110,7 +110,9 @@ for (const [width, height] of [
   test(`heading, play button and tools never overlap at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.reload();
-    await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+    // Narrow screens keep examples in the sidebar, which starts closed.
+    if (width <= 760) await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
     const play = page.getByRole('button', { name: 'Play the process' });
     await expect(play).toBeVisible();
     const tools = page.getByRole('toolbar', { name: 'Canvas tools' });
@@ -123,7 +125,7 @@ for (const [width, height] of [
   });
 
 test('next steps stay tucked away until opened, and remember being opened', async ({ page }) => {
-  await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+  await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
   const toggle = page.getByRole('button', { name: /Next steps/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
@@ -138,7 +140,8 @@ test('next steps stay tucked away until opened, and remember being opened', asyn
 test('mobile canvas remains usable without horizontal page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await expect(page.getByRole('button', { name: 'Play the process' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -147,7 +150,7 @@ test('mobile canvas remains usable without horizontal page overflow', async ({ p
 });
 
 test('reuses ports for branches and keeps arrows attached while dragging', async ({ page }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   // Reading mode intentionally keeps distant nodes offscreen at a legible zoom.
   // Use the explicit overview for this whole-graph connection-editing scenario.
   await expect(page.getByText('Saved to SQLite')).toBeVisible();

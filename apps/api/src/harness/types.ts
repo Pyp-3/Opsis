@@ -1,4 +1,5 @@
 import type { LLMRequest } from '@opsis/parse';
+import type { HarnessProgress } from './progress.js';
 
 /** CLI harnesses audited for use as local LLM providers. */
 export type HarnessProvider = 'claude' | 'codex' | 'agy';
@@ -24,6 +25,8 @@ export type ProcessRunRequest = {
   maxStdoutBytes: number;
   maxStderrBytes: number;
   signal?: AbortSignal;
+  /** Called with each complete stdout line as it arrives, for live progress. */
+  onStdoutLine?: (line: string) => void;
 };
 
 /** Sanitized child-process result. Callers must not include stderr in diagnostics. */
@@ -42,4 +45,5 @@ export type HarnessComplete = (
   request: LLMRequest,
   signal?: AbortSignal,
   files?: readonly HarnessFile[],
+  onProgress?: (progress: HarnessProgress) => void,
 ) => Promise<string>;

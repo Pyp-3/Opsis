@@ -27,6 +27,7 @@ export class SpawnProcessRunner implements ProcessRunner {
       let stdout = '';
       let stdoutBytes = 0;
       let stderrBytes = 0;
+      let pending = '';
       let settled = false;
       let failure: HarnessError | undefined;
       let killTimer: NodeJS.Timeout | undefined;
@@ -51,7 +52,12 @@ export class SpawnProcessRunner implements ProcessRunner {
           terminate(new HarnessError('harness_overflow'));
           return;
         }
-        stdout += chunk.toString('utf8');
+        const text = chunk.toString('utf8');
+        stdout += text;
+        if (!request.onStdoutLine) return;
+        const lines = (pending + text).split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) if (line.trim()) request.onStdoutLine(line);
       });
       child.stderr.on('data', (chunk: Buffer) => {
         stderrBytes += chunk.length;

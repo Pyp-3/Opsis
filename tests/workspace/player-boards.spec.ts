@@ -70,7 +70,7 @@ test.beforeEach(async ({ page }) => {
 test('plays the DNS process with a British narrator, in message order, to the end', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+  await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
   await saved(page);
   await page.getByRole('button', { name: 'Play the process' }).click();
   const timeline = page.getByRole('slider', { name: 'Process timeline' });
@@ -135,7 +135,7 @@ test('narrates with the natural voice from the Opsis API, sentence by sentence',
     lines.push(route.request().postDataJSON());
     return route.fulfill({ body: silentWav(), contentType: 'audio/wav' });
   });
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('button', { name: 'Play the process' }).click();
   await page.getByRole('button', { name: 'Narrator' }).click();
   await expect(page.getByRole('combobox', { name: 'Voice' })).toHaveValue('natural:bf_emma');
@@ -153,7 +153,7 @@ test('narrates with the natural voice from the Opsis API, sentence by sentence',
 
 test('falls back to a device voice when the natural voice cannot load', async ({ page }) => {
   await page.route('**/v1/speech', (route) => route.fulfill({ json: { state: 'off' } }));
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('button', { name: 'Play the process' }).click();
   await page.getByRole('button', { name: 'Narrator' }).click();
   await expect(page.locator('.player-voice [role=status]')).toContainText(
@@ -168,7 +168,7 @@ test('falls back to a device voice when the natural voice cannot load', async ({
 test('scrubs the timeline with the keyboard and dims what has not happened yet', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('button', { name: 'Play the process' }).click();
   const timeline = page.getByRole('slider', { name: 'Process timeline' });
   await timeline.focus();
@@ -192,7 +192,7 @@ test('scrubs the timeline with the keyboard and dims what has not happened yet',
 test('arrows keep their chosen colour through reload and never vanish while dragging', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the DNS example' }).click();
+  await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
   await saved(page);
   const edge = DNS_DEMO.edges[0]!;
   await page.locator(`[data-id="${edge.id}"] .connection-label rect`).click();
@@ -233,7 +233,7 @@ test('arrows keep their chosen colour through reload and never vanish while drag
 });
 
 test('the icon library searches by meaning and filters by category', async ({ page }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await saved(page);
   await page
     .getByRole('navigation', { name: 'Diagram steps' })
@@ -286,8 +286,11 @@ test('the boards page is a real page with history, search and an accessible layo
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('the introduction offers examples and sample questions', async ({ page }) => {
-  await expect(page.getByText('Understand anything by seeing it.')).toBeVisible();
+test('a new canvas offers questions, and examples live in the sidebar', async ({ page }) => {
+  await expect(page.getByText('Start with a question')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Examples' }).getByRole('button')).toHaveCount(
+    2,
+  );
   await page.getByRole('button', { name: 'How does the water cycle work?' }).click();
   await expect(page.getByLabel('What would you like to understand?')).toHaveValue(
     'How does the water cycle work?',

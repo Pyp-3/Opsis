@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderOpen, Plus, Search } from 'lucide-react';
-import type { BoardDocument } from '@opsis/schema';
+import { DNS_DEMO, EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
 import { BrandMark } from './BrandMark';
@@ -69,21 +69,46 @@ export function WorkspaceSidebar({
           <summary className="rail-section-title">
             Recent boards <span>{library.entries.length}</span>
           </summary>
-          <nav className="node-list" aria-label="Saved boards">
-            {library.entries.slice(0, 5).map((entry) => (
-              <button
-                key={entry.id}
-                disabled={busy}
-                aria-current={entry.id === library.activeId ? 'true' : undefined}
-                onClick={() => onOpen(entry.id)}
-              >
-                {entry.title}
-              </button>
-            ))}
-          </nav>
-          {!library.entries.length && (
-            <p className="rail-empty">Your saved boards will appear here.</p>
+          {library.entries.length ? (
+            <nav className="node-list" aria-label="Saved boards">
+              {library.entries.slice(0, 5).map((entry) => (
+                <button
+                  key={entry.id}
+                  disabled={busy}
+                  aria-current={entry.id === library.activeId ? 'true' : undefined}
+                  onClick={() => onOpen(entry.id)}
+                >
+                  {entry.title}
+                </button>
+              ))}
+            </nav>
+          ) : (
+            <p className="rail-empty">No boards yet.</p>
           )}
+        </details>
+        <details className="rail-section" open>
+          <summary className="rail-section-title">Examples</summary>
+          <nav className="node-list" aria-label="Examples">
+            {(
+              [
+                ['An email’s journey', EMAIL_DEMO, demo],
+                ['DNS lookups', DNS_DEMO, dnsDemo],
+              ] as const
+            ).map(([title, graph, open]) => {
+              const Icon = boardIcons[graph.nodes[1]!.icon];
+              return (
+                <button
+                  key={title}
+                  disabled={busy}
+                  aria-label={`Open example: ${title}`}
+                  onClick={open}
+                >
+                  <Icon size={15} />
+                  <span className="list-label">{title}</span>
+                </button>
+              );
+            })}
+          </nav>
         </details>
         {board && (
           <section className="rail-section">
@@ -146,17 +171,6 @@ export function WorkspaceSidebar({
         )}
       </div>
       <div className="rail-bottom">
-        <details>
-          <summary className="rail-section-title">Examples</summary>
-          <div className="node-list">
-            <button disabled={busy} onClick={demo}>
-              An email’s journey
-            </button>
-            <button disabled={busy} onClick={dnsDemo}>
-              DNS requests &amp; responses
-            </button>
-          </div>
-        </details>
         <p className="rail-footnote">
           <span className="active-dot" /> Private workspace · saved locally
         </p>

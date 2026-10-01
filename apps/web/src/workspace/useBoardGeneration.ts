@@ -7,12 +7,19 @@ import {
 } from '@opsis/schema';
 import { layoutBoard, withoutIllustrations } from './model';
 import type { ModelPreferences } from './model-settings';
+import {
+  agentResponse,
+  applyProgress,
+  startActivity,
+  STREAM_ACCEPT,
+  type AgentActivity,
+} from './agentActivity';
 
 export function useBoardGeneration(commit: (board: BoardDocument) => void) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
-  const [stage, setStage] = useState('');
+  const [activity, setActivity] = useState<AgentActivity>(startActivity);
   const [review, setReview] = useState<{
     candidate: BoardDocument;
     before: BoardDocument;
@@ -40,15 +47,11 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     setBusy(true);
     setError('');
     setElapsed(0);
-    setStage(
-      attachments.length
-        ? `Agent is reading ${attachments.length} document${attachments.length > 1 ? 's' : ''}; validating output may include one repair attempt`
-        : 'Waiting for agent; validating output may include one repair attempt',
-    );
+    setActivity(startActivity());
     try {
       const response = await fetch('/v1/boards/generate', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', accept: STREAM_ACCEPT },
         signal: controller.signal,
         body: JSON.stringify({
           prompt: text,
@@ -59,11 +62,17 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
           ...(attachments.length ? { attachments } : {}),
         }),
       });
-      const payload = await response.json();
-      const needsReview = response.status === 409 && previous && payload.candidate;
-      if (!response.ok && !needsReview)
-        throw new Error(payload.message ?? 'Could not generate a diagram.');
-      setStage('Validating and arranging concepts');
+      const {
+        ok,
+        status,
+        body: payload,
+      } = await agentResponse(response, (progress) => {
+        if (!controller.signal.aborted) setActivity((current) => applyProgress(current, progress));
+      });
+      const needsReview = status === 409 && previous && payload.candidate;
+      if (!ok && !needsReview)
+        throw new Error((payload.message as string) ?? 'Could not generate a diagram.');
+      setActivity((current) => ({ ...current, phase: 'arranging' }));
       const graph = BoardGraphSchema.parse(needsReview ? payload.candidate : payload);
       const candidate = await layoutBoard(
         graph,
@@ -72,7 +81,8 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         document.querySelector('.blueprint')?.clientWidth ?? 900,
       );
       if (controller.signal.aborted) return false;
-      if (needsReview) setReview({ candidate, before: previous, changes: payload.changes });
+      if (needsReview)
+        setReview({ candidate, before: previous, changes: payload.changes as string[] });
       else commit(candidate);
       return true;
     } catch (e) {
@@ -90,7 +100,6 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     request.current?.abort();
     request.current = null;
     setBusy(false);
-    setStage('');
   };
   return {
     busy,
@@ -98,7 +107,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     error,
     setError,
     elapsed,
-    stage,
+    activity,
     review,
     generate,
     cancel,

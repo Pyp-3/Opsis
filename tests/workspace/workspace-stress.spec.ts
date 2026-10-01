@@ -8,7 +8,15 @@ const snapshot = (page: Page) =>
 const saved = (page: Page) =>
   expect(page.getByText('Saved to SQLite', { exact: true })).toBeVisible();
 async function endpoints(page: Page) {
-  const gaps = await page.evaluate(() => {
+  const gaps = await page.evaluate(async () => {
+    // Objects animate into place (after a reload, for example); measuring mid-entrance
+    // compares arrows with handles that are still moving. Endless loops are not waited for.
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     const state = JSON.parse(sessionStorage.getItem('opsis:library-recovery:v1')!).snapshot;
     return state.board.edges.flatMap((edge: { id: string; source: string; target: string }) => {
       const path = document.querySelector(
@@ -104,7 +112,7 @@ test('manager creates, renames, cancels deletion, deletes and never resurrects a
   ).toHaveCount(0);
   await page.getByRole('link', { name: 'Back to workspace' }).click();
   await page.reload();
-  await expect(page.getByText('Understand anything by seeing it.')).toBeVisible();
+  await expect(page.getByText('Start with a question')).toBeVisible();
   expect((await page.request.get('/v1/boards')).ok()).toBe(true);
   await expect(
     page
@@ -116,7 +124,7 @@ test('manager creates, renames, cancels deletion, deletes and never resurrects a
 test('repeated drags, undo, redo and reload keep every endpoint attached and history exact', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await saved(page);
   await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
   await page.waitForTimeout(400);
@@ -160,7 +168,7 @@ test('repeated drags, undo, redo and reload keep every endpoint attached and his
 test('edits, icon changes, deletion and all export formats round trip without losing history', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await saved(page);
   await page
     .getByRole('navigation', { name: 'Diagram steps' })
@@ -207,7 +215,7 @@ test('edits, icon changes, deletion and all export formats round trip without lo
 test('invalid imports and generation errors preserve the board; cancellation ignores late output', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await saved(page);
   const before = (await snapshot(page)).board;
   await page.locator('input[type="file"]').setInputFiles({
@@ -250,7 +258,7 @@ test('invalid imports and generation errors preserve the board; cancellation ign
 test('connection editing, keyboard undo/redo, arrangement and model settings are reversible and durable', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await saved(page);
   await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
   await page.waitForTimeout(400);

@@ -141,7 +141,8 @@ describe('HarnessLLMClient', () => {
       expect(call).toMatchObject({
         cwd: '/private/context-free',
         maxStdinBytes: 786_432,
-        maxStdoutBytes: 1_048_576,
+        // Claude streams every token as an event, so it is allowed more output.
+        maxStdoutBytes: provider === 'claude' ? 33_554_432 : 1_048_576,
         maxStderrBytes: 65_536,
       });
       if (provider === 'codex') {

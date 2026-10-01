@@ -10,6 +10,7 @@ import {
 import { IllustrationView } from './Illustration';
 import { ProcessPlayer } from './ProcessPlayer';
 import { layoutBoard, withoutIllustrations } from './model';
+import { startActivity } from './agentActivity';
 
 afterEach(cleanup);
 
@@ -98,6 +99,7 @@ describe('illustrated boards', () => {
       message: '',
       available: true,
       redraw: true,
+      activity: startActivity(),
       onIllustrate,
     };
     const { rerender } = render(

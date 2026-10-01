@@ -89,6 +89,7 @@ export { HarnessLLMClient } from './client.js';
 export { SpawnProcessRunner } from './runner.js';
 export { extractHarnessResult } from './envelope.js';
 export { pdfText } from './pdf.js';
+export type { HarnessProgress } from './progress.js';
 export type {
   HarnessConfig,
   HarnessFile,

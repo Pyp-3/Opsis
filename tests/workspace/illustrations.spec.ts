@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 
 test('icons come alive in playback and evolve into agent illustrations', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('button', { name: 'Play the process' }).click();
   const player = page.getByRole('region', { name: 'Process player' });
   await player.getByRole('button', { name: 'Next step' }).click();
@@ -70,7 +70,7 @@ test('icons come alive in playback and evolve into agent illustrations', async (
 test('reduced motion shows drawings at rest', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Explore the email example' }).click();
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('button', { name: 'Play the process' }).click();
   const player = page.getByRole('region', { name: 'Process player' });
   await player.getByRole('button', { name: 'Illustrate' }).click();

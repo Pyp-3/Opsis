@@ -49,12 +49,14 @@ describe('2D board API', () => {
       }),
       expect.any(AbortSignal),
       [],
+      expect.any(Function),
     );
     expect(factory).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenLastCalledWith(
       expect.objectContaining({ user: expect.stringContaining('Validation error:') }),
       expect.any(AbortSignal),
       [],
+      expect.any(Function),
     );
   });
   it('repairs malformed CLI output but never retries authentication/process errors', async () => {
@@ -149,6 +151,7 @@ describe('2D board API', () => {
       expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v3' }),
       expect.any(AbortSignal),
       [],
+      expect.any(Function),
     );
     expect(BoardGraphSchema.safeParse(reply.json()).success).toBe(true);
   });
@@ -286,6 +289,66 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(400);
   });
 
+  it('streams the agent’s progress, then the result, to clients that ask', async () => {
+    const { app, complete } = setup();
+    complete.mockImplementationOnce((async (
+      _request: unknown,
+      _signal: unknown,
+      _files: unknown,
+      onProgress?: (progress: object) => void,
+    ) => {
+      onProgress?.({ type: 'note', text: 'Tracing the email to its inbox', done: true });
+      return JSON.stringify(EMAIL_DEMO);
+    }) as never);
+    const reply = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      headers: { accept: 'application/x-ndjson, application/json' },
+      payload: { agent: 'claude', prompt: 'Explain email' },
+    });
+    expect(reply.headers['content-type']).toContain('application/x-ndjson');
+    const events = reply.body
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(events[0]).toEqual({
+      type: 'progress',
+      progress: { type: 'note', text: 'Tracing the email to its inbox', done: true },
+    });
+    expect(events.at(-1)).toMatchObject({ type: 'result', status: 200, body: EMAIL_DEMO });
+    // Claude is asked for specific progress notes; Codex's answer must stay pure JSON.
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ system: expect.stringContaining('progress notes') }),
+      expect.any(AbortSignal),
+      [],
+      expect.any(Function),
+    );
+  });
+  it('streams validation failures as a result event', async () => {
+    const { app } = setup();
+    const reply = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      headers: { accept: 'application/x-ndjson' },
+      payload: { agent: 'claude' },
+    });
+    expect(JSON.parse(reply.body.trim())).toMatchObject({ type: 'result', status: 400 });
+  });
+  it('does not ask Codex to write notes outside its JSON answer', async () => {
+    const { app, complete } = setup();
+    await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'codex', prompt: 'Explain email' },
+    });
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ system: expect.not.stringContaining('progress notes') }),
+      expect.any(AbortSignal),
+      [],
+      expect.any(Function),
+    );
+  });
+
   describe('illustrations', () => {
     const drawing = EMAIL_DEMO_ILLUSTRATIONS.sender!;
     const illustrate = (app: FastifyInstance, payload: object) =>
@@ -338,6 +401,8 @@ describe('2D board API', () => {
       expect(complete).toHaveBeenLastCalledWith(
         expect.objectContaining({ user: expect.stringContaining('None of your illustrations') }),
         expect.any(AbortSignal),
+        [],
+        expect.any(Function),
       );
     });
     it('rejects objects that are not on the board', async () => {

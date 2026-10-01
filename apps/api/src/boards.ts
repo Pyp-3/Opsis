@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { LLMClient, LLMRequest } from '@opsis/parse';
 import {
   BoardGraphSchema,
@@ -20,7 +20,12 @@ import {
   type BoardAgent,
   type BoardGraph,
 } from '@opsis/schema';
-import { createHarnessLLMClient, HarnessError, type HarnessFile } from './harness/index.js';
+import {
+  createHarnessLLMClient,
+  HarnessError,
+  type HarnessFile,
+  type HarnessProgress,
+} from './harness/index.js';
 import { AttachmentError, attachmentInstructions, prepareAttachments } from './attachments.js';
 
 export type BoardClient = LLMClient & {
@@ -28,6 +33,7 @@ export type BoardClient = LLMClient & {
     request: LLMRequest,
     signal?: AbortSignal,
     files?: readonly HarnessFile[],
+    onProgress?: (progress: HarnessProgress) => void,
   ): Promise<string>;
 };
 export type BoardClientFactory = (
@@ -83,6 +89,30 @@ Motion (each layer may have up to 3 motions; they combine):
 - duration is seconds for one pass (0.2–12), delay is seconds after the object appears, repeat is "once" or "loop", easing "smooth" or "linear". Let the subject arrive in the first 1–1.5 seconds, then keep a calm loop of 1.5–4 seconds that shows the process continuing. Loops should return to where they start so they repeat seamlessly; particles can fade in and out as they travel.
 - Show real behaviour: warm air rises, water falls and pools, blood is pumped in beats, messages travel from sender to receiver. Keep it legible, not busy.`;
 
+const DIAGRAM_NOTES = [
+  'Tracing the query from resolver to root servers',
+  'Separating replies from forwarded requests',
+  'Checking which steps can fail and retry',
+];
+const DRAWING_NOTES = [
+  'Sketching air streaming past the turbine blades',
+  'Timing the heartbeat so each pump reads clearly',
+  'Making the droplets fall and pool below',
+];
+
+/**
+ * The app shows an agent's working live, like Claude Code's status line. Claude writes short
+ * progress notes as plain text before its structured answer; Codex's answer must be JSON
+ * alone, so it is shown through its reasoning summaries instead.
+ */
+function progressNotes(agent: Exclude<BoardAgent, 'demo'>, examples: readonly string[]) {
+  if (agent !== 'claude') return '';
+  return `
+Live progress: the reader watches a one-line status of your work while they wait. Write 3–7 progress notes as plain text, one per line, before the JSON answer. Do not plan everything silently first: write the first note straight away, before you start working it out, then work in stages and write the next note as you begin each stage, so the reader sees you progress in real time.
+- Each note is under 9 words, starts with a present participle, and names the real things in this request (for example: ${examples.map((example) => `"${example}"`).join(', ')}). Never generic ("Thinking", "Analysing the request", "Generating JSON").
+- No markdown, numbering, quotation marks or ending punctuation. Notes say what you are doing, not the result: never write the answer, a summary or any other prose outside the structured output.`;
+}
+
 const agentLabel = (agent: Exclude<BoardAgent, 'demo'>) =>
   agent === 'claude' ? 'Claude' : 'Codex';
 
@@ -109,6 +139,59 @@ function acceptIllustrations(output: string, wanted: ReadonlySet<string>) {
     skipped: [...wanted].filter((id) => !illustrations[id]),
     problems,
   };
+}
+
+type Outcome = { status: number; body: unknown };
+const outcome = (status: number, body: unknown): Outcome => ({ status, body });
+type AgentWork = (context: {
+  signal: AbortSignal;
+  progress: (progress: HarnessProgress) => void;
+}) => Promise<Outcome>;
+
+/** Agent calls end when the reader leaves or after three minutes. */
+const AGENT_DEADLINE_MS = 180_000;
+
+/**
+ * Runs agent work for a route. A client that accepts `application/x-ndjson` receives the
+ * agent's progress live, one JSON event per line, then `{ type: "result", status, body }`;
+ * anyone else receives the result as an ordinary JSON response.
+ */
+async function respond(request: FastifyRequest, reply: FastifyReply, work: AgentWork) {
+  const controller = new AbortController();
+  const cancel = () => {
+    if (!reply.raw.writableEnded) controller.abort();
+  };
+  reply.raw.on('close', cancel);
+  const deadline = setTimeout(() => controller.abort(), AGENT_DEADLINE_MS);
+  try {
+    if (!request.headers.accept?.includes('application/x-ndjson')) {
+      const result = await work({ signal: controller.signal, progress: () => undefined });
+      return reply.code(result.status).send(result.body);
+    }
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-cache',
+      'x-content-type-options': 'nosniff',
+    });
+    const send = (event: object) => {
+      if (!reply.raw.writableEnded) reply.raw.write(`${JSON.stringify(event)}\n`);
+    };
+    let result: Outcome;
+    try {
+      result = await work({
+        signal: controller.signal,
+        progress: (progress) => send({ type: 'progress', progress }),
+      });
+    } catch {
+      result = outcome(500, { message: 'Something went wrong. Your board is unchanged.' });
+    }
+    send({ type: 'result', ...result });
+    reply.raw.end();
+  } finally {
+    clearTimeout(deadline);
+    reply.raw.off('close', cancel);
+  }
 }
 
 export function registerBoardRoutes(
@@ -150,279 +233,270 @@ export function registerBoardRoutes(
   });
 
   // Uploaded documents arrive base64-encoded in the request body.
-  app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, async (request, reply) => {
-    const parsed = BoardRequestSchema.safeParse(request.body);
-    if (!parsed.success)
-      return reply.code(400).send({ message: 'The prompt or current diagram is invalid.' });
-    const input = parsed.data;
-    if (input.settings?.model === 'default')
-      return reply
-        .code(400)
-        .send({ message: 'Choose an explicit model so your usage is predictable.' });
-    if (input.selectedId && !input.board?.nodes.some((node) => node.id === input.selectedId))
-      return reply.code(400).send({ message: 'The selected node no longer exists.' });
-    if (input.agent === 'demo' && input.attachments?.length)
-      return reply.code(400).send({
-        message: 'The demo cannot read documents. Choose Claude or Codex to use uploads.',
-      });
-    if (input.agent === 'demo') {
-      if (!input.board && /dns|domain/i.test(input.prompt)) return DNS_DEMO;
-      if (!input.board && /email|mail/i.test(input.prompt)) return EMAIL_DEMO;
-      if (
-        input.board?.nodes.some((node) => node.id === 'outgoing') &&
-        /fail|bounce|retry/i.test(input.prompt)
-      ) {
-        const graph: BoardGraph = {
-          title: input.board.title,
-          description: input.board.description,
-          nodes: [...input.board.nodes],
-          edges: [...input.board.edges],
-          suggestions: [],
-        };
-        if (!graph.nodes.some((node) => node.id === 'failure')) {
-          graph.nodes.push({
-            id: 'failure',
-            label: 'Delivery failed',
-            icon: 'alert',
-            kind: 'decision',
-            summary: 'Retry or notify the sender.',
-            explanation:
-              'A temporary SMTP error usually queues the message for another attempt. A permanent rejection, or retries that expire, can produce a delivery status notification for the sender. A spam-folder placement is different from a delivery failure.',
-            narration:
-              'Sometimes delivery fails, and the sending server has to decide what to do next.',
-          });
-          graph.edges.push(
-            {
-              id: 'failed',
-              source: 'outgoing',
-              target: 'failure',
-              label: 'Rejected / unavailable',
+  app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, (request, reply) =>
+    respond(request, reply, async ({ signal, progress }) => {
+      const parsed = BoardRequestSchema.safeParse(request.body);
+      if (!parsed.success)
+        return outcome(400, { message: 'The prompt or current diagram is invalid.' });
+      const input = parsed.data;
+      if (input.settings?.model === 'default')
+        return outcome(400, { message: 'Choose an explicit model so your usage is predictable.' });
+      if (input.selectedId && !input.board?.nodes.some((node) => node.id === input.selectedId))
+        return outcome(400, { message: 'The selected node no longer exists.' });
+      if (input.agent === 'demo' && input.attachments?.length)
+        return outcome(400, {
+          message: 'The demo cannot read documents. Choose Claude or Codex to use uploads.',
+        });
+      if (input.agent === 'demo') {
+        if (!input.board && /dns|domain/i.test(input.prompt)) return outcome(200, DNS_DEMO);
+        if (!input.board && /email|mail/i.test(input.prompt)) return outcome(200, EMAIL_DEMO);
+        if (
+          input.board?.nodes.some((node) => node.id === 'outgoing') &&
+          /fail|bounce|retry/i.test(input.prompt)
+        ) {
+          const graph: BoardGraph = {
+            title: input.board.title,
+            description: input.board.description,
+            nodes: [...input.board.nodes],
+            edges: [...input.board.edges],
+            suggestions: [],
+          };
+          if (!graph.nodes.some((node) => node.id === 'failure')) {
+            graph.nodes.push({
+              id: 'failure',
+              label: 'Delivery failed',
+              icon: 'alert',
+              kind: 'decision',
+              summary: 'Retry or notify the sender.',
+              explanation:
+                'A temporary SMTP error usually queues the message for another attempt. A permanent rejection, or retries that expire, can produce a delivery status notification for the sender. A spam-folder placement is different from a delivery failure.',
               narration:
-                'If the receiving server rejects the message or can’t be reached, the attempt fails.',
-            },
-            {
-              id: 'retry',
-              source: 'failure',
-              target: 'outgoing',
-              label: 'Temporary: retry',
-              kind: 'retry',
-              narration:
-                'For a temporary problem, the sending server queues the message and tries again later.',
-            },
-          );
+                'Sometimes delivery fails, and the sending server has to decide what to do next.',
+            });
+            graph.edges.push(
+              {
+                id: 'failed',
+                source: 'outgoing',
+                target: 'failure',
+                label: 'Rejected / unavailable',
+                narration:
+                  'If the receiving server rejects the message or can’t be reached, the attempt fails.',
+              },
+              {
+                id: 'retry',
+                source: 'failure',
+                target: 'outgoing',
+                label: 'Temporary: retry',
+                kind: 'retry',
+                narration:
+                  'For a temporary problem, the sending server queues the message and tries again later.',
+              },
+            );
+          }
+          return outcome(200, BoardGraphSchema.parse(graph));
         }
-        return BoardGraphSchema.parse(graph);
+        return outcome(400, {
+          message:
+            'Demo supports the email journey, its delivery-failure branch, and DNS requests and responses. Select Claude or Codex for other requests.',
+        });
       }
-      return reply.code(400).send({
-        message:
-          'Demo supports the email journey, its delivery-failure branch, and DNS requests and responses. Select Claude or Codex for other requests.',
-      });
-    }
-    const controller = new AbortController();
-    const cancel = () => {
-      if (!reply.raw.writableEnded) controller.abort();
-    };
-    reply.raw.on('close', cancel);
-    const deadline = setTimeout(() => controller.abort(), 180_000);
-    let prepared;
-    try {
-      prepared = await prepareAttachments(input.attachments ?? [], input.agent);
-    } catch (error) {
-      if (error instanceof AttachmentError) return reply.code(400).send({ message: error.message });
-      throw error;
-    }
-    try {
-      const client = await factory(
-        input.agent,
-        input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
-      );
-      const modelRequest: LLMRequest = {
-        promptId: 'board/v3',
-        system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}\nSchema: ${boardOutputSchema}`,
-        user: JSON.stringify({
-          prompt: input.prompt,
-          selectedId: input.selectedId,
-          currentDiagram: input.board,
-          ...(prepared.documents.length ? { documents: prepared.documents } : {}),
-        }),
-        responseFormat: 'json',
-        temperature: 0.3,
-        maxOutputTokens: 14000,
-      };
-      let repair = '';
-      for (let attempt = 0; attempt < 2; attempt++) {
-        if (controller.signal.aborted) throw new Error('Cancelled');
-        let output: string;
-        try {
-          output = await client.complete(
-            { ...modelRequest, user: modelRequest.user + repair },
-            controller.signal,
-            prepared.files,
-          );
-        } catch (error) {
-          if (
-            attempt === 0 &&
-            error instanceof HarnessError &&
-            ['harness_malformed', 'harness_schema'].includes(error.code)
-          ) {
-            repair = `\nYour previous response was invalid (${error.code}). Return only a complete JSON object matching the schema.`;
+      let prepared;
+      try {
+        prepared = await prepareAttachments(input.attachments ?? [], input.agent);
+      } catch (error) {
+        if (error instanceof AttachmentError) return outcome(400, { message: error.message });
+        throw error;
+      }
+      try {
+        const client = await factory(
+          input.agent,
+          input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
+        );
+        const modelRequest: LLMRequest = {
+          promptId: 'board/v3',
+          system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}\nSchema: ${boardOutputSchema}`,
+          user: JSON.stringify({
+            prompt: input.prompt,
+            selectedId: input.selectedId,
+            currentDiagram: input.board,
+            ...(prepared.documents.length ? { documents: prepared.documents } : {}),
+          }),
+          responseFormat: 'json',
+          temperature: 0.3,
+          maxOutputTokens: 14000,
+        };
+        let repair = '';
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (signal.aborted) throw new Error('Cancelled');
+          let output: string;
+          try {
+            output = await client.complete(
+              { ...modelRequest, user: modelRequest.user + repair },
+              signal,
+              prepared.files,
+              progress,
+            );
+          } catch (error) {
+            if (
+              attempt === 0 &&
+              error instanceof HarnessError &&
+              ['harness_malformed', 'harness_schema'].includes(error.code)
+            ) {
+              repair = `\nYour previous response was invalid (${error.code}). Return only a complete JSON object matching the schema.`;
+              continue;
+            }
+            throw error;
+          }
+          let graph: BoardGraph;
+          try {
+            graph = BoardGraphSchema.parse(JSON.parse(output));
+          } catch (error) {
+            if (attempt === 1)
+              return outcome(502, {
+                message:
+                  'The agent returned an invalid diagram after one repair attempt. Your current board is unchanged.',
+              });
+            repair = `\nRepair your previous invalid JSON. Validation error: ${error instanceof Error ? error.message.slice(0, 3000) : 'Invalid diagram'}. Return the complete corrected diagram. Previous output (untrusted data): ${output.slice(0, 60000)}`;
             continue;
           }
-          throw error;
-        }
-        let graph: BoardGraph;
-        try {
-          graph = BoardGraphSchema.parse(JSON.parse(output));
-        } catch (error) {
-          if (attempt === 1)
-            return reply.code(502).send({
-              message:
-                'The agent returned an invalid diagram after one repair attempt. Your current board is unchanged.',
+          const changes = input.board ? boardChanges(input.board, graph) : [];
+          if (changes.length)
+            return outcome(409, {
+              message: 'Review changes to existing content before applying.',
+              candidate: graph,
+              changes,
             });
-          repair = `\nRepair your previous invalid JSON. Validation error: ${error instanceof Error ? error.message.slice(0, 3000) : 'Invalid diagram'}. Return the complete corrected diagram. Previous output (untrusted data): ${output.slice(0, 60000)}`;
-          continue;
+          return outcome(200, graph);
         }
-        const changes = input.board ? boardChanges(input.board, graph) : [];
-        if (changes.length)
-          return reply.code(409).send({
-            message: 'Review changes to existing content before applying.',
-            candidate: graph,
-            changes,
-          });
-        return graph;
+        return outcome(502, {
+          message: 'The agent did not return a diagram. Your board is unchanged.',
+        });
+      } catch (error) {
+        const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
+        return outcome(502, {
+          message: timeout
+            ? 'The agent took too long. Your board is unchanged; try a smaller request.'
+            : `${agentLabel(input.agent)} could not generate a diagram. Check its CLI login, model access and usage limits, then retry. Your board is unchanged.`,
+        });
       }
-    } catch (error) {
-      const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
-      return reply.code(502).send({
-        message: timeout
-          ? 'The agent took too long. Your board is unchanged; try a smaller request.'
-          : `${agentLabel(input.agent)} could not generate a diagram. Check its CLI login, model access and usage limits, then retry. Your board is unchanged.`,
-      });
-    } finally {
-      clearTimeout(deadline);
-      reply.raw.off('close', cancel);
-    }
-  });
+    }),
+  );
 
   // Drawings are presentation, like narration: they are returned for the app to apply
   // without review, and never change what the diagram says.
-  app.post('/v1/boards/illustrate', { bodyLimit: 4_000_000 }, async (request, reply) => {
-    const parsed = IllustrateRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ message: 'The diagram is invalid.' });
-    const input = parsed.data;
-    if (input.settings?.model === 'default')
-      return reply
-        .code(400)
-        .send({ message: 'Choose an explicit model so your usage is predictable.' });
-    const ids = new Set(input.board.nodes.map((node) => node.id));
-    const wanted = new Set(input.nodeIds ?? ids);
-    if ([...wanted].some((id) => !ids.has(id)))
-      return reply.code(400).send({ message: 'An object to illustrate no longer exists.' });
-    if (input.agent === 'demo') {
-      const illustrations = Object.fromEntries(
-        [...wanted].flatMap((id) => {
-          const drawing = EMAIL_DEMO_ILLUSTRATIONS[id];
-          const node = input.board.nodes.find((item) => item.id === id);
-          const demo = EMAIL_DEMO.nodes.find((item) => item.id === id);
-          return drawing && node?.icon === demo?.icon ? [[id, drawing]] : [];
-        }),
-      );
-      if (!Object.keys(illustrations).length)
-        return reply.code(400).send({
-          message:
-            'The demo can illustrate the email journey only. Select Claude or Codex to illustrate other boards.',
+  app.post('/v1/boards/illustrate', { bodyLimit: 4_000_000 }, (request, reply) =>
+    respond(request, reply, async ({ signal, progress }) => {
+      const parsed = IllustrateRequestSchema.safeParse(request.body);
+      if (!parsed.success) return outcome(400, { message: 'The diagram is invalid.' });
+      const input = parsed.data;
+      if (input.settings?.model === 'default')
+        return outcome(400, { message: 'Choose an explicit model so your usage is predictable.' });
+      const ids = new Set(input.board.nodes.map((node) => node.id));
+      const wanted = new Set(input.nodeIds ?? ids);
+      if ([...wanted].some((id) => !ids.has(id)))
+        return outcome(400, { message: 'An object to illustrate no longer exists.' });
+      if (input.agent === 'demo') {
+        const illustrations = Object.fromEntries(
+          [...wanted].flatMap((id) => {
+            const drawing = EMAIL_DEMO_ILLUSTRATIONS[id];
+            const node = input.board.nodes.find((item) => item.id === id);
+            const demo = EMAIL_DEMO.nodes.find((item) => item.id === id);
+            return drawing && node?.icon === demo?.icon ? [[id, drawing]] : [];
+          }),
+        );
+        if (!Object.keys(illustrations).length)
+          return outcome(400, {
+            message:
+              'The demo can illustrate the email journey only. Select Claude or Codex to illustrate other boards.',
+          });
+        return outcome(200, {
+          illustrations,
+          skipped: [...wanted].filter((id) => !illustrations[id]),
         });
-      return { illustrations, skipped: [...wanted].filter((id) => !illustrations[id]) };
-    }
-    const controller = new AbortController();
-    const cancel = () => {
-      if (!reply.raw.writableEnded) controller.abort();
-    };
-    reply.raw.on('close', cancel);
-    const deadline = setTimeout(() => controller.abort(), 180_000);
-    try {
-      const client = await factory(
-        input.agent,
-        input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
-        illustrateOutputSchema,
-      );
-      const board = input.board;
-      const user = JSON.stringify({
-        title: board.title,
-        description: board.description,
-        draw: board.nodes
-          .filter((node) => wanted.has(node.id))
-          .map((node) => ({
-            id: node.id,
-            label: node.label,
-            icon: node.icon,
-            summary: node.summary,
-            explanation: node.explanation,
-            receives: board.edges
-              .filter((edge) => edge.target === node.id)
-              .map((edge) => `${edge.label} from ${edge.source}`),
-            sends: board.edges
-              .filter((edge) => edge.source === node.id)
-              .map((edge) => `${edge.label} to ${edge.target}`),
-          })),
-      });
-      let repair = '';
-      for (let attempt = 0; attempt < 2; attempt++) {
-        if (controller.signal.aborted) throw new Error('Cancelled');
-        let output: string;
-        try {
-          output = await client.complete(
-            {
-              promptId: 'illustrate/v1',
-              system: `${ILLUSTRATE_SYSTEM}\nSchema: ${illustrateOutputSchema}`,
-              user: user + repair,
-              responseFormat: 'json',
-              temperature: 0.6,
-              maxOutputTokens: Math.min(32000, 3000 + wanted.size * 1600),
-            },
-            controller.signal,
-          );
-        } catch (error) {
-          if (
-            attempt === 0 &&
-            error instanceof HarnessError &&
-            ['harness_malformed', 'harness_schema'].includes(error.code)
-          ) {
-            repair = `\nYour previous response was invalid (${error.code}). Return only a complete JSON object matching the schema.`;
+      }
+      try {
+        const client = await factory(
+          input.agent,
+          input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
+          illustrateOutputSchema,
+        );
+        const board = input.board;
+        const user = JSON.stringify({
+          title: board.title,
+          description: board.description,
+          draw: board.nodes
+            .filter((node) => wanted.has(node.id))
+            .map((node) => ({
+              id: node.id,
+              label: node.label,
+              icon: node.icon,
+              summary: node.summary,
+              explanation: node.explanation,
+              receives: board.edges
+                .filter((edge) => edge.target === node.id)
+                .map((edge) => `${edge.label} from ${edge.source}`),
+              sends: board.edges
+                .filter((edge) => edge.source === node.id)
+                .map((edge) => `${edge.label} to ${edge.target}`),
+            })),
+        });
+        let repair = '';
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (signal.aborted) throw new Error('Cancelled');
+          let output: string;
+          try {
+            output = await client.complete(
+              {
+                promptId: 'illustrate/v1',
+                system: `${ILLUSTRATE_SYSTEM}${progressNotes(input.agent, DRAWING_NOTES)}\nSchema: ${illustrateOutputSchema}`,
+                user: user + repair,
+                responseFormat: 'json',
+                temperature: 0.6,
+                maxOutputTokens: Math.min(32000, 3000 + wanted.size * 1600),
+              },
+              signal,
+              [],
+              progress,
+            );
+          } catch (error) {
+            if (
+              attempt === 0 &&
+              error instanceof HarnessError &&
+              ['harness_malformed', 'harness_schema'].includes(error.code)
+            ) {
+              repair = `\nYour previous response was invalid (${error.code}). Return only a complete JSON object matching the schema.`;
+              continue;
+            }
+            throw error;
+          }
+          let result: ReturnType<typeof acceptIllustrations>;
+          try {
+            result = acceptIllustrations(output, wanted);
+          } catch (error) {
+            if (attempt === 1) break;
+            repair = `\nRepair your previous invalid JSON (${error instanceof Error ? error.message.slice(0, 500) : 'invalid'}). Return all the illustrations again.`;
             continue;
           }
-          throw error;
+          // One chance to fix drawings that break the rules; valid ones are kept either way.
+          if (!Object.keys(result.illustrations).length && attempt === 0) {
+            repair = `\nNone of your illustrations were valid. Problems: ${result.problems.join(' | ').slice(0, 3000)}. Return all the illustrations again, following the rules.`;
+            continue;
+          }
+          const { illustrations, skipped } = result;
+          return outcome(200, { illustrations, skipped });
         }
-        let result: ReturnType<typeof acceptIllustrations>;
-        try {
-          result = acceptIllustrations(output, wanted);
-        } catch (error) {
-          if (attempt === 1) break;
-          repair = `\nRepair your previous invalid JSON (${error instanceof Error ? error.message.slice(0, 500) : 'invalid'}). Return all the illustrations again.`;
-          continue;
-        }
-        // One chance to fix drawings that break the rules; valid ones are kept either way.
-        if (!Object.keys(result.illustrations).length && attempt === 0) {
-          repair = `\nNone of your illustrations were valid. Problems: ${result.problems.join(' | ').slice(0, 3000)}. Return all the illustrations again, following the rules.`;
-          continue;
-        }
-        const { illustrations, skipped } = result;
-        return { illustrations, skipped };
+        return outcome(502, {
+          message:
+            'The agent’s drawings were invalid after one repair attempt. Your icons are unchanged.',
+        });
+      } catch (error) {
+        const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
+        return outcome(502, {
+          message: timeout
+            ? 'The agent took too long to draw. Your icons are unchanged; try again or choose a faster model.'
+            : `${agentLabel(input.agent)} could not draw illustrations. Check its CLI login, model access and usage limits, then retry. Your icons are unchanged.`,
+        });
       }
-      return reply.code(502).send({
-        message:
-          'The agent’s drawings were invalid after one repair attempt. Your icons are unchanged.',
-      });
-    } catch (error) {
-      const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
-      return reply.code(502).send({
-        message: timeout
-          ? 'The agent took too long to draw. Your icons are unchanged; try again or choose a faster model.'
-          : `${agentLabel(input.agent)} could not draw illustrations. Check its CLI login, model access and usage limits, then retry. Your icons are unchanged.`,
-      });
-    } finally {
-      clearTimeout(deadline);
-      reply.raw.off('close', cancel);
-    }
-  });
+    }),
+  );
 }

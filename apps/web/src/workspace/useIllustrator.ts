@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { IllustrateResponseSchema, type BoardAgent, type BoardDocument } from '@opsis/schema';
 import type { ModelPreferences } from './model-settings';
 import { withoutIllustrations } from './model';
+import {
+  agentResponse,
+  applyProgress,
+  startActivity,
+  STREAM_ACCEPT,
+  type AgentActivity,
+} from './agentActivity';
 
 /**
  * Asks an agent to draw animated illustrations for a board's objects. It runs beside playback
@@ -16,6 +23,7 @@ export function useIllustrator(
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [activity, setActivity] = useState<AgentActivity>(startActivity);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -38,10 +46,11 @@ export function useIllustrator(
       setBusy(true);
       setElapsed(0);
       setMessage('');
+      setActivity(startActivity());
       try {
         const response = await fetch('/v1/boards/illustrate', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', accept: STREAM_ACCEPT },
           signal: controller.signal,
           body: JSON.stringify({
             agent,
@@ -50,8 +59,11 @@ export function useIllustrator(
             nodeIds: wanted.map((node) => node.id),
           }),
         });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.message ?? 'Could not draw illustrations.');
+        const { ok, body: payload } = await agentResponse(response, (progress) => {
+          if (!controller.signal.aborted)
+            setActivity((current) => applyProgress(current, progress));
+        });
+        if (!ok) throw new Error((payload.message as string) ?? 'Could not draw illustrations.');
         const { illustrations, skipped } = IllustrateResponseSchema.parse(payload);
         if (controller.signal.aborted) return;
         let drawn = 0;
@@ -88,5 +100,5 @@ export function useIllustrator(
     setBusy(false);
     setMessage('');
   }, []);
-  return { busy, message, elapsed, illustrate, cancel };
+  return { busy, message, elapsed, activity, illustrate, cancel };
 }

@@ -5,11 +5,14 @@ import { join } from 'node:path';
 import type { LLMClient, LLMRequest } from '@opsis/parse';
 import { HarnessError } from './errors.js';
 import { extractHarnessResult } from './envelope.js';
+import { progressReader, type HarnessProgress } from './progress.js';
 import type { HarnessConfig, HarnessFile, ProcessRunner, ProcessRunRequest } from './types.js';
 
 // Room for extracted document text as well as the current diagram.
 const MAX_STDIN_BYTES = 768 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
+// Claude streams every token as its own event, which is far larger than the answer.
+const MAX_STREAM_BYTES = 32 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const RESULT_SCHEMA = JSON.stringify({ type: 'object' });
 
@@ -88,8 +91,11 @@ function argv(
     const tools = files.length ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--tools', ''];
     return [
       '--print',
+      // Streamed events let the app show the agent's progress live.
       '--output-format',
-      'json',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
       '--json-schema',
       schema,
       ...(config.model === 'default' ? [] : ['--model', config.model]),
@@ -112,6 +118,9 @@ function argv(
       '-',
       ...(config.model === 'default' ? [] : ['--model', config.model]),
       ...(config.effort ? ['--config', `model_reasoning_effort="${config.effort}"`] : []),
+      // Concise reasoning summaries become live progress notes.
+      '--config',
+      'model_reasoning_summary="concise"',
       // Codex attaches images natively; other documents arrive as extracted text.
       ...paths
         .filter((_, index) => files[index]?.kind === 'image')
@@ -177,6 +186,7 @@ export class HarnessLLMClient implements LLMClient {
     request: LLMRequest,
     signal?: AbortSignal,
     files: readonly HarnessFile[] = [],
+    onProgress?: (progress: HarnessProgress) => void,
   ): Promise<string> {
     return harnessSlots.use(async () => {
       try {
@@ -192,9 +202,17 @@ export class HarnessLLMClient implements LLMClient {
             env: childEnvironment(this.env),
             timeoutMs: this.config.timeoutMs,
             maxStdinBytes: MAX_STDIN_BYTES,
-            maxStdoutBytes: MAX_STDOUT_BYTES,
+            maxStdoutBytes: this.config.provider === 'claude' ? MAX_STREAM_BYTES : MAX_STDOUT_BYTES,
             maxStderrBytes: MAX_STDERR_BYTES,
             ...(signal ? { signal } : {}),
+            ...(onProgress
+              ? {
+                  onStdoutLine: (() => {
+                    const read = progressReader(this.config.provider);
+                    return (line: string) => read(line).forEach(onProgress);
+                  })(),
+                }
+              : {}),
           });
           if (result.exitCode !== 0) throw new HarnessError('harness_exit');
           return extractHarnessResult(this.config.provider, result.stdout);

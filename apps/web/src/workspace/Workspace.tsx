@@ -16,6 +16,7 @@ import {
 } from '@xyflow/react';
 import {
   ArrowRight,
+  ArrowUpRight,
   ArrowUp,
   Check,
   ChevronDown,
@@ -27,8 +28,6 @@ import {
   GitBranch,
   ImageIcon,
   LoaderCircle,
-  MessageSquareText,
-  Network,
   PanelLeft,
   Play,
   Pencil,
@@ -63,6 +62,7 @@ import {
 import { boardIcons, iconMotion } from './icons';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
+import { AgentActivity } from './AgentActivity';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
@@ -362,6 +362,8 @@ function BoardWorkspace() {
       setAgent('demo');
       setSelected(null);
       setSelectedEdge(null);
+      // On phones the sidebar covers the canvas; get it out of the way of the example.
+      if (window.innerWidth <= 760) setRailOpen(false);
     } catch {
       setError('Could not arrange the example. Please retry.');
     } finally {
@@ -858,86 +860,27 @@ function BoardWorkspace() {
             </div>
             {!board && (
               <div className="canvas-welcome">
-                <span className="welcome-kicker">Visual explanations</span>
-                <h3>Understand anything by seeing it.</h3>
-                <p>
-                  Ask a question and your agent draws the objects involved and how they connect.
-                  Then explore each part, rearrange it, or play it back as a narrated walkthrough.
-                </p>
-                <ol className="welcome-steps">
-                  <li>
-                    <span>
-                      <MessageSquareText size={18} />
-                    </span>
-                    <strong>Ask</strong>
-                    <small>Any process, system or idea</small>
-                  </li>
-                  <li>
-                    <span>
-                      <Network size={18} />
-                    </span>
-                    <strong>See</strong>
-                    <small>Objects, arrows and labels, laid out for you</small>
-                  </li>
-                  <li>
-                    <span>
-                      <Play size={18} />
-                    </span>
-                    <strong>Play</strong>
-                    <small>Step through it, with a British narrator</small>
-                  </li>
-                </ol>
-                <div className="welcome-examples">
-                  {(
-                    [
-                      [
-                        'An email’s journey',
-                        'From outbox to inbox in five steps',
-                        EMAIL_DEMO,
-                        'email',
-                      ],
-                      ['DNS lookups', 'Requests and replies between servers', DNS_DEMO, 'DNS'],
-                    ] as const
-                  ).map(([title, detail, graph, topic]) => (
-                    <button
-                      key={title}
-                      aria-label={`Explore the ${topic} example`}
-                      disabled={busy}
-                      onClick={() => void demo(graph)}
-                    >
-                      <span className="welcome-example-icons" aria-hidden>
-                        {graph.nodes.slice(0, 4).map((node) => {
-                          const Icon = boardIcons[node.icon];
-                          return <Icon key={node.id} size={18} />;
-                        })}
-                      </span>
-                      <strong>{title}</strong>
-                      <small>{detail}</small>
-                      <span className="welcome-open">
-                        Open example <ArrowRight size={14} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="welcome-prompts">
-                  <span>Or try asking</span>
+                <h3>Start with a question</h3>
+                <ul aria-label="Suggested questions">
                   {[
                     'How does a vaccine train the immune system?',
                     'What happens when I tap my card to pay?',
                     'How does the water cycle work?',
                   ].map((question) => (
-                    <button
-                      key={question}
-                      disabled={busy}
-                      onClick={() => {
-                        setPrompt(question);
-                        promptInput.current?.focus();
-                      }}
-                    >
-                      {question}
-                    </button>
+                    <li key={question}>
+                      <button
+                        disabled={busy}
+                        onClick={() => {
+                          setPrompt(question);
+                          promptInput.current?.focus();
+                        }}
+                      >
+                        <span>{question}</span>
+                        <ArrowUpRight size={15} aria-hidden />
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
             <span className="canvas-coordinate">
@@ -978,6 +921,13 @@ function BoardWorkspace() {
                   </button>
                 </div>
               )}
+              {generation.busy && (
+                <AgentActivity
+                  activity={generation.activity}
+                  elapsed={generation.elapsed}
+                  agent={agent === 'claude' ? 'Claude' : agent === 'codex' ? 'Codex' : 'Demo'}
+                />
+              )}
               {board && playerOpen ? (
                 <ProcessPlayer
                   key={library.activeId}
@@ -988,6 +938,7 @@ function BoardWorkspace() {
                   illustration={{
                     busy: illustrator.busy,
                     elapsed: illustrator.elapsed,
+                    activity: illustrator.activity,
                     message: illustrator.message,
                     available: agent === 'demo' || status?.available !== false,
                     redraw: board.nodes.every((node) => node.illustration),
@@ -1134,8 +1085,7 @@ function BoardWorkspace() {
                       <span className="agent-status" role="status">
                         {generation.busy ? (
                           <>
-                            <LoaderCircle className="spin" size={13} /> {generation.stage} ·{' '}
-                            {generation.elapsed}s
+                            <LoaderCircle className="spin" size={13} /> Working
                           </>
                         ) : agent === 'demo' ? (
                           'Sample content · no agent calls'
@@ -1155,16 +1105,11 @@ function BoardWorkspace() {
                       )}
                     </div>
                   </form>
-                  <p className="composer-hint">
-                    {busy ? (
-                      'You can cancel at any time. Your current canvas stays here.'
-                    ) : (
-                      <>
-                        <kbd>Enter</kbd> to draw · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new
-                        line · Scroll to follow the flow · Drag to arrange
-                      </>
-                    )}
-                  </p>
+                  {!busy && (
+                    <p className="composer-hint">
+                      <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
+                    </p>
+                  )}
                 </>
               )}
             </div>

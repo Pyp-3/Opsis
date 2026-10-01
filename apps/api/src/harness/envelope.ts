@@ -22,8 +22,28 @@ function resultText(value: unknown): string | null {
   return null;
 }
 
+/** Streamed output is one event per line, ending with the same result envelope. */
+function claudeEnvelope(stdout: string): Record<string, unknown> {
+  try {
+    return jsonObject(stdout);
+  } catch (error) {
+    if (!stdout.includes('"type":"result"')) throw error;
+  }
+  const lines = stdout.split(/\r?\n/u).filter((line) => line.trim());
+  for (const line of lines.reverse()) {
+    if (!line.includes('"result"')) continue;
+    try {
+      const event = jsonObject(line);
+      if (event.type === 'result') return event;
+    } catch {
+      // Not the envelope; keep looking.
+    }
+  }
+  throw new HarnessError('harness_malformed');
+}
+
 function extractClaudeLike(stdout: string): string {
-  const envelope = jsonObject(stdout);
+  const envelope = claudeEnvelope(stdout);
   if (envelope.is_error === true) throw new HarnessError('harness_exit');
   const text = resultText(envelope.structured_output) ?? resultText(envelope.result);
   if (text === null) throw new HarnessError('harness_malformed');

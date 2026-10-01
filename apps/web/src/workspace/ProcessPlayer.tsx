@@ -11,6 +11,8 @@ import {
   X,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
+import { AgentActivity } from './AgentActivity';
+import type { AgentActivity as AgentActivityState } from './agentActivity';
 import { beatDuration, britishVoice, PACE, playbackTimeline, type Beat } from './playback';
 import {
   NATURAL_VOICES,
@@ -70,6 +72,7 @@ export type IllustrationControl = {
   busy: boolean;
   elapsed: number;
   message: string;
+  activity: AgentActivityState;
   available: boolean;
   /** Every object already has a drawing, so asking again redraws them all. */
   redraw: boolean;
@@ -337,6 +340,13 @@ export function ProcessPlayer({
           <X size={16} />
         </button>
       </div>
+      {illustration?.busy && (
+        <AgentActivity
+          activity={illustration.activity}
+          elapsed={illustration.elapsed}
+          agent="The illustrator"
+        />
+      )}
       {illustration?.message && !illustration.busy && (
         <p className="player-illustration-status" role="status">
           {illustration.message}
