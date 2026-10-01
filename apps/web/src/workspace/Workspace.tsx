@@ -189,12 +189,23 @@ function BoardWorkspace() {
   const [initial] = useState(restoreLibrary);
   const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
     useBoardHistory(initial.snapshot);
-  const library = useBoardLibrary(initial, snapshot, replace);
   const generation = useBoardGeneration(commit);
+  const [arranging, setArranging] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const illustrator = useIllustrator(boardRef, setBoard);
+  const library = useBoardLibrary(
+    initial,
+    snapshot,
+    replace,
+    board !== snapshot.board ||
+      generation.busy ||
+      !!generation.review ||
+      illustrator.busy ||
+      arranging ||
+      playerOpen,
+  );
   const { error, setError, setBusy } = generation;
   const { cancel: cancelIllustration } = illustrator;
-  const [arranging, setArranging] = useState(false);
   const busy = generation.busy || library.switching || !!generation.review || arranging;
   const saved = library.status;
   const [agent, setAgent] = useState<BoardAgent>(initial.snapshot.board?.agent ?? 'claude');
@@ -207,7 +218,6 @@ function BoardWorkspace() {
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [playerOpen, setPlayerOpen] = useState(false);
   const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
   const [playback, setPlayback] = useState<{
     nodes: Set<string>;

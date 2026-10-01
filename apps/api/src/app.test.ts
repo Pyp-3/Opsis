@@ -313,6 +313,22 @@ describe('Opsis API', () => {
 });
 
 describe('rate limiting', () => {
+  it('bounds board polling separately without consuming the edit/model allowance', async () => {
+    const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
+    for (let i = 0; i < 10; i++) {
+      expect((await app.inject({ method: 'GET', url: '/v1/boards' })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'GET', url: '/v1/boards' })).statusCode).toBe(429);
+    expect(
+      (await app.inject({ method: 'POST', url: '/v1/boards', payload: { title: 'New board' } }))
+        .statusCode,
+    ).toBe(201);
+    expect(
+      (await app.inject({ method: 'POST', url: '/v1/boards', payload: { title: 'Another board' } }))
+        .statusCode,
+    ).toBe(429);
+    await app.close();
+  });
   it('limits each client with the shared error shape', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
     const id = '00000000-0000-4000-8000-000000000000';

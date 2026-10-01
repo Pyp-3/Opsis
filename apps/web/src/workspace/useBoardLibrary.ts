@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
 import { restoreBoard } from './model';
+import { mergeBoardSnapshots } from './board-sync';
 
 const RECOVERY = 'opsis:library-recovery:v1';
 function writeRecovery(value: unknown) {
@@ -22,6 +23,7 @@ const Entry = z.object({
   id: z.string().uuid(),
   revision: z.number().int().nonnegative(),
   snapshot: BoardSnapshotSchema,
+  savedSnapshot: BoardSnapshotSchema.optional(),
 });
 const List = z.array(
   z.object({
@@ -31,7 +33,7 @@ const List = z.array(
     updatedAt: z.number(),
   }),
 );
-export function restoreLibrary() {
+export function restoreLibrary(): z.infer<typeof Entry> & { error: string } {
   try {
     const raw = sessionStorage.getItem(RECOVERY) ?? localStorage.getItem(RECOVERY);
     if (raw) return { ...Entry.parse(JSON.parse(raw)), error: '' };
@@ -56,10 +58,14 @@ export function useBoardLibrary(
   initial: ReturnType<typeof restoreLibrary>,
   snapshot: BoardSnapshot,
   replace: (next: BoardSnapshot) => void,
+  paused = false,
 ) {
   const active = useRef({ id: initial.id, revision: initial.revision });
   const current = useRef(snapshot);
-  const lastSaved = useRef<BoardSnapshot | null>(null);
+  const lastSaved = useRef<BoardSnapshot | null>(
+    initial.savedSnapshot ?? (initial.revision ? initial.snapshot : null),
+  );
+  const pausedRef = useRef(paused);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [entries, setEntries] = useState<z.infer<typeof List>>([]);
   const [status, setStatus] = useState('');
@@ -68,12 +74,15 @@ export function useBoardLibrary(
   const [activeId, setActiveId] = useState(initial.id);
   useEffect(() => {
     current.current = snapshot;
-  }, [snapshot]);
+    pausedRef.current = paused;
+  }, [snapshot, paused]);
 
   const refresh = useCallback(async () => {
     const response = await fetch('/v1/boards');
     if (!response.ok) throw new Error('Saved-board service unavailable.');
-    setEntries(List.parse(await response.json()));
+    const next = List.parse(await response.json());
+    setEntries((before) => (JSON.stringify(before) === JSON.stringify(next) ? before : next));
+    return next;
   }, []);
   useEffect(() => {
     // Async network completion synchronizes the library with its external store.
@@ -82,12 +91,17 @@ export function useBoardLibrary(
   }, [refresh]);
 
   const save = useCallback(() => {
-    const target = current.current;
-    const identity = active.current;
     const job = queue.current
       .catch(() => undefined)
       .then(async () => {
+        let target = current.current;
+        const identity = active.current;
         if (lastSaved.current === target) return;
+        if (lastSaved.current && JSON.stringify(lastSaved.current) === JSON.stringify(target)) {
+          lastSaved.current = target;
+          setStatus(identity.revision ? 'Saved to SQLite' : '');
+          return;
+        }
         if (!target.board && !target.past.length && !target.future.length) {
           await refresh();
           setStatus('');
@@ -95,11 +109,51 @@ export function useBoardLibrary(
           return;
         }
         setStatus('Saving…');
-        const response = await fetch(`/v1/boards/${identity.id}`, {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ snapshot: target, revision: identity.revision }),
-        });
+        let recoveredCopy = false;
+        const preserveCopy = () => {
+          identity.id = crypto.randomUUID();
+          identity.revision = 0;
+          setActiveId(identity.id);
+          lastSaved.current = null;
+          target = current.current;
+          recoveredCopy = true;
+        };
+        let response: Response | undefined;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          response = await fetch(`/v1/boards/${identity.id}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ snapshot: target, revision: identity.revision }),
+          });
+          if (response.status !== 409) break;
+          const latest = await fetch(`/v1/boards/${identity.id}`);
+          if (latest.status === 404) {
+            preserveCopy();
+            continue;
+          }
+          if (!latest.ok) throw new Error('Could not sync this board. Local recovery is retained.');
+          const remote = Entry.parse(await latest.json());
+          try {
+            target = mergeBoardSnapshots(lastSaved.current, current.current, remote.snapshot);
+          } catch {
+            // Preserve all edits if a combined graph exceeds the schema limits.
+            preserveCopy();
+            continue;
+          }
+          identity.revision = remote.revision;
+          lastSaved.current = remote.snapshot;
+          current.current = target;
+          replace(target);
+        }
+        if (response?.status === 409) {
+          preserveCopy();
+          response = await fetch(`/v1/boards/${identity.id}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ snapshot: target, revision: 0 }),
+          });
+        }
+        if (!response) throw new Error('Could not save this board.');
         if (!response.ok) {
           const payload = await response.json();
           throw new Error(
@@ -111,12 +165,18 @@ export function useBoardLibrary(
         lastSaved.current = target;
         // Never replace a newer local edit with this completed request's older snapshot.
         try {
-          writeRecovery({ ...active.current, snapshot: current.current });
+          writeRecovery({ ...active.current, snapshot: current.current, savedSnapshot: target });
           setError('');
         } catch {
           setError('Saved to SQLite, but browser recovery storage is unavailable.');
         }
-        setStatus(target === current.current ? 'Saved to SQLite' : 'Saving…');
+        setStatus(
+          recoveredCopy
+            ? 'Saved separate copy · concurrent edits retained'
+            : target === current.current
+              ? 'Saved to SQLite'
+              : 'Saving…',
+        );
         await refresh();
       });
     queue.current = job;
@@ -125,12 +185,87 @@ export function useBoardLibrary(
       setStatus('Could not save · retry or export');
       throw e;
     });
-  }, [refresh]);
+  }, [refresh, replace]);
+
+  useEffect(() => {
+    let disposed = false;
+    let polling = false;
+    const sync = () => {
+      if (polling || pausedRef.current) return;
+      polling = true;
+      const job = queue.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (disposed || pausedRef.current) return;
+          const list = await refresh();
+          const identity = active.current;
+          const local = current.current;
+          if (
+            !identity.revision ||
+            (lastSaved.current && JSON.stringify(local) !== JSON.stringify(lastSaved.current))
+          )
+            return;
+          if (list.find((entry) => entry.id === identity.id)?.revision === identity.revision)
+            return;
+          const response = await fetch(`/v1/boards/${identity.id}`);
+          if (
+            disposed ||
+            identity !== active.current ||
+            local !== current.current ||
+            pausedRef.current
+          )
+            return;
+          if (response.status === 404) {
+            const empty: BoardSnapshot = { board: null, past: [], future: [] };
+            active.current = { id: crypto.randomUUID(), revision: 0 };
+            current.current = empty;
+            lastSaved.current = empty;
+            setActiveId(active.current.id);
+            replace(empty);
+            writeRecovery({ ...active.current, snapshot: empty, savedSnapshot: empty });
+            setStatus('Board deleted in another view · new canvas ready');
+            setError('');
+            return;
+          }
+          if (!response.ok) return;
+          const remote = Entry.parse(await response.json());
+          if (
+            identity !== active.current ||
+            local !== current.current ||
+            pausedRef.current ||
+            remote.revision === identity.revision
+          )
+            return;
+          identity.revision = remote.revision;
+          current.current = remote.snapshot;
+          lastSaved.current = remote.snapshot;
+          replace(remote.snapshot);
+          writeRecovery({ ...identity, snapshot: remote.snapshot, savedSnapshot: remote.snapshot });
+          setStatus('Synced · saved to SQLite');
+          setError('');
+          await refresh();
+        });
+      queue.current = job;
+      void job
+        .catch(() => undefined)
+        .finally(() => {
+          polling = false;
+        });
+    };
+    const timer = setInterval(sync, 1500);
+    sync();
+    window.addEventListener('focus', sync);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', sync);
+    };
+  }, [refresh, replace]);
 
   useEffect(() => {
     if (initial.error && !snapshot.board) return;
     try {
-      writeRecovery({ ...active.current, snapshot });
+      writeRecovery({ ...active.current, snapshot, savedSnapshot: lastSaved.current ?? undefined });
     } catch {
       // Report a real external storage failure; this is not derived render state.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -171,6 +306,7 @@ export function useBoardLibrary(
         }
         setActiveId(entry.id);
         replace(entry.snapshot);
+        setStatus(id ? 'Saved to SQLite' : '');
         setError(warning);
         return true;
       } catch (e) {

@@ -248,8 +248,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Speech is local work with its own bounded queue; a narrated board makes many requests.
     if (request.url === '/v1/health' || request.url.startsWith('/v1/speech')) return;
     const now = Date.now();
-    const recent = (requests.get(request.ip) ?? []).filter((time) => now - time < rateWindowMs);
-    if (recent.length >= rateLimit) {
+    // Multiple canvas views poll cheap library reads without consuming the write/model budget.
+    const boardRead =
+      request.method === 'GET' && /^\/v1\/boards(?:\/[a-f\d-]{36})?(?:\?|$)/i.test(request.url);
+    const key = `${request.ip}:${boardRead ? 'board-read' : 'work'}`;
+    const allowance = boardRead ? rateLimit * 10 : rateLimit;
+    const recent = (requests.get(key) ?? []).filter((time) => now - time < rateWindowMs);
+    if (recent.length >= allowance) {
       return reply
         .code(429)
         .send(
@@ -262,7 +267,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         );
     }
     recent.push(now);
-    requests.set(request.ip, recent);
+    requests.set(key, recent);
   });
 
   app.setErrorHandler((error, request, reply) => {
