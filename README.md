@@ -48,11 +48,13 @@ Install and sign in to your preferred agent CLI separately. Opsis uses that CLI'
 In the prompt panel at the bottom of the canvas:
 
 1. Choose **Agent**: Claude, Codex, or Demo.
-2. Choose **Model**: a preset or **Custom model ID…**.
+2. Open **Model** in the prompt panel: choose a versioned preset, a CLI alias, or **Custom model ID…**. The settings show the exact ID sent to the agent.
 3. Choose **Effort**, if supported by the model.
 4. Submit the prompt. Reading details, editing the graph, and changing settings do not generate model calls.
 
 Claude initially selects Haiku; Codex initially selects GPT-6 Luna with low effort. These are application presets, not a guarantee of account availability. Haiku's effort selector is disabled. Unsupported models or effort levels return an error rather than silently switching to an expensive model. Settings are remembered separately for each agent.
+
+Claude presets include Haiku 4.5, Sonnet 5.5, Opus 5.5, Fable 5.1, and earlier Sonnet/Opus 4.6. The `haiku`, `sonnet`, and `opus` options are explicitly marked as CLI aliases: their resolved version depends on your CLI configuration and provider. Choose a versioned ID for a specific generation. Codex presets include GPT-6 Luna, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Astra. These lists follow the [Claude model documentation](https://platform.claude.com/docs/en/models/overview) and [OpenAI model documentation](https://learn.chatgpt.com/docs/models); selecting a preset does not grant account access.
 
 CLI readiness checks installation/version, not subscription entitlement. An actual generation is needed to verify model access. Effort is **not** a token or spending cap; usage remains subject to your provider's subscription and limits. There is no dedicated model-management page or actual token-usage dashboard yet.
 

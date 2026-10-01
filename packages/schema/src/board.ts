@@ -203,14 +203,21 @@ export const DEFAULT_BOARD_MODELS: Record<'claude' | 'codex', BoardModelSettings
 };
 export const BOARD_MODEL_CHOICES = {
   claude: [
-    { id: 'haiku', label: 'Haiku · economical' },
-    { id: 'sonnet', label: 'Sonnet · balanced' },
-    { id: 'opus', label: 'Opus · powerful' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5', group: 'Versioned models' },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', group: 'Versioned models' },
+    { id: 'claude-opus-5-5', label: 'Opus 5.5', group: 'Versioned models' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1', group: 'Versioned models' },
+    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', group: 'Earlier versions' },
+    { id: 'claude-opus-4-6', label: 'Opus 4.6', group: 'Earlier versions' },
+    { id: 'haiku', label: 'Haiku · CLI alias', group: 'CLI aliases' },
+    { id: 'sonnet', label: 'Sonnet · CLI alias', group: 'CLI aliases' },
+    { id: 'opus', label: 'Opus · CLI alias', group: 'CLI aliases' },
   ],
   codex: [
-    { id: 'gpt-6-luna', label: 'GPT-6 Luna · economical' },
-    { id: 'gpt-6-sol', label: 'GPT-6 Sol · balanced' },
-    { id: 'gpt-6-astra', label: 'GPT-6 Astra · powerful' },
+    { id: 'gpt-6-luna', label: 'GPT-6 Luna', group: 'GPT-6 models' },
+    { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', group: 'GPT-6 models' },
+    { id: 'gpt-6-sol', label: 'GPT-6 Sol', group: 'GPT-6 models' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra', group: 'GPT-6 models' },
   ],
 } as const;
 const id = z

@@ -64,6 +64,7 @@ import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
 import { BrandMark } from './BrandMark';
+import { AgentLogo } from './AgentLogo';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
@@ -1066,9 +1067,7 @@ function BoardWorkspace() {
                     )}
                     <div className="composer-footer">
                       <label className="agent-picker">
-                        <span
-                          className={`agent-indicator ${status?.available === false ? 'offline' : ''}`}
-                        />
+                        <AgentLogo agent={agent} />
                         <span className="sr-only">Agent</span>
                         <select
                           aria-label="Agent"
@@ -1091,7 +1090,7 @@ function BoardWorkspace() {
                           onClick={() => setSettingsOpen(!settingsOpen)}
                         >
                           <SlidersHorizontal size={13} />
-                          {modelLabel}
+                          <span className="model-toggle-label">Model: {modelLabel}</span>
                           <ChevronDown className="chevron" size={13} />
                         </button>
                       )}

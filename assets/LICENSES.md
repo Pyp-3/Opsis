@@ -8,7 +8,15 @@ logos or copyrighted artwork.
 | Path | Source / author | Licence | Notes |
 | ---- | --------------- | ------- | ----- |
 
-_No third-party assets yet._
+## Agent identity marks
+
+The user-requested agent logos below are used solely to identify the selected integration.
+The SVG artwork is from Simple Icons (CC0); the brands remain their owners' trademarks.
+
+| Path                                | Source                                                                                                      | Licence |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------- |
+| `apps/web/public/agents/claude.svg` | [Simple Icons 14.15.0 — Claude](https://github.com/simple-icons/simple-icons/blob/14.15.0/icons/claude.svg) | CC0-1.0 |
+| `apps/web/public/agents/openai.svg` | [Simple Icons 14.15.0 — OpenAI](https://github.com/simple-icons/simple-icons/blob/14.15.0/icons/openai.svg) | CC0-1.0 |
 
 ## Original primitives (M1)
 

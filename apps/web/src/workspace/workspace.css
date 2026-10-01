@@ -1289,6 +1289,30 @@ summary::-webkit-details-marker {
   color: var(--ink);
   background: var(--surface);
 }
+.agent-logo {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.agent-logo-claude {
+  background: #c27052;
+  mask: url('/agents/claude.svg') center / contain no-repeat;
+}
+.agent-logo-codex {
+  background: var(--ink);
+  mask: url('/agents/openai.svg') center / contain no-repeat;
+}
+.model-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.model-toggle {
+  min-width: 0;
+  max-width: 280px;
+}
 .model-toggle[aria-expanded='true'] {
   color: var(--ink);
   background: var(--accent-soft);
@@ -1379,6 +1403,23 @@ summary::-webkit-details-marker {
   flex-basis: 100%;
   font-size: 12px;
   color: var(--ink-3);
+}
+.model-identity {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.model-identity code {
+  margin-left: 4px;
+  color: var(--ink-2);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.model-alias-note {
+  display: block;
+  margin-top: 3px;
 }
 .composer-hint {
   margin: 10px 0 0;
@@ -1847,6 +1888,20 @@ summary::-webkit-details-marker {
   }
   .composer-wrap {
     width: calc(100% - 24px);
+  }
+  .composer-footer {
+    flex-wrap: wrap;
+  }
+  .agent-picker select {
+    width: 80px;
+  }
+  .model-toggle {
+    flex: 1;
+  }
+  .composer-footer .agent-status {
+    flex-basis: 100%;
+    margin: 2px 0 0;
+    font-size: 11px;
   }
   .composer-hint {
     display: none;

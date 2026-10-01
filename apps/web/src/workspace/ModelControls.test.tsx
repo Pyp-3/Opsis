@@ -53,4 +53,53 @@ describe('model configuration', () => {
     fireEvent.change(screen.getByLabelText('Reasoning effort'), { target: { value: 'low' } });
     expect(change).toHaveBeenLastCalledWith({ model: 'sonnet', effort: 'low' });
   });
+  it('distinguishes aliases from explicit versions and sends the selected model ID', () => {
+    const change = vi.fn();
+    const { rerender } = render(
+      <ModelControls
+        agent="claude"
+        value={{ model: 'sonnet', effort: 'medium' }}
+        disabled={false}
+        onChange={change}
+      />,
+    );
+    expect(screen.getByText(/version depends on your CLI configuration/)).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-sonnet-5-5' } });
+    expect(change).toHaveBeenLastCalledWith({ model: 'claude-sonnet-5-5', effort: 'medium' });
+    rerender(
+      <ModelControls
+        agent="claude"
+        value={{ model: 'claude-sonnet-5-5', effort: 'medium' }}
+        disabled={false}
+        onChange={change}
+      />,
+    );
+    expect(screen.getByText('claude-sonnet-5-5')).toBeDefined();
+    expect(screen.queryByText(/version depends on your CLI configuration/)).toBeNull();
+  });
+  it('offers GPT-6.1 Sol and supports a custom model without changing effort', () => {
+    const change = vi.fn();
+    const { rerender } = render(
+      <ModelControls
+        agent="codex"
+        value={{ model: 'gpt-6-luna', effort: 'low' }}
+        disabled={false}
+        onChange={change}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-6.1-sol' } });
+    expect(change).toHaveBeenLastCalledWith({ model: 'gpt-6.1-sol', effort: 'low' });
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'custom' } });
+    expect(change).toHaveBeenLastCalledWith({ model: '', effort: 'low' });
+    rerender(
+      <ModelControls
+        agent="codex"
+        value={{ model: '', effort: 'low' }}
+        disabled={false}
+        onChange={change}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Custom model ID'), { target: { value: 'my-model' } });
+    expect(change).toHaveBeenLastCalledWith({ model: 'my-model', effort: 'low' });
+  });
 });
