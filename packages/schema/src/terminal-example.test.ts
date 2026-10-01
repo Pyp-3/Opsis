@@ -3,6 +3,16 @@ import { BoardDocumentSchema, BoardGraphSchema, TerminalStepSchema, boardChanges
 import { terminalExampleFor, TERMINAL_PIPELINE_EXAMPLE } from './terminal-example';
 
 describe('terminal-flow foundation', () => {
+  it('uses one consistent sample file and shows the first ten records without placeholders', () => {
+    const read = TERMINAL_PIPELINE_EXAMPLE.nodes[1]!.terminal!;
+    const head = TERMINAL_PIPELINE_EXAMPLE.nodes[2]!.terminal!;
+    const result = TERMINAL_PIPELINE_EXAMPLE.nodes[3]!.terminal!;
+    expect(read.output.split('\n')).toHaveLength(12);
+    expect(head.exampleInput).toBe(read.output);
+    expect(head.output).toBe(read.output.split('\n').slice(0, 10).join('\n'));
+    expect(result.output).toBe(head.output);
+    expect(result.output).not.toMatch(/\[line|\.\.\.|…/i);
+  });
   it.each([
     'cat users.txt | head -10',
     'cat users.txt | head -n 10',

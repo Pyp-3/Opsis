@@ -1,5 +1,22 @@
 import type { BoardDocument, BoardGraph } from './board';
 
+const SAMPLE_USERS = [
+  'alex',
+  'blair',
+  'casey',
+  'devon',
+  'ellis',
+  'frankie',
+  'gray',
+  'harper',
+  'indigo',
+  'jules',
+  'kai',
+  'logan',
+];
+const SAMPLE_FILE = SAMPLE_USERS.join('\n');
+const SAMPLE_PREVIEW = SAMPLE_USERS.slice(0, 10).join('\n');
+
 /** First terminal-flow reference case. No filesystem access, process execution or model call. */
 export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
   title: 'Read the first ten lines',
@@ -31,8 +48,9 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
       terminal: {
         command: 'cat users.txt',
         environment: 'Bash · Linux / macOS / WSL',
-        input: 'unused · source: users.txt',
-        output: '[file contents] → stdout → pipe',
+        input: 'users.txt · 12 example rows',
+        exampleInput: SAMPLE_FILE,
+        output: SAMPLE_FILE,
         success: 'Readable file → text forwarded',
         issues: [
           {
@@ -66,7 +84,8 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
         command: 'head -10',
         environment: 'Unix head · portable spelling: -n 10',
         input: 'cat stdout → pipe → stdin',
-        output: '[line 1]\n[line 2]\n…\n[line 10, if present]',
+        exampleInput: SAMPLE_FILE,
+        output: SAMPLE_PREVIEW,
         success: '0–10 lines → exit 0',
         issues: [
           {
@@ -97,7 +116,8 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
         command: 'cat users.txt | head -10',
         environment: 'Bash · read-only · file contents unknown',
         input: 'users.txt → cat → head',
-        output: '[line 1]\n[line 2]\n…\n[line 10, if present]',
+        exampleInput: SAMPLE_FILE,
+        output: SAMPLE_PREVIEW,
         success: 'First ≤10 lines · check stderr too',
         issues: [
           {

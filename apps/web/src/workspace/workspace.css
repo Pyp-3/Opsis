@@ -3007,3 +3007,19 @@ summary::-webkit-details-marker {
 .terminal-remedy {
   color: #75d3a8;
 }
+.terminal-sample-input {
+  margin-top: 8px;
+  color: #8ba2bc;
+  font: 11px / 1.7 var(--font-mono);
+}
+.terminal-sample-input summary {
+  cursor: pointer;
+}
+.terminal-sample-input pre {
+  margin: 8px 0 0;
+  padding-left: 12px;
+  border-left: 1px solid #26384d;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}

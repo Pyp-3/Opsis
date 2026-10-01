@@ -113,7 +113,7 @@ export function boardMarkdown(board: BoardDocument): string {
           )
           .join('\n');
         const terminal = node.terminal
-          ? `**Command:** ${safe(node.terminal.command)}\n\n**Environment:** ${safe(node.terminal.environment)}\n\n**Input:** ${safe(node.terminal.input)}\n\n**Expected output:** ${safe(node.terminal.output)}\n\n**Expected success:** ${safe(node.terminal.success)}\n\n${node.terminal.issues.map((issue) => `### ${safe(issue.symptom)}\n\n${safe(issue.cause)}\n\n**Check / remedy:** ${safe(issue.remedy)}\n`).join('\n')}\n`
+          ? `**Command:** ${safe(node.terminal.command)}\n\n**Environment:** ${safe(node.terminal.environment)}\n\n**Input:** ${safe(node.terminal.input)}\n\n${node.terminal.exampleInput ? `**Sample input:**\n\n${safe(node.terminal.exampleInput)}\n\n` : ''}**Expected output:** ${safe(node.terminal.output)}\n\n**Expected success:** ${safe(node.terminal.success)}\n\n${node.terminal.issues.map((issue) => `### ${safe(issue.symptom)}\n\n${safe(issue.cause)}\n\n**Check / remedy:** ${safe(issue.remedy)}\n`).join('\n')}\n`
           : '';
         return `## ${index + 1}. ${safe(node.label)}\n\n${safe(node.summary)}\n\n${safe(node.explanation)}\n\n${terminal}${node.confidence && node.confidence !== 'normal' ? `**${node.confidence}**: ${safe(node.caveat ?? '')}\n\n` : ''}${paths}\n`;
       })

@@ -231,6 +231,7 @@ export const TerminalStepSchema = z
     command: z.string().min(1).max(240),
     environment: z.string().min(1).max(200),
     input: z.string().max(500),
+    exampleInput: z.string().min(1).max(1000).optional(),
     output: z.string().max(1000),
     success: z.string().min(1).max(700),
     issues: z

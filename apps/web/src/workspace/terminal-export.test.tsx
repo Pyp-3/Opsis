@@ -18,6 +18,8 @@ describe('terminal metadata across canvas exports', () => {
     expect(markdown).toContain('**Expected success:**');
     expect(markdown).toContain('**Check / remedy:**');
     expect(markdown).toContain('Permission denied');
+    expect(markdown).toContain('**Sample input:**');
+    expect(markdown).toContain('alex\nblair\ncasey');
   });
   it('reserves a footprint for command captions and escapes their SVG text', () => {
     const node = board.nodes[1]!;

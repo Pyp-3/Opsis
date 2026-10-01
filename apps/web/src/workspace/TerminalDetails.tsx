@@ -7,14 +7,20 @@ export function TerminalDetails({ step }: { step: TerminalStep }) {
       <div className="terminal-window">
         <div className="terminal-titlebar">
           <Terminal size={14} aria-hidden />
-          <span>Expected output</span>
+          <span>Example output</span>
           <small>Preview</small>
         </div>
         <div className="terminal-transcript">
           <div className="terminal-input">
-            <span>stdin</span>
+            <span>input</span>
             <code>{step.input}</code>
           </div>
+          {step.exampleInput && (
+            <details className="terminal-sample-input">
+              <summary>Sample input</summary>
+              <pre>{step.exampleInput}</pre>
+            </details>
+          )}
           <div className="terminal-command">
             <span aria-hidden>$</span>
             <code>{step.command}</code>
@@ -44,7 +50,7 @@ export function TerminalDetails({ step }: { step: TerminalStep }) {
           ))}
         </div>
       )}
-      <p className="terminal-explanation-note">Illustrative preview · no commands executed</p>
+      <p className="terminal-explanation-note">Example data · no commands executed</p>
     </section>
   );
 }

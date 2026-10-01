@@ -80,11 +80,21 @@ describe('current workspace integration', () => {
     fireEvent.click(within(steps).getByRole('button', { name: 'Read the file' }));
     const details = screen.getByRole('region', { name: 'Terminal step expectations' });
     expect(within(details).getByText('cat users.txt')).toBeDefined();
-    expect(within(details).getByText('Expected output')).toBeDefined();
-    expect(within(details).getByText('[file contents] → stdout → pipe')).toBeDefined();
+    expect(within(details).getByText('Example output')).toBeDefined();
+    const sample = within(details).getByText('Sample input').closest('details')!;
+    fireEvent.click(within(details).getByText('Sample input'));
+    expect(sample.textContent).toContain('logan');
+    expect(details.querySelector('.terminal-output')?.textContent?.split('\n')).toHaveLength(12);
     expect(screen.queryByText('How it works')).toBeNull();
     fireEvent.click(within(details).getByText('Permission denied'));
     expect(within(details).getByText(/request authorised access/)).toBeDefined();
+    fireEvent.click(within(steps).getByRole('button', { name: 'Keep ten lines' }));
+    const output = screen
+      .getByRole('region', { name: 'Terminal step expectations' })
+      .querySelector('.terminal-output')!;
+    expect(output.textContent?.split('\n')).toHaveLength(10);
+    expect(output.textContent).toContain('jules');
+    expect(output.textContent).not.toContain('kai');
     expect(fetch.mock.calls.some(([url]) => url === '/v1/boards/generate')).toBe(false);
     await waitFor(() =>
       expect(

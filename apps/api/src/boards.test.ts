@@ -4,6 +4,8 @@ import {
   EMAIL_DEMO,
   EMAIL_DEMO_ILLUSTRATIONS,
   illustrateOutputSchema,
+  TERMINAL_PIPELINE_EXAMPLE,
+  boardOutputSchema,
 } from '@opsis/schema';
 import { buildApp } from './app.js';
 import type { FastifyInstance } from 'fastify';
@@ -31,6 +33,35 @@ describe('2D board API', () => {
     apps.push(app);
     return { app, complete, factory };
   }
+  it.each(['claude', 'codex'])(
+    'requests coherent example data and retains terminal output for %s',
+    async (agent) => {
+      const { app, complete } = setup(JSON.stringify(TERMINAL_PIPELINE_EXAMPLE));
+      const result = await app.inject({
+        method: 'POST',
+        url: '/v1/boards/generate',
+        payload: { agent, prompt: 'Show a terminal flow with sample users' },
+      });
+      expect(result.statusCode).toBe(200);
+      expect(result.json().nodes[2].terminal.output).toBe(
+        TERMINAL_PIPELINE_EXAMPLE.nodes[2]!.terminal!.output,
+      );
+      expect(result.json().nodes[2].terminal.exampleInput.split('\n')).toHaveLength(12);
+      expect(complete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptId: 'board/v4',
+          system: expect.stringContaining('Generate small, plausible synthetic example data'),
+        }),
+        expect.any(AbortSignal),
+        [],
+        expect.any(Function),
+      );
+      expect(
+        JSON.parse(boardOutputSchema).properties.nodes.items.properties.terminal.properties
+          .exampleInput,
+      ).toBeDefined();
+    },
+  );
   it('repairs invalid JSON once using the same model and validation feedback', async () => {
     const { app, complete, factory } = setup();
     complete.mockResolvedValueOnce('not JSON').mockResolvedValueOnce(JSON.stringify(EMAIL_DEMO));
@@ -148,7 +179,7 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v3' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v4' }),
       expect.any(AbortSignal),
       [],
       expect.any(Function),
