@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
 import { Workspace } from './Workspace';
+import { playbackTimeline } from './playback';
 
 vi.mock('@xyflow/react', async (original) => {
   const actual = await original<typeof import('@xyflow/react')>();
@@ -45,6 +46,7 @@ function setup(candidate?: typeof EMAIL_DEMO, responseStatus = 409) {
     if (url === '/v1/agents')
       return Response.json([{ id: 'claude', available: true, detail: 'Fixture ready' }]);
     if (url === '/v1/boards') return Response.json([]);
+    if (url === '/v1/speech') return Response.json({ state: 'off' });
     if (options?.method === 'PUT') return Response.json({ revision: 1 });
     if (url === '/v1/boards/generate')
       return Response.json(
@@ -62,6 +64,26 @@ function setup(candidate?: typeof EMAIL_DEMO, responseStatus = 409) {
   return fetch;
 }
 describe('current workspace integration', () => {
+  it('updates an open details panel as playback advances and keeps a closed panel closed', async () => {
+    setup();
+    await screen.findByText('Fixture ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Play the process' }));
+    const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
+    expect(screen.getByRole('complementary', { name: 'Details for You write' })).toBeDefined();
+    const timeline = screen.getByRole('slider', { name: 'Process timeline' });
+    const beats = playbackTimeline(board);
+    const inbox = beats.findIndex((beat) => beat.nodeId === 'recipient');
+    const sender = beats.findIndex((beat) => beat.nodeId === 'sender');
+    fireEvent.change(timeline, { target: { value: String(inbox) } });
+    expect(screen.getByRole('complementary', { name: 'Details for Their inbox' })).toBeDefined();
+    fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
+    expect(screen.getByRole('complementary', { name: 'Details for You write' })).toBeDefined();
+    fireEvent.change(timeline, { target: { value: String(sender) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close details' }));
+    fireEvent.change(timeline, { target: { value: String(inbox) } });
+    expect(screen.queryByRole('complementary', { name: /Details for/ })).toBeNull();
+  });
   it('recognises the terminal reference without an agent call and exposes troubleshooting', async () => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
       if (url === '/v1/agents')

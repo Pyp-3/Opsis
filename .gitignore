@@ -17,5 +17,5 @@ output/
 .heuresis/
 skills/
 
-# Natural narrator speech model (downloaded on first use)
+# Natural narrator speech model (preloaded at server startup; voice files are in node_modules)
 apps/api/data/models/

@@ -6,7 +6,7 @@ import { z } from 'zod';
 /**
  * The process player's natural narrator. Kokoro runs natively here (onnxruntime-node uses
  * every core), several times faster than real time, where the browser's WebAssembly build
- * manages about real time. The model (~330 MB) downloads on first use and is kept on disk.
+ * manages about real time. The model (~330 MB) is preloaded at server startup and kept on disk.
  */
 export const SPEECH_VOICES = ['bf_emma', 'bm_george', 'bf_isabella', 'bm_fable'] as const;
 export type SpeechVoice = (typeof SPEECH_VOICES)[number];
@@ -32,7 +32,7 @@ const describe = (error: unknown) => (error instanceof Error ? error.message : S
 
 type Kokoro = Awaited<ReturnType<(typeof import('kokoro-js'))['KokoroTTS']['from_pretrained']>>;
 
-/** Kokoro on the server's CPU, loaded on first use. */
+/** Kokoro on the server's CPU; warm and generate share one model-loading promise. */
 export function kokoroEngine(modelDir = process.env.OPSIS_MODEL_DIR ?? defaultModelDir) {
   let status: SpeechStatus = { state: 'idle' };
   let model: Promise<Kokoro> | null = null;

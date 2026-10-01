@@ -418,6 +418,11 @@ function BoardWorkspace() {
           ? { ...revealed(beats, index), nodeId: beat.nodeId, edgeId: beat.edgeId }
           : null,
       );
+      // An open concept panel follows the film, without opening one for every step.
+      if (beat.nodeId) {
+        setSelected((current) => (current ? beat.nodeId! : null));
+        setShowIcons(false);
+      }
       const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       const point = beat.nodeId ? boardRef.current?.positions[beat.nodeId] : null;
       if (!point) {
@@ -1154,7 +1159,11 @@ function BoardWorkspace() {
             </div>
           </section>
           {activeNode && board && (
-            <aside className="detail-panel" aria-label={`Details for ${activeNode.label}`}>
+            <aside
+              key={activeNode.id}
+              className="detail-panel"
+              aria-label={`Details for ${activeNode.label}`}
+            >
               <div className="detail-top">
                 <span className="eyebrow">
                   <SlidersHorizontal size={13} /> Concept details
