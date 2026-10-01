@@ -63,6 +63,7 @@ import { boardIcons, iconMotion } from './icons';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
+import { BrandMark } from './BrandMark';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
 import { ModelControls } from './ModelControls';
@@ -858,8 +859,20 @@ function BoardWorkspace() {
                 <Plus size={17} />
               </button>
             </div>
-            {!board && (
-              <div className="canvas-welcome">
+            {(!board || board.nodes.length === 0) && (
+              <section className="canvas-welcome" aria-label="Welcome to Opsis">
+                <div className="welcome-identity">
+                  <span className="welcome-mark">
+                    <BrandMark size={64} />
+                  </span>
+                  <span className="welcome-wordmark">
+                    opsis<span>.</span>
+                  </span>
+                </div>
+                <h2>See what you mean.</h2>
+                <p className="welcome-description">
+                  Turn a question into a diagram you can explore.
+                </p>
                 <h3>Start with a question</h3>
                 <ul aria-label="Suggested questions">
                   {[
@@ -881,7 +894,7 @@ function BoardWorkspace() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
             <span className="canvas-coordinate">
               OPSIS / VISUAL FIELD{' '}
