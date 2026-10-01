@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BoardGraphSchema,
+  terminalExampleFor,
   type BoardAgent,
   type BoardAttachment,
   type BoardDocument,
@@ -49,6 +50,19 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     setElapsed(0);
     setActivity(startActivity());
     try {
+      const example = terminalExampleFor(text, previous, attachments.length > 0);
+      if (example) {
+        setActivity((current) => ({ ...current, phase: 'arranging' }));
+        const candidate = await layoutBoard(
+          BoardGraphSchema.parse(example),
+          agent,
+          previous ?? undefined,
+          document.querySelector('.blueprint')?.clientWidth ?? 900,
+        );
+        if (controller.signal.aborted) return false;
+        commit(candidate);
+        return true;
+      }
       const response = await fetch('/v1/boards/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: STREAM_ACCEPT },

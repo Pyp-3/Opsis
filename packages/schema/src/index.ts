@@ -5,5 +5,6 @@ export * from './board';
 export * from './illustration';
 export * from './demo-illustrations';
 export * from './dns-demo';
+export * from './terminal-example';
 
 export const PACKAGE_NAME = '@opsis/schema';

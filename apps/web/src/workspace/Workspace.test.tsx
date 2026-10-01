@@ -57,6 +57,44 @@ function setup(candidate?: typeof EMAIL_DEMO) {
   return fetch;
 }
 describe('current workspace integration', () => {
+  it('recognises the terminal reference without an agent call and exposes troubleshooting', async () => {
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/v1/agents')
+        return Response.json([{ id: 'claude', available: false, detail: 'Offline fixture' }]);
+      if (url === '/v1/boards') return Response.json([]);
+      if (options?.method === 'PUT') return Response.json({ revision: 1 });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<Workspace />);
+    await screen.findByText('Offline fixture');
+    fireEvent.change(screen.getByLabelText('What would you like to understand?'), {
+      target: { value: 'What does `cat users.txt | head -10` do?' },
+    });
+    expect(screen.getByText('Local terminal example · no agent call')).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Generate diagram' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
+    const steps = await screen.findByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(within(steps).getByRole('button', { name: 'Read the file' }));
+    const details = screen.getByRole('region', { name: 'Terminal step expectations' });
+    expect(within(details).getByText('cat users.txt')).toBeDefined();
+    expect(within(details).getByText('Expected output')).toBeDefined();
+    expect(within(details).getByText('[file contents] → stdout → pipe')).toBeDefined();
+    expect(screen.queryByText('How it works')).toBeNull();
+    fireEvent.click(within(details).getByText('Permission denied'));
+    expect(within(details).getByText(/request authorised access/)).toBeDefined();
+    expect(fetch.mock.calls.some(([url]) => url === '/v1/boards/generate')).toBe(false);
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([, options]) =>
+            options?.method === 'PUT' && options.body?.toString().includes('cat users.txt'),
+        ),
+      ).toBe(true),
+    );
+  });
   it('shows topic suggestions and prepares them without generating', async () => {
     const fetch = setup();
     // Suggestions stay tucked away until asked for, so they never cover the diagram.

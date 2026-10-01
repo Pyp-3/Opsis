@@ -225,6 +225,29 @@ const id = z
   .min(1)
   .max(80)
   .regex(/^[a-zA-Z0-9_-]+$/);
+/** Explanatory terminal data only; commands are never executable application actions. */
+export const TerminalStepSchema = z
+  .object({
+    command: z.string().min(1).max(240),
+    environment: z.string().min(1).max(200),
+    input: z.string().max(500),
+    output: z.string().max(1000),
+    success: z.string().min(1).max(700),
+    issues: z
+      .array(
+        z
+          .object({
+            symptom: z.string().min(1).max(200),
+            cause: z.string().min(1).max(500),
+            remedy: z.string().min(1).max(700),
+          })
+          .strict(),
+      )
+      .max(5),
+  })
+  .strict();
+export type TerminalStep = z.infer<typeof TerminalStepSchema>;
+
 export const BoardNodeSchema = z
   .object({
     id,
@@ -235,6 +258,7 @@ export const BoardNodeSchema = z
     kind: z.enum(['step', 'decision', 'note']),
     confidence: z.enum(['normal', 'simplified', 'uncertain']).optional(),
     caveat: z.string().max(500).optional(),
+    terminal: TerminalStepSchema.optional(),
     /** What the process player's narrator says when it first reaches this object. */
     narration: z.string().max(400).optional(),
     /** An animated drawing the process player evolves the icon into; see illustration.ts. */

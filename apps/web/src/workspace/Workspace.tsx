@@ -58,7 +58,9 @@ import {
   type BoardAgent,
   type BoardAttachment,
   type Illustration,
+  terminalExampleFor,
 } from '@opsis/schema';
+import { TerminalDetails } from './TerminalDetails';
 import { boardIcons, iconMotion } from './icons';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
@@ -103,6 +105,7 @@ type DiagramNode = Node<{
   outgoing: number;
   confidence: string | undefined;
   illustration: Illustration | undefined;
+  command: string | undefined;
   /** Where playback is: on this object, past it, or not playing (or not reached). */
   stage: 'current' | 'revealed' | null;
 }>;
@@ -166,6 +169,13 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
           <span key={i}>{line}</span>
         ))}
       </strong>
+      {data.command && (
+        <code className="node-command" title={data.command}>
+          {wrapLabel(data.command, 26).map((line, i) => (
+            <span key={i}>{line}</span>
+          ))}
+        </code>
+      )}
       {data.confidence && data.confidence !== 'normal' && (
         <span className="confidence-badge">{data.confidence}</span>
       )}
@@ -325,6 +335,7 @@ function BoardWorkspace() {
     if (!text.trim() || busy) return;
     if (
       agent !== 'demo' &&
+      !terminalExampleFor(text, boardRef.current, attachments.length > 0) &&
       (!BoardModelSettingsSchema.safeParse(modelPreferences[agent]).success ||
         modelPreferences[agent].model === 'default')
     ) {
@@ -425,6 +436,7 @@ function BoardWorkspace() {
   const activeNode = board?.nodes.find((node) => node.id === selected);
   const activeEdge = board?.edges.find((edge) => edge.id === selectedEdge);
   const status = agents.find((entry) => entry.id === agent);
+  const localTerminalExample = !!terminalExampleFor(prompt, board, attachments.length > 0);
   const modelLabel =
     agent === 'demo'
       ? ''
@@ -462,6 +474,7 @@ function BoardWorkspace() {
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,
           confidence: node.confidence,
           illustration: node.illustration,
+          command: node.terminal?.command,
           stage:
             playback?.nodeId === node.id
               ? 'current'
@@ -1038,7 +1051,9 @@ function BoardWorkspace() {
                           disabled={
                             busy ||
                             !prompt.trim() ||
-                            (agent !== 'demo' && status?.available === false)
+                            (!localTerminalExample &&
+                              agent !== 'demo' &&
+                              status?.available === false)
                           }
                         >
                           <ArrowUp size={19} />
@@ -1101,6 +1116,8 @@ function BoardWorkspace() {
                           </>
                         ) : agent === 'demo' ? (
                           'Sample content · no agent calls'
+                        ) : localTerminalExample ? (
+                          'Local terminal example · no agent call'
                         ) : (
                           connectionError || status?.detail || 'Checking local agent…'
                         )}
@@ -1160,11 +1177,17 @@ function BoardWorkspace() {
                     <h2>{activeNode.label}</h2>
                   </div>
                 </div>
-                <p className="detail-summary">{activeNode.summary}</p>
-                <section className="detail-section">
-                  <h3>How it works</h3>
-                  <p className="detail-explanation">{activeNode.explanation}</p>
-                </section>
+                {activeNode.terminal ? (
+                  <TerminalDetails step={activeNode.terminal} />
+                ) : (
+                  <>
+                    <p className="detail-summary">{activeNode.summary}</p>
+                    <section className="detail-section">
+                      <h3>How it works</h3>
+                      <p className="detail-explanation">{activeNode.explanation}</p>
+                    </section>
+                  </>
+                )}
                 <section className="detail-section" aria-label="Connected concepts">
                   {(() => {
                     const links = board.edges.filter(
@@ -1298,12 +1321,14 @@ function BoardWorkspace() {
                     )}
                   </fieldset>
                 </details>
-                <p className="detail-note">
-                  {board.agent === 'demo'
-                    ? 'Curated example.'
-                    : `Generated with ${board.agent === 'claude' ? 'Claude' : 'Codex'}.`}{' '}
-                  A simplified explanation — ask your agent to check anything uncertain.
-                </p>
+                {!activeNode.terminal && (
+                  <p className="detail-note">
+                    {board.agent === 'demo'
+                      ? 'Curated example.'
+                      : `Generated with ${board.agent === 'claude' ? 'Claude' : 'Codex'}.`}{' '}
+                    A simplified explanation — ask your agent to check anything uncertain.
+                  </p>
+                )}
               </div>
             </aside>
           )}

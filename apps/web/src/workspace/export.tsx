@@ -70,7 +70,15 @@ export function boardSvg(board: BoardDocument): string {
           (port) => `<circle cx="${port.x}" cy="${port.y}" r="4" fill="#224d78" stroke="#a8c6e5"/>`,
         )
         .join('');
-      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g>${ports}${label}<title>${escape(node.explanation)}</title></g>`;
+      const command = node.terminal
+        ? wrapLabel(node.terminal.command, 26)
+            .map(
+              (line, i) =>
+                `<text x="${NODE_WIDTH / 2}" y="${126 + (wrapLabel(node.label).length - 1) * 18 + i * 16}" fill="#e8d4a3" text-anchor="middle" font-family="monospace" font-size="12">${escape(line)}</text>`,
+            )
+            .join('')
+        : '';
+      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
   const markers = [...new Set(board.edges.map((edge) => connectionStyle(edge).color))]
@@ -104,7 +112,10 @@ export function boardMarkdown(board: BoardDocument): string {
               `- ${safe(connectionLabel(edge) || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}`,
           )
           .join('\n');
-        return `## ${index + 1}. ${safe(node.label)}\n\n${safe(node.summary)}\n\n${safe(node.explanation)}\n\n${node.confidence && node.confidence !== 'normal' ? `**${node.confidence}**: ${safe(node.caveat ?? '')}\n\n` : ''}${paths}\n`;
+        const terminal = node.terminal
+          ? `**Command:** ${safe(node.terminal.command)}\n\n**Environment:** ${safe(node.terminal.environment)}\n\n**Input:** ${safe(node.terminal.input)}\n\n**Expected output:** ${safe(node.terminal.output)}\n\n**Expected success:** ${safe(node.terminal.success)}\n\n${node.terminal.issues.map((issue) => `### ${safe(issue.symptom)}\n\n${safe(issue.cause)}\n\n**Check / remedy:** ${safe(issue.remedy)}\n`).join('\n')}\n`
+          : '';
+        return `## ${index + 1}. ${safe(node.label)}\n\n${safe(node.summary)}\n\n${safe(node.explanation)}\n\n${terminal}${node.confidence && node.confidence !== 'normal' ? `**${node.confidence}**: ${safe(node.caveat ?? '')}\n\n` : ''}${paths}\n`;
       })
       .join('\n')
   );

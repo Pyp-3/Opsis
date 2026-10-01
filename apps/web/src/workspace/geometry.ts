@@ -4,11 +4,16 @@ export const NODE_HEIGHT = 200;
 export const COLUMN_GAP = 80;
 export const ROW_GAP = 56;
 
-export function nodeHeight(node: { label: string; confidence?: string | undefined }): number {
+export function nodeHeight(node: {
+  label: string;
+  confidence?: string | undefined;
+  terminal?: { command: string } | undefined;
+}): number {
   return (
     94 +
     wrapLabel(node.label).length * 18 +
     (node.confidence && node.confidence !== 'normal' ? 24 : 0) +
+    (node.terminal ? wrapLabel(node.terminal.command, 26).length * 16 + 16 : 0) +
     12
   );
 }
