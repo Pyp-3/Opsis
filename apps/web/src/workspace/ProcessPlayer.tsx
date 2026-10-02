@@ -33,6 +33,8 @@ const VOICE_KEY = 'opsis:narrator-voice';
 /** How many steps ahead the natural voice prepares. */
 const LOOK_AHEAD = 4;
 const IDLE: NaturalState = { status: 'idle' };
+/** Beyond this many steps, tick marks would crowd the timeline into a smear. */
+const MAX_TICKS = 40;
 
 const readVoice = () => {
   try {
@@ -243,11 +245,57 @@ export function ProcessPlayer({
   useEffect(() => () => synth?.cancel(), [synth]);
 
   const go = (next: number) => setPosition(Math.max(0, Math.min(beats.length - 1, next)));
+  const toggle = () => {
+    setSpeechIssue('');
+    if (!playing && last) setPosition(0);
+    setPlaying(!playing);
+  };
+  // Player shortcuts: Space or K plays and pauses, arrows or J/L step, Home/End jump.
+  const keys = useRef({ toggle, go, index, last: beats.length - 1, disabled });
+  useEffect(() => {
+    keys.current = { toggle, go, index, last: beats.length - 1, disabled };
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const { toggle, go, index, last, disabled } = keys.current;
+      if (disabled || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey)
+        return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      // Leave typing, native controls and focused canvas items (which move with arrows) alone.
+      if (target?.closest('input,textarea,select,[contenteditable],.react-flow__node')) return;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      // Space and Enter already press a focused button.
+      if (target?.closest('button,summary,a') && (key === ' ' || key === 'Enter')) return;
+      const action = (
+        {
+          ' ': toggle,
+          k: toggle,
+          ArrowLeft: () => go(index - 1),
+          j: () => go(index - 1),
+          ArrowRight: () => go(index + 1),
+          l: () => go(index + 1),
+          Home: () => go(0),
+          End: () => go(last),
+        } as Record<string, () => void>
+      )[key];
+      if (!action) return;
+      event.preventDefault();
+      action();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const ratio = index / Math.max(1, beats.length - 1);
+  const voiceOptions =
+    (naturalSupported && natural.status !== 'failed' ? NATURAL_VOICES.length : 0) + british.length;
   return (
     <section className="process-player" aria-label="Process player">
       <p className="player-caption" aria-live={playing ? 'off' : 'polite'}>
-        <strong>{beat.title}</strong>
-        <span>{beat.narration}</span>
+        <span className="player-caption-body" key={beat.id}>
+          <strong>{beat.title}</strong>
+          <span>{beat.narration}</span>
+        </span>
       </p>
       {sample && (
         <ProcessDataView
@@ -273,102 +321,138 @@ export function ProcessPlayer({
         </p>
       )}
       <div className="player-controls">
-        <button
-          aria-label="Previous step"
-          disabled={disabled || index === 0}
-          onClick={() => go(index - 1)}
-        >
-          <SkipBack size={16} />
-        </button>
-        <button
-          className="player-play"
-          aria-label={playing ? 'Pause' : last ? 'Replay' : 'Play'}
-          disabled={disabled}
-          onClick={() => {
-            setSpeechIssue('');
-            if (!playing && last) setPosition(0);
-            setPlaying(!playing);
-          }}
-        >
-          {playing ? (
-            <Pause size={18} fill="currentColor" />
-          ) : (
-            <Play size={18} fill="currentColor" />
-          )}
-        </button>
-        <button aria-label="Next step" disabled={disabled || last} onClick={() => go(index + 1)}>
-          <SkipForward size={16} />
-        </button>
-        <input
-          className="player-scrubber"
-          type="range"
-          min={0}
-          max={beats.length - 1}
-          step={1}
-          value={index}
-          disabled={disabled}
-          aria-label="Process timeline"
-          aria-valuetext={`Step ${index + 1} of ${beats.length}: ${beat.title}`}
-          style={{ ['--progress' as string]: `${(index / Math.max(1, beats.length - 1)) * 100}%` }}
-          onChange={(event) => go(Number(event.target.value))}
-        />
-        <span className="player-count">
-          {index + 1} / {beats.length}
-        </span>
-        <label className="player-speed">
-          <span className="sr-only">Playback speed</span>
-          <select
-            value={speed}
-            onChange={(event) => setSpeed(Number(event.target.value) as (typeof SPEEDS)[number])}
-          >
-            {SPEEDS.map((value) => (
-              <option key={value} value={value}>
-                {value}×
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="player-narrator"
-          aria-pressed={narrate}
-          disabled={!synth && !naturalSupported}
-          title={
-            synth || naturalSupported
-              ? 'British English narrator'
-              : 'Speech is not supported in this browser'
-          }
-          onClick={() => {
-            setSpeechIssue('');
-            setNarrate(!narrate);
-            if (narrate && engine === 'system') synth?.cancel();
-          }}
-        >
-          {narrate ? <Volume2 size={16} /> : <VolumeX size={16} />}
-          <span>Narrator</span>
-        </button>
-        {illustration && (
+        <div className="player-transport">
           <button
-            className="player-illustrate"
-            aria-busy={illustration.busy}
-            disabled={disabled || illustration.busy || !illustration.available}
-            title={
-              illustration.available
-                ? 'Ask the agent to draw animated illustrations that the icons evolve into (uses the selected model)'
-                : 'The selected agent is unavailable'
-            }
-            onClick={illustration.onIllustrate}
+            aria-label="Previous step"
+            aria-keyshortcuts="ArrowLeft J"
+            title="Previous step (←)"
+            disabled={disabled || index === 0}
+            onClick={() => go(index - 1)}
           >
-            {illustration.busy ? <LoaderCircle size={16} className="spin" /> : <Brush size={16} />}
-            <span>
-              {illustration.busy
-                ? `Drawing… ${illustration.elapsed}s`
-                : illustration.redraw
-                  ? 'Redraw'
-                  : 'Illustrate'}
-            </span>
+            <SkipBack size={16} />
           </button>
-        )}
-        <button aria-label="Close player" onClick={onClose}>
+          <button
+            className="player-play"
+            aria-label={playing ? 'Pause' : last ? 'Replay' : 'Play'}
+            aria-keyshortcuts="Space K"
+            title={`${playing ? 'Pause' : last ? 'Replay' : 'Play'} (Space)`}
+            disabled={disabled}
+            onClick={toggle}
+          >
+            {playing ? (
+              <Pause size={18} fill="currentColor" />
+            ) : (
+              <Play size={18} fill="currentColor" className="player-play-icon" />
+            )}
+          </button>
+          <button
+            aria-label="Next step"
+            aria-keyshortcuts="ArrowRight L"
+            title="Next step (→)"
+            disabled={disabled || last}
+            onClick={() => go(index + 1)}
+          >
+            <SkipForward size={16} />
+          </button>
+        </div>
+        <div className="player-timeline">
+          <div className="player-track" style={{ ['--ratio' as string]: ratio }}>
+            <div className="player-track-inner" aria-hidden>
+              <span className="player-track-rail">
+                <span className="player-track-fill" />
+              </span>
+              {beats.length <= MAX_TICKS &&
+                beats.map((item, at) => (
+                  <span
+                    key={item.id}
+                    className={`player-track-tick ${at <= index ? 'is-reached' : ''}`}
+                    style={{ left: `${(at / Math.max(1, beats.length - 1)) * 100}%` }}
+                  />
+                ))}
+              <span className="player-track-thumb" />
+            </div>
+            <input
+              className="player-scrubber"
+              type="range"
+              min={0}
+              max={beats.length - 1}
+              step={1}
+              value={index}
+              disabled={disabled}
+              aria-label="Process timeline"
+              aria-valuetext={`Step ${index + 1} of ${beats.length}: ${beat.title}`}
+              onChange={(event) => go(Number(event.target.value))}
+            />
+          </div>
+          <span className="player-count" aria-hidden>
+            {index + 1} / {beats.length}
+          </span>
+        </div>
+        <div className="player-options">
+          <label className="player-speed">
+            <span className="sr-only">Playback speed</span>
+            <select
+              value={speed}
+              onChange={(event) => setSpeed(Number(event.target.value) as (typeof SPEEDS)[number])}
+            >
+              {SPEEDS.map((value) => (
+                <option key={value} value={value}>
+                  {value}×
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="player-narrator"
+            aria-pressed={narrate}
+            disabled={!synth && !naturalSupported}
+            title={
+              synth || naturalSupported
+                ? 'British English narrator'
+                : 'Speech is not supported in this browser'
+            }
+            onClick={() => {
+              setSpeechIssue('');
+              setNarrate(!narrate);
+              if (narrate && engine === 'system') synth?.cancel();
+            }}
+          >
+            {narrate ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            <span>Narrator</span>
+          </button>
+          {illustration && (
+            <button
+              className="player-illustrate"
+              aria-busy={illustration.busy}
+              disabled={disabled || illustration.busy || !illustration.available}
+              title={
+                illustration.available
+                  ? 'Ask the agent to draw animated illustrations that the icons evolve into (uses the selected model)'
+                  : 'The selected agent is unavailable'
+              }
+              onClick={illustration.onIllustrate}
+            >
+              {illustration.busy ? (
+                <LoaderCircle size={16} className="spin" />
+              ) : (
+                <Brush size={16} />
+              )}
+              <span>
+                {illustration.busy
+                  ? `Drawing… ${illustration.elapsed}s`
+                  : illustration.redraw
+                    ? 'Redraw'
+                    : 'Illustrate'}
+              </span>
+            </button>
+          )}
+        </div>
+        <button
+          className="player-close"
+          aria-label="Close player"
+          title="Close player"
+          onClick={onClose}
+        >
           <X size={16} />
         </button>
       </div>
@@ -386,7 +470,7 @@ export function ProcessPlayer({
       )}
       {narrate && (
         <div className="player-voice">
-          {naturalSupported || british.length > 1 ? (
+          {voiceOptions > 1 ? (
             <label>
               Voice
               <select

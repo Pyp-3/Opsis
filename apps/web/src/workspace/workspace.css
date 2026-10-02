@@ -1105,6 +1105,26 @@ summary::-webkit-details-marker {
   width: min(680px, calc(100% - 96px));
   z-index: 5;
 }
+/* The player carries more controls than the composer, so it may use a little more width. */
+@media (min-width: 1101px) {
+  .composer-wrap:has(.process-player) {
+    width: min(780px, calc(100% - 96px));
+  }
+}
+.process-player {
+  container-type: inline-size;
+}
+@container (max-width: 720px) {
+  .player-controls .player-narrator span,
+  .player-controls .player-illustrate span {
+    display: none;
+  }
+  .player-controls .player-narrator,
+  .player-controls .player-illustrate {
+    width: var(--control);
+    padding: 0;
+  }
+}
 .next-steps {
   display: flex;
   flex-direction: column;
@@ -1305,6 +1325,15 @@ summary::-webkit-details-marker {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .player-caption-body,
+  .process-player .process-data {
+    animation: none;
+  }
+  .player-track-fill,
+  .player-track-thumb,
+  .player-controls button {
+    transition: none;
+  }
   .attachment-chips li {
     animation: none;
   }
@@ -2220,7 +2249,8 @@ summary::-webkit-details-marker {
   margin-top: 7px;
 }
 .process-data-scroll {
-  max-height: 96px;
+  /* The pre's 5px top padding plus seven whole 14px rows, so no row is cut in half. */
+  max-height: 103px;
   overflow: auto;
   scrollbar-width: thin;
 }
@@ -2391,8 +2421,7 @@ summary::-webkit-details-marker {
   }
 }
 .player-caption {
-  margin: 0 auto;
-  max-width: 620px;
+  margin: 0;
   padding: 12px 18px;
   text-align: center;
   color: var(--bp-ink);
@@ -2401,6 +2430,10 @@ summary::-webkit-details-marker {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
+.player-caption-body {
+  display: block;
+  animation: player-fade-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
 .player-caption strong {
   display: block;
   margin-bottom: 4px;
@@ -2408,88 +2441,197 @@ summary::-webkit-details-marker {
   font-size: 15px;
   color: var(--bp-gold);
 }
-.player-caption span {
+.player-caption-body > span {
   font-size: 15px;
   line-height: 1.55;
 }
+.process-player .process-data {
+  animation: player-fade-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes player-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+/* Transport | timeline | options | close, every control on one 32px baseline. */
 .player-controls {
+  --control: 32px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
 }
-.player-controls > button {
-  width: 34px;
-  height: 34px;
+.player-transport,
+.player-options {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+.player-controls button {
+  height: var(--control);
   flex-shrink: 0;
   color: var(--ink-2);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    transform 120ms var(--ease);
+}
+.player-controls button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.player-transport > button,
+.player-close {
+  width: var(--control);
+  border-radius: 50%;
 }
 .player-controls .player-play {
   width: 40px;
   height: 40px;
   color: var(--accent-fg);
   background: var(--accent);
-  border-radius: 50%;
 }
 .player-controls .player-play:hover:not(:disabled) {
   background: var(--accent-hover);
 }
-.player-scrubber {
+/* The play triangle's visual centre sits left of its box. */
+.player-play-icon {
+  margin-left: 2px;
+}
+.player-timeline {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 10px;
   min-width: 80px;
-  height: 6px;
-  margin: 0 6px;
+}
+/* A drawn track under an invisible native range: the range keeps keyboard, pointer and
+   screen-reader behaviour, the drawing can glide between steps. */
+.player-track {
+  position: relative;
+  flex: 1;
+  height: var(--control);
+}
+.player-track-inner {
+  position: absolute;
+  inset: 0 7px;
+  pointer-events: none;
+}
+.player-track-rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  margin-top: -2px;
+  overflow: hidden;
+  background: var(--line-strong);
+  border-radius: 2px;
+}
+.player-track-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-text);
+  transform: scaleX(var(--ratio));
+  transform-origin: left;
+  transition: transform 320ms var(--ease);
+}
+.player-track-tick {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  background: var(--surface);
+  border-radius: 50%;
+  opacity: 0.5;
+  transform: translate(-50%, -50%);
+}
+.player-track-tick:not(.is-reached) {
+  background: var(--ink-3);
+}
+.player-track-thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--ratio) * 100%);
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border: 3px solid var(--accent-text);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transform: translate(-50%, -50%);
+  transition:
+    left 320ms var(--ease),
+    transform 120ms var(--ease);
+}
+.player-track:hover .player-track-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+.player-track:has(.player-scrubber:focus-visible) .player-track-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.player-track:has(.player-scrubber:disabled) {
+  opacity: 0.45;
+}
+.player-scrubber {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   appearance: none;
-  background: linear-gradient(
-    to right,
-    var(--accent-text) var(--progress),
-    var(--line-strong) var(--progress)
-  );
-  border-radius: 3px;
+  background: transparent;
+  opacity: 0;
   cursor: pointer;
 }
+.player-scrubber:disabled {
+  cursor: not-allowed;
+}
+/* Match the drawn thumb so pointer positions map to the same steps. */
 .player-scrubber::-webkit-slider-thumb {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   appearance: none;
-  background: var(--surface);
-  border: 3px solid var(--accent-text);
-  border-radius: 50%;
 }
 .player-scrubber::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  background: var(--surface);
-  border: 3px solid var(--accent-text);
-  border-radius: 50%;
-}
-.player-scrubber:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 6px;
+  width: 14px;
+  height: 14px;
+  border: 0;
 }
 .player-count {
   flex-shrink: 0;
-  min-width: 44px;
+  min-width: 48px;
   font: 500 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--ink-3);
   text-align: center;
 }
 .player-speed select {
-  height: 30px;
-  padding: 0 4px;
+  height: var(--control);
+  min-width: 48px;
+  padding: 0 10px;
+  appearance: none;
+  text-align: center;
+  text-align-last: center;
   font-size: 12px;
+  font-weight: 600;
   color: var(--ink-2);
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 999px;
 }
-.player-controls .player-narrator {
+.player-controls .player-narrator,
+.player-controls .player-illustrate {
   width: auto;
-  padding: 0 10px;
+  padding: 0 12px;
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -2501,32 +2643,49 @@ summary::-webkit-details-marker {
   background: var(--accent-soft);
   border-color: transparent;
 }
-.player-controls .player-illustrate {
-  width: auto;
-  padding: 0 10px;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-}
 .player-controls .player-illustrate[aria-busy='true'] {
   color: var(--accent-text);
   font-variant-numeric: tabular-nums;
 }
+/* A hairline sets closing apart from the playback controls. */
+.player-close {
+  position: relative;
+  margin-left: 4px;
+}
+.player-close::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -8px;
+  width: 1px;
+  background: var(--line);
+}
+/* Status lines sit on the canvas, so they get the caption's backing to stay legible. */
+.player-data-status,
+.player-illustration-status,
+.player-voice {
+  align-self: center;
+  max-width: 100%;
+  padding: 6px 12px;
+  color: var(--bp-ink-2);
+  background: rgb(8 26 48 / 0.82);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
 .player-illustration-status {
   margin: 0;
   font-size: 12px;
-  color: var(--bp-ink-2);
   text-align: center;
 }
 .player-voice {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 4px 12px;
   font-size: 12px;
-  color: var(--bp-ink-2);
 }
 .player-voice label {
   display: flex;
@@ -2834,12 +2993,12 @@ summary::-webkit-details-marker {
   }
 }
 @media (max-width: 760px) {
-  .player-speed,
-  .player-count {
-    display: none;
+  .player-controls {
+    gap: 6px;
   }
-  .player-controls .player-narrator span,
-  .player-controls .player-illustrate span {
+  .player-speed,
+  .player-count,
+  .player-track-tick {
     display: none;
   }
 }

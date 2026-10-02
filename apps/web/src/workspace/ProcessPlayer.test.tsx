@@ -108,6 +108,35 @@ describe('process player', () => {
     expect(onBeat).toHaveBeenLastCalledWith(beats, 3);
   });
 
+  it('steps, jumps and plays from the keyboard without hijacking typing or buttons', () => {
+    fakeSpeech(BRITISH);
+    const { onBeat, beats } = setup();
+    const press = (key: string, target: Element = document.body) =>
+      fireEvent.keyDown(target, { key });
+    press('ArrowRight');
+    press('l');
+    expect(onBeat).toHaveBeenLastCalledWith(beats, 2);
+    press('ArrowLeft');
+    expect(onBeat).toHaveBeenLastCalledWith(beats, 1);
+    press('End');
+    expect(onBeat).toHaveBeenLastCalledWith(beats, beats.length - 1);
+    press('Home');
+    expect(onBeat).toHaveBeenLastCalledWith(beats, 0);
+    press(' ');
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDefined();
+    press('k');
+    expect(screen.getByRole('button', { name: 'Play' })).toBeDefined();
+    // Typing elsewhere, a focused button's own Space, and modified keys are left alone.
+    const field = document.createElement('input');
+    document.body.append(field);
+    press('ArrowRight', field);
+    press(' ', screen.getByRole('button', { name: 'Next step' }));
+    fireEvent.keyDown(document.body, { key: 'ArrowRight', ctrlKey: true });
+    expect(onBeat).toHaveBeenLastCalledWith(beats, 0);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeDefined();
+    field.remove();
+  });
+
   it('plays silently like a video, reaches the end and offers a replay', () => {
     const speech = fakeSpeech(BRITISH);
     const { slider, beats } = setup(EMAIL_DEMO);
