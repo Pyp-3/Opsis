@@ -1,0 +1,21 @@
+{
+  "name": "@opsis/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic Rust/WASM process calculations and vector traces",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:rust": "cargo test --locked",
+    "check:rust": "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings"
+  },
+  "dependencies": {
+    "@opsis/schema": "workspace:*",
+    "zod": "^3.25.76"
+  }
+}

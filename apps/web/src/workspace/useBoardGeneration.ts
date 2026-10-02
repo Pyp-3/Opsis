@@ -97,7 +97,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
       );
       if (controller.signal.aborted) return false;
       if (previous?.nodes.length) {
-        const changes = boardChanges(previous, graph);
+        const changes = boardChanges(previous, candidate);
         for (const node of graph.nodes) {
           if (!previous.nodes.some((item) => item.id === node.id))
             changes.push(`Add concept: ${node.label}`);

@@ -30,6 +30,7 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
       label: 'Text file',
       icon: 'file',
       kind: 'step',
+      process: { op: 'source', text: SAMPLE_FILE },
       summary: 'users.txt in the current working directory.',
       explanation:
         'This example assumes a readable, regular text file called users.txt. The filename does not imply any particular format or actual system user accounts. The app has not read your file. A relative path is resolved from the shell’s current working directory.',
@@ -42,6 +43,7 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
       icon: 'terminal',
       kind: 'step',
       summary: 'cat copies file contents to standard output.',
+      process: { op: 'pass', from: 'users-file' },
       explanation:
         'cat opens users.txt and copies its bytes to standard output. In this pipeline standard output is connected to head, rather than directly to the screen. Diagnostics normally go to standard error, which is not carried by the pipe. Neither command modifies the file.',
       narration: 'Cat opens the file and starts sending its contents into the pipe.',
@@ -77,6 +79,7 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
       icon: 'filter',
       kind: 'step',
       summary: 'head reads from the pipe and stops after ten lines.',
+      process: { op: 'head', from: 'read-file', count: 10 },
       explanation:
         'The shell connects cat’s stdout to head’s stdin using |. Both commands can run concurrently; the diagram shows data flow, not a sequence in which cat must finish first. head has no filename argument, so it reads stdin. -10 is a historical option spelling; prefer -n 10 in scripts.',
       narration: 'The pipe feeds head, which keeps the first ten lines and then stops reading.',
@@ -108,8 +111,9 @@ export const TERMINAL_PIPELINE_EXAMPLE: BoardGraph = {
       icon: 'monitor',
       kind: 'step',
       summary: 'A preview of the file, with errors on a separate stream.',
+      process: { op: 'pass', from: 'first-lines' },
       explanation:
-        'The screen receives head’s stdout and, unless redirected elsewhere, both commands’ stderr. The exact text depends on the real file; Opsis shows no fabricated user records. This is a read-only preview of at most ten lines, not ten users, and it does not sort, count, or change the file.',
+        'The screen receives head’s stdout and, unless redirected elsewhere, both commands’ stderr. Opsis calculates the preview from synthetic sample data; the real file may differ. This is a read-only preview of at most ten lines, not ten users, and it does not sort, count, or change the file.',
       narration:
         'The terminal displays the preview. Error messages arrive separately, so read them as well as checking the result.',
       terminal: {

@@ -1,35 +1,58 @@
 import type { TerminalStep } from '@opsis/schema';
 import { Terminal, Check, CircleAlert } from 'lucide-react';
+import type { ProcessResult } from '@opsis/engine';
+import type { ProcessState } from './useProcessEngine';
 
-export function TerminalDetails({ step }: { step: TerminalStep }) {
+export function TerminalDetails({
+  step,
+  result,
+  calculation,
+}: {
+  step: TerminalStep;
+  result?: ProcessResult | undefined;
+  calculation?: ProcessState;
+}) {
+  const waiting = calculation && calculation.status !== 'ready';
+  const sampleInput = result ? result.input : waiting ? '' : step.exampleInput;
+  const output = result
+    ? result.output || '(empty)'
+    : waiting
+      ? calculation.status === 'failed'
+        ? calculation.message
+        : 'Calculating sample…'
+      : step.output;
   return (
     <section className="terminal-details" aria-label="Terminal step expectations">
       <div className="terminal-window">
         <div className="terminal-titlebar">
           <Terminal size={14} aria-hidden />
           <span>Example output</span>
-          <small>Preview</small>
+          <small>{result ? 'Calculated' : 'Preview'}</small>
         </div>
         <div className="terminal-transcript">
           <div className="terminal-input">
             <span>input</span>
-            <code>{step.input}</code>
+            <code>{result ? `${result.inputRows} example lines` : step.input}</code>
           </div>
-          {step.exampleInput && (
+          {sampleInput && (
             <details className="terminal-sample-input">
               <summary>Sample input</summary>
-              <pre>{step.exampleInput}</pre>
+              <pre>{sampleInput}</pre>
             </details>
           )}
           <div className="terminal-command">
             <span aria-hidden>$</span>
             <code>{step.command}</code>
           </div>
-          <pre className="terminal-output">{step.output}</pre>
-          <div className="terminal-success">
-            <Check size={13} aria-hidden />
-            <code>{step.success}</code>
-          </div>
+          <pre className="terminal-output">{output.replace(/\r?\n$/, '')}</pre>
+          {!waiting && (
+            <div className="terminal-success">
+              <Check size={13} aria-hidden />
+              <code>
+                {result ? `${result.inputRows} → ${result.outputRows} lines` : step.success}
+              </code>
+            </div>
+          )}
         </div>
       </div>
       <p className="terminal-environment">{step.environment}</p>

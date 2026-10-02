@@ -32,11 +32,19 @@ On a new or empty canvas, ask `cat users.txt | head -10` (or “What does `cat u
 
 This first model covers missing files, permissions, empty/short input, unavailable utilities, upstream errors hidden by a successful final command, and conditional SIGPIPE behaviour when `head` stops early. It treats stdout and stderr separately and describes concurrent data flow. `head -n 10 users.txt` is the simpler equivalent for this particular task. The reference follows the [GNU head manual](https://www.gnu.org/s/coreutils/manual/html_node/head-invocation.html) and [Bash pipeline manual](https://www.gnu.org/software/bash/manual/html_node/Pipelines).
 
-Local recognition is deliberately limited to this pipeline (including `head -n 10`) and short explanation questions. Attachments, existing nonempty boards, and other commands follow the normal agent path. Claude and Codex are instructed to infer terminal flows and generate coherent synthetic input/output examples for command nodes, rather than line placeholders. This is model judgment, not a shell parser or execution engine. Terminal metadata persists with the board and editable JSON, appears in image exports as command captions, and is included in Markdown. Scenario branches and real machine context remain future work. There is no terminal mode selector.
+Local recognition is deliberately limited to this pipeline (including `head -n 10`) and short explanation questions. Attachments, existing nonempty boards, and other commands follow the normal agent path. For supported text transformations, Claude and Codex supply a synthetic source and structured operations; the Rust engine calculates intermediate outputs instead of relying on the model to invent them. Other commands retain explicit illustrative previews. Terminal metadata and process operations persist with editable JSON; command captions appear in image exports and terminal previews in Markdown. Scenario branches and real machine context remain future work. There is no terminal mode selector.
+
+### Calculated process engine
+
+`@opsis/engine` is a Rust core compiled to WebAssembly, loaded in a dedicated browser worker. Its versioned input contract accepts synthetic text sources, pass-through, head, tail, lexical sort, literal substring filter and adjacent unique operations. Each node references its input node by ID. The engine returns exact text, row counts, retained input row indices and vector paths showing each row's journey. Playback shows a compact input → output view, moving packets along calculated paths and marking stopped rows. Reached icons show their calculated counts. The browser renders these values; the model supplies meaning and operations.
+
+Select a source icon and edit **Sample data → Update sample** to recalculate connected previews without calling an agent. This is one undoable, synchronized edit. Calculations also run before generation proposals are previewed or applied, so saved terminal output is populated by the engine. Existing boards without process metadata retain their original previews. The engine performs no shell execution, file access or network requests; its WASM loader fetches only the bundled application asset. Limits are 50 process nodes, 100 lines and 1000 characters per sample/output. Missing sources and dependency cycles are rejected; deleting a source drops dependent calculations while retaining their explanatory content.
+
+Head, tail and pass-through preserve line endings and unterminated final lines. Sort uses Unicode lexical ordering and terminates output lines with LF; it does not reproduce locale-dependent or numeric shell sorting. Filter is case-sensitive literal matching, and unique collapses adjacent equal lines without sorting. This first slice calculates the successful sample flow; stderr, exit statuses, SIGPIPE, shell concurrency and unsupported command behavior remain explanations. ELK, existing connector routing and SVG drawing remain in place. General vector geometry and domain-specific simulations can be added behind the same engine boundary after measurement. See [the engine contract](docs/PROCESS-ENGINE.md).
 
 ## Quick start
 
-Requirements: Node.js **20.19+** and **pnpm 10.34.5** (the version pinned in `package.json`).
+Requirements: Node.js **20.19+**, **pnpm 10.34.5** and [Rust via rustup](https://rustup.rs/). The engine pins Rust **1.89.0** and the browser WASM target in `packages/engine/rust-toolchain.toml`; rustup installs these on its first build. Native Rust tests require your platform's C/C++ linker (Windows: Visual Studio Build Tools with Desktop development with C++; macOS: Xcode command-line tools; Linux: a C compiler).
 
 ```sh
 git clone git@github.com:Pyp-3/Opsis.git
@@ -113,6 +121,8 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm engine:test
+pnpm engine:check
 ```
 
 Targeted new-workspace coverage:
@@ -135,6 +145,7 @@ apps/api/src/harness/    Validated local CLI integration
 apps/api/src/storage.ts  SQLite persistence for v2 and legacy boards
 apps/api/src/board-library.ts V2 library list/load/save endpoints
 packages/schema/        Shared Zod contracts, including v2 boards
+packages/engine/        Rust/WASM calculations, bindings and shared engine contract
 packages/pipeline/      Legacy parsing, metaphor, layout and explanation pipeline
 tests/workspace/        Current workspace browser regression suite
 docs/                   Design notes and implementation documentation

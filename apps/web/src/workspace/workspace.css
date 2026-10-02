@@ -2184,6 +2184,118 @@ summary::-webkit-details-marker {
   flex-direction: column;
   gap: 10px;
 }
+.process-data {
+  overflow: hidden;
+  padding: 8px 12px;
+  border: 1px solid var(--bp-line);
+  border-radius: 10px;
+  background: rgb(5 20 37 / 0.94);
+  font-family: var(--font-mono);
+  color: var(--bp-ink);
+}
+.process-data header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+.process-data header code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-data header span {
+  flex-shrink: 0;
+  color: var(--bp-gold);
+}
+.process-data-columns,
+.process-data-labels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr);
+  gap: 10px;
+}
+.process-data-labels {
+  margin-top: 7px;
+}
+.process-data-scroll {
+  max-height: 96px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.process-data-columns > div {
+  min-width: 0;
+}
+.process-data small,
+.process-data footer {
+  color: var(--bp-muted);
+  font-size: 9px;
+}
+.process-data pre {
+  margin: 0;
+  padding-top: 5px;
+  font: 10px/1.4 var(--font-mono);
+  scrollbar-width: thin;
+}
+.process-data svg {
+  width: 80px;
+  display: block;
+}
+.data-kept {
+  color: #8fe3b4;
+}
+.data-stopped {
+  color: #ffad8f;
+  opacity: 0.5;
+}
+.process-data footer {
+  margin-top: 5px;
+}
+.player-data-status {
+  margin: 0;
+  color: var(--bp-muted);
+  font-size: 11px;
+}
+.process-row-count {
+  position: absolute;
+  top: -3px;
+  right: -20px;
+  padding: 3px 6px;
+  border: 1px solid var(--bp-line);
+  border-radius: 8px;
+  background: #102f52;
+  color: #8fe3b4;
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+.process-sample-editor {
+  margin-top: 18px;
+}
+.process-sample-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.process-sample-editor textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 12px/1.5 var(--font-mono);
+}
+.process-sample-editor button {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.process-sample-editor p {
+  font-size: 12px;
+}
 /* Live agent status, in the manner of Claude Code's: spark, current step, then the metrics. */
 .agent-activity {
   width: 100%;

@@ -7,12 +7,15 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter web --filter api dev",
+    "dev": "pnpm engine:build && pnpm --parallel --filter web --filter api dev",
+    "engine:build": "pnpm --filter @opsis/engine build",
+    "engine:test": "pnpm --filter @opsis/engine test:rust",
+    "engine:check": "pnpm --filter @opsis/engine check:rust",
     "build": "pnpm -r build",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.json",
-    "test": "vitest run",
+    "typecheck": "pnpm engine:build && pnpm -r typecheck && tsc -p tsconfig.json",
+    "test": "pnpm engine:build && vitest run",
     "test:golden": "vitest run --config tests/golden/vitest.config.ts",
     "test:browser": "playwright test",
     "test:qa": "pnpm build && pnpm test && pnpm test:browser"
@@ -30,6 +33,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.70.1",
     "vitest": "^3.2.7",
+    "wasm-pack": "0.15.0",
     "zod": "^3.25.76"
   }
 }

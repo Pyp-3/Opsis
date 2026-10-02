@@ -1,4 +1,4 @@
-import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
+import { BoardSnapshotSchema, withoutBrokenProcesses, type BoardSnapshot } from '@opsis/schema';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 /** Apply only fields edited locally, preserving unrelated edits from another view. */
@@ -45,7 +45,9 @@ export function mergeBoardSnapshots(
   const board = structuredClone(mergeValue(base.board, local.board, remote.board)) as NonNullable<
     BoardSnapshot['board']
   >;
-  board.nodes = mergeItems(base.board.nodes, local.board.nodes, remote.board.nodes);
+  board.nodes = withoutBrokenProcesses(
+    mergeItems(base.board.nodes, local.board.nodes, remote.board.nodes),
+  );
   const ids = new Set(board.nodes.map((node) => node.id));
   board.edges = mergeItems(base.board.edges, local.board.edges, remote.board.edges).filter(
     (edge) => ids.has(edge.source) && ids.has(edge.target),

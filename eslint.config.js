@@ -50,7 +50,13 @@ const stageBoundaries = STAGES.slice(0, -1).map((stage, i) => {
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'pnpm-lock.yaml'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/target/**',
+      '**/coverage/**',
+      'pnpm-lock.yaml',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

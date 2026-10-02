@@ -5,3 +5,4 @@ PROMPT.md
 .heuresis/
 skills/
 .playwright-cli/
+target/

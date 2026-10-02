@@ -21,6 +21,18 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.89.0'
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine
+      - name: Build process engine
+        run: pnpm engine:build
+      - name: Check and test Rust
+        run: pnpm engine:check && pnpm engine:test
       - name: Install browser
         run: pnpm exec playwright install --with-deps chromium
       - name: Lint

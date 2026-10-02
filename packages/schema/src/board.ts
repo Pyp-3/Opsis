@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CustomIconSchema, IllustrationSchema } from './illustration';
+import { ProcessStepSchema, processProblems } from './process';
 
 /** Icon names agents and readers may use; see apps/web icons for labels and search terms. */
 export const BOARD_ICONS = [
@@ -262,6 +263,8 @@ export const BoardNodeSchema = z
     confidence: z.enum(['normal', 'simplified', 'uncertain']).optional(),
     caveat: z.string().max(500).optional(),
     terminal: TerminalStepSchema.optional(),
+    /** The engine calculates sample data from these operations, independently of narration. */
+    process: ProcessStepSchema.optional(),
     /** What the process player's narrator says when it first reaches this object. */
     narration: z.string().max(400).optional(),
     /** An animated drawing the process player evolves the icon into; see illustration.ts. */
@@ -311,6 +314,7 @@ export function validateBoardReferences(
       code: 'custom',
       message: 'Every connection must reference an existing node.',
     });
+  for (const message of processProblems(board.nodes)) context.addIssue({ code: 'custom', message });
 }
 export const BoardGraphSchema = BoardContentSchema.superRefine(validateBoardReferences);
 export const BoardPortSchema = z.enum(['left', 'right', 'top', 'bottom']);

@@ -13,6 +13,8 @@ import {
 import type { BoardDocument } from '@opsis/schema';
 import { AgentActivity } from './AgentActivityView';
 import type { AgentActivity as AgentActivityState } from './agentActivity';
+import { ProcessDataView } from './ProcessDataView';
+import type { ProcessState } from './useProcessEngine';
 import { beatDuration, britishVoice, PACE, playbackTimeline, type Beat } from './playback';
 import {
   NATURAL_VOICES,
@@ -98,12 +100,14 @@ export function ProcessPlayer({
   onBeat,
   onClose,
   illustration,
+  process,
 }: {
   board: BoardDocument;
   disabled: boolean;
   onBeat: (beats: Beat[], index: number) => void;
   onClose: () => void;
   illustration?: IllustrationControl;
+  process?: ProcessState;
 }) {
   const beats = useTimeline(board);
   const [position, setPosition] = useState(0);
@@ -132,6 +136,10 @@ export function ProcessPlayer({
         : 'off';
   const beat = beats[index]!;
   const last = index >= beats.length - 1;
+  const sample = process?.results.get(
+    beat.nodeId ?? board.nodes.find((node) => node.process?.op === 'source')?.id ?? '',
+  );
+  const sampleNode = sample && board.nodes.find((node) => node.id === sample.id);
 
   const onBeatRef = useRef(onBeat);
   useEffect(() => {
@@ -240,6 +248,24 @@ export function ProcessPlayer({
         <strong>{beat.title}</strong>
         <span>{beat.narration}</span>
       </p>
+      {sample && (
+        <ProcessDataView
+          key={beat.id}
+          result={sample}
+          command={sampleNode?.terminal?.command ?? sampleNode?.label ?? 'Sample data'}
+          animate={playing && !disabled}
+        />
+      )}
+      {process?.status === 'calculating' && (
+        <p className="player-data-status" role="status">
+          Calculating sample…
+        </p>
+      )}
+      {process?.status === 'failed' && (
+        <p className="player-data-status" role="status">
+          {process.message}
+        </p>
+      )}
       <div className="player-controls">
         <button
           aria-label="Previous step"

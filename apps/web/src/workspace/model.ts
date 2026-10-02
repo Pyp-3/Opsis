@@ -3,7 +3,9 @@ import {
   type BoardDocument,
   type BoardGraph,
   type BoardAgent,
+  withoutBrokenProcesses,
 } from '@opsis/schema';
+import { populateProcess } from './process-engine';
 
 export const STORAGE_KEY = 'opsis:board:v2';
 import { NODE_WIDTH, COLUMN_GAP, ROW_GAP, nodeHeight, wrapLabel } from './geometry';
@@ -17,6 +19,7 @@ export async function layoutBoard(
   previous?: BoardDocument,
   availableWidth = 900,
 ): Promise<BoardDocument> {
+  graph = await populateProcess(graph);
   const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
   const elk = new ELK();
   const result = await elk.layout({
@@ -185,7 +188,7 @@ export function removeNode(board: BoardDocument, id: string): BoardDocument {
   delete positions[id];
   return {
     ...board,
-    nodes: board.nodes.filter((node) => node.id !== id),
+    nodes: withoutBrokenProcesses(board.nodes.filter((node) => node.id !== id)),
     edges: board.edges.filter((edge) => edge.source !== id && edge.target !== id),
     positions,
   };

@@ -60,8 +60,12 @@ import {
   type Illustration,
   type CustomIcon,
   terminalExampleFor,
+  BoardDocumentSchema,
 } from '@opsis/schema';
 import { TerminalDetails } from './TerminalDetails';
+import { useProcessEngine } from './useProcessEngine';
+import { ProcessSampleEditor } from './ProcessSampleEditor';
+import { populateProcess } from './process-engine';
 import { boardIcons, iconMotion } from './icons';
 import { NodeIcon } from './NodeIcon';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
@@ -109,6 +113,7 @@ type DiagramNode = Node<{
   confidence: string | undefined;
   illustration: Illustration | undefined;
   command: string | undefined;
+  sample: { input: number; output: number } | undefined;
   /** Where playback is: on this object, past it, or not playing (or not reached). */
   stage: 'current' | 'revealed' | null;
 }>;
@@ -135,6 +140,16 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
         }
       >
         <NodeIcon node={data} className="node-icon" size={48} strokeWidth={1.35} />
+        {data.stage && data.sample && (
+          <span
+            className="process-row-count"
+            aria-label={`${data.sample.input} input lines, ${data.sample.output} output lines`}
+          >
+            {data.sample.input === data.sample.output
+              ? `${data.sample.output} lines`
+              : `${data.sample.input} → ${data.sample.output}`}
+          </span>
+        )}
         {evolved && (
           // Remounted on each visit, so the drawing plays from the start every time.
           <IllustrationView
@@ -199,6 +214,7 @@ function BoardWorkspace() {
   const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
     useBoardHistory(initial.snapshot);
   const generation = useBoardGeneration(commit);
+  const process = useProcessEngine(board);
   const [arranging, setArranging] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const illustrator = useIllustrator(boardRef, setBoard);
@@ -500,6 +516,12 @@ function BoardWorkspace() {
           confidence: node.confidence,
           illustration: node.illustration,
           command: node.terminal?.command,
+          sample: process.results.has(node.id)
+            ? {
+                input: process.results.get(node.id)!.inputRows,
+                output: process.results.get(node.id)!.outputRows,
+              }
+            : undefined,
           stage:
             playback?.nodeId === node.id
               ? 'current'
@@ -508,7 +530,7 @@ function BoardWorkspace() {
                 : null,
         },
       })) ?? [],
-    [board, selected, playback],
+    [board, selected, playback, process.results],
   );
   const routes = useMemo(() => (board ? routeBoard(board) : {}), [board]);
   const edges = useMemo(
@@ -985,6 +1007,7 @@ function BoardWorkspace() {
                   key={library.activeId}
                   board={board}
                   disabled={busy}
+                  process={process}
                   onBeat={followBeat}
                   onClose={closePlayer}
                   illustration={{
@@ -1204,7 +1227,12 @@ function BoardWorkspace() {
                   </div>
                 </div>
                 {activeNode.terminal ? (
-                  <TerminalDetails step={activeNode.terminal} />
+                  <TerminalDetails
+                    step={activeNode.terminal}
+                    {...(activeNode.process
+                      ? { calculation: process, result: process.results.get(activeNode.id) }
+                      : {})}
+                  />
                 ) : (
                   <>
                     <p className="detail-summary">{activeNode.summary}</p>
@@ -1213,6 +1241,35 @@ function BoardWorkspace() {
                       <p className="detail-explanation">{activeNode.explanation}</p>
                     </section>
                   </>
+                )}
+                {activeNode.process?.op === 'source' && (
+                  <ProcessSampleEditor
+                    key={activeNode.process.text}
+                    text={activeNode.process.text}
+                    disabled={busy}
+                    onUpdate={async (text) => {
+                      const current = board;
+                      setArranging(true);
+                      try {
+                        const parsed = BoardDocumentSchema.safeParse({
+                          ...current,
+                          nodes: current.nodes.map((node) =>
+                            node.id === activeNode.id
+                              ? { ...node, process: { op: 'source', text } }
+                              : node,
+                          ),
+                        });
+                        if (!parsed.success)
+                          throw new Error(
+                            parsed.error.issues[0]?.message ?? 'Use a smaller sample.',
+                          );
+                        const calculated = await populateProcess(parsed.data);
+                        if (boardRef.current === current) commit(calculated);
+                      } finally {
+                        setArranging(false);
+                      }
+                    }}
+                  />
                 )}
                 <section className="detail-section" aria-label="Connected concepts">
                   {(() => {

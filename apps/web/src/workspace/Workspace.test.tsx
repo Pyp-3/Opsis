@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
+import { EMAIL_DEMO, TERMINAL_PIPELINE_EXAMPLE, type BoardDocument } from '@opsis/schema';
 import { Workspace } from './Workspace';
 import { playbackTimeline } from './playback';
 
@@ -32,6 +32,25 @@ vi.mock('./model', async (original) => ({
     agent,
   }),
 }));
+// Use the real Rust/WASM calculations through an in-process transport in jsdom.
+vi.mock('./process-engine', async (original) => {
+  const actual = await original<typeof import('./process-engine')>();
+  const { readFile } = await import('node:fs/promises');
+  const { resolve } = await import('node:path');
+  const { calculateInRust } = await import('@opsis/engine/runtime');
+  const { applyProcessResults } = await import('@opsis/engine');
+  const bytes = new Uint8Array(
+    await readFile(resolve(process.cwd(), 'packages/engine/dist/opsis_engine_bg.wasm')),
+  ).buffer;
+  const calculate = (request: Parameters<typeof calculateInRust>[0]) =>
+    calculateInRust(request, bytes);
+  return {
+    ...actual,
+    calculateProcess: calculate,
+    populateProcess: async (board: typeof EMAIL_DEMO) =>
+      applyProcessResults(board, await calculate(actual.processRequest(board))),
+  };
+});
 
 afterEach(() => {
   cleanup();
@@ -104,8 +123,10 @@ describe('current workspace integration', () => {
     ).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
     const steps = await screen.findByRole('navigation', { name: 'Diagram steps' });
+    await waitFor(() => expect(screen.queryByText('Calculating sample…')).toBeNull());
     fireEvent.click(within(steps).getByRole('button', { name: 'Read the file' }));
     const details = screen.getByRole('region', { name: 'Terminal step expectations' });
+    await within(details).findByText('Calculated');
     expect(within(details).getByText('cat users.txt')).toBeDefined();
     expect(within(details).getByText('Example output')).toBeDefined();
     const sample = within(details).getByText('Sample input').closest('details')!;
@@ -131,6 +152,64 @@ describe('current workspace integration', () => {
         ),
       ).toBe(true),
     );
+  });
+  it('updates a sample, calculates downstream outputs, plays the result and supports undo', async () => {
+    const terminalBoard: BoardDocument = {
+      ...TERMINAL_PIPELINE_EXAMPLE,
+      version: 2,
+      agent: 'claude',
+      positions: {},
+    };
+    localStorage.setItem('opsis:board:v2', JSON.stringify(terminalBoard));
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url === '/v1/agents')
+        return Response.json([{ id: 'claude', available: false, detail: 'Offline fixture' }]);
+      if (url === '/v1/boards') return Response.json([]);
+      if (url === '/v1/speech') return Response.json({ state: 'off' });
+      if (options?.method === 'PUT') return Response.json({ revision: 1 });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<Workspace />);
+    await screen.findByText('Offline fixture');
+    const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(within(steps).getByRole('button', { name: 'Text file' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Sample data' }), {
+      target: { value: 'nairobi\nkisumu\nmombasa' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Update sample' }));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Update sample' }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+    fireEvent.click(within(steps).getByRole('button', { name: 'Keep ten lines' }));
+    await within(screen.getByRole('region', { name: 'Terminal step expectations' })).findByText(
+      '3 → 3 lines',
+    );
+    expect(
+      screen
+        .getByRole('region', { name: 'Terminal step expectations' })
+        .querySelector('.terminal-output')?.textContent,
+    ).toBe('nairobi\nkisumu\nmombasa');
+    fireEvent.click(screen.getByRole('button', { name: 'Play the process' }));
+    const beats = playbackTimeline(terminalBoard);
+    fireEvent.change(screen.getByRole('slider', { name: 'Process timeline' }), {
+      target: { value: String(beats.findIndex((beat) => beat.nodeId === 'first-lines')) },
+    });
+    const preview = await screen.findByRole('region', { name: 'Calculated sample flow' });
+    expect(
+      within(preview).getByRole('img', { name: '3 lines passed through; 0 stopped' }),
+    ).toBeDefined();
+    expect(preview.querySelectorAll('path')).toHaveLength(3);
+    expect(preview.querySelectorAll('pre')[1]?.textContent).toBe('nairobi\nkisumu\nmombasa');
+    fireEvent.click(screen.getByRole('button', { name: 'Close player' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(within(steps).getByRole('button', { name: 'Keep ten lines' }));
+    await within(screen.getByRole('region', { name: 'Terminal step expectations' })).findByText(
+      '12 → 10 lines',
+    );
+    expect(fetch.mock.calls.some(([url]) => url === '/v1/boards/generate')).toBe(false);
   });
   it('shows topic suggestions and prepares them without generating', async () => {
     const fetch = setup();

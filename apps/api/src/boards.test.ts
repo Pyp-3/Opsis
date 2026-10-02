@@ -49,7 +49,7 @@ describe('2D board API', () => {
       expect(result.json().nodes[2].terminal.exampleInput.split('\n')).toHaveLength(12);
       expect(complete).toHaveBeenCalledWith(
         expect.objectContaining({
-          promptId: 'board/v5',
+          promptId: 'board/v6',
           system: expect.stringContaining('Generate small, plausible synthetic example data'),
         }),
         expect.any(AbortSignal),
@@ -212,7 +212,7 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v5' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v6' }),
       expect.any(AbortSignal),
       [],
       expect.any(Function),
