@@ -155,3 +155,60 @@ export const IllustrationSchema = z
 export type Illustration = z.infer<typeof IllustrationSchema>;
 export type IllustrationLayer = Layer;
 export type IllustrationMotion = Motion;
+
+/**
+ * Custom icons are what an agent draws when the icon library cannot model an idea (a specific
+ * organ, instrument or domain object). They match the library's style: outline strokes in the
+ * icon colour on a 24 × 24 grid, which the app draws with the same stroke width and round caps.
+ * Like illustrations they are declarative shapes, never markup, and the node's library icon
+ * stays as the fallback.
+ */
+export const MAX_CUSTOM_ICON_LAYERS = 12;
+const gridPoint = z.number().finite().min(0).max(24);
+const gridSize = z.number().finite().min(0).max(24);
+
+export const CustomIconLayerSchema = z
+  .object({
+    shape: z.enum(['path', 'circle', 'ellipse', 'rect', 'line']),
+    d: pathData.optional(),
+    cx: gridPoint.optional(),
+    cy: gridPoint.optional(),
+    r: gridSize.optional(),
+    /** Ellipse radii, or a rect's corner radius. */
+    rx: gridSize.optional(),
+    ry: gridSize.optional(),
+    x: gridPoint.optional(),
+    y: gridPoint.optional(),
+    width: gridSize.optional(),
+    height: gridSize.optional(),
+    x1: gridPoint.optional(),
+    y1: gridPoint.optional(),
+    x2: gridPoint.optional(),
+    y2: gridPoint.optional(),
+    /** Solid in the icon colour, for small details such as dots; otherwise an outline. */
+    fill: z.boolean().optional(),
+  })
+  .strict();
+
+export const CustomIconSchema = z
+  .object({
+    /** What the drawing shows, in a few words; read out and shown in the icon picker. */
+    name: z.string().trim().min(1).max(40),
+    layers: z.array(CustomIconLayerSchema).min(1).max(MAX_CUSTOM_ICON_LAYERS),
+  })
+  .strict()
+  .superRefine((icon, context) => {
+    icon.layers.forEach((layer, index) => {
+      const missing = REQUIRED[layer.shape].filter(
+        (key) => layer[key as keyof CustomIconLayer] === undefined,
+      );
+      if (missing.length)
+        context.addIssue({
+          code: 'custom',
+          path: ['layers', index],
+          message: `A ${layer.shape} needs ${missing.join(', ')}.`,
+        });
+    });
+  });
+export type CustomIcon = z.infer<typeof CustomIconSchema>;
+export type CustomIconLayer = z.infer<typeof CustomIconLayerSchema>;

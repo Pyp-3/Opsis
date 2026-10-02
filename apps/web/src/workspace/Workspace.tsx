@@ -58,10 +58,12 @@ import {
   type BoardAgent,
   type BoardAttachment,
   type Illustration,
+  type CustomIcon,
   terminalExampleFor,
 } from '@opsis/schema';
 import { TerminalDetails } from './TerminalDetails';
 import { boardIcons, iconMotion } from './icons';
+import { NodeIcon } from './NodeIcon';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
@@ -100,6 +102,7 @@ import './workspace.css';
 type DiagramNode = Node<{
   label: string;
   icon: keyof typeof boardIcons;
+  customIcon: CustomIcon | undefined;
   kind: string;
   number: number;
   outgoing: number;
@@ -111,7 +114,6 @@ type DiagramNode = Node<{
 }>;
 
 function IconNode({ data, selected }: NodeProps<DiagramNode>) {
-  const Icon = boardIcons[data.icon] ?? boardIcons.box;
   const still = usePrefersReducedMotion();
   // During playback an illustrated icon evolves into its drawing, which stays once reached.
   const evolved = data.illustration && data.stage;
@@ -123,9 +125,16 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
     >
       <div
         className={`node-symbol ${evolved ? 'is-evolved' : ''}`}
-        data-motion={data.stage === 'current' && !evolved ? iconMotion(data.icon) : undefined}
+        data-motion={
+          data.stage === 'current' && !evolved
+            ? // A drawn icon draws itself in; library icons move like their subject.
+              data.customIcon
+              ? 'draw'
+              : iconMotion(data.icon)
+            : undefined
+        }
       >
-        <Icon className="node-icon" size={48} strokeWidth={1.35} />
+        <NodeIcon node={data} className="node-icon" size={48} strokeWidth={1.35} />
         {evolved && (
           // Remounted on each visit, so the drawing plays from the start every time.
           <IllustrationView
@@ -484,6 +493,7 @@ function BoardWorkspace() {
         data: {
           label: node.label,
           icon: node.icon,
+          customIcon: node.customIcon,
           kind: node.kind,
           number: index + 1,
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,
@@ -563,9 +573,9 @@ function BoardWorkspace() {
             ? node
             : 'label' in patch || 'summary' in patch
               ? withoutNarration({ ...node, ...patch })
-              : 'icon' in patch && patch.icon !== node.icon
+              : 'icon' in patch && (patch.icon !== node.icon || node.customIcon)
                 ? // A new icon replaces the picture, so the drawing of the old one goes.
-                  { ...node, ...patch, illustration: undefined }
+                  { ...node, ...patch, customIcon: undefined, illustration: undefined }
                 : { ...node, ...patch },
         ),
       });
@@ -1181,10 +1191,7 @@ function BoardWorkspace() {
                 )}
                 <div className="detail-hero">
                   <div className="detail-icon">
-                    {(() => {
-                      const Icon = boardIcons[activeNode.icon];
-                      return <Icon size={28} strokeWidth={1.6} />;
-                    })()}
+                    <NodeIcon node={activeNode} size={28} strokeWidth={1.6} />
                   </div>
                   <div>
                     <span
@@ -1332,6 +1339,7 @@ function BoardWorkspace() {
                     {showIcons && (
                       <IconPicker
                         value={activeNode.icon}
+                        custom={activeNode.customIcon}
                         onPick={(icon) => {
                           editNode({ icon });
                           setShowIcons(false);

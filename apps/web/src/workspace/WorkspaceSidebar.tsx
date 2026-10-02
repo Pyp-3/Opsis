@@ -3,6 +3,7 @@ import { FolderOpen, Plus, Search } from 'lucide-react';
 import { DNS_DEMO, EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { boardIcons } from './icons';
+import { NodeIcon } from './NodeIcon';
 import { BrandMark } from './BrandMark';
 
 export function WorkspaceSidebar({
@@ -145,7 +146,6 @@ export function WorkspaceSidebar({
               )}
               <nav className="node-list" aria-label="Diagram steps">
                 {visibleNodes.map((node) => {
-                  const Icon = boardIcons[node.icon];
                   return (
                     <button
                       key={node.id}
@@ -153,7 +153,7 @@ export function WorkspaceSidebar({
                       aria-current={selected === node.id ? 'true' : undefined}
                       onClick={() => selectNode(node.id)}
                     >
-                      <Icon size={15} />
+                      <NodeIcon node={node} size={15} />
                       <span className="list-label">{node.label}</span>
                     </button>
                   );

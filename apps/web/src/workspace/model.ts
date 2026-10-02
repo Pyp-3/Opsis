@@ -138,12 +138,15 @@ export async function layoutBoard(
     const color = previous?.edges.find((item) => item.id === edge.id)?.color;
     return color && !edge.color ? { ...edge, color } : edge;
   });
-  // Nor do they return drawings; an object keeps its illustration while it keeps its icon.
+  // Nor do they return drawings; an object keeps its illustration while it keeps its icon,
+  // and a custom icon an agent left out while keeping the same fallback.
   const nodes = graph.nodes.map((node) => {
     const before = previous?.nodes.find((item) => item.id === node.id);
-    return before?.illustration && !node.illustration && before.icon === node.icon
-      ? { ...node, illustration: before.illustration }
-      : node;
+    if (!before || before.icon !== node.icon) return node;
+    const kept = { ...node };
+    if (before.customIcon && !node.customIcon) kept.customIcon = before.customIcon;
+    if (before.illustration && !node.illustration) kept.illustration = before.illustration;
+    return kept;
   });
   return BoardDocumentSchema.parse({
     ...graph,

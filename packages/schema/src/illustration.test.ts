@@ -4,6 +4,7 @@ import {
   EMAIL_DEMO,
   EMAIL_DEMO_ILLUSTRATIONS,
   IllustrationSchema,
+  CustomIconSchema,
   boardChanges,
   illustrateOutputSchema,
   boardOutputSchema,
@@ -91,5 +92,43 @@ describe('illustrations', () => {
   it('is drawn on request, not with every diagram', () => {
     expect(boardOutputSchema).not.toContain('illustration');
     expect(JSON.parse(illustrateOutputSchema).properties.illustrations.type).toBe('array');
+  });
+});
+
+describe('custom icons', () => {
+  const kidney = {
+    name: 'Kidney',
+    layers: [
+      { shape: 'path', d: 'M9 3C4 3 3 9 4 14s4 7 7 6c2-1 1-4 3-5s2-6-1-9C12 4 11 3 9 3Z' },
+      { shape: 'circle', cx: 16, cy: 15, r: 1.5, fill: true },
+      { shape: 'rect', x: 15, y: 17, width: 4, height: 5, rx: 1 },
+    ],
+  } as const;
+  it('accepts a simple outline drawing on the 24 × 24 grid', () => {
+    expect(CustomIconSchema.parse(kidney)).toEqual(kidney);
+  });
+  it('rejects markup, missing geometry, off-grid points and an empty name', () => {
+    const invalid = [
+      { ...kidney, layers: [{ shape: 'path', d: '<script>alert(1)</script>' }] },
+      { ...kidney, layers: [{ shape: 'circle', cx: 12, cy: 12 }] },
+      { ...kidney, layers: [{ shape: 'line', x1: 0, y1: 0, x2: 90, y2: 12 }] },
+      { ...kidney, layers: [{ ...kidney.layers[1], stroke: 'gold' }] },
+      { ...kidney, name: ' ' },
+    ];
+    for (const icon of invalid) expect(CustomIconSchema.safeParse(icon).success).toBe(false);
+  });
+  it('is offered with every diagram and redrawn without review', () => {
+    expect(
+      JSON.parse(boardOutputSchema).properties.nodes.items.properties.customIcon,
+    ).toBeDefined();
+    const before = { ...EMAIL_DEMO, version: 2 as const, agent: 'demo' as const, positions: {} };
+    const after = {
+      ...before,
+      nodes: before.nodes.map((node) =>
+        node.id === 'sender' ? { ...node, customIcon: kidney } : node,
+      ),
+    };
+    expect(BoardDocumentSchema.safeParse(after).success).toBe(true);
+    expect(boardChanges(before, after)).toEqual([]);
   });
 });

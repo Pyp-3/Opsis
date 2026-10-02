@@ -49,7 +49,7 @@ describe('2D board API', () => {
       expect(result.json().nodes[2].terminal.exampleInput.split('\n')).toHaveLength(12);
       expect(complete).toHaveBeenCalledWith(
         expect.objectContaining({
-          promptId: 'board/v4',
+          promptId: 'board/v5',
           system: expect.stringContaining('Generate small, plausible synthetic example data'),
         }),
         expect.any(AbortSignal),
@@ -115,6 +115,39 @@ describe('2D board API', () => {
     ).toBe(502);
     expect(complete).toHaveBeenCalledTimes(1);
   });
+  it('lets agents draw custom icons and drops malformed ones without failing the diagram', async () => {
+    const drawn = { name: 'Envelope seal', layers: [{ shape: 'circle', cx: 12, cy: 12, r: 4 }] };
+    const { app, complete } = setup(
+      JSON.stringify({
+        ...EMAIL_DEMO,
+        nodes: EMAIL_DEMO.nodes.map((node, index) =>
+          index === 0
+            ? { ...node, customIcon: drawn }
+            : index === 1
+              ? { ...node, customIcon: { name: 'Broken', layers: [{ shape: 'circle' }] } }
+              : node,
+        ),
+      }),
+    );
+    const result = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain email' },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().nodes[0].customIcon).toEqual(drawn);
+    expect(result.json().nodes[1].customIcon).toBeUndefined();
+    expect(result.json().nodes[1].icon).toBe(EMAIL_DEMO.nodes[1]!.icon);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('When none models the idea well'),
+      }),
+      expect.any(AbortSignal),
+      [],
+      expect.any(Function),
+    );
+  });
   it('stops after two invalid outputs', async () => {
     const { app, complete } = setup('{}');
     expect(
@@ -179,7 +212,7 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v4' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v5' }),
       expect.any(AbortSignal),
       [],
       expect.any(Function),

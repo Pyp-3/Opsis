@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { IllustrationSchema } from './illustration';
+import { CustomIconSchema, IllustrationSchema } from './illustration';
 
 /** Icon names agents and readers may use; see apps/web icons for labels and search terms. */
 export const BOARD_ICONS = [
@@ -254,6 +254,8 @@ export const BoardNodeSchema = z
     id,
     label: z.string().min(1).max(80),
     icon: z.enum(BOARD_ICONS),
+    /** Drawn by the agent when no library icon fits; `icon` stays as the fallback. */
+    customIcon: CustomIconSchema.optional(),
     summary: z.string().min(1).max(400),
     explanation: z.string().min(1).max(3000),
     kind: z.enum(['step', 'decision', 'note']),
@@ -438,11 +440,15 @@ export function withoutNarration<T extends { narration?: string | undefined }>(i
 }
 
 /**
- * Narration and illustrations are presentation; agents may re-word or redraw them so the story
- * flows, without review.
+ * Narration, illustrations and custom icons are presentation; agents may re-word or redraw them
+ * so the story flows, without review. The library icon a node falls back to is still reviewed.
  */
-const content = (item: { narration?: string | undefined; illustration?: unknown }) =>
-  JSON.stringify({ ...item, narration: undefined, illustration: undefined });
+const content = (item: {
+  narration?: string | undefined;
+  illustration?: unknown;
+  customIcon?: unknown;
+}) =>
+  JSON.stringify({ ...item, narration: undefined, illustration: undefined, customIcon: undefined });
 
 /** Every changed or removed existing item requires explicit review, including selected nodes. */
 export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {

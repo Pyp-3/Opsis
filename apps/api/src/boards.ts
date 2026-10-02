@@ -5,6 +5,8 @@ import {
   BoardRequestSchema,
   IllustrateRequestSchema,
   IllustrationSchema,
+  CustomIconSchema,
+  MAX_CUSTOM_ICON_LAYERS,
   illustrateOutputSchema,
   EMAIL_DEMO,
   EMAIL_DEMO_ILLUSTRATIONS,
@@ -65,6 +67,10 @@ const SYSTEM = `You are Opsis, a visual explanation designer. Return ONLY a JSON
 Distinguish a chronological sequence of stages from messages between actors. Downward visual layout does NOT mean interactions only go forward. Every edge has a kind: flow, request, response, feedback, or retry. Show genuine replies, acknowledgments, feedback and retry loops as separately labelled directed edges to the actual recipient, reusing actor IDs. Never invent a reverse interaction just to balance the picture. For example, on a cold-cache DNS lookup the resolver queries root, TLD and authoritative servers separately; each replies to the resolver (referrals or an answer). Root does not forward the client's query to TLD. Finally the resolver replies to the client. State simplifications and conditions.
 For a follow-up, return the entire updated diagram, keeping existing IDs and all unrelated content unchanged. Expand the selected node when one is supplied. Preserve the original process when adding failure paths. The app retains existing positions. Return 2–3 topic-specific follow-up suggestions. Every node must include confidence (normal, simplified, uncertain) and caveat (empty for normal; explain limitations otherwise). These are qualitative annotations, not calibrated probabilities.
 Terminal flows: infer from the user's command or sysadmin task when terminal nodes are useful; there is no mode switch. Use file, terminal, filter, monitor and other relevant icons to show data flowing between steps. For command nodes, include terminal metadata: command, environment, input, exampleInput, output, success and issues (symptom, cause, remedy). Keep each field terse and terminal-like, not prose paragraphs. Generate small, plausible synthetic example data rather than placeholders such as [LINE 1]. Put literal newline-separated sample records in exampleInput and the matching transformed records in output; keep the same data consistent across connected commands. Respect the operation exactly: for head -10 use at least twelve source lines and show precisely the first ten in output, in order. Sample data is illustrative, never claimed to come from the reader's machine. State shell/OS assumptions briefly; represent stdout and stderr accurately. For commands without stdout, show a concise illustrative status, not invented stdout. Supply short failure checks/remedies. Explain commands without executing them or reading local files. Preserve terminal examples on unrelated follow-ups. For other topics, omit terminal metadata.
+Icons: give every node the closest library icon. When none models the idea well (a specific organ, instrument, molecule, tool or domain object that a generic icon would misrepresent), also draw a customIcon; the library icon stays as its fallback, so still choose the nearest one. Prefer the library when it fits and draw only where it genuinely helps the reader.
+- A customIcon is a simple outline icon in the library's style on a 24 × 24 grid, origin top-left, kept within about 2–22. The app strokes every shape in the icon colour at 2 px with round caps, so draw bold, recognisable silhouettes, not detailed pictures: 1–${MAX_CUSTOM_ICON_LAYERS} layers, no text or letters.
+- Shapes: path (d uses only M L H V C S Q T A Z commands and numbers), circle, ellipse, rect (rx rounds its corners), line. Set fill true only for small solid details such as dots. name says what it depicts in two to four words.
+- On follow-ups keep existing custom icons unchanged unless the node's meaning changes.
 Narration: the app plays every diagram back as a narrated film for a listener who may not be looking at the screen. It speaks the diagram's narration first, then follows the arrows in order (numbered arrows by their numbers, otherwise along the flow from the starting node). Each arrow's narration is spoken as playback crosses it; when an arrow reaches a node for the first time, that node's narration follows immediately. A starting node that no arrow reaches is spoken on its own. Labels and summaries are terse captions for the eye; narration is what a thoughtful presenter would say aloud. Write every narration field as spoken British English:
 - Complete, grammatical sentences in the present tense: one or two per field, and no more than about 35 words.
 - Refer to things as a person would say them ("the recursive resolver", "your email app"), never as a bare label ("Recursive resolver:"). Never read out step numbers, IDs, arrows, brackets, slashes or colons used as separators.
@@ -113,6 +119,19 @@ Live progress: the reader watches a one-line status of your work while they wait
 
 const agentLabel = (agent: Exclude<BoardAgent, 'demo'>) =>
   agent === 'claude' ? 'Claude' : 'Codex';
+
+/**
+ * A custom icon is presentation with a library icon to fall back on, so a malformed drawing is
+ * dropped rather than failing the whole diagram.
+ */
+function withoutInvalidCustomIcons(output: unknown) {
+  const nodes = (output as { nodes?: unknown } | null)?.nodes;
+  if (!Array.isArray(nodes)) return output;
+  for (const node of nodes as { customIcon?: unknown }[])
+    if (node && 'customIcon' in node && !CustomIconSchema.safeParse(node.customIcon).success)
+      delete node.customIcon;
+  return output;
+}
 
 /** Keeps the drawings that are valid for requested objects; the rest keep their icons. */
 function acceptIllustrations(output: string, wanted: ReadonlySet<string>) {
@@ -311,7 +330,7 @@ export function registerBoardRoutes(
           input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
         );
         const modelRequest: LLMRequest = {
-          promptId: 'board/v4',
+          promptId: 'board/v5',
           system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}\nSchema: ${boardOutputSchema}`,
           user: JSON.stringify({
             prompt: input.prompt,
@@ -347,7 +366,7 @@ export function registerBoardRoutes(
           }
           let graph: BoardGraph;
           try {
-            graph = BoardGraphSchema.parse(JSON.parse(output));
+            graph = BoardGraphSchema.parse(withoutInvalidCustomIcons(JSON.parse(output)));
           } catch (error) {
             if (attempt === 1)
               return outcome(502, {
@@ -427,7 +446,7 @@ export function registerBoardRoutes(
             .map((node) => ({
               id: node.id,
               label: node.label,
-              icon: node.icon,
+              icon: node.customIcon?.name ?? node.icon,
               summary: node.summary,
               explanation: node.explanation,
               receives: board.edges

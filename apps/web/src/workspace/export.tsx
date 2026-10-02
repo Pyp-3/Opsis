@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BoardDocument } from '@opsis/schema';
-import { boardIcons } from './icons';
+import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
 import { wrapLabel, nodeHeight } from './geometry';
@@ -58,7 +58,6 @@ export function boardSvg(board: BoardDocument): string {
   const nodes = board.nodes
     .map((node) => {
       const p = board.positions[node.id] ?? { x: 0, y: 0 };
-      const Icon = boardIcons[node.icon];
       const label = wrapLabel(node.label)
         .map(
           (line, i) =>
@@ -78,7 +77,7 @@ export function boardSvg(board: BoardDocument): string {
             )
             .join('')
         : '';
-      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<Icon size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
+      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<NodeIcon node={node} size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
   const markers = [...new Set(board.edges.map((edge) => connectionStyle(edge).color))]
