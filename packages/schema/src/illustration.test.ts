@@ -9,6 +9,7 @@ import {
   illustrateOutputSchema,
   boardOutputSchema,
   type Illustration,
+  type CustomIcon,
 } from './index';
 
 const wind: Illustration = {
@@ -96,14 +97,14 @@ describe('illustrations', () => {
 });
 
 describe('custom icons', () => {
-  const kidney = {
+  const kidney: CustomIcon = {
     name: 'Kidney',
     layers: [
       { shape: 'path', d: 'M9 3C4 3 3 9 4 14s4 7 7 6c2-1 1-4 3-5s2-6-1-9C12 4 11 3 9 3Z' },
       { shape: 'circle', cx: 16, cy: 15, r: 1.5, fill: true },
       { shape: 'rect', x: 15, y: 17, width: 4, height: 5, rx: 1 },
     ],
-  } as const;
+  };
   it('accepts a simple outline drawing on the 24 × 24 grid', () => {
     expect(CustomIconSchema.parse(kidney)).toEqual(kidney);
   });
