@@ -91,6 +91,7 @@ import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
 import { ProcessPlayer } from './ProcessPlayer';
+import { CanvasLookPicker } from './CanvasLookPicker';
 import { NextSteps, RETURN_PATHS } from './NextSteps';
 import { IconPicker } from './IconPicker';
 import { BoardsPage } from './BoardsPage';
@@ -567,8 +568,8 @@ function BoardWorkspace() {
           strokeLinejoin: 'round' as const,
           strokeDasharray: connectionStyle(edge).dash,
         },
-        labelStyle: { fill: '#e4edfa', fontSize: 10, fontFamily: 'monospace' },
-        labelBgStyle: { fill: '#153b65', fillOpacity: 0.95 },
+        labelStyle: { fill: 'var(--bp-ink)', fontSize: 10, fontFamily: 'monospace' },
+        labelBgStyle: { fill: 'var(--bp-deep)', fillOpacity: 0.95 },
         labelBgPadding: [7, 5] as [number, number],
       })) ?? [],
     [board, selectedEdge, routes, playback],
@@ -799,14 +800,14 @@ function BoardWorkspace() {
                 id="fine"
                 variant={BackgroundVariant.Lines}
                 gap={24}
-                color="rgba(189,215,246,.13)"
+                color="var(--bp-grid)"
                 lineWidth={0.6}
               />
               <Background
                 id="major"
                 variant={BackgroundVariant.Lines}
                 gap={120}
-                color="rgba(189,215,246,.18)"
+                color="var(--bp-grid-major)"
                 lineWidth={1}
               />
             </ReactFlow>
@@ -884,6 +885,7 @@ function BoardWorkspace() {
               >
                 <ListTree size={16} />
               </button>
+              <CanvasLookPicker />
               <span />
               <button
                 aria-label="Add a concept"

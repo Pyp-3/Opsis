@@ -13,7 +13,13 @@ export function RoutedConnection({
   return (
     <>
       {/* A small knockout at unavoidable crossings makes clear these are not junctions. */}
-      <path d={route.path} fill="none" stroke="#153b65" strokeWidth={7} pointerEvents="none" />
+      <path
+        d={route.path}
+        fill="none"
+        style={{ stroke: 'var(--bp-deep)' }}
+        strokeWidth={7}
+        pointerEvents="none"
+      />
       <BaseEdge
         id={id}
         path={route.path}
@@ -55,14 +61,14 @@ export function RoutedConnection({
           <rect
             {...route.label}
             rx={5}
-            fill="#153b65"
+            style={{ fill: 'var(--bp-deep)' }}
             stroke={selected ? '#ffffff' : (style?.stroke ?? '#607e9e')}
             strokeWidth={0.6}
           />
           <text
             x={route.label.x + route.label.width / 2}
             y={route.label.y + 18}
-            fill="#e4edfa"
+            style={{ fill: 'var(--bp-ink)' }}
             fontSize={12}
             fontFamily="monospace"
             textAnchor="middle"

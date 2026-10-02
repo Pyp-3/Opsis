@@ -5,6 +5,7 @@ import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
 import { wrapLabel, nodeHeight } from './geometry';
 import { connectionStyle, PORT_OFFSETS, connectionLabel } from './connections';
+import { canvasLook, iconColorOf, paletteOf, type CanvasLook } from './canvas-theme';
 
 const escape = (text: string) =>
   text.replace(
@@ -13,7 +14,9 @@ const escape = (text: string) =>
       ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]!,
   );
 
-export function boardSvg(board: BoardDocument): string {
+/** Draws the board in the viewer's chosen canvas palette and icon colour. */
+export function boardSvg(board: BoardDocument, look: CanvasLook = canvasLook()): string {
+  const palette = paletteOf(look);
   const routes = routeBoard(board);
   const points = [
     ...(board.nodes.length
@@ -46,13 +49,13 @@ export function boardSvg(board: BoardDocument): string {
       if (!route) return '';
       const label = route.label;
       const text = label
-        ? `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="5" fill="#153b65" stroke="#607e9e"/>${route.lines.map((line, i) => `<text x="${label.x + label.width / 2}" y="${label.y + 18 + i * 16}" text-anchor="middle" font-family="monospace" font-size="12" fill="#e4edfa">${escape(line)}</text>`).join('')}`
+        ? `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="5" fill="${palette.deep}" stroke="#607e9e"/>${route.lines.map((line, i) => `<text x="${label.x + label.width / 2}" y="${label.y + 18 + i * 16}" text-anchor="middle" font-family="monospace" font-size="12" fill="#e4edfa">${escape(line)}</text>`).join('')}`
         : '';
       const style = connectionStyle(edge);
       const callout = route.callout
         ? `<path d="${route.callout}" fill="none" stroke="${style.color}" stroke-width="1" stroke-dasharray="2 5" opacity=".7"/>`
         : '';
-      return `<path d="${route.path}" fill="none" stroke="#153b65" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${style.color.slice(1)})"/>${callout}${text}`;
+      return `<path d="${route.path}" fill="none" stroke="${palette.deep}" stroke-width="7"/><path d="${route.path}" fill="none" stroke="${style.color}" stroke-dasharray="${style.dash}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-${style.color.slice(1)})"/>${callout}${text}`;
     })
     .join('');
   const nodes = board.nodes
@@ -61,12 +64,13 @@ export function boardSvg(board: BoardDocument): string {
       const label = wrapLabel(node.label)
         .map(
           (line, i) =>
-            `<text x="${NODE_WIDTH / 2}" y="${110 + i * 18}" fill="white" text-anchor="middle" font-size="14">${escape(line)}</text>`,
+            `<text x="${NODE_WIDTH / 2}" y="${110 + i * 18}" fill="${palette.ink}" text-anchor="middle" font-size="14">${escape(line)}</text>`,
         )
         .join('');
       const ports = Object.values(PORT_OFFSETS)
         .map(
-          (port) => `<circle cx="${port.x}" cy="${port.y}" r="4" fill="#224d78" stroke="#a8c6e5"/>`,
+          (port) =>
+            `<circle cx="${port.x}" cy="${port.y}" r="4" fill="${palette.handle}" stroke="${palette.handleRing}"/>`,
         )
         .join('');
       const command = node.terminal
@@ -77,7 +81,7 @@ export function boardSvg(board: BoardDocument): string {
             )
             .join('')
         : '';
-      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="#f4d598">${renderToStaticMarkup(<NodeIcon node={node} size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
+      return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="${iconColorOf(look)}">${renderToStaticMarkup(<NodeIcon node={node} size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
   const markers = [...new Set(board.edges.map((edge) => connectionStyle(edge).color))]
@@ -86,7 +90,7 @@ export function boardSvg(board: BoardDocument): string {
         `<marker id="arrow-${color.slice(1)}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10" fill="${color}"/></marker>`,
     )
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#153c68"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="white" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${palette.deep}"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="${palette.ink}" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;
 }
 
 export function download(content: string, name: string, type: string) {
