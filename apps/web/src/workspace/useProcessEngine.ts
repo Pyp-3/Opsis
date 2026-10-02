@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BoardDocument } from '@opsis/schema';
-import type { EngineRequest, ProcessResult } from '@opsis/engine';
+import type { EngineRequest, ProcessFailure, ProcessResult } from '@opsis/engine';
 import { calculateProcess } from './process-engine';
 
 export type ProcessState = {
   status: 'idle' | 'calculating' | 'ready' | 'failed';
   results: Map<string, ProcessResult>;
+  /** Steps that could not be calculated while the rest of the request succeeded. */
+  failures: Map<string, ProcessFailure>;
   message: string;
 };
-const IDLE: ProcessState = { status: 'idle', results: new Map(), message: '' };
+const IDLE: ProcessState = { status: 'idle', results: new Map(), failures: new Map(), message: '' };
 
 export function useProcessEngine(board: BoardDocument | null): ProcessState {
   const key = JSON.stringify({
-    version: 1,
+    version: 2,
     nodes:
       board?.nodes.flatMap((node) =>
         node.process ? [{ id: node.id, process: node.process }] : [],
@@ -35,7 +37,16 @@ export function useProcessEngine(board: BoardDocument | null): ProcessState {
               key,
               value: {
                 status: 'ready',
-                results: new Map(result.nodes.map((node) => [node.id, node])),
+                results: new Map(
+                  result.nodes.flatMap((node) =>
+                    node.status === 'ok' ? [[node.id, node] as const] : [],
+                  ),
+                ),
+                failures: new Map(
+                  result.nodes.flatMap((node) =>
+                    node.status === 'failed' ? [[node.id, node] as const] : [],
+                  ),
+                ),
                 message: '',
               },
             });
@@ -47,6 +58,7 @@ export function useProcessEngine(board: BoardDocument | null): ProcessState {
               value: {
                 status: 'failed',
                 results: new Map(),
+                failures: new Map(),
                 message:
                   error instanceof Error ? error.message : 'The sample could not be calculated.',
               },
@@ -61,5 +73,5 @@ export function useProcessEngine(board: BoardDocument | null): ProcessState {
     ? IDLE
     : state.key === key
       ? state.value
-      : { status: 'calculating', results: new Map(), message: '' };
+      : { status: 'calculating', results: new Map(), failures: new Map(), message: '' };
 }

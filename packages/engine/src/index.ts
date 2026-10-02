@@ -8,7 +8,7 @@ const id = z
   .regex(/^[a-zA-Z0-9_-]+$/);
 export const EngineRequestSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     nodes: z.array(z.object({ id, process: ProcessStepSchema }).strict()).max(50),
   })
   .strict()
@@ -22,6 +22,7 @@ export type EngineRequest = z.infer<typeof EngineRequestSchema>;
 
 export const ProcessResultSchema = z
   .object({
+    status: z.literal('ok'),
     id,
     input: z.string().max(1000),
     output: z.string().max(1000),
@@ -49,21 +50,61 @@ export const ProcessResultSchema = z
   })
   .strict();
 export type ProcessResult = z.infer<typeof ProcessResultSchema>;
+
+const error = (codes: [string, ...string[]]) =>
+  z.object({ code: z.enum(codes), message: z.string().max(2000), source: id.optional() }).strict();
+export const ProcessFailureSchema = z
+  .object({
+    status: z.literal('failed'),
+    id,
+    error: error([
+      'missing_source',
+      'cycle',
+      'sample_too_long',
+      'too_many_lines',
+      'count_out_of_range',
+      'filter_too_long',
+      'output_too_long',
+      'upstream_failed',
+    ]),
+  })
+  .strict();
+export type ProcessFailure = z.infer<typeof ProcessFailureSchema>;
+export const ProcessOutcomeSchema = z.discriminatedUnion('status', [
+  ProcessResultSchema,
+  ProcessFailureSchema,
+]);
+export type ProcessOutcome = z.infer<typeof ProcessOutcomeSchema>;
 export const EngineResultSchema = z
-  .object({ version: z.literal(1), nodes: z.array(ProcessResultSchema).max(50) })
+  .object({ version: z.literal(2), nodes: z.array(ProcessOutcomeSchema).max(50) })
   .strict();
 export type EngineResult = z.infer<typeof EngineResultSchema>;
 export const EngineResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), result: EngineResultSchema }).strict(),
-  z.object({ ok: z.literal(false), error: z.string().max(2000) }).strict(),
+  z
+    .object({
+      ok: z.literal(false),
+      error: error([
+        'request_too_large',
+        'invalid_request',
+        'unsupported_version',
+        'too_many_nodes',
+        'invalid_id',
+        'duplicate_id',
+      ]),
+    })
+    .strict(),
 ]);
 
-/** Persist calculated previews alongside their source operations for exports and older readers. */
+/** Persist calculated previews alongside their source operations for exports and older readers.
+ * Failed steps keep their existing preview; the live view reports their failure instead. */
 export function applyProcessResults<T extends { nodes: z.infer<typeof BoardNodeSchema>[] }>(
   board: T,
   result: EngineResult,
 ): T {
-  const values = new Map(result.nodes.map((node) => [node.id, node]));
+  const values = new Map(
+    result.nodes.flatMap((node) => (node.status === 'ok' ? [[node.id, node] as const] : [])),
+  );
   return {
     ...board,
     nodes: board.nodes.map((node) => {

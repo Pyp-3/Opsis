@@ -22,6 +22,6 @@ export async function calculateInRust(
   });
   await initialized;
   const response = EngineResponseSchema.parse(JSON.parse(evaluate(JSON.stringify(input))));
-  if (!response.ok) throw new Error(response.error);
+  if (!response.ok) throw new Error(response.error.message);
   return response.result;
 }

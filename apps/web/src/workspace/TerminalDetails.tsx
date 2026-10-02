@@ -1,26 +1,30 @@
 import type { TerminalStep } from '@opsis/schema';
 import { Terminal, Check, CircleAlert } from 'lucide-react';
-import type { ProcessResult } from '@opsis/engine';
+import type { ProcessFailure, ProcessResult } from '@opsis/engine';
 import type { ProcessState } from './useProcessEngine';
 
 export function TerminalDetails({
   step,
   result,
+  failure,
   calculation,
 }: {
   step: TerminalStep;
   result?: ProcessResult | undefined;
+  failure?: ProcessFailure | undefined;
   calculation?: ProcessState;
 }) {
-  const waiting = calculation && calculation.status !== 'ready';
+  const waiting = calculation && (calculation.status !== 'ready' || failure);
   const sampleInput = result ? result.input : waiting ? '' : step.exampleInput;
   const output = result
     ? result.output || '(empty)'
-    : waiting
-      ? calculation.status === 'failed'
-        ? calculation.message
-        : 'Calculating sample…'
-      : step.output;
+    : failure
+      ? failure.error.message
+      : waiting
+        ? calculation.status === 'failed'
+          ? calculation.message
+          : 'Calculating sample…'
+        : step.output;
   return (
     <section className="terminal-details" aria-label="Terminal step expectations">
       <div className="terminal-window">

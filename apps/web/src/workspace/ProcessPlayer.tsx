@@ -140,6 +140,7 @@ export function ProcessPlayer({
     beat.nodeId ?? board.nodes.find((node) => node.process?.op === 'source')?.id ?? '',
   );
   const sampleNode = sample && board.nodes.find((node) => node.id === sample.id);
+  const failure = beat.nodeId ? process?.failures.get(beat.nodeId) : undefined;
 
   const onBeatRef = useRef(onBeat);
   useEffect(() => {
@@ -264,6 +265,11 @@ export function ProcessPlayer({
       {process?.status === 'failed' && (
         <p className="player-data-status" role="status">
           {process.message}
+        </p>
+      )}
+      {failure && (
+        <p className="player-data-status" role="status">
+          {failure.error.message}
         </p>
       )}
       <div className="player-controls">

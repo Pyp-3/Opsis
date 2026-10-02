@@ -1,6 +1,6 @@
 import {
   EngineRequestSchema,
-  EngineResponseSchema,
+  EngineResultSchema,
   applyProcessResults,
   type EngineRequest,
   type EngineResult,
@@ -32,7 +32,7 @@ function stop(message: string) {
 
 export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest {
   return EngineRequestSchema.parse({
-    version: 1,
+    version: 2,
     nodes: board.nodes.flatMap((node) =>
       node.process ? [{ id: node.id, process: node.process }] : [],
     ),
@@ -42,7 +42,7 @@ export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest 
 /** One shared worker, bounded requests, and a small cache independent of node positions. */
 export function calculateProcess(request: EngineRequest): Promise<EngineResult> {
   const input = EngineRequestSchema.parse(request);
-  if (!input.nodes.length) return Promise.resolve({ version: 1, nodes: [] });
+  if (!input.nodes.length) return Promise.resolve({ version: 2, nodes: [] });
   const key = JSON.stringify(input);
   const cached = cache.get(key);
   if (cached) return cached;
@@ -55,13 +55,15 @@ export function calculateProcess(request: EngineRequest): Promise<EngineResult> 
         clearTimeout(job.timer);
         pending.delete(event.data.id);
         try {
-          const response = EngineResponseSchema.parse(
-            event.data.ok === true
-              ? { ok: true, result: event.data.result }
-              : { ok: false, error: event.data.error },
-          );
-          if (response.ok) job.resolve(response.result);
-          else job.reject(new Error(response.error));
+          if (event.data.ok === true) job.resolve(EngineResultSchema.parse(event.data.result));
+          else
+            job.reject(
+              new Error(
+                typeof event.data.error === 'string'
+                  ? event.data.error.slice(0, 2000)
+                  : 'The process could not be calculated.',
+              ),
+            );
         } catch {
           job.reject(new Error('The process engine returned invalid data.'));
         }

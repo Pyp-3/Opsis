@@ -65,7 +65,8 @@ import {
 import { TerminalDetails } from './TerminalDetails';
 import { useProcessEngine } from './useProcessEngine';
 import { ProcessSampleEditor } from './ProcessSampleEditor';
-import { populateProcess } from './process-engine';
+import { calculateProcess, processRequest } from './process-engine';
+import { applyProcessResults } from '@opsis/engine';
 import { boardIcons, iconMotion } from './icons';
 import { NodeIcon } from './NodeIcon';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
@@ -1230,7 +1231,11 @@ function BoardWorkspace() {
                   <TerminalDetails
                     step={activeNode.terminal}
                     {...(activeNode.process
-                      ? { calculation: process, result: process.results.get(activeNode.id) }
+                      ? {
+                          calculation: process,
+                          result: process.results.get(activeNode.id),
+                          failure: process.failures.get(activeNode.id),
+                        }
                       : {})}
                   />
                 ) : (
@@ -1263,8 +1268,16 @@ function BoardWorkspace() {
                           throw new Error(
                             parsed.error.issues[0]?.message ?? 'Use a smaller sample.',
                           );
-                        const calculated = await populateProcess(parsed.data);
-                        if (boardRef.current === current) commit(calculated);
+                        const result = await calculateProcess(processRequest(parsed.data));
+                        const failure = result.nodes.find((node) => node.status === 'failed');
+                        if (failure) {
+                          const label = current.nodes.find((node) => node.id === failure.id)?.label;
+                          throw new Error(
+                            label ? `${label}: ${failure.error.message}` : failure.error.message,
+                          );
+                        }
+                        if (boardRef.current === current)
+                          commit(applyProcessResults(parsed.data, result));
                       } finally {
                         setArranging(false);
                       }
