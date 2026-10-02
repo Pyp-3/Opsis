@@ -8,7 +8,7 @@ const id = z
   .regex(/^[a-zA-Z0-9_-]+$/);
 export const EngineRequestSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     nodes: z.array(z.object({ id, process: ProcessStepSchema }).strict()).max(50),
   })
   .strict()
@@ -28,7 +28,8 @@ export const ProcessResultSchema = z
     output: z.string().max(1000),
     inputRows: z.number().int().min(0).max(100),
     outputRows: z.number().int().min(0).max(100),
-    retained: z.array(z.number().int().min(0).max(99)).max(100),
+    origins: z.array(z.array(z.number().int().min(0).max(99)).max(100)).max(100),
+    inputs: z.array(z.object({ id, rows: z.number().int().min(0).max(100) }).strict()).max(10),
     drawing: z
       .object({
         height: z.number().int().min(18).max(1008),
@@ -61,9 +62,11 @@ export const ProcessFailureSchema = z
       'missing_source',
       'cycle',
       'sample_too_long',
+      'input_too_long',
       'too_many_lines',
       'count_out_of_range',
       'filter_too_long',
+      'invalid_argument',
       'output_too_long',
       'upstream_failed',
     ]),
@@ -76,7 +79,7 @@ export const ProcessOutcomeSchema = z.discriminatedUnion('status', [
 ]);
 export type ProcessOutcome = z.infer<typeof ProcessOutcomeSchema>;
 export const EngineResultSchema = z
-  .object({ version: z.literal(2), nodes: z.array(ProcessOutcomeSchema).max(50) })
+  .object({ version: z.literal(3), nodes: z.array(ProcessOutcomeSchema).max(50) })
   .strict();
 export type EngineResult = z.infer<typeof EngineResultSchema>;
 export const EngineResponseSchema = z.discriminatedUnion('ok', [

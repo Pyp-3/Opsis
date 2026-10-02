@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { BoardGraphSchema, boardChanges } from './board';
-import { ProcessStepSchema, processProblems, withoutBrokenProcesses } from './process';
+import {
+  ProcessStepSchema,
+  processProblems,
+  processSources,
+  withoutBrokenProcesses,
+} from './process';
 import { TERMINAL_PIPELINE_EXAMPLE } from './terminal-example';
 
 describe('calculated process contracts', () => {
@@ -59,5 +64,54 @@ describe('calculated process contracts', () => {
     expect(nodes.find((node) => node.id === 'first-lines')?.process).toBeUndefined();
     expect(nodes.find((node) => node.id === 'terminal-output')?.process).toBeUndefined();
     expect(TERMINAL_PIPELINE_EXAMPLE.nodes[2]!.process?.op).toBe('head');
+  });
+  it('validates the extended operations and follows every input of combining steps', () => {
+    const valid = [
+      { op: 'sort', from: 's', order: 'asc', numeric: true, ignoreCase: false },
+      { op: 'filter', from: 's', text: 'x', ignoreCase: true, invert: true },
+      { op: 'unique', from: 's', withCounts: true },
+      { op: 'count', from: 's' },
+      { op: 'cut', from: 's', fields: [1, 3], delimiter: ',' },
+      { op: 'translate', from: 's', set1: 'a-z', set2: 'A-Z' },
+      { op: 'concat', from: ['a', 'b'] },
+      { op: 'paste', from: ['a', 'b', 'a'], delimiter: ',' },
+    ];
+    for (const step of valid) expect(ProcessStepSchema.safeParse(step).success).toBe(true);
+    const invalid = [
+      { op: 'cut', from: 's', fields: [] },
+      { op: 'cut', from: 's', fields: [0] },
+      { op: 'cut', from: 's', fields: [1], delimiter: ',,' },
+      { op: 'paste', from: ['a', 'b'], delimiter: '\n' },
+      { op: 'translate', from: 's', set1: 'a\n', set2: 'b' },
+      { op: 'concat', from: ['a'] },
+      { op: 'concat', from: 'a' },
+      { op: 'sort', from: 's', order: 'asc', numeric: 'yes' },
+    ];
+    for (const step of invalid) expect(ProcessStepSchema.safeParse(step).success).toBe(false);
+    expect(processSources({ op: 'paste', from: ['a', 'b'] })).toEqual(['a', 'b']);
+    expect(processSources({ op: 'head', from: 'a', count: 1 })).toEqual(['a']);
+    expect(processSources({ op: 'source', text: '' })).toEqual([]);
+
+    const nodes = [
+      { id: 'a', process: { op: 'source' as const, text: 'x' } },
+      { id: 'b', process: { op: 'source' as const, text: 'y' } },
+      { id: 'joined', process: { op: 'paste' as const, from: ['a', 'b'] } },
+      { id: 'total', process: { op: 'count' as const, from: 'joined' } },
+    ];
+    expect(processProblems(nodes)).toEqual([]);
+    expect(processProblems(nodes.filter((node) => node.id !== 'b'))).toEqual([
+      'Process source b must name a node with a process step.',
+    ]);
+    expect(
+      processProblems([
+        ...nodes,
+        { id: 'loop', process: { op: 'concat' as const, from: ['a', 'loop'] } },
+      ]),
+    ).toEqual(['Calculated process steps must not form a cycle.']);
+    const pruned = withoutBrokenProcesses(nodes.filter((node) => node.id !== 'b'));
+    expect(pruned.map((node) => node.id)).toEqual(['a', 'joined', 'total']);
+    expect(pruned.find((node) => node.id === 'a')?.process).toBeDefined();
+    expect(pruned.find((node) => node.id === 'joined')?.process).toBeUndefined();
+    expect(pruned.find((node) => node.id === 'total')?.process).toBeUndefined();
   });
 });

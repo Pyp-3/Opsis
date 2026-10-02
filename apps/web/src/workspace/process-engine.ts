@@ -32,7 +32,7 @@ function stop(message: string) {
 
 export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest {
   return EngineRequestSchema.parse({
-    version: 2,
+    version: 3,
     nodes: board.nodes.flatMap((node) =>
       node.process ? [{ id: node.id, process: node.process }] : [],
     ),
@@ -42,7 +42,7 @@ export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest 
 /** One shared worker, bounded requests, and a small cache independent of node positions. */
 export function calculateProcess(request: EngineRequest): Promise<EngineResult> {
   const input = EngineRequestSchema.parse(request);
-  if (!input.nodes.length) return Promise.resolve({ version: 2, nodes: [] });
+  if (!input.nodes.length) return Promise.resolve({ version: 3, nodes: [] });
   const key = JSON.stringify(input);
   const cached = cache.get(key);
   if (cached) return cached;

@@ -14,7 +14,7 @@ const IDLE: ProcessState = { status: 'idle', results: new Map(), failures: new M
 
 export function useProcessEngine(board: BoardDocument | null): ProcessState {
   const key = JSON.stringify({
-    version: 2,
+    version: 3,
     nodes:
       board?.nodes.flatMap((node) =>
         node.process ? [{ id: node.id, process: node.process }] : [],

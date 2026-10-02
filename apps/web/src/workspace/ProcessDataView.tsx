@@ -21,7 +21,9 @@ export function ProcessDataView({
         </span>
       </header>
       <div className="process-data-labels">
-        <small>Input</small>
+        <small>
+          {result.inputs.length > 1 ? `${result.inputs.length} inputs, stacked` : 'Input'}
+        </small>
         <span />
         <small>Output</small>
       </div>
