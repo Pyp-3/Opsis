@@ -124,33 +124,53 @@ export function boardMarkdown(board: BoardDocument): string {
   );
 }
 
-export async function downloadPng(board: BoardDocument): Promise<void> {
-  const svg = boardSvg(board);
+const RASTER_FORMATS = {
+  png: { type: 'image/png', ext: 'png', quality: undefined as number | undefined },
+  jpeg: { type: 'image/jpeg', ext: 'jpg', quality: 0.92 },
+} as const;
+export type RasterFormat = keyof typeof RASTER_FORMATS;
+
+/**
+ * Rasterises the whole board to PNG or JPEG. It draws from {@link boardSvg}, which lays out
+ * every node, port, label and routed path from the board's own bounds — so the file always
+ * shows the complete diagram, not just whatever is in the viewport. The canvas is painted
+ * with the board's background first, so JPEG (which has no transparency) never bleeds to black.
+ */
+export async function downloadRaster(board: BoardDocument, format: RasterFormat): Promise<void> {
+  const look = lookOf(board);
+  const svg = boardSvg(board, look);
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const image = new Image();
     image.src = url;
     await image.decode();
+    // Cap the longest side so very large boards still encode, but keep small ones crisp at 2×.
     const scale = Math.min(2, 4096 / image.width, 4096 / image.height);
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.width * scale));
     canvas.height = Math.max(1, Math.round(image.height * scale));
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('PNG export is unavailable in this browser.');
+    if (!context) throw new Error('Image export is unavailable in this browser.');
+    context.fillStyle = paletteOf(look).deep;
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const { type, ext, quality } = RASTER_FORMATS[format];
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
-        (value) => (value ? resolve(value) : reject(new Error('PNG encoding failed.'))),
-        'image/png',
+        (value) => (value ? resolve(value) : reject(new Error('Image encoding failed.'))),
+        type,
+        quality,
       ),
     );
-    const pngUrl = URL.createObjectURL(blob);
+    const outUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = pngUrl;
-    link.download = 'opsis-diagram.png';
+    link.href = outUrl;
+    link.download = `opsis-diagram.${ext}`;
     link.click();
-    setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+    setTimeout(() => URL.revokeObjectURL(outUrl), 1000);
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+
+export const downloadPng = (board: BoardDocument) => downloadRaster(board, 'png');

@@ -719,3 +719,14 @@ body.is-resizing-rail {
   font-size: 11px;
   color: var(--ink-3);
 }
+.export-menu-group {
+  margin: 8px 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.export-menu-group:first-child {
+  margin-top: 2px;
+}

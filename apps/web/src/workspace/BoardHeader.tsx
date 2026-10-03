@@ -5,11 +5,12 @@ import {
   ChevronDown,
   Upload,
   Download,
+  FileText,
   FileJson,
   ImageIcon,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
-import { boardSvg, boardMarkdown, downloadPng, download } from './export';
+import { boardSvg, boardMarkdown, downloadRaster, download, type RasterFormat } from './export';
 import { navigate } from '../router';
 
 type BoardHeaderProps = {
@@ -42,6 +43,10 @@ export function BoardHeader({
   }, []);
   const exportAs = (content: string, filename: string, type: string) => {
     download(content, filename, type);
+    if (exportMenu.current) exportMenu.current.open = false;
+  };
+  const exportRaster = (format: RasterFormat) => {
+    if (board) void downloadRaster(board, format).catch((e: Error) => setError(e.message));
     if (exportMenu.current) exportMenu.current.open = false;
   };
 
@@ -82,22 +87,45 @@ export function BoardHeader({
             <Download size={15} /> Export <ChevronDown className="chevron" size={14} />
           </summary>
           <div className="export-menu-panel">
+            <p className="export-menu-group">Picture of the diagram</p>
+            <button disabled={!board} onClick={() => exportRaster('png')}>
+              <ImageIcon size={16} />
+              <span>
+                <strong>PNG image</strong>
+                <small>.png · full diagram, crisp, transparent-safe</small>
+              </span>
+            </button>
+            <button disabled={!board} onClick={() => exportRaster('jpeg')}>
+              <ImageIcon size={16} />
+              <span>
+                <strong>JPEG image</strong>
+                <small>.jpg · full diagram, smaller file for email</small>
+              </span>
+            </button>
+            <button
+              disabled={!board}
+              onClick={() =>
+                board && exportAs(boardSvg(board), 'opsis-diagram.svg', 'image/svg+xml')
+              }
+            >
+              <ImageIcon size={16} />
+              <span>
+                <strong>Vector image</strong>
+                <small>.svg · scales losslessly for slides</small>
+              </span>
+            </button>
+            <p className="export-menu-group">Text &amp; data</p>
             <button
               disabled={!board}
               onClick={() =>
                 board && exportAs(boardMarkdown(board), 'opsis-notes.md', 'text/markdown')
               }
             >
-              Markdown notes
-            </button>
-            <button
-              disabled={!board}
-              onClick={() => {
-                if (board) void downloadPng(board).catch((e: Error) => setError(e.message));
-                if (exportMenu.current) exportMenu.current.open = false;
-              }}
-            >
-              PNG image
+              <FileText size={16} />
+              <span>
+                <strong>Markdown notes</strong>
+                <small>.md · every concept and path as text</small>
+              </span>
             </button>
             <button
               disabled={!board}
@@ -110,18 +138,6 @@ export function BoardHeader({
               <span>
                 <strong>Editable board</strong>
                 <small>.json · import it again later</small>
-              </span>
-            </button>
-            <button
-              disabled={!board}
-              onClick={() =>
-                board && exportAs(boardSvg(board), 'opsis-diagram.svg', 'image/svg+xml')
-              }
-            >
-              <ImageIcon size={16} />
-              <span>
-                <strong>Diagram image</strong>
-                <small>.svg · for slides and documents</small>
               </span>
             </button>
           </div>
