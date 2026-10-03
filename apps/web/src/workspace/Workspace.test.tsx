@@ -107,6 +107,28 @@ describe('current workspace integration', () => {
     fireEvent.change(timeline, { target: { value: String(inbox) } });
     expect(screen.queryByRole('complementary', { name: /Details for/ })).toBeNull();
   });
+  it('deletes the selected concept with the Delete key, closes the panel, and can undo', async () => {
+    setup();
+    await screen.findByText('Fixture ready');
+    const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
+    expect(screen.getByRole('complementary', { name: 'Details for You write' })).toBeDefined();
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(within(steps).queryByRole('button', { name: /You write/ })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'Details for You write' })).toBeNull();
+    // Deletion is one undoable action routed through the board history.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(within(steps).getByRole('button', { name: /You write/ })).toBeDefined();
+  });
+  it('does not delete on Delete while typing in a field', async () => {
+    setup();
+    await screen.findByText('Fixture ready');
+    const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
+    const prompt = screen.getByLabelText('What would you like to understand?');
+    fireEvent.keyDown(prompt, { key: 'Delete' });
+    expect(within(steps).getByRole('button', { name: /You write/ })).toBeDefined();
+  });
   it('recognises the terminal reference without an agent call and exposes troubleshooting', async () => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
       if (url === '/v1/agents')

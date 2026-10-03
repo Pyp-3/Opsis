@@ -48,7 +48,7 @@ import {
 import { useProcessEngine } from './useProcessEngine';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
-import { layoutBoard, NODE_HEIGHT, NODE_WIDTH } from './model';
+import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { connectBoard } from './connections';
 import { readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
@@ -146,6 +146,36 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
     window.addEventListener(CLOSE_RAIL, close);
     return () => window.removeEventListener(CLOSE_RAIL, close);
   }, []);
+  // Delete the selected concept or connection with the Delete/Backspace key. Routed through
+  // commit() so it is one undoable action and the board document stays in sync (ReactFlow's
+  // own deletion is disabled via deleteKeyCode). Ignored while typing in a field.
+  useEffect(() => {
+    if (readOnly) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
+          target.closest('[contenteditable="true"]'))
+      )
+        return;
+      const current = boardRef.current;
+      if (!current || busy) return;
+      if (selected) {
+        event.preventDefault();
+        commit(removeNode(current, selected));
+        setSelected(null);
+      } else if (selectedEdge) {
+        event.preventDefault();
+        commit({ ...current, edges: current.edges.filter((edge) => edge.id !== selectedEdge) });
+        setSelectedEdge(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [readOnly, busy, selected, selectedEdge, boardRef, commit]);
   const page: SidebarMode =
     path === '/boards'
       ? 'boards'

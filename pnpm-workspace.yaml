@@ -3,5 +3,10 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
+  # sharp is intentionally omitted: it uses its bundled prebuilt binaries, and forcing
+  # its install script builds from source, which needs a node-gyp/C++ toolchain.
+  - better-sqlite3
   - esbuild
+  - onnxruntime-node
+  - protobufjs
   - wasm-pack
