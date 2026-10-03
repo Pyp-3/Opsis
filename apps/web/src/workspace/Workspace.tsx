@@ -67,12 +67,15 @@ import type { User } from '../auth/session';
 import { CanvasSettingsPage } from './CanvasSettingsPage';
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
-import { AppSidebar, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
+import { AppSidebar, applySavedRailWidth, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
 import { RoutedConnection } from './RoutedConnection';
 import { ROW_GAP, nodeHeight } from './geometry';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
+import { useProviderUsage, type ProviderAgent } from './provider-usage';
+
+const EXPLAIN_KEY = 'opsis:explain';
 const nodeTypes = { concept: IconNode };
 const edgeTypes = { routed: RoutedConnection };
 
@@ -81,6 +84,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
     useBoardHistory(initial.snapshot);
   const generation = useBoardGeneration(commit);
+  const provider = useProviderUsage();
   const process = useProcessEngine(board);
   const [arranging, setArranging] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
@@ -113,6 +117,22 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
+  // Whether clicking a concept icon opens its explanation. Off = drawing only.
+  const [explain, setExplainState] = useState(() => {
+    try {
+      return localStorage.getItem(EXPLAIN_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const setExplain = useCallback((next: boolean) => {
+    setExplainState(next);
+    try {
+      localStorage.setItem(EXPLAIN_KEY, String(next));
+    } catch {
+      // Remembering the choice is a convenience only.
+    }
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
   const [playback, setPlayback] = useState<PlaybackFocus | null>(null);
@@ -121,6 +141,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const flow = useReactFlow();
   const path = usePath();
   useEffect(() => {
+    applySavedRailWidth();
     const close = () => setRailOpen(false);
     window.addEventListener(CLOSE_RAIL, close);
     return () => window.removeEventListener(CLOSE_RAIL, close);
@@ -255,14 +276,22 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   async function generate(event?: FormEvent, text = prompt) {
     event?.preventDefault();
     if (!text.trim() || busy) return;
+    const callsAgent =
+      agent !== 'demo' && !terminalExampleFor(text, boardRef.current, attachments.length > 0);
     if (
-      agent !== 'demo' &&
-      !terminalExampleFor(text, boardRef.current, attachments.length > 0) &&
+      callsAgent &&
       (!BoardModelSettingsSchema.safeParse(modelPreferences[agent]).success ||
         modelPreferences[agent].model === 'default')
     ) {
       setError('Choose a valid, explicit model before generating.');
       setSettingsOpen(true);
+      return;
+    }
+    // Provider mode: stop before a call the agent has no remaining window for.
+    if (callsAgent && providerStatus?.blocked) {
+      setError(
+        `${agent === 'claude' ? 'Claude' : 'Codex'} has reached its ${providerStatus.reason.toLowerCase()}. It will be available again when the window resets.`,
+      );
       return;
     }
     if (
@@ -275,6 +304,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         agent === 'demo' ? [] : attachments,
       )
     ) {
+      if (callsAgent) provider.record(agent as ProviderAgent);
       setPrompt('');
       setAttachments([]);
     }
@@ -374,6 +404,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const activeNode = board?.nodes.find((node) => node.id === selected);
   const activeEdge = board?.edges.find((edge) => edge.id === selectedEdge);
   const status = agents.find((entry) => entry.id === agent);
+  const providerStatus = agent === 'demo' ? null : provider.statusOf(agent);
   const localTerminalExample = !!terminalExampleFor(prompt, board, attachments.length > 0);
   const modelLabel =
     agent === 'demo'
@@ -431,6 +462,8 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       commit={commit}
       selected={selected}
       selectNode={selectNode}
+      explain={explain}
+      setExplain={setExplain}
       onNew={async () => {
         if (!(await newCanvas())) return;
         navigate('/canvas');
@@ -564,6 +597,8 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
               onNodesChange={changePositions}
               onNodeClick={(_, node) => {
                 retractHeading();
+                // Drawing mode: a click on an icon does nothing until explanation is on.
+                if (!explain) return;
                 selectNode(node.id);
               }}
               onEdgeClick={(_, edge) => {
@@ -910,6 +945,18 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                     localTerminalExample={localTerminalExample}
                     connectionError={connectionError}
                     status={status}
+                    provider={{
+                      enabled: provider.settings.enabled,
+                      status: providerStatus,
+                      caps:
+                        agent === 'demo'
+                          ? { fiveHour: 0, weekly: 0 }
+                          : provider.settings.caps[agent],
+                      setEnabled: provider.setEnabled,
+                      setCaps: (caps) => {
+                        if (agent !== 'demo') provider.setCaps(agent, caps);
+                      },
+                    }}
                     generation={generation}
                     generate={generate}
                     setAttachments={setAttachments}

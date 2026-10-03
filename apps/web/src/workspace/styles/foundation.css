@@ -233,12 +233,46 @@ summary::-webkit-details-marker {
 
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 .workspace-rail {
-  width: 264px;
+  position: relative;
+  width: var(--rail-w, 264px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--rail);
   border-right: 1px solid var(--line);
+}
+/* Drag handle on the canvas rail's right edge. */
+.rail-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 5;
+  width: 7px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+.rail-resize::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background-color 140ms ease;
+}
+.rail-resize:hover::after,
+.rail-resize:focus-visible::after {
+  background: var(--accent-text);
+}
+.rail-resize:hover,
+.rail-resize:focus-visible {
+  background: transparent;
+}
+body.is-resizing-rail {
+  cursor: col-resize;
+  user-select: none;
 }
 .rail-closed .workspace-rail {
   display: none;

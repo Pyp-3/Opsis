@@ -1,10 +1,27 @@
 import type { FormEvent, RefObject } from 'react';
-import { ArrowUp, ChevronDown, LoaderCircle, SlidersHorizontal, Square, X } from 'lucide-react';
+import {
+  ArrowUp,
+  ChevronDown,
+  Gauge,
+  LoaderCircle,
+  SlidersHorizontal,
+  Square,
+  X,
+} from 'lucide-react';
 import type { BoardAgent, BoardAttachment, BoardDocument } from '@opsis/schema';
 import { ModelControls } from './ModelControls';
 import { AgentLogo } from './AgentLogo';
 import { AttachButton, AttachmentChips } from './Attachments';
 import { MODEL_SETTINGS_KEY, type ModelPreferences } from './model-settings';
+import { untilLabel, type AgentCaps, type AgentStatus } from './provider-usage';
+
+type ProviderControls = {
+  enabled: boolean;
+  status: AgentStatus | null;
+  caps: AgentCaps;
+  setEnabled: (enabled: boolean) => void;
+  setCaps: (caps: AgentCaps) => void;
+};
 
 type BoardComposerProps = {
   board: BoardDocument | null;
@@ -20,6 +37,7 @@ type BoardComposerProps = {
   localTerminalExample: boolean;
   connectionError: string;
   status: { available: boolean; detail: string } | undefined;
+  provider: ProviderControls;
   generation: { busy: boolean; cancel: () => void };
   generate: (event?: FormEvent) => Promise<void>;
   setAttachments: (attachments: BoardAttachment[]) => void;
@@ -45,6 +63,7 @@ export function BoardComposer({
   localTerminalExample,
   connectionError,
   status,
+  provider,
   generation,
   generate,
   setAttachments,
@@ -55,6 +74,8 @@ export function BoardComposer({
   setSettingsOpen,
   setSelected,
 }: BoardComposerProps) {
+  const providerBlocked = agent !== 'demo' && provider.enabled && !!provider.status?.blocked;
+  const providerTracked = agent !== 'demo' && provider.enabled && !!provider.status?.tracked;
   return (
     <form
       className={`composer ${busy ? 'is-busy' : ''}`}
@@ -117,7 +138,8 @@ export function BoardComposer({
             disabled={
               busy ||
               !prompt.trim() ||
-              (!localTerminalExample && agent !== 'demo' && status?.available === false)
+              (!localTerminalExample && agent !== 'demo' && status?.available === false) ||
+              (!localTerminalExample && providerBlocked)
             }
           >
             <ArrowUp size={19} />
@@ -142,6 +164,62 @@ export function BoardComposer({
               }
             }}
           />
+          <fieldset className="provider-mode">
+            <legend>
+              <Gauge size={13} /> Provider mode
+            </legend>
+            <label className="provider-switch">
+              <input
+                type="checkbox"
+                checked={provider.enabled}
+                onChange={(event) => provider.setEnabled(event.target.checked)}
+              />
+              Track this agent’s usage windows and disable it at the cap
+            </label>
+            {provider.enabled && (
+              <>
+                <div className="provider-caps">
+                  <label>
+                    5-hour cap
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      value={provider.caps.fiveHour || 0}
+                      onChange={(event) =>
+                        provider.setCaps({
+                          ...provider.caps,
+                          fiveHour: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Weekly cap
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      value={provider.caps.weekly || 0}
+                      onChange={(event) =>
+                        provider.setCaps({ ...provider.caps, weekly: Number(event.target.value) })
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="provider-usage">
+                  {provider.status?.cap5h
+                    ? `5h: ${provider.status.used5h}/${provider.status.cap5h}`
+                    : '5h: no limit'}{' '}
+                  ·{' '}
+                  {provider.status?.cap7d
+                    ? `week: ${provider.status.used7d}/${provider.status.cap7d}`
+                    : 'week: no limit'}
+                  . 0 means no limit. Each agent keeps its own count on this device.
+                </p>
+              </>
+            )}
+          </fieldset>
         </div>
       )}
       <div className="composer-footer">
@@ -186,6 +264,20 @@ export function BoardComposer({
             connectionError || status?.detail || 'Checking local agent…'
           )}
         </span>
+        {providerTracked && provider.status && (
+          <span
+            className={`provider-pill ${providerBlocked ? 'is-blocked' : ''}`}
+            role="status"
+            title="Provider mode usage"
+          >
+            <Gauge size={12} />
+            {providerBlocked
+              ? `${provider.status.reason} · resets ${untilLabel(provider.status.resetsAt)}`
+              : provider.status.cap5h
+                ? `${provider.status.used5h}/${provider.status.cap5h} this 5h`
+                : `${provider.status.used7d}/${provider.status.cap7d} this week`}
+          </span>
+        )}
         {selected && (
           <button
             type="button"

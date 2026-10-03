@@ -13,6 +13,12 @@
 .play-process:hover:not(:disabled) {
   background: #f6e9ca;
 }
+/* Collapsed, the heading is a horizontal pill; drop the stacked top margin so the
+   button sits centred in the row instead of hanging low. */
+.canvas-heading.is-collapsed .play-process {
+  margin-top: 0;
+  flex-shrink: 0;
+}
 .process-player {
   display: flex;
   flex-direction: column;

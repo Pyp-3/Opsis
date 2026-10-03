@@ -1,4 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import {
   ArrowLeft,
   Eye,
@@ -6,6 +11,7 @@ import {
   House,
   LogOut,
   Palette,
+  Pencil,
   Plus,
   Search,
   SquareDashedMousePointer,
@@ -69,6 +75,8 @@ export function AppSidebar({
   commit,
   selected,
   selectNode,
+  explain,
+  setExplain,
 }: {
   mode: SidebarMode;
   board: BoardDocument | null;
@@ -81,6 +89,8 @@ export function AppSidebar({
   commit: (board: BoardDocument) => void;
   selected: string | null;
   selectNode: (id: string) => void;
+  explain: boolean;
+  setExplain: (explain: boolean) => void;
 }) {
   const inCanvas = mode === 'canvas' || mode === 'settings';
   return (
@@ -118,6 +128,8 @@ export function AppSidebar({
           commit={commit}
           selected={selected}
           selectNode={selectNode}
+          explain={explain}
+          setExplain={setExplain}
         />
       ) : (
         <>
@@ -170,7 +182,75 @@ export function AppSidebar({
           </p>
         )}
       </div>
+      {inCanvas && <RailResizer />}
     </aside>
+  );
+}
+
+const RAIL_WIDTH_KEY = 'opsis:rail-width';
+const RAIL_MIN = 220;
+const RAIL_MAX = 460;
+/** Restore any saved rail width once, before paint, so the rail opens at the chosen size. */
+export function applySavedRailWidth() {
+  try {
+    const saved = Number(localStorage.getItem(RAIL_WIDTH_KEY));
+    if (saved >= RAIL_MIN && saved <= RAIL_MAX)
+      document.documentElement.style.setProperty('--rail-w', `${saved}px`);
+  } catch {
+    // A remembered width is a convenience only.
+  }
+}
+
+/** A drag handle on the rail's right edge: widen or narrow the canvas sidebar, remembered per device. */
+function RailResizer() {
+  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const rail = event.currentTarget.closest('.workspace-rail') as HTMLElement | null;
+    const left = rail?.getBoundingClientRect().left ?? 0;
+    const move = (e: PointerEvent) => {
+      const width = Math.min(RAIL_MAX, Math.max(RAIL_MIN, e.clientX - left));
+      document.documentElement.style.setProperty('--rail-w', `${width}px`);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.classList.remove('is-resizing-rail');
+      try {
+        const current = getComputedStyle(document.documentElement).getPropertyValue('--rail-w');
+        if (current) localStorage.setItem(RAIL_WIDTH_KEY, String(parseInt(current, 10)));
+      } catch {
+        // Persistence is optional.
+      }
+    };
+    document.body.classList.add('is-resizing-rail');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }, []);
+  return (
+    <button
+      type="button"
+      className="rail-resize"
+      aria-label="Resize sidebar"
+      title="Drag to resize"
+      onPointerDown={onPointerDown}
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const current =
+          parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rail-w'), 10) ||
+          264;
+        const width = Math.min(
+          RAIL_MAX,
+          Math.max(RAIL_MIN, current + (event.key === 'ArrowRight' ? 16 : -16)),
+        );
+        document.documentElement.style.setProperty('--rail-w', `${width}px`);
+        try {
+          localStorage.setItem(RAIL_WIDTH_KEY, String(width));
+        } catch {
+          // Persistence is optional.
+        }
+      }}
+    />
   );
 }
 
@@ -191,6 +271,8 @@ function CanvasRail({
   commit,
   selected,
   selectNode,
+  explain,
+  setExplain,
 }: {
   mode: 'canvas' | 'settings';
   board: BoardDocument | null;
@@ -200,6 +282,8 @@ function CanvasRail({
   commit: (board: BoardDocument) => void;
   selected: string | null;
   selectNode: (id: string) => void;
+  explain: boolean;
+  setExplain: (explain: boolean) => void;
 }) {
   const [search, setSearch] = useState({ boardId: library.activeId, query: '' });
   const nodeSearch =
@@ -249,6 +333,31 @@ function CanvasRail({
             </NavLink>
           )}
         </nav>
+        {board && !readOnly && mode === 'canvas' && (
+          <div className="rail-modes" role="group" aria-label="What a click on an icon does">
+            <button
+              type="button"
+              className={!explain ? 'is-active' : ''}
+              aria-pressed={!explain}
+              onClick={() => setExplain(false)}
+            >
+              <Pencil size={14} /> Drawing
+            </button>
+            <button
+              type="button"
+              className={explain ? 'is-active' : ''}
+              aria-pressed={explain}
+              onClick={() => setExplain(true)}
+            >
+              <SquareDashedMousePointer size={14} /> Explanation
+            </button>
+            <small>
+              {explain
+                ? 'Clicking an icon opens its explanation.'
+                : 'Drawing only — clicking an icon won’t open its explanation.'}
+            </small>
+          </div>
+        )}
       </section>
       {board && mode === 'canvas' && (
         <details open className="rail-section rail-concepts">

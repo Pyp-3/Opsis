@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import {
   ArrowRight,
+  ChevronLeft,
   ChevronRight,
   GitBranch,
   Pencil,
@@ -52,6 +53,9 @@ export function ConceptDetails({
   setShowIcons,
   setArranging,
 }: ConceptDetailsProps) {
+  const index = board.nodes.indexOf(activeNode);
+  const previous = index > 0 ? board.nodes[index - 1] : undefined;
+  const next = index >= 0 && index < board.nodes.length - 1 ? board.nodes[index + 1] : undefined;
   return (
     <aside
       key={activeNode.id}
@@ -66,6 +70,27 @@ export function ConceptDetails({
           <X size={17} />
         </button>
       </div>
+      {/* Step through concepts in reading order, mirroring the process player's next/previous. */}
+      <nav className="detail-steps" aria-label="Step through concepts">
+        <button
+          disabled={!previous}
+          aria-label={previous ? `Previous concept: ${previous.label}` : 'No previous concept'}
+          onClick={() => previous && selectNode(previous.id)}
+        >
+          <ChevronLeft size={15} /> Previous
+        </button>
+        <span className="detail-steps-count">
+          {index + 1} / {board.nodes.length}
+        </span>
+        <button
+          className="is-next"
+          disabled={!next}
+          aria-label={next ? `Next concept: ${next.label}` : 'No next concept'}
+          onClick={() => next && selectNode(next.id)}
+        >
+          Next <ChevronRight size={15} />
+        </button>
+      </nav>
       <div className="detail-body">
         {activeNode.confidence && activeNode.confidence !== 'normal' && (
           <p className="node-caveat">

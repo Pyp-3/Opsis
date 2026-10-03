@@ -73,7 +73,7 @@ export function useBoardLibrary(
         if (lastSaved.current === target) return;
         if (lastSaved.current && JSON.stringify(lastSaved.current) === JSON.stringify(target)) {
           lastSaved.current = target;
-          setStatus(identity.revision ? 'Saved to SQLite' : '');
+          setStatus(identity.revision ? 'Saved' : '');
           return;
         }
         if (!target.board && !target.past.length && !target.future.length) {
@@ -134,13 +134,13 @@ export function useBoardLibrary(
           writeRecovery({ ...active.current, snapshot: current.current, savedSnapshot: target });
           setError('');
         } catch {
-          setError('Saved to SQLite, but browser recovery storage is unavailable.');
+          setError('Saved, but browser recovery storage is unavailable.');
         }
         setStatus(
           recoveredCopy
             ? 'Saved separate copy · concurrent edits retained'
             : target === current.current
-              ? 'Saved to SQLite'
+              ? 'Saved'
               : 'Saving…',
         );
         await refresh();
@@ -213,7 +213,7 @@ export function useBoardLibrary(
           lastSaved.current = remote.snapshot;
           replace(remote.snapshot);
           writeRecovery({ ...identity, snapshot: remote.snapshot, savedSnapshot: remote.snapshot });
-          setStatus('Synced · saved to SQLite');
+          setStatus('Synced');
           setError('');
           await refresh();
         });
@@ -274,12 +274,12 @@ export function useBoardLibrary(
         try {
           writeRecovery(entry);
         } catch {
-          warning = 'Browser recovery is unavailable; wait for SQLite saves before closing.';
+          warning = 'Browser recovery is unavailable; wait for the save to finish before closing.';
         }
         setActiveId(entry.id);
         setAccess(entry.access ?? 'owner', entry.owner?.name);
         replace(entry.snapshot);
-        setStatus(id ? (entry.access === 'viewer' ? '' : 'Saved to SQLite') : '');
+        setStatus(id ? (entry.access === 'viewer' ? '' : 'Saved') : '');
         setError(warning);
         return true;
       } catch (e) {
@@ -349,7 +349,7 @@ export function useBoardLibrary(
         setAccess('owner');
         replace(next.snapshot);
         writeRecovery(next);
-        setStatus(action === 'delete' ? '' : 'Saved to SQLite');
+        setStatus(action === 'delete' ? '' : 'Saved');
       }
       await refresh();
       setError('');
