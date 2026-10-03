@@ -1,73 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
-import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
-import { restoreBoard } from './model';
+import { type BoardSnapshot } from '@opsis/schema';
 import { mergeBoardSnapshots } from './board-sync';
-
-const RECOVERY_BASE = 'opsis:library-recovery:v1';
-/** Recovery copies are kept per account, so people sharing a browser never see each other's. */
-let RECOVERY = RECOVERY_BASE;
-let scoped = false;
-export function setRecoveryScope(userId: string) {
-  RECOVERY = `${RECOVERY_BASE}:${userId}`;
-  scoped = true;
-}
-/** Fired when the API says the session has ended; the app returns to sign-in. */
-export const AUTH_EXPIRED = 'opsis:auth-expired';
-export type BoardAccess = 'owner' | 'viewer';
-function writeRecovery(value: unknown) {
-  const text = JSON.stringify(value);
-  // A per-tab copy prevents another tab from replacing unsaved recovery data.
-  let saved = false;
-  for (const storage of [sessionStorage, localStorage]) {
-    try {
-      storage.setItem(RECOVERY, text);
-      saved = true;
-    } catch {
-      /* Try the other store. */
-    }
-  }
-  if (!saved) throw new Error('Browser recovery storage is full or unavailable.');
-}
-const Entry = z.object({
-  id: z.string().uuid(),
-  revision: z.number().int().nonnegative(),
-  snapshot: BoardSnapshotSchema,
-  savedSnapshot: BoardSnapshotSchema.optional(),
-  /** `viewer` for someone else's public board: shown, never saved. */
-  access: z.enum(['owner', 'viewer']).optional(),
-  owner: z.object({ name: z.string() }).optional(),
-});
-const List = z.array(
-  z.object({
-    id: z.string().uuid(),
-    title: z.string(),
-    revision: z.number(),
-    updatedAt: z.number(),
-    visibility: z.enum(['private', 'public']).optional(),
-  }),
-);
-export function restoreLibrary(): z.infer<typeof Entry> & { error: string } {
-  try {
-    const raw = sessionStorage.getItem(RECOVERY) ?? localStorage.getItem(RECOVERY);
-    if (raw) return { ...Entry.parse(JSON.parse(raw)), error: '' };
-    return {
-      id: crypto.randomUUID(),
-      revision: 0,
-      // The pre-library browser board belongs to whoever used this browser before accounts.
-      snapshot: { board: scoped ? null : restoreBoard(), past: [], future: [] } as BoardSnapshot,
-      error: '',
-    };
-  } catch {
-    return {
-      id: crypto.randomUUID(),
-      revision: 0,
-      snapshot: { board: null, past: [], future: [] } as BoardSnapshot,
-      error:
-        'Saved recovery data could not be read. It has not been overwritten. Import a backup to continue.',
-    };
-  }
-}
+import {
+  boardLibraryApi,
+  BoardEntrySchema as Entry,
+  BoardListSchema as List,
+  AUTH_EXPIRED,
+  type BoardAccess,
+} from './board-library-api';
+import { restoreLibrary, writeRecovery } from './board-recovery';
+export { restoreLibrary, setRecoveryScope } from './board-recovery';
+export { AUTH_EXPIRED } from './board-library-api';
+export type { BoardAccess } from './board-library-api';
 
 export function useBoardLibrary(
   initial: ReturnType<typeof restoreLibrary>,
@@ -101,7 +46,7 @@ export function useBoardLibrary(
   }, [snapshot, paused]);
 
   const refresh = useCallback(async () => {
-    const response = await fetch('/v1/boards');
+    const response = await boardLibraryApi.list();
     if (response.status === 401) {
       window.dispatchEvent(new Event(AUTH_EXPIRED));
       throw new Error('Your session ended. Sign in again.');
@@ -149,13 +94,9 @@ export function useBoardLibrary(
         };
         let response: Response | undefined;
         for (let attempt = 0; attempt < 4; attempt++) {
-          response = await fetch(`/v1/boards/${identity.id}`, {
-            method: 'PUT',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ snapshot: target, revision: identity.revision }),
-          });
+          response = await boardLibraryApi.save(identity.id, target, identity.revision);
           if (response.status !== 409) break;
-          const latest = await fetch(`/v1/boards/${identity.id}`);
+          const latest = await boardLibraryApi.read(identity.id);
           if (latest.status === 404) {
             preserveCopy();
             continue;
@@ -176,11 +117,7 @@ export function useBoardLibrary(
         }
         if (response?.status === 409) {
           preserveCopy();
-          response = await fetch(`/v1/boards/${identity.id}`, {
-            method: 'PUT',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ snapshot: target, revision: 0 }),
-          });
+          response = await boardLibraryApi.save(identity.id, target, 0);
         }
         if (!response) throw new Error('Could not save this board.');
         if (!response.ok) {
@@ -236,7 +173,7 @@ export function useBoardLibrary(
             return;
           if (list.find((entry) => entry.id === identity.id)?.revision === identity.revision)
             return;
-          const response = await fetch(`/v1/boards/${identity.id}`);
+          const response = await boardLibraryApi.read(identity.id);
           if (
             disposed ||
             identity !== active.current ||
@@ -321,7 +258,7 @@ export function useBoardLibrary(
         await save();
         const entry = id
           ? await (async () => {
-              const response = await fetch(`/v1/boards/${id}`);
+              const response = await boardLibraryApi.read(id);
               if (!response.ok) throw new Error('Could not open this board.');
               return Entry.parse(await response.json());
             })()
@@ -384,15 +321,11 @@ export function useBoardLibrary(
     try {
       await save();
       const isActive = entry?.id === active.current.id;
-      const response = await fetch(action === 'create' ? '/v1/boards' : `/v1/boards/${entry!.id}`, {
-        method: action === 'create' ? 'POST' : action === 'delete' ? 'DELETE' : 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          ...(action === 'delete' ? {} : action === 'share' ? { visibility } : { title }),
-          ...(action === 'create'
-            ? {}
-            : { revision: isActive ? active.current.revision : entry!.revision }),
-        }),
+      const response = await boardLibraryApi.manage(action, entry?.id, {
+        ...(action === 'delete' ? {} : action === 'share' ? { visibility } : { title }),
+        ...(action === 'create'
+          ? {}
+          : { revision: isActive ? active.current.revision : entry!.revision }),
       });
       if (!response.ok)
         throw new Error((await response.json()).message ?? 'Board operation failed.');

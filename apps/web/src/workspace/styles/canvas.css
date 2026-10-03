@@ -1,0 +1,519 @@
+/* ── Canvas (diagram rules below are intentionally unchanged) ─────────── */
+.blueprint {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse at 30% 30%,
+    var(--bp-bg-1) 0,
+    var(--bp-bg-2) 55%,
+    var(--bp-bg-3) 100%
+  );
+  transition: background 300ms ease;
+}
+
+/* ── Canvas overlays ──────────────────────────────────────────────────── */
+.blueprint {
+  --focus: var(--bp-gold);
+  container-type: inline-size;
+}
+/* The big picture: a glass card over the canvas that tucks into a pill once the reader starts
+   working, and unfolds again on request. */
+.canvas-heading {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: min(520px, 55%);
+  padding: 12px 18px 16px 12px;
+  color: var(--bp-ink);
+  background: rgb(var(--bp-shade) / 0.5);
+  border: 1px solid var(--bp-line);
+  border-radius: 18px;
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 12px 32px rgb(var(--bp-shade) / 0.3);
+  transform-origin: top left;
+  animation: heading-in 380ms var(--ease-out) both;
+}
+.canvas-heading.is-collapsed {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 40px);
+  padding: 4px;
+  border-radius: 999px;
+  animation-name: heading-tuck;
+}
+.canvas-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--bp-ink-2);
+  border-radius: 999px;
+}
+.canvas-kicker:hover:not(:disabled) {
+  color: var(--bp-ink);
+  background: var(--bp-panel-hover);
+}
+.kicker-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bp-gold);
+  box-shadow: 0 0 0 3px rgb(232 212 163 / 0.18);
+}
+.kicker-title {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0;
+  color: var(--bp-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.is-collapsed .kicker-title {
+  display: block;
+  max-width: 280px;
+  animation: player-fade-in 260ms var(--ease-out) both;
+}
+.canvas-kicker .chevron {
+  flex-shrink: 0;
+  transition: transform 260ms var(--ease-out);
+}
+.is-collapsed .canvas-kicker .chevron {
+  transform: rotate(180deg);
+}
+.canvas-heading-body {
+  padding-left: 8px;
+  animation: heading-unfold 420ms var(--ease-out) both;
+}
+.is-collapsed .canvas-heading-body {
+  display: none;
+}
+.canvas-heading h2 {
+  margin: 8px 0 6px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.canvas-heading p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--bp-ink-2);
+}
+@keyframes heading-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes heading-tuck {
+  from {
+    opacity: 0.4;
+    transform: scale(0.94);
+  }
+}
+@keyframes heading-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 -20px 0);
+  }
+}
+.canvas-tools,
+.next-steps-toggle,
+.next-steps-panel {
+  background: var(--bp-panel);
+  border: 1px solid var(--bp-line);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.canvas-tools {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  /* Above the welcome screen and composer, so the colour panel is never covered. */
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  color: var(--bp-ink);
+  box-shadow: 0 6px 20px rgb(var(--bp-shade) / 0.3);
+}
+.canvas-tools button {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+}
+.canvas-tools button:hover:not(:disabled) {
+  background: var(--bp-panel-hover);
+}
+.canvas-tools > span {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--bp-line);
+}
+.canvas-welcome {
+  position: absolute;
+  top: 76px;
+  bottom: 190px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  width: 460px;
+  max-width: calc(100% - 48px);
+  overflow-y: auto;
+  color: var(--bp-ink);
+}
+.node-command {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 8px;
+  padding: 4px 8px;
+  color: var(--bp-gold);
+  background: rgb(var(--bp-shade) / 0.48);
+  border: 1px solid var(--bp-line);
+  border-radius: 6px;
+  font: 12px / 16px var(--font-mono);
+  text-align: center;
+}
+.terminal-details {
+  margin: 20px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.terminal-command {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.terminal-command svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.terminal-command code {
+  font: 12px / 1.6 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.terminal-environment,
+.terminal-explanation-note {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.terminal-streams > div {
+  margin: 12px 0;
+}
+.terminal-streams dt,
+.terminal-details h3,
+.terminal-issue h4 {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.terminal-streams dd {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+}
+.terminal-details h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 20px 0 8px;
+}
+.terminal-details > p,
+.terminal-issue p {
+  color: var(--ink-2);
+}
+.terminal-issue {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.terminal-issue summary {
+  display: list-item;
+  margin-left: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.terminal-issue h4 {
+  margin: 12px 0 4px;
+}
+.terminal-issue p {
+  margin: 8px 0;
+}
+.welcome-identity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.welcome-mark {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgb(232 212 163 / 0.22),
+    0 8px 24px rgb(var(--bp-shade) / 0.18);
+}
+.welcome-wordmark {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.055em;
+}
+.welcome-wordmark > span {
+  color: var(--bp-gold);
+}
+.canvas-welcome h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  text-align: center;
+}
+.welcome-description {
+  margin: 10px 0 32px;
+  color: var(--bp-ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+.canvas-welcome h3 {
+  margin: 0 0 12px;
+  color: var(--bp-gold);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.canvas-welcome ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--bp-line);
+}
+.canvas-welcome li {
+  border-bottom: 1px solid var(--bp-line);
+}
+.canvas-welcome li button {
+  width: 100%;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  font-size: 14px;
+  text-align: left;
+  color: var(--bp-ink-2);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  transition: color 150ms ease;
+}
+.canvas-welcome li button svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transform: translate(-4px, 4px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.canvas-welcome li button:hover:not(:disabled),
+.canvas-welcome li button:focus-visible {
+  color: var(--bp-ink);
+  background: none;
+}
+.canvas-welcome li button:hover:not(:disabled) svg,
+.canvas-welcome li button:focus-visible svg {
+  opacity: 1;
+  transform: none;
+  color: var(--bp-gold);
+}
+.canvas-coordinate {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--bp-muted);
+  pointer-events: none;
+}
+.blueprint .react-flow__attribution {
+  bottom: 6px;
+  right: 10px;
+  font-size: 9px;
+  background: transparent;
+}
+.blueprint .react-flow__attribution a {
+  color: var(--bp-muted);
+}
+.blueprint-node {
+  width: 224px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  color: var(--bp-ink);
+  position: relative;
+}
+/* Transparent node bounds must not intercept nearby arrow endpoint drags. */
+.blueprint .react-flow__node-concept {
+  pointer-events: none;
+}
+.blueprint-node .node-symbol,
+.blueprint-node strong {
+  pointer-events: auto;
+}
+.node-symbol {
+  width: 88px;
+  height: 88px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--bp-icon);
+  border-radius: 50%;
+  transition: color 200ms ease;
+}
+.node-symbol > svg {
+  filter: drop-shadow(0 2px 8px rgb(var(--bp-shade)));
+  pointer-events: none;
+}
+.blueprint-node:hover .node-symbol {
+  background: color-mix(in srgb, var(--bp-ink-2) 4%, transparent);
+}
+.blueprint-node.is-selected .node-symbol {
+  background: #e9d39d0d;
+  outline: 1px dashed #e9d39d90;
+  outline-offset: 7px;
+}
+.blueprint-node.is-decision .node-symbol {
+  color: #ffc2a5;
+}
+.branch-count {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font: 9px monospace;
+  color: #e5d1a1;
+  background: var(--bp-deep);
+  border-radius: 8px;
+  padding: 3px;
+}
+.blueprint-node strong {
+  font-size: 14px;
+  font-weight: 500;
+  width: 224px;
+  line-height: 18px;
+  text-align: center;
+  white-space: normal;
+}
+.blueprint-node strong span {
+  display: block;
+}
+.connection-label {
+  cursor: pointer;
+  pointer-events: all;
+}
+.rail-board-actions {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.rail-board-actions .new-board {
+  margin: 0;
+  width: 100%;
+}
+.rail-section summary,
+.rail-bottom summary {
+  cursor: pointer;
+}
+.connection-label text {
+  pointer-events: none;
+}
+.blueprint-node .node-number {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font: 8px monospace;
+  color: var(--bp-muted);
+}
+.node-hint {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8px;
+  color: var(--bp-ink-2);
+  opacity: 0;
+}
+.blueprint-node:hover .node-hint,
+.blueprint-node.is-selected .node-hint {
+  opacity: 1;
+}
+.blueprint-node .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--bp-handle);
+  border: 1.5px solid var(--bp-handle-ring);
+  opacity: 0.65;
+  cursor: crosshair;
+}
+.blueprint-node:hover .react-flow__handle,
+.blueprint-node.is-selected .react-flow__handle {
+  opacity: 1;
+  border-color: #f4dba6;
+  background: var(--bp-panel-hover);
+}
+.blueprint-node .react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+.blueprint .react-flow__edge:hover .react-flow__edge-path {
+  stroke: #f4dba6 !important;
+  stroke-width: 2.5 !important;
+}
+
+@container (max-width: 1120px) {
+  .canvas-coordinate {
+    display: none;
+  }
+}

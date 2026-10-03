@@ -1,4 +1,9 @@
-import { BoardSnapshotSchema, withoutBrokenProcesses, type BoardSnapshot } from '@opsis/schema';
+import {
+  appendBoardHistory,
+  BoardSnapshotSchema,
+  withoutBrokenProcesses,
+  type BoardSnapshot,
+} from '@opsis/schema';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 /** Apply only fields edited locally, preserving unrelated edits from another view. */
@@ -30,7 +35,7 @@ export function mergeBoardSnapshots(
   remote: BoardSnapshot,
 ): BoardSnapshot {
   if (!base || !base.board || !local.board || !remote.board)
-    return { ...local, past: [...local.past, remote.board].slice(-40), future: [] };
+    return { ...local, past: appendBoardHistory(local.past, remote.board), future: [] };
   const mergeItems = <T extends { id: string }>(before: T[], mine: T[], theirs: T[]): T[] => {
     const ids = [...new Set([...theirs.map((item) => item.id), ...mine.map((item) => item.id)])];
     return ids.flatMap((id) => {
@@ -63,7 +68,7 @@ export function mergeBoardSnapshots(
   }
   return BoardSnapshotSchema.parse({
     board,
-    past: [...local.past, remote.board].slice(-40),
+    past: appendBoardHistory(local.past, remote.board),
     future: [],
   });
 }

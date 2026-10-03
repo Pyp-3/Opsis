@@ -1,48 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { BoardHeader } from './BoardHeader';
+import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
+import { BoardComposer } from './BoardComposer';
+import { IconNode, type DiagramNode } from './IconNode';
+import { ConceptDetails } from './ConceptDetails';
+import { ConnectionDetails } from './ConnectionDetails';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
   ConnectionMode,
-  Handle,
-  MarkerType,
-  Position,
   PanOnScrollMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  type Node,
-  type NodeProps,
   type NodeChange,
 } from '@xyflow/react';
 import {
-  ArrowRight,
   ArrowUpRight,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronRight,
   ChevronUp,
   Copy,
   Eye,
   CircleAlert,
-  Download,
   Expand,
-  FileJson,
-  GitBranch,
-  ImageIcon,
-  LoaderCircle,
   Palette,
   PanelLeft,
   Play,
-  Pencil,
-  SlidersHorizontal,
   Plus,
   Redo2,
-  Search,
-  Square,
-  Trash2,
   Undo2,
-  Upload,
   X,
   ZoomIn,
   ZoomOut,
@@ -53,40 +38,19 @@ import {
   BOARD_MODEL_CHOICES,
   BoardAgentsSchema,
   BoardModelSettingsSchema,
-  BoardEdgeKindSchema,
-  withoutNarration,
-  EDGE_COLORS,
+  patchBoardNode,
   EMAIL_DEMO,
   type BoardGraph,
   type BoardAgent,
   type BoardAttachment,
-  type Illustration,
-  type CustomIcon,
   terminalExampleFor,
-  BoardDocumentSchema,
 } from '@opsis/schema';
-import { TerminalDetails } from './TerminalDetails';
 import { useProcessEngine } from './useProcessEngine';
-import { ProcessSampleEditor } from './ProcessSampleEditor';
-import { calculateProcess, processRequest } from './process-engine';
-import { applyProcessResults } from '@opsis/engine';
-import { boardIcons, iconMotion } from './icons';
-import { NodeIcon } from './NodeIcon';
-import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
-import { AgentLogo } from './AgentLogo';
-import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
-import { boardSvg, boardMarkdown, downloadPng, download } from './export';
-import { ModelControls } from './ModelControls';
-import {
-  connectBoard,
-  edgePorts,
-  PORT_OFFSETS,
-  connectionStyle,
-  EDGE_COLOR_VALUES,
-} from './connections';
-import { MODEL_SETTINGS_KEY, readModelPreferences } from './model-settings';
+import { layoutBoard, NODE_HEIGHT, NODE_WIDTH } from './model';
+import { connectBoard } from './connections';
+import { readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
 import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
@@ -96,7 +60,6 @@ import { ProcessPlayer } from './ProcessPlayer';
 import { applyLook, lookOf } from './canvas-theme';
 import { NextSteps, RETURN_PATHS } from './NextSteps';
 import { BrandMark } from './BrandMark';
-import { IconPicker } from './IconPicker';
 import { BoardsPage } from './BoardsPage';
 import { HomePage } from './HomePage';
 import { AccountPage } from './AccountPage';
@@ -105,116 +68,11 @@ import { CanvasSettingsPage } from './CanvasSettingsPage';
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
 import { AppSidebar, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
-import { routeBoard } from './routing';
 import { RoutedConnection } from './RoutedConnection';
-import { AttachButton, AttachmentChips } from './Attachments';
-import { wrapLabel, ROW_GAP, nodeHeight } from './geometry';
+import { ROW_GAP, nodeHeight } from './geometry';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
-type DiagramNode = Node<{
-  label: string;
-  icon: keyof typeof boardIcons;
-  customIcon: CustomIcon | undefined;
-  kind: string;
-  number: number;
-  outgoing: number;
-  confidence: string | undefined;
-  illustration: Illustration | undefined;
-  command: string | undefined;
-  sample: { input: number; output: number } | undefined;
-  /** Where playback is: on this object, past it, or not playing (or not reached). */
-  stage: 'current' | 'revealed' | null;
-}>;
-
-function IconNode({ data, selected }: NodeProps<DiagramNode>) {
-  const still = usePrefersReducedMotion();
-  // During playback an illustrated icon evolves into its drawing, which stays once reached.
-  const evolved = data.illustration && data.stage;
-  return (
-    <div
-      className={`blueprint-node ${selected ? 'is-selected' : ''} ${data.kind === 'decision' ? 'is-decision' : ''}`}
-      // Staggers the entrance so a new board assembles in reading order.
-      style={{ ['--enter-index' as string]: Math.min(data.number - 1, 14) }}
-    >
-      <div
-        className={`node-symbol ${evolved ? 'is-evolved' : ''}`}
-        data-motion={
-          data.stage === 'current' && !evolved
-            ? // A drawn icon draws itself in; library icons move like their subject.
-              data.customIcon
-              ? 'draw'
-              : iconMotion(data.icon)
-            : undefined
-        }
-      >
-        <NodeIcon node={data} className="node-icon" size={48} strokeWidth={1.35} />
-        {data.stage && data.sample && (
-          <span
-            className="process-row-count"
-            aria-label={`${data.sample.input} input lines, ${data.sample.output} output lines`}
-          >
-            {data.sample.input === data.sample.output
-              ? `${data.sample.output} lines`
-              : `${data.sample.input} → ${data.sample.output}`}
-          </span>
-        )}
-        {evolved && (
-          // Remounted on each visit, so the drawing plays from the start every time.
-          <IllustrationView
-            key={data.stage}
-            illustration={data.illustration!}
-            animate={data.stage === 'current' && !still}
-          />
-        )}
-        {(['left', 'right', 'top', 'bottom'] as const).map((side) => (
-          <Handle
-            key={side}
-            id={side}
-            type="source"
-            position={
-              {
-                left: Position.Left,
-                right: Position.Right,
-                top: Position.Top,
-                bottom: Position.Bottom,
-              }[side]
-            }
-            title={`${data.label}: ${side} connection`}
-            style={{
-              left: PORT_OFFSETS[side].x - (NODE_WIDTH - 88) / 2,
-              top: PORT_OFFSETS[side].y,
-              right: 'auto',
-              bottom: 'auto',
-              transform: 'translate(-50%, -50%)',
-            }}
-          />
-        ))}
-        {data.outgoing > 1 && (
-          <span className="branch-count" title={`${data.outgoing} outgoing connections`}>
-            <GitBranch size={10} />
-            {data.outgoing}
-          </span>
-        )}
-      </div>
-      <strong title={data.label}>
-        {wrapLabel(data.label).map((line, i) => (
-          <span key={i}>{line}</span>
-        ))}
-      </strong>
-      {data.command && (
-        <code className="node-command" title={data.command}>
-          {wrapLabel(data.command, 26).map((line, i) => (
-            <span key={i}>{line}</span>
-          ))}
-        </code>
-      )}
-      {data.confidence && data.confidence !== 'normal' && (
-        <span className="confidence-badge">{data.confidence}</span>
-      )}
-    </div>
-  );
-}
 const nodeTypes = { concept: IconNode };
 const edgeTypes = { routed: RoutedConnection };
 
@@ -257,13 +115,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
-  const [playback, setPlayback] = useState<{
-    nodes: Set<string>;
-    edges: Set<string>;
-    nodeId: string | null;
-    edgeId: string | null;
-  } | null>(null);
-  const exportMenu = useRef<HTMLDetailsElement>(null);
+  const [playback, setPlayback] = useState<PlaybackFocus | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
@@ -400,19 +252,6 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
     return () => window.removeEventListener('keydown', handler);
   }, [undo, editing]);
 
-  useEffect(() => {
-    const close = (event: PointerEvent) => {
-      const menu = exportMenu.current;
-      if (menu?.open && !menu.contains(event.target as globalThis.Node)) menu.open = false;
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, []);
-  const exportAs = (content: string, filename: string, type: string) => {
-    download(content, filename, type);
-    if (exportMenu.current) exportMenu.current.open = false;
-  };
-
   async function generate(event?: FormEvent, text = prompt) {
     event?.preventDefault();
     if (!text.trim() || busy) return;
@@ -542,95 +381,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       : (BOARD_MODEL_CHOICES[agent].find((choice) => choice.id === modelPreferences[agent].model)
           ?.label ??
         (modelPreferences[agent].model || 'Choose a model'));
-  const nodes: DiagramNode[] = useMemo(
-    () =>
-      board?.nodes.map((node, index) => ({
-        id: node.id,
-        type: 'concept',
-        position: board.positions[node.id] ?? { x: 0, y: index * 200 },
-        selected: selected === node.id,
-        ...(playback
-          ? {
-              className:
-                playback.nodeId === node.id
-                  ? 'is-current'
-                  : playback.nodes.has(node.id)
-                    ? ''
-                    : 'is-dimmed',
-            }
-          : {}),
-        width: NODE_WIDTH,
-        height: nodeHeight(node),
-        // Supplying the known footprint keeps React Flow from treating every dragged
-        // position update as an unmeasured node, which unmounted all edges for a frame.
-        measured: { width: NODE_WIDTH, height: nodeHeight(node) },
-        ariaLabel: `${node.label}. ${node.summary}`,
-        data: {
-          label: node.label,
-          icon: node.icon,
-          customIcon: node.customIcon,
-          kind: node.kind,
-          number: index + 1,
-          outgoing: board.edges.filter((edge) => edge.source === node.id).length,
-          confidence: node.confidence,
-          illustration: node.illustration,
-          command: node.terminal?.command,
-          sample: process.results.has(node.id)
-            ? {
-                input: process.results.get(node.id)!.inputRows,
-                output: process.results.get(node.id)!.outputRows,
-              }
-            : undefined,
-          stage:
-            playback?.nodeId === node.id
-              ? 'current'
-              : playback?.nodes.has(node.id)
-                ? 'revealed'
-                : null,
-        },
-      })) ?? [],
-    [board, selected, playback, process.results],
-  );
-  const routes = useMemo(() => (board ? routeBoard(board) : {}), [board]);
-  const edges = useMemo(
-    () =>
-      board?.edges.map((edge) => ({
-        ...edge,
-        type: 'routed',
-        data: { route: routes[edge.id]!, current: playback?.edgeId === edge.id },
-        sourceHandle: edgePorts(board, edge).source,
-        targetHandle: edgePorts(board, edge).target,
-        interactionWidth: 24,
-        selected: selectedEdge === edge.id,
-        ...(playback
-          ? {
-              className:
-                playback.edgeId === edge.id
-                  ? 'is-current'
-                  : playback.edges.has(edge.id)
-                    ? ''
-                    : 'is-dimmed',
-            }
-          : {}),
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: connectionStyle(edge).color,
-          width: 22,
-          height: 22,
-        },
-        style: {
-          stroke: selectedEdge === edge.id ? '#ffffff' : connectionStyle(edge).color,
-          strokeWidth: 2,
-          strokeLinecap: 'round' as const,
-          strokeLinejoin: 'round' as const,
-          strokeDasharray: connectionStyle(edge).dash,
-        },
-        labelStyle: { fill: 'var(--bp-ink)', fontSize: 10, fontFamily: 'monospace' },
-        labelBgStyle: { fill: 'var(--bp-deep)', fillOpacity: 0.95 },
-        labelBgPadding: [7, 5] as [number, number],
-      })) ?? [],
-    [board, selectedEdge, routes, playback],
-  );
+  const { nodes, edges } = useBoardDiagram(board, selected, selectedEdge, playback, process);
   const changePositions = (changes: NodeChange<DiagramNode>[]) => {
     if (busy) return;
     setBoard((current) => {
@@ -652,12 +403,10 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         nodes: board.nodes.map((node) =>
           node.id !== activeNode.id
             ? node
-            : 'label' in patch || 'summary' in patch
-              ? withoutNarration({ ...node, ...patch })
-              : 'icon' in patch && (patch.icon !== node.icon || node.customIcon)
-                ? // A new icon replaces the picture, so the drawing of the old one goes.
-                  { ...node, ...patch, customIcon: undefined, illustration: undefined }
-                : { ...node, ...patch },
+            : patchBoardNode(node, patch, {
+                narration: 'label' in patch || 'summary' in patch,
+                drawing: 'icon' in patch && (patch.icon !== node.icon || !!node.customIcon),
+              }),
         ),
       });
   };
@@ -761,88 +510,15 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       {sidebar}
 
       <main className="workspace-main">
-        <header className="workspace-header">
-          <div className="header-breadcrumb">
-            {railToggle}
-            <a
-              href="/boards"
-              className="crumb-root"
-              onClick={(event) => {
-                event.preventDefault();
-                if (!busy) navigate('/boards');
-              }}
-            >
-              Boards
-            </a>
-            <ChevronRight size={14} aria-hidden />
-            <h1>{board?.title ?? 'Untitled canvas'}</h1>
-          </div>
-          <div className="header-actions">
-            <span className={`save-status ${saved.startsWith('Could') ? 'is-warning' : ''}`}>
-              {saved && !saved.startsWith('Could') && <Check size={13} />}
-              {saved}
-            </span>
-            <button
-              className="header-button"
-              title="Import a saved board"
-              aria-label="Import board"
-              disabled={working}
-              onClick={() => importInput.current?.click()}
-            >
-              <Upload size={15} />
-              <span className="button-label">Import</span>
-            </button>
-            <details className="export-menu" ref={exportMenu}>
-              <summary>
-                <Download size={15} /> Export <ChevronDown className="chevron" size={14} />
-              </summary>
-              <div className="export-menu-panel">
-                <button
-                  disabled={!board}
-                  onClick={() =>
-                    board && exportAs(boardMarkdown(board), 'opsis-notes.md', 'text/markdown')
-                  }
-                >
-                  Markdown notes
-                </button>
-                <button
-                  disabled={!board}
-                  onClick={() => {
-                    if (board) void downloadPng(board).catch((e: Error) => setError(e.message));
-                    if (exportMenu.current) exportMenu.current.open = false;
-                  }}
-                >
-                  PNG image
-                </button>
-                <button
-                  disabled={!board}
-                  onClick={() =>
-                    board &&
-                    exportAs(JSON.stringify(board, null, 2), 'opsis-board.json', 'application/json')
-                  }
-                >
-                  <FileJson size={16} />
-                  <span>
-                    <strong>Editable board</strong>
-                    <small>.json · import it again later</small>
-                  </span>
-                </button>
-                <button
-                  disabled={!board}
-                  onClick={() =>
-                    board && exportAs(boardSvg(board), 'opsis-diagram.svg', 'image/svg+xml')
-                  }
-                >
-                  <ImageIcon size={16} />
-                  <span>
-                    <strong>Diagram image</strong>
-                    <small>.svg · for slides and documents</small>
-                  </span>
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
+        <BoardHeader
+          board={board}
+          busy={busy}
+          working={working}
+          saved={saved}
+          railToggle={railToggle}
+          onImport={() => importInput.current?.click()}
+          setError={setError}
+        />
         <input
           ref={importInput}
           type="file"
@@ -1220,154 +896,30 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                       }}
                     />
                   )}
-                  <form
-                    className={`composer ${busy ? 'is-busy' : ''}`}
-                    onSubmit={(event) => void generate(event)}
-                  >
-                    {agent !== 'demo' && (
-                      <AttachmentChips
-                        attachments={attachments}
-                        disabled={busy}
-                        onChange={setAttachments}
-                      />
-                    )}
-                    <div className="composer-input">
-                      <label className="sr-only" htmlFor="visual-prompt">
-                        What would you like to understand?
-                      </label>
-                      <textarea
-                        ref={promptInput}
-                        id="visual-prompt"
-                        value={prompt}
-                        maxLength={4000}
-                        rows={2}
-                        placeholder={
-                          board
-                            ? 'Ask a follow-up, or change something on the canvas…'
-                            : 'What would you like to understand?'
-                        }
-                        disabled={busy}
-                        onChange={(event) => setPrompt(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            void generate();
-                          }
-                        }}
-                      />
-                      {agent !== 'demo' && (
-                        <AttachButton
-                          attachments={attachments}
-                          disabled={busy}
-                          onChange={setAttachments}
-                          onError={setError}
-                        />
-                      )}
-                      {generation.busy ? (
-                        <button
-                          key="cancel-generation"
-                          className="send-prompt"
-                          type="button"
-                          aria-label="Cancel generation"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            generation.cancel();
-                          }}
-                        >
-                          <Square size={14} fill="currentColor" />
-                        </button>
-                      ) : (
-                        <button
-                          key="submit-generation"
-                          className="send-prompt"
-                          type="submit"
-                          aria-label="Generate diagram"
-                          disabled={
-                            busy ||
-                            !prompt.trim() ||
-                            (!localTerminalExample &&
-                              agent !== 'demo' &&
-                              status?.available === false)
-                          }
-                        >
-                          <ArrowUp size={19} />
-                        </button>
-                      )}
-                    </div>
-                    {agent !== 'demo' && settingsOpen && (
-                      <div className="model-settings" id="model-settings">
-                        <ModelControls
-                          agent={agent}
-                          value={modelPreferences[agent]}
-                          disabled={busy}
-                          onChange={(value) => {
-                            const next = { ...modelPreferences, [agent]: value };
-                            setModelPreferences(next);
-                            try {
-                              localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(next));
-                            } catch {
-                              setError(
-                                'Model settings apply to this session, but could not be saved on this device.',
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-                    )}
-                    <div className="composer-footer">
-                      <label className="agent-picker">
-                        <AgentLogo agent={agent} />
-                        <span className="sr-only">Agent</span>
-                        <select
-                          aria-label="Agent"
-                          value={agent}
-                          disabled={busy}
-                          onChange={(event) => setAgent(event.target.value as BoardAgent)}
-                        >
-                          <option value="claude">Claude</option>
-                          <option value="codex">Codex</option>
-                          <option value="demo">Demo · built-in examples</option>
-                        </select>
-                      </label>
-                      {agent !== 'demo' && (
-                        <button
-                          type="button"
-                          className="model-toggle"
-                          aria-expanded={settingsOpen}
-                          aria-controls="model-settings"
-                          aria-label={`Model settings: ${modelLabel}`}
-                          onClick={() => setSettingsOpen(!settingsOpen)}
-                        >
-                          <SlidersHorizontal size={13} />
-                          <span className="model-toggle-label">Model: {modelLabel}</span>
-                          <ChevronDown className="chevron" size={13} />
-                        </button>
-                      )}
-                      <span className="agent-status" role="status">
-                        {generation.busy ? (
-                          <>
-                            <LoaderCircle className="spin" size={13} /> Working
-                          </>
-                        ) : agent === 'demo' ? (
-                          'Sample content · no agent calls'
-                        ) : localTerminalExample ? (
-                          'Local terminal example · no agent call'
-                        ) : (
-                          connectionError || status?.detail || 'Checking local agent…'
-                        )}
-                      </span>
-                      {selected && (
-                        <button
-                          type="button"
-                          className="selection-pill"
-                          aria-label="Clear selected step"
-                          onClick={() => setSelected(null)}
-                        >
-                          1 step selected <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </form>
+                  <BoardComposer
+                    board={board}
+                    agent={agent}
+                    busy={busy}
+                    attachments={attachments}
+                    prompt={prompt}
+                    promptInput={promptInput}
+                    selected={selected}
+                    settingsOpen={settingsOpen}
+                    modelPreferences={modelPreferences}
+                    modelLabel={modelLabel}
+                    localTerminalExample={localTerminalExample}
+                    connectionError={connectionError}
+                    status={status}
+                    generation={generation}
+                    generate={generate}
+                    setAttachments={setAttachments}
+                    setPrompt={setPrompt}
+                    setError={setError}
+                    setModelPreferences={setModelPreferences}
+                    setAgent={setAgent}
+                    setSettingsOpen={setSettingsOpen}
+                    setSelected={setSelected}
+                  />
                   {!busy && (
                     <p className="composer-hint">
                       <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
@@ -1378,350 +930,32 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
             </div>
           </section>
           {activeNode && board && (
-            <aside
+            <ConceptDetails
               key={activeNode.id}
-              className="detail-panel"
-              aria-label={`Details for ${activeNode.label}`}
-            >
-              <div className="detail-top">
-                <span className="eyebrow">
-                  <SlidersHorizontal size={13} /> Concept details
-                </span>
-                <button aria-label="Close details" onClick={() => setSelected(null)}>
-                  <X size={17} />
-                </button>
-              </div>
-              <div className="detail-body">
-                {activeNode.confidence && activeNode.confidence !== 'normal' && (
-                  <p className="node-caveat">
-                    <strong>{activeNode.confidence}</strong>:{' '}
-                    {activeNode.caveat || 'This concept needs independent verification.'}
-                  </p>
-                )}
-                <div className="detail-hero">
-                  <div className="detail-icon">
-                    <NodeIcon node={activeNode} size={28} strokeWidth={1.6} />
-                  </div>
-                  <div>
-                    <span
-                      className={`kind-tag ${activeNode.kind === 'decision' ? 'is-decision' : ''}`}
-                    >
-                      {activeNode.kind === 'decision' ? 'Decision' : 'Concept'}
-                      <span>{String(board.nodes.indexOf(activeNode) + 1).padStart(2, '0')}</span>
-                    </span>
-                    <h2>{activeNode.label}</h2>
-                  </div>
-                </div>
-                {activeNode.terminal ? (
-                  <TerminalDetails
-                    step={activeNode.terminal}
-                    {...(activeNode.process
-                      ? {
-                          calculation: process,
-                          result: process.results.get(activeNode.id),
-                          failure: process.failures.get(activeNode.id),
-                        }
-                      : {})}
-                  />
-                ) : (
-                  <>
-                    <p className="detail-summary">{activeNode.summary}</p>
-                    <section className="detail-section">
-                      <h3>How it works</h3>
-                      <p className="detail-explanation">{activeNode.explanation}</p>
-                    </section>
-                  </>
-                )}
-                {activeNode.process?.op === 'source' && (
-                  <ProcessSampleEditor
-                    key={activeNode.process.text}
-                    text={activeNode.process.text}
-                    disabled={busy}
-                    onUpdate={async (text) => {
-                      const current = board;
-                      setArranging(true);
-                      try {
-                        const parsed = BoardDocumentSchema.safeParse({
-                          ...current,
-                          nodes: current.nodes.map((node) =>
-                            node.id === activeNode.id
-                              ? { ...node, process: { op: 'source', text } }
-                              : node,
-                          ),
-                        });
-                        if (!parsed.success)
-                          throw new Error(
-                            parsed.error.issues[0]?.message ?? 'Use a smaller sample.',
-                          );
-                        const result = await calculateProcess(processRequest(parsed.data));
-                        const failure = result.nodes.find((node) => node.status === 'failed');
-                        if (failure) {
-                          const label = current.nodes.find((node) => node.id === failure.id)?.label;
-                          throw new Error(
-                            label ? `${label}: ${failure.error.message}` : failure.error.message,
-                          );
-                        }
-                        if (boardRef.current === current)
-                          commit(applyProcessResults(parsed.data, result));
-                      } finally {
-                        setArranging(false);
-                      }
-                    }}
-                  />
-                )}
-                <section className="detail-section" aria-label="Connected concepts">
-                  {(() => {
-                    const links = board.edges.filter(
-                      (edge) => edge.source === activeNode.id || edge.target === activeNode.id,
-                    );
-                    return (
-                      <>
-                        <h3>
-                          Connections{' '}
-                          <span>
-                            {links.length} {links.length === 1 ? 'path' : 'paths'}
-                          </span>
-                        </h3>
-                        <div className="connection-list">
-                          {links.map((edge) => {
-                            const outgoing = edge.source === activeNode.id;
-                            const neighbor = board.nodes.find(
-                              (node) => node.id === (outgoing ? edge.target : edge.source),
-                            );
-                            if (!neighbor) return null;
-                            return (
-                              <button key={edge.id} onClick={() => selectNode(neighbor.id)}>
-                                <ArrowRight
-                                  size={15}
-                                  className={outgoing ? '' : 'incoming-arrow'}
-                                />
-                                <span>
-                                  {neighbor.label}
-                                  <small>
-                                    {outgoing ? 'Leads to' : 'Comes from'}
-                                    {edge.label ? ` · ${edge.label}` : ''}
-                                  </small>
-                                </span>
-                                <ChevronRight size={14} />
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {!links.length && (
-                          <p className="detail-note">
-                            Drag a dot on this icon to another concept to connect them.
-                          </p>
-                        )}
-                      </>
-                    );
-                  })()}
-                </section>
-                <button
-                  className="expand-concept"
-                  disabled={busy}
-                  onClick={() => {
-                    setPrompt(
-                      `Expand “${activeNode.label}” into its substeps while keeping the rest of the diagram`,
-                    );
-                    promptInput.current?.focus();
-                  }}
-                >
-                  <GitBranch size={15} /> Explore this step <ArrowRight size={15} />
-                </button>
-                <details className="edit-concept">
-                  <summary>
-                    <Pencil size={14} /> Edit this concept <ChevronRight size={14} />
-                  </summary>
-                  <fieldset disabled={busy}>
-                    <label>
-                      Label
-                      <input
-                        key={`${activeNode.id}-label-${activeNode.label}`}
-                        defaultValue={activeNode.label}
-                        maxLength={80}
-                        onBlur={(event) => {
-                          const label = event.target.value.trim();
-                          if (label && label !== activeNode.label) editNode({ label });
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Summary
-                      <textarea
-                        key={`${activeNode.id}-summary-${activeNode.summary}`}
-                        defaultValue={activeNode.summary}
-                        maxLength={400}
-                        onBlur={(event) => {
-                          const summary = event.target.value.trim();
-                          if (summary && summary !== activeNode.summary) editNode({ summary });
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Explanation
-                      <textarea
-                        key={`${activeNode.id}-explanation-${activeNode.explanation}`}
-                        defaultValue={activeNode.explanation}
-                        maxLength={3000}
-                        onBlur={(event) => {
-                          const explanation = event.target.value.trim();
-                          if (explanation && explanation !== activeNode.explanation)
-                            editNode({ explanation });
-                        }}
-                      />
-                    </label>
-                    <div className="fieldset-actions">
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        aria-expanded={showIcons}
-                        onClick={() => setShowIcons(!showIcons)}
-                      >
-                        <Search size={14} /> Change icon
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-concept"
-                        disabled={busy}
-                        onClick={() => {
-                          commit(removeNode(board, activeNode.id));
-                          setSelected(null);
-                        }}
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </div>
-                    {showIcons && (
-                      <IconPicker
-                        value={activeNode.icon}
-                        custom={activeNode.customIcon}
-                        onPick={(icon) => {
-                          editNode({ icon });
-                          setShowIcons(false);
-                        }}
-                      />
-                    )}
-                  </fieldset>
-                </details>
-                {!activeNode.terminal && (
-                  <p className="detail-note">
-                    {board.agent === 'demo'
-                      ? 'Curated example.'
-                      : `Generated with ${board.agent === 'claude' ? 'Claude' : 'Codex'}.`}{' '}
-                    A simplified explanation — ask your agent to check anything uncertain.
-                  </p>
-                )}
-              </div>
-            </aside>
+              board={board}
+              boardRef={boardRef}
+              activeNode={activeNode}
+              process={process}
+              busy={busy}
+              showIcons={showIcons}
+              promptInput={promptInput}
+              commit={commit}
+              editNode={editNode}
+              selectNode={selectNode}
+              setSelected={setSelected}
+              setPrompt={setPrompt}
+              setShowIcons={setShowIcons}
+              setArranging={setArranging}
+            />
           )}
           {activeEdge && board && (
-            <aside className="detail-panel" aria-label="Connection details">
-              <div className="detail-top">
-                <span className="eyebrow">
-                  <ArrowRight size={13} /> Connection
-                </span>
-                <button aria-label="Close details" onClick={() => setSelectedEdge(null)}>
-                  <X size={17} />
-                </button>
-              </div>
-              <div className="detail-body">
-                <h2>{activeEdge.label || 'Connection'}</h2>
-                <p className="detail-summary">
-                  {board.nodes.find((node) => node.id === activeEdge.source)?.label ?? 'Start'} →{' '}
-                  {board.nodes.find((node) => node.id === activeEdge.target)?.label ?? 'End'}
-                </p>
-                <section className="detail-section">
-                  <label>
-                    Connection type
-                    <select
-                      value={activeEdge.kind ?? 'flow'}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const kind = BoardEdgeKindSchema.parse(event.target.value);
-                        commit({
-                          ...board,
-                          edges: board.edges.map((edge) =>
-                            edge.id === activeEdge.id ? withoutNarration({ ...edge, kind }) : edge,
-                          ),
-                        });
-                      }}
-                    >
-                      {BoardEdgeKindSchema.options.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {kind}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <fieldset className="color-picker" disabled={busy}>
-                    <legend>Arrow colour</legend>
-                    {([undefined, ...EDGE_COLORS] as const).map((color) => (
-                      <button
-                        type="button"
-                        key={color ?? 'auto'}
-                        className={color ? '' : 'is-auto'}
-                        aria-pressed={activeEdge.color === color}
-                        aria-label={color ? `${color} arrow` : 'Automatic colour (by type)'}
-                        title={color ?? 'By type'}
-                        style={{
-                          ['--swatch' as string]: color
-                            ? EDGE_COLOR_VALUES[color]
-                            : connectionStyle({ ...activeEdge, color: undefined }).color,
-                        }}
-                        onClick={() =>
-                          commit({
-                            ...board,
-                            edges: board.edges.map((edge) => {
-                              if (edge.id !== activeEdge.id) return edge;
-                              const next: typeof edge = { ...edge };
-                              if (color) next.color = color;
-                              else delete next.color;
-                              return next;
-                            }),
-                          })
-                        }
-                      >
-                        {!color && 'Auto'}
-                      </button>
-                    ))}
-                  </fieldset>
-                  <label>
-                    Relationship
-                    <input
-                      key={activeEdge.id}
-                      defaultValue={activeEdge.label}
-                      disabled={busy}
-                      maxLength={100}
-                      placeholder="e.g. sends, becomes, causes"
-                      onBlur={(event) => {
-                        if (event.target.value !== activeEdge.label)
-                          commit({
-                            ...board,
-                            edges: board.edges.map((edge) =>
-                              edge.id === activeEdge.id
-                                ? withoutNarration({ ...edge, label: event.target.value })
-                                : edge,
-                            ),
-                          });
-                      }}
-                    />
-                  </label>
-                </section>
-                <button
-                  className="delete-concept"
-                  disabled={busy}
-                  onClick={() => {
-                    commit({
-                      ...board,
-                      edges: board.edges.filter((edge) => edge.id !== activeEdge.id),
-                    });
-                    setSelectedEdge(null);
-                  }}
-                >
-                  <Trash2 size={14} /> Remove connection
-                </button>
-              </div>
-            </aside>
+            <ConnectionDetails
+              board={board}
+              activeEdge={activeEdge}
+              busy={busy}
+              commit={commit}
+              onClose={() => setSelectedEdge(null)}
+            />
           )}
         </div>
       </main>

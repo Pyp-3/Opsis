@@ -1,0 +1,478 @@
+/* ── Composer ─────────────────────────────────────────────────────────── */
+.composer-wrap {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100% - 96px));
+  z-index: 5;
+}
+/* The player gives its timeline the full width of the dock, so it may use more of the canvas. */
+.composer-wrap {
+  transition: width 320ms var(--ease-out);
+}
+@media (min-width: 1101px) {
+  .composer-wrap:has(.process-player) {
+    width: min(920px, calc(100% - 96px));
+  }
+}
+.process-player {
+  container-type: inline-size;
+}
+@container (max-width: 720px) {
+  .player-controls .player-narrator span,
+  .player-controls .player-illustrate span {
+    display: none;
+  }
+  .player-controls .player-narrator,
+  .player-controls .player-illustrate {
+    width: var(--control);
+    padding: 0;
+  }
+}
+.next-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.next-steps-toggle {
+  gap: 6px;
+  padding: 5px 10px 5px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--bp-ink);
+  border-radius: 999px;
+}
+.next-steps-toggle:hover:not(:disabled) {
+  background: var(--bp-panel-hover);
+}
+.next-steps-toggle .chevron {
+  transition: transform 150ms ease;
+}
+.next-steps-toggle[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+.next-steps-count {
+  min-width: 18px;
+  padding: 0 5px;
+  font: 600 11px/18px var(--font-mono);
+  color: #1f3440;
+  text-align: center;
+  background: var(--bp-gold);
+  border-radius: 999px;
+}
+.next-steps-panel {
+  width: min(420px, 100%);
+  max-height: min(240px, 40vh);
+  overflow-y: auto;
+  padding: 6px;
+  background: rgb(var(--bp-shade) / 0.9);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.next-steps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 6px 10px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-ink-2);
+}
+.next-steps-head button {
+  width: 26px;
+  height: 26px;
+  color: var(--bp-ink-2);
+  border-radius: 50%;
+}
+.next-steps-head button:hover:not(:disabled) {
+  color: var(--bp-ink);
+  background: var(--bp-panel-hover);
+}
+.next-steps-panel ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.next-steps-panel li button {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--bp-ink);
+  border-radius: var(--radius);
+}
+.next-steps-panel li button:hover:not(:disabled) {
+  background: var(--bp-panel-hover);
+}
+.workspace-error {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 10px 10px 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--error-ink);
+  background: var(--error-bg);
+  border: 1px solid rgb(176 100 63 / 0.35);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.workspace-error > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.workspace-error button {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 3px;
+}
+/* The composer and the player share one partially glass surface and dock in the same way. */
+.composer,
+.player-controls {
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 38%), var(--glass);
+  border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-sheen),
+    var(--shadow-lg);
+}
+.composer {
+  border-radius: 18px;
+  transition:
+    box-shadow 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+  animation: dock-in 360ms var(--ease-out) both;
+}
+.composer:focus-within {
+  box-shadow:
+    inset 0 1px 0 var(--glass-sheen),
+    var(--shadow-lg),
+    0 0 0 3px rgb(232 212 163 / 0.5);
+}
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+.composer-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 12px 8px 16px;
+}
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  max-height: 168px;
+  field-sizing: content;
+  min-height: 48px;
+  padding: 4px 0;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+.composer textarea::placeholder {
+  color: var(--ink-3);
+}
+.attach-document {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--ink-3);
+  background: transparent;
+  border-radius: 10px;
+}
+.attach-document:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--sunken);
+}
+.attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px 0;
+  list-style: none;
+}
+.attachment-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 8px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  animation: chip-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.attachment-size {
+  color: var(--ink-3);
+}
+.attachment-chips button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3);
+  border-radius: 5px;
+}
+.attachment-chips button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--line);
+}
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-caption-body,
+  .process-player .process-data,
+  .process-player,
+  .composer,
+  .canvas-heading,
+  .canvas-heading-body,
+  .kicker-title {
+    animation: none;
+  }
+  .player-track-fill,
+  .player-track-thumb,
+  .player-controls button {
+    transition: none;
+  }
+  .attachment-chips li {
+    animation: none;
+  }
+}
+.send-prompt {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: 10px;
+}
+.send-prompt:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.send-prompt:disabled {
+  opacity: 1;
+  color: var(--ink-3);
+  background: var(--sunken);
+}
+.composer.is-busy .send-prompt {
+  color: #fff;
+  background: var(--danger);
+}
+.composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px 8px 10px;
+}
+.agent-picker,
+.model-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.agent-picker:hover,
+.model-toggle:hover:not(:disabled) {
+  background: var(--hover);
+}
+.agent-picker:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.agent-picker select {
+  max-width: 170px;
+  padding-right: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+.agent-picker select option {
+  color: var(--ink);
+  background: var(--surface);
+}
+.agent-logo {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.agent-logo-claude {
+  background: #c27052;
+  mask: url('/agents/claude.svg') center / contain no-repeat;
+}
+.agent-logo-codex {
+  background: var(--ink);
+  mask: url('/agents/openai.svg') center / contain no-repeat;
+}
+.model-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.model-toggle {
+  min-width: 0;
+  max-width: 280px;
+}
+.model-toggle[aria-expanded='true'] {
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.model-toggle .chevron {
+  transition: transform 150ms ease;
+}
+.model-toggle[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+.agent-indicator {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgb(95 138 76 / 0.18);
+}
+.agent-indicator.offline {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgb(176 100 63 / 0.18);
+}
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-left: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.selection-pill {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 4px 6px 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+.model-settings {
+  margin: 0 10px 8px;
+  padding: 12px;
+  background: var(--sunken);
+  border-radius: var(--radius);
+}
+.model-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+.model-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.model-controls select,
+.model-controls input {
+  height: 32px;
+  min-width: 170px;
+  max-width: 220px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+.model-controls select:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.model-usage-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.model-identity {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.model-identity code {
+  margin-left: 4px;
+  color: var(--ink-2);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.model-alias-note {
+  display: block;
+  margin-top: 3px;
+}
+.composer-hint {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--bp-ink-2);
+}
+.composer-hint kbd {
+  padding: 1px 5px;
+  font: 500 10px var(--font-mono);
+  color: var(--bp-ink);
+  background: rgb(var(--bp-shade) / 0.7);
+  border: 1px solid var(--bp-line);
+  border-radius: 4px;
+}

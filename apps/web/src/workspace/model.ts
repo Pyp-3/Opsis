@@ -3,7 +3,6 @@ import {
   type BoardDocument,
   type BoardGraph,
   type BoardAgent,
-  withoutBrokenProcesses,
 } from '@opsis/schema';
 import { populateProcess } from './process-engine';
 
@@ -187,13 +186,4 @@ export function restoreBoard(): BoardDocument | null {
   return BoardDocumentSchema.parse(JSON.parse(stored));
 }
 
-export function removeNode(board: BoardDocument, id: string): BoardDocument {
-  const positions = { ...board.positions };
-  delete positions[id];
-  return {
-    ...board,
-    nodes: withoutBrokenProcesses(board.nodes.filter((node) => node.id !== id)),
-    edges: board.edges.filter((edge) => edge.source !== id && edge.target !== id),
-    positions,
-  };
-}
+export { removeBoardNode as removeNode } from '@opsis/schema';

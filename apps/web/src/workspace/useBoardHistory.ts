@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import type { BoardDocument, BoardSnapshot } from '@opsis/schema';
+import {
+  appendBoardHistory,
+  recordBoardEdit,
+  type BoardDocument,
+  type BoardSnapshot,
+} from '@opsis/schema';
 
 export function useBoardHistory(initial: BoardSnapshot) {
   const [snapshot, setSnapshot] = useState(initial);
@@ -22,7 +27,7 @@ export function useBoardHistory(initial: BoardSnapshot) {
         replace(current);
         return;
       }
-      replace({ board: next, past: [...current.past.slice(-39), before], future: [] });
+      replace(recordBoardEdit(current, next, before));
     },
     [replace],
   );
@@ -63,8 +68,10 @@ export function useBoardHistory(initial: BoardSnapshot) {
       if (!stack.length) return;
       replace({
         board: stack[stack.length - 1] ?? null,
-        past: redo ? [...current.past.slice(-39), current.board] : current.past.slice(0, -1),
-        future: redo ? current.future.slice(0, -1) : [...current.future.slice(-39), current.board],
+        past: redo ? appendBoardHistory(current.past, current.board) : current.past.slice(0, -1),
+        future: redo
+          ? current.future.slice(0, -1)
+          : appendBoardHistory(current.future, current.board),
       });
     },
     [replace],
