@@ -1,7 +1,6 @@
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LLMClient } from '@opsis/parse';
 import { HarnessError } from './errors.js';
 import { readHarnessConfig } from './config.js';
 import {
@@ -47,7 +46,7 @@ export type CreateHarnessOptions = {
 export async function createHarnessLLMClient(
   env: Readonly<Record<string, string | undefined>> = process.env,
   options: CreateHarnessOptions = {},
-): Promise<LLMClient | null> {
+): Promise<HarnessLLMClient | null> {
   const config = readHarnessConfig(env);
   if (!config) return null;
   const runner = options.runner ?? new SpawnProcessRunner();

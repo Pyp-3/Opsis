@@ -30,7 +30,7 @@ describe('2D board API', () => {
       return output;
     });
     const factory = vi.fn(async () => ({ model: 'test', complete }));
-    const app = buildApp({ databasePath: ':memory:', llm: null, boardClientFactory: factory });
+    const app = buildApp({ databasePath: ':memory:', boardClientFactory: factory });
     void signIn(app);
     apps.push(app);
     return { app, complete, factory };

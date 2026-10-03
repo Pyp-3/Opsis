@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 function start() {
-  const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1_000 });
+  const app = buildApp({ databasePath: ':memory:', rateLimit: 1_000 });
   apps.push(app);
   return app;
 }
@@ -173,13 +173,17 @@ describe('owned and shared boards', () => {
       old.exec(`CREATE TABLE boards_v2 (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, snapshot TEXT NOT NULL,
         revision INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      // Retiring the pipeline must not remove its historical records.
+      old.exec(`CREATE TABLE osg_documents (
+        id TEXT PRIMARY KEY, document TEXT NOT NULL, updated_at INTEGER NOT NULL);
+        INSERT INTO osg_documents VALUES ('historical', '{"saved":true}', 1)`);
       const legacy = randomUUID();
       old
         .prepare('INSERT INTO boards_v2 VALUES (?,?,?,?,?)')
         .run(legacy, EMAIL_DEMO.title, JSON.stringify(snapshot), 3, Date.now());
       old.close();
 
-      const app = buildApp({ databasePath: path, llm: null, rateLimit: 1_000 });
+      const app = buildApp({ databasePath: path, rateLimit: 1_000 });
       apps.push(app);
       const ada = (await signUp(app, 'ada@example.com')).cookie;
       expect((await app.inject({ url: '/v1/boards', headers: { cookie: ada } })).json()).toEqual([
@@ -189,6 +193,14 @@ describe('owned and shared boards', () => {
       expect((await app.inject({ url: '/v1/boards', headers: { cookie: bob } })).json()).toEqual(
         [],
       );
+      const persisted = new Database(path, { readonly: true });
+      try {
+        expect(persisted.prepare('SELECT * FROM osg_documents').all()).toEqual([
+          { id: 'historical', document: '{"saved":true}', updated_at: 1 },
+        ]);
+      } finally {
+        persisted.close();
+      }
     } finally {
       await Promise.all(apps.splice(0).map((app) => app.close()));
       await rm(directory, { recursive: true, force: true });

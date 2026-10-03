@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { LLMClient, LLMRequest } from '@opsis/parse';
+import type { LLMClient, LLMRequest } from './harness/types.js';
 import {
   BoardGraphSchema,
   BoardRequestSchema,

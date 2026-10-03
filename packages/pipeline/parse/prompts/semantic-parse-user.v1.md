@@ -1,1 +1,0 @@
-<utterance>{{UTTERANCE}}</utterance>

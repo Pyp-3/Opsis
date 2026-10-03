@@ -1,9 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`explain/v1 prompt (PROMPT.md §15) > sends the request and context as data in the user message 1`] = `
-"<request>{"nodeId":"e_tomato","osgId":"20000000-0000-4000-8000-000000000002","level":"explanation","audience":"child"}</request>
-
-<context>
-{"utterance":"A sandwich can contain bread, tomato, ham.","node":{"id":"e_tomato","label":"Tomato","kind":"substance","role":"part","summary":"Tomato adds a juicy vegetable layer to the sandwich."},"facts":["sandwich can contain tomato"],"notes":[],"partsInDiagram":[],"path":["Sandwich"]}
-</context>"
-`;

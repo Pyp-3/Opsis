@@ -2,12 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import type { LLMRequest } from '@opsis/parse';
-import {
-  configuredLLMClientFromEnvironment,
-  llmClientFromEnvironment,
-  llmIdentity,
-} from '../llm.js';
+import type { LLMRequest } from './types.js';
 import { HarnessLLMClient, type HarnessWorkspace } from './client.js';
 import { readHarnessConfig } from './config.js';
 import { extractHarnessResult } from './envelope.js';
@@ -149,9 +144,7 @@ describe('HarnessLLMClient', () => {
       if (provider === 'codex') {
         expect(call?.args.slice(0, 4)).toEqual(['--ask-for-approval', 'never', 'exec', '-']);
       }
-      expect(llmIdentity(client)).toMatch(
-        new RegExp(`^harness:${provider}:audited-model:cli-`, 'u'),
-      );
+      expect(client?.identity).toMatch(new RegExp(`^harness:${provider}:audited-model:cli-`, 'u'));
       expect(client.capabilities).toEqual({ temperature: false, maxOutputTokens: false });
     },
   );
@@ -233,18 +226,7 @@ describe('SpawnProcessRunner supervision', () => {
   });
 });
 
-describe('harness configuration and offline fallback', () => {
-  it('preserves existing HTTP and offline environment modes', async () => {
-    const http = llmClientFromEnvironment({
-      OPSIS_LLM_PROVIDER: 'openai',
-      OPSIS_LLM_MODEL: 'gpt-test',
-      OPSIS_LLM_API_KEY: 'test-key',
-    });
-    expect(llmIdentity(http)).toBe('http:openai:gpt-test');
-    expect(llmClientFromEnvironment({})).toBeNull();
-    expect(await configuredLLMClientFromEnvironment({})).toBeNull();
-  });
-
+describe('harness configuration', () => {
   it('requires an explicit safe model, absolute binary, known provider and bounded timeout', () => {
     expect(() => readHarnessConfig({ OPSIS_LLM_PROVIDER: 'harness:nope' })).toThrowError(
       'harness_config',
@@ -289,7 +271,7 @@ describe('harness configuration and offline fallback', () => {
           }),
         },
       );
-      expect(llmIdentity(client)).toBe(`harness:${provider}:safe-model:cli-${version}`);
+      expect(client?.identity).toBe(`harness:${provider}:safe-model:cli-${version}`);
     },
   );
 
@@ -312,20 +294,5 @@ describe('harness configuration and offline fallback', () => {
         },
       ),
     ).rejects.toThrowError('harness_config');
-  });
-
-  it('disables a missing executable cleanly and emits only a redacted warning', async () => {
-    const warnings: string[] = [];
-    const client = await configuredLLMClientFromEnvironment(
-      {
-        OPSIS_LLM_PROVIDER: 'harness:codex',
-        OPSIS_LLM_MODEL: 'safe-model',
-        OPSIS_HARNESS_BIN: '/definitely/missing/TOP_SECRET_NAME',
-      },
-      { onWarning: (warning) => warnings.push(warning) },
-    );
-    expect(client).toBeNull();
-    expect(warnings).toEqual(['Harness backend disabled (harness_missing); using offline rules.']);
-    expect(warnings.join(' ')).not.toContain('TOP_SECRET_NAME');
   });
 });

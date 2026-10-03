@@ -1,4 +1,3 @@
-import type { LLMRequest } from '@opsis/parse';
 import type { HarnessProgress } from './progress.js';
 
 /** CLI harnesses audited for use as local LLM providers. */
@@ -47,3 +46,18 @@ export type HarnessComplete = (
   files?: readonly HarnessFile[],
   onProgress?: (progress: HarnessProgress) => void,
 ) => Promise<string>;
+
+/** One completion request; callers own parsing and validation. */
+export type LLMRequest = {
+  promptId: string;
+  system: string;
+  user: string;
+  responseFormat: 'json' | 'text';
+  temperature: number;
+  maxOutputTokens: number;
+};
+
+export interface LLMClient {
+  readonly model: string;
+  complete(request: LLMRequest): Promise<string>;
+}

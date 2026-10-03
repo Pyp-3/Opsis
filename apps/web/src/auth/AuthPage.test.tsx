@@ -61,8 +61,10 @@ describe('signing in', () => {
     history.replaceState(null, '', '/canvas?board=abc');
     render(<App />);
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeDefined();
-    expect(location.pathname + location.search).toBe(
-      `/login?next=${encodeURIComponent('/canvas?board=abc')}`,
+    await waitFor(() =>
+      expect(location.pathname + location.search).toBe(
+        `/login?next=${encodeURIComponent('/canvas?board=abc')}`,
+      ),
     );
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong pass' } });

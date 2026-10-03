@@ -21,7 +21,7 @@ function fakeEngine() {
 
 const apps: ReturnType<typeof buildApp>[] = [];
 const start = (speech: SpeechEngine | null) => {
-  const app = buildApp({ databasePath: ':memory:', llm: null, speech, rateLimit: 2 });
+  const app = buildApp({ databasePath: ':memory:', speech, rateLimit: 2 });
   apps.push(app);
   return app;
 };

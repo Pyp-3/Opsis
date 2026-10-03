@@ -49,7 +49,7 @@ async function account(name: string) {
 }
 
 beforeEach(async () => {
-  app = buildApp({ databasePath: ':memory:', llm: null });
+  app = buildApp({ databasePath: ':memory:' });
   const { key } = await account('Ada');
   adaKey = key;
   const server = createServer(

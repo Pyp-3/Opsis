@@ -16,7 +16,6 @@
     "format": "prettier --write .",
     "typecheck": "pnpm engine:build && pnpm -r typecheck && tsc -p tsconfig.json",
     "test": "pnpm engine:build && vitest run",
-    "test:golden": "vitest run --config tests/golden/vitest.config.ts",
     "test:browser": "playwright test",
     "test:qa": "pnpm build && pnpm test && pnpm test:browser"
   },

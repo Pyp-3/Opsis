@@ -4,50 +4,6 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
-/**
- * Pipeline stage order (PROMPT.md §4.1, §17). A stage MUST NOT import from any later stage,
- * whether via its package name (`@opsis/layout`) or a relative path (`../../layout/src`).
- */
-const STAGES = ['parse', 'metaphor', 'layout', 'explain'];
-
-/** Builds a `no-restricted-imports` config forbidding the given workspace packages. */
-function forbid(packages, message) {
-  const names = packages.join('|');
-  return {
-    'no-restricted-imports': [
-      'error',
-      {
-        paths: [
-          {
-            name: 'node:child_process',
-            message: 'Child processes are restricted to apps/api/src/harness/.',
-          },
-          {
-            name: 'child_process',
-            message: 'Child processes are restricted to apps/api/src/harness/.',
-          },
-        ],
-        patterns: [
-          { regex: `^@opsis/(${names})(/|$)`, message },
-          { regex: `^(\\.\\./)+(pipeline/)?(${names})(/|$)`, message },
-        ],
-      },
-    ],
-  };
-}
-
-const stageBoundaries = STAGES.slice(0, -1).map((stage, i) => {
-  const later = STAGES.slice(i + 1);
-  return {
-    name: `opsis/stage-boundary/${stage}`,
-    files: [`packages/pipeline/${stage}/**/*.{ts,tsx}`],
-    rules: forbid(
-      later,
-      `Stage "${stage}" must not import from a later pipeline stage (${later.join(', ')}). See PROMPT.md §17.`,
-    ),
-  };
-});
-
 export default tseslint.config(
   {
     ignores: [
@@ -95,13 +51,24 @@ export default tseslint.config(
       ],
     },
   },
-  ...stageBoundaries,
   {
     name: 'opsis/schema-is-a-leaf',
     files: ['packages/schema/**/*.{ts,tsx}'],
-    rules: forbid(
-      ['parse', 'metaphor', 'layout', 'explain', 'primitives', 'ui'],
-      'packages/schema is the contract leaf and must not import other Opsis packages.',
-    ),
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['node:child_process', 'child_process', 'api', 'web'],
+          patterns: [
+            {
+              regex:
+                '^@opsis/(?!schema(?:/|$))|^(\\.\\./)+(?:packages/)?(engine|pipeline|primitives|ui|apps)(/|$)',
+              message:
+                'Schema owns pure contracts and board rules; it must not depend on applications or other Opsis packages.',
+            },
+          ],
+        },
+      ],
+    },
   },
 );

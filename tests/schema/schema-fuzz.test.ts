@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  ExplanationSchema,
+  BoardDocumentSchema,
+  BoardSnapshotSchema,
+  BoardRequestSchema,
   OSGSchema,
   SemanticGraphSchema,
-  VisualPlanSchema,
-  VisualizeRequestSchema,
   type OSG,
 } from '../../packages/schema/src/index';
 
@@ -33,10 +33,10 @@ describe('shared-schema fuzzing', () => {
   it('never throws while rejecting or accepting 2,500 arbitrary boundary values', () => {
     const schemas = [
       SemanticGraphSchema,
-      VisualPlanSchema,
+      BoardDocumentSchema,
       OSGSchema,
-      ExplanationSchema,
-      VisualizeRequestSchema,
+      BoardSnapshotSchema,
+      BoardRequestSchema,
     ];
     for (const schema of schemas) {
       for (let index = 0; index < 500; index += 1) {

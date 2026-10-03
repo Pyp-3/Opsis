@@ -11,47 +11,18 @@ async function ruleIds(code: string, filePath: string): Promise<(string | null)[
   return result?.messages.map((m) => m.ruleId) ?? [];
 }
 
-describe('§17 stage import boundary', () => {
-  const later: [string, string][] = [
-    ['parse', '@opsis/metaphor'],
-    ['parse', '@opsis/layout'],
-    ['parse', '@opsis/explain'],
-    ['parse', '../../layout/src/index'],
-    ['metaphor', '@opsis/layout'],
-    ['metaphor', '@opsis/explain/sub'],
-    ['layout', '@opsis/explain'],
-    ['layout', '../../../pipeline/explain'],
-  ];
-
-  it.each(later)('%s must not import %s', async (stage, spec) => {
-    const ids = await ruleIds(
-      `export { PACKAGE_NAME } from '${spec}';\n`,
-      `packages/pipeline/${stage}/src/probe.ts`,
-    );
-    expect(ids).toContain('no-restricted-imports');
-  });
-
-  const allowed: [string, string][] = [
-    ['metaphor', '@opsis/parse'],
-    ['layout', '@opsis/metaphor'],
-    ['explain', '@opsis/layout'],
-    ['parse', '@opsis/schema'],
-  ];
-
-  it.each(allowed)('%s may import %s', async (stage, spec) => {
-    const ids = await ruleIds(
-      `export { PACKAGE_NAME } from '${spec}';\n`,
-      `packages/pipeline/${stage}/src/probe.ts`,
-    );
-    expect(ids).not.toContain('no-restricted-imports');
-  });
-
-  it('schema must not import pipeline stages', async () => {
-    const ids = await ruleIds(
-      `export { PACKAGE_NAME } from '@opsis/parse';\n`,
-      'packages/schema/src/probe.ts',
-    );
-    expect(ids).toContain('no-restricted-imports');
+describe('schema dependency boundary', () => {
+  it.each(['@opsis/engine', '@opsis/mcp', '../../engine/src/index', '../../../apps/api/src/app'])(
+    'rejects %s from schema',
+    async (specifier) => {
+      const ids = await ruleIds(`export * from '${specifier}';\n`, 'packages/schema/src/probe.ts');
+      expect(ids).toContain('no-restricted-imports');
+    },
+  );
+  it('allows internal schema modules', async () => {
+    expect(
+      await ruleIds("export * from './board';\n", 'packages/schema/src/probe.ts'),
+    ).not.toContain('no-restricted-imports');
   });
 });
 

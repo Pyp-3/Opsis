@@ -1,3 +1,4 @@
+/** Strict compatibility validation for imported OSG files; no legacy renderer is required. */
 import { z } from 'zod';
 
 const nonEmptyString = z.string().min(1);
@@ -256,31 +257,6 @@ function validateSceneReferences(
   });
 }
 
-export const SceneIntentSchema = z.object(sceneShape).strict().superRefine(validateSceneReferences);
-export type SceneIntent = z.infer<typeof SceneIntentSchema>;
-
-export const VisualPlanSchema = z
-  .object({
-    schemaVersion: z.literal('vp/1'),
-    sgRef: nonEmptyString,
-    anchor: nonEmptyString,
-    scenes: z.array(SceneIntentSchema).min(1).max(3),
-  })
-  .strict()
-  .superRefine((plan, context) => {
-    const anchorExists = plan.scenes.some((scene) =>
-      scene.nodes.some((node) => node.id === plan.anchor),
-    );
-    if (!anchorExists) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'plan anchor must reference a scene node',
-        path: ['anchor'],
-      });
-    }
-  });
-export type VisualPlan = z.infer<typeof VisualPlanSchema>;
-
 export const PositionedNodeSchema = VisualNodeSchema.extend({
   position: positionSchema,
   size: vector3Schema,
@@ -375,76 +351,3 @@ export const OSGSchema = z
     validateOptionalNodes(osg.scenes, osg.sg, context, ['scenes']);
   });
 export type OSG = z.infer<typeof OSGSchema>;
-
-/** Returns a VP validator bound to the SG needed for optional-modality validation. */
-export function visualPlanSchemaFor(graph: SemanticGraph) {
-  return VisualPlanSchema.superRefine((plan, context) => {
-    validateOptionalNodes(plan.scenes, graph, context, ['scenes']);
-  });
-}
-
-export const ExplanationSchema = z
-  .object({
-    schemaVersion: z.literal('exp/1'),
-    nodeId: nonEmptyString,
-    osgId: z.string().uuid(),
-    level: z.enum(['summary', 'explanation']),
-    audience: z.enum(['child', 'teen', 'adult']),
-    summary: atMostWords(25, 'summary'),
-    sections: z
-      .object({
-        whatItIs: nonEmptyString,
-        whyItMattersHere: nonEmptyString,
-        howItWorks: nonEmptyString.optional(),
-        funFact: nonEmptyString.optional(),
-        commonMisconception: nonEmptyString.optional(),
-      })
-      .strict()
-      .optional(),
-    confidence: z.enum(['high', 'medium', 'low']),
-    suggestedDrillDown: z.array(nonEmptyString).optional(),
-  })
-  .strict();
-export type Explanation = z.infer<typeof ExplanationSchema>;
-
-export const AudienceSchema = z.enum(['child', 'teen', 'adult']);
-
-export const VisualizeRequestSchema = z
-  .object({
-    utterance: nonEmptyString.max(500),
-    audience: AudienceSchema.optional(),
-    seed: finiteNumber.optional(),
-  })
-  .strict();
-export type VisualizeRequest = z.infer<typeof VisualizeRequestSchema>;
-
-export const ExplainRequestSchema = z
-  .object({
-    osgId: z.string().uuid(),
-    nodeId: nonEmptyString,
-    level: z.enum(['summary', 'explanation']),
-    audience: AudienceSchema,
-  })
-  .strict();
-export type ExplainRequest = z.infer<typeof ExplainRequestSchema>;
-
-export const DrilldownRequestSchema = z
-  .object({ osgId: z.string().uuid(), nodeId: nonEmptyString })
-  .strict();
-export type DrilldownRequest = z.infer<typeof DrilldownRequestSchema>;
-
-export const SaveOSGRequestSchema = OSGSchema;
-export type SaveOSGRequest = z.infer<typeof SaveOSGRequestSchema>;
-
-export const ErrorResponseSchema = z
-  .object({
-    code: nonEmptyString,
-    message: nonEmptyString,
-    stage: nonEmptyString,
-    retryable: z.boolean(),
-  })
-  .strict();
-export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
-
-export const VisualizeProgressSchema = z.enum(['parsing', 'mapping', 'layout', 'done']);
-export type VisualizeProgress = z.infer<typeof VisualizeProgressSchema>;

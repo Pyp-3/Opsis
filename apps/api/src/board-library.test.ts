@@ -11,7 +11,7 @@ const board = { ...EMAIL_DEMO, version: 2, agent: 'demo', positions: {} };
 const snapshot = { board, past: [null], future: [] };
 describe('SQLite v2 library', () => {
   it('creates empty named boards, renames with history, and rejects stale deletes and resurrection', async () => {
-    const app = buildApp({ databasePath: ':memory:', llm: null });
+    const app = buildApp({ databasePath: ':memory:' });
     await signIn(app);
     try {
       for (const title of ['', ' ', 'x'.repeat(101)])
@@ -69,7 +69,7 @@ describe('SQLite v2 library', () => {
   });
   it('keeps independent boards and history across restart; rejects stale writes', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'opsis-library-test-'));
-    let app = buildApp({ databasePath: join(directory, 'boards.sqlite'), llm: null });
+    let app = buildApp({ databasePath: join(directory, 'boards.sqlite') });
     const session = await signIn(app);
     try {
       const first = randomUUID(),
@@ -83,7 +83,7 @@ describe('SQLite v2 library', () => {
         expect(response.statusCode).toBe(200);
       }
       await app.close();
-      app = buildApp({ databasePath: join(directory, 'boards.sqlite'), llm: null });
+      app = buildApp({ databasePath: join(directory, 'boards.sqlite') });
       // Sessions are stored, so the same login survives a restart.
       withSession(app, session);
       expect((await app.inject('/v1/boards')).json()).toHaveLength(2);

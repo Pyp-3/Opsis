@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/pr
 import { accessSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LLMClient, LLMRequest } from '@opsis/parse';
+import type { LLMClient, LLMRequest } from './types.js';
 import { HarnessError } from './errors.js';
 import { extractHarnessResult } from './envelope.js';
 import { progressReader, type HarnessProgress } from './progress.js';

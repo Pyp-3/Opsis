@@ -59,7 +59,6 @@ describe('document uploads', () => {
     const complete = vi.fn(async () => JSON.stringify(EMAIL_DEMO));
     const app = buildApp({
       databasePath: ':memory:',
-      llm: null,
       boardClientFactory: async () => ({ model: 'test', complete }),
     });
     await signIn(app);
@@ -90,7 +89,7 @@ describe('document uploads', () => {
   });
 
   it('refuses uploads for the demo agent', async () => {
-    const app = buildApp({ databasePath: ':memory:', llm: null });
+    const app = buildApp({ databasePath: ':memory:' });
     await signIn(app);
     apps.push(app);
     const result = await app.inject({

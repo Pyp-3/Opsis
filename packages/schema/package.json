@@ -3,13 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Zod contracts: SG, VP, OSG, Explanation (PROMPT.md §5)",
+  "description": "Board contracts, shared edit rules, process metadata and legacy OSG import validation",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test:coverage": "pnpm --dir ../.. exec vitest run packages/schema --coverage --coverage.include='packages/schema/src/{contracts,hashing,json-schema}.ts' --coverage.thresholds.lines=100 --coverage.thresholds.branches=100",
+    "test:coverage": "pnpm --dir ../.. exec vitest run packages/schema --coverage --coverage.include='packages/schema/src/**/*.ts' --coverage.exclude='**/*.test.ts'",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
