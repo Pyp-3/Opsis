@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Repository setup and development launcher for Linux, macOS, and WSL.
+set -euo pipefail
+
+usage() {
+  printf '%s\n' \
+    'Usage: ./opsis [install|dev|help]' \
+    '' \
+    '  install  Install locked dependencies, check SQLite, and build the WASM engine.' \
+    '  dev      Install/check dependencies, then start the API and web servers (default).' \
+    '  help     Show this help.' \
+    '' \
+    'Requires Node.js 20.19+, the pinned pnpm version, and Rust via rustup.' \
+    'Stop development servers with Ctrl+C. Existing environment settings are preserved.'
+}
+
+fail() {
+  printf 'Opsis: %s\n' "$*" >&2
+  exit 1
+}
+
+action="${1:-dev}"
+if (( $# > 1 )); then
+  usage >&2
+  exit 2
+fi
+case "$action" in
+  help|-h|--help) usage; exit 0 ;;
+  install|dev) ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+# Resolve relative paths from the launcher, even when invoked outside the repository.
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd -- "$project_dir"
+
+command -v node >/dev/null 2>&1 || fail 'Install Node.js 20.19+ first.'
+node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 20 || (major === 20 && minor >= 19) ? 0 : 1)' \
+  || fail 'Node.js 20.19+ is required.'
+
+required_pnpm="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+command -v pnpm >/dev/null 2>&1 \
+  || fail "Install pnpm $required_pnpm first (npm install --global pnpm@$required_pnpm)."
+installed_pnpm="$(pnpm --version)"
+[[ "$installed_pnpm" == "$required_pnpm" ]] \
+  || fail "Expected pnpm $required_pnpm, found $installed_pnpm. Run: npm install --global pnpm@$required_pnpm"
+command -v rustup >/dev/null 2>&1 || fail 'Install Rust via rustup: https://rustup.rs/'
+command -v cargo >/dev/null 2>&1 || fail 'Cargo is not on PATH. Restart your shell after installing Rust.'
+
+printf 'Installing Opsis dependencies…\n'
+pnpm install --frozen-lockfile
+
+# Loading the package alone does not exercise its native binding; open a disposable DB.
+if ! pnpm --filter api exec node --input-type=module -e \
+  'import Database from "better-sqlite3"; const db = new Database(":memory:"); db.close();'; then
+  fail 'SQLite could not load. Run pnpm approve-builds, approve better-sqlite3, then pnpm rebuild better-sqlite3 and retry. A native compiler toolchain may also be needed.'
+fi
+
+if [[ "$action" == install ]]; then
+  pnpm engine:build
+  printf '\nSetup complete. Start development with ./opsis dev\n'
+else
+  printf '\nStarting Opsis. The web server prints its URL below; press Ctrl+C to stop.\n'
+  exec pnpm dev
+fi

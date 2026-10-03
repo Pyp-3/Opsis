@@ -47,11 +47,20 @@ Requirements: Node.js **20.19+**, **pnpm 10.34.5** and [Rust via rustup](https:/
 ```sh
 git clone git@github.com:Pyp-3/Opsis.git
 cd Opsis
-pnpm install --frozen-lockfile
-pnpm dev
+./opsis dev
 ```
 
 Open **http://localhost:3000**. The API listens on **127.0.0.1:8000**, and the web development server proxies `/v1` requests to it. Start with the email example to explore without spending tokens.
+
+On Linux, macOS, or WSL, `./opsis dev` (or just `./opsis`) checks prerequisites,
+installs locked dependencies, verifies SQLite, and runs the existing development
+command, which builds the WASM engine before starting both servers. Use `./opsis install`
+to prepare dependencies and WASM without starting servers, and `./opsis help` for usage.
+The launcher works from any working directory and preserves environment settings such
+as `OPSIS_SPEECH=off`. Stop both servers with Ctrl+C. It does not install global tools
+or automatically approve dependency build scripts.
+
+On native Windows, use `pnpm install --frozen-lockfile` followed by `pnpm dev`.
 
 The API uses the native `better-sqlite3` dependency even when working with the new canvas. If a fresh installation reports a missing native binding, run `pnpm approve-builds`, approve only the reviewed dependency `better-sqlite3`, then run `pnpm rebuild better-sqlite3`. A platform without a matching prebuilt binary may also need Python and a C/C++ build toolchain.
 
