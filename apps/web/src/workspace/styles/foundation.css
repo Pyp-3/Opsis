@@ -41,6 +41,14 @@
   --glass-blur: blur(18px) saturate(1.6);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Green→blue blend, theme-independent deep tones so light text always reads on them.
+     Paired with artistic green + blue grids for the board library. */
+  --blend: linear-gradient(135deg, #2d5445 0%, #2f5e73 52%, #224f7e 100%);
+  --blend-hover: linear-gradient(135deg, #386652 0%, #35708a 52%, #2a5f92 100%);
+  --blend-fg: #f3f8f3;
+  --grid-green: color-mix(in srgb, #2d5445 13%, transparent);
+  --grid-blue: color-mix(in srgb, #224f7e 12%, transparent);
+
   --bp-bg-1: #224f7e;
   --bp-bg-2: var(--bp-deep);
   --bp-bg-3: #113258;
@@ -98,6 +106,8 @@
     --glass: color-mix(in srgb, var(--surface) 80%, transparent);
     --glass-edge: rgb(255 255 255 / 0.1);
     --glass-sheen: rgb(255 255 255 / 0.07);
+    --grid-green: rgb(159 207 169 / 0.1);
+    --grid-blue: rgb(148 174 204 / 0.11);
     color-scheme: dark;
   }
 }
@@ -127,6 +137,8 @@
   --glass: color-mix(in srgb, var(--surface) 80%, transparent);
   --glass-edge: rgb(255 255 255 / 0.1);
   --glass-sheen: rgb(255 255 255 / 0.07);
+  --grid-green: rgb(159 207 169 / 0.1);
+  --grid-blue: rgb(148 174 204 / 0.11);
   color-scheme: dark;
 }
 
