@@ -72,7 +72,7 @@ test('board manager stays usable on a narrow mobile viewport and removes the sid
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByLabel('New board name').fill(`Mobile ${Date.now()}`);
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/canvas$/);
   await expect(page.getByRole('heading', { name: 'Your boards' })).toHaveCount(0);
 });
 
@@ -110,9 +110,9 @@ test('manager creates, renames, cancels deletion, deletes and never resurrects a
   await expect(
     page.getByRole('button', { name: `Delete ${name} renamed`, exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('link', { name: 'Back to workspace' }).click();
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
   await page.reload();
-  await expect(page.getByText('Start with a question')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'See what you mean.', level: 1 })).toBeVisible();
   expect((await page.request.get('/v1/boards')).ok()).toBe(true);
   await expect(
     page

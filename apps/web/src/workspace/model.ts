@@ -159,16 +159,20 @@ export async function layoutBoard(
     agent,
     positions,
     edgePorts,
+    // Agents never see the canvas colours; a follow-up keeps the ones the reader chose.
+    ...(previous?.look ? { look: previous.look } : {}),
   });
 }
 
 /**
- * Drawings are large and only matter to playback, so agents are sent the board without them;
- * they are restored afterwards by `layoutBoard`.
+ * Drawings are large and only matter to playback, and colours only to the reader, so agents
+ * are sent the board without them; `layoutBoard` restores both afterwards.
  */
 export function withoutIllustrations(board: BoardDocument): BoardDocument {
+  const rest = { ...board };
+  delete rest.look;
   return {
-    ...board,
+    ...rest,
     nodes: board.nodes.map((node) => {
       const copy = { ...node };
       delete copy.illustration;

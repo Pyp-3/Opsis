@@ -30,6 +30,7 @@ test('keeps named boards and undo history after reload, exports and walks throug
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
   await expect(page.getByText('Start with a question')).toBeVisible();
+  await page.getByRole('link', { name: 'Opsis home' }).click();
   await page
     .getByRole('navigation', { name: 'Saved boards' })
     .getByRole('button', { name: title, exact: true })
@@ -110,8 +111,7 @@ for (const [width, height] of [
   test(`heading, play button and tools never overlap at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.reload();
-    // Narrow screens keep examples in the sidebar, which starts closed.
-    if (width <= 760) await page.getByRole('button', { name: 'Show sidebar' }).click();
+    // Examples live on the landing page, so narrow screens reach them without the sidebar.
     await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
     const play = page.getByRole('button', { name: 'Play the process' });
     await expect(play).toBeVisible();
@@ -140,7 +140,6 @@ test('next steps stay tucked away until opened, and remember being opened', asyn
 test('mobile canvas remains usable without horizontal page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await page.getByRole('button', { name: 'Show sidebar' }).click();
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await expect(page.getByRole('button', { name: 'Play the process' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(

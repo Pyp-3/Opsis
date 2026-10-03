@@ -5,7 +5,7 @@ import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
 import { wrapLabel, nodeHeight } from './geometry';
 import { connectionStyle, PORT_OFFSETS, connectionLabel } from './connections';
-import { canvasLook, iconColorOf, paletteOf, type CanvasLook } from './canvas-theme';
+import { iconColorOf, lookOf, paletteOf, type CanvasLook } from './canvas-theme';
 
 const escape = (text: string) =>
   text.replace(
@@ -14,8 +14,8 @@ const escape = (text: string) =>
       ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]!,
   );
 
-/** Draws the board in the viewer's chosen canvas palette and icon colour. */
-export function boardSvg(board: BoardDocument, look: CanvasLook = canvasLook()): string {
+/** Draws the board in its own canvas palette and icon colour. */
+export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board)): string {
   const palette = paletteOf(look);
   const routes = routeBoard(board);
   const points = [

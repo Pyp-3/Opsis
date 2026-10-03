@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { EMAIL_DEMO, TERMINAL_PIPELINE_EXAMPLE, type BoardDocument } from '@opsis/schema';
 import { Workspace } from './Workspace';
@@ -52,6 +52,10 @@ vi.mock('./process-engine', async (original) => {
   };
 });
 
+beforeEach(() => {
+  // The canvas has its own route; the landing page lives at /.
+  history.replaceState(null, '', '/canvas');
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -295,5 +299,63 @@ describe('current workspace integration', () => {
     expect(fetch.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(
       savesBefore,
     );
+  });
+  it('tucks the big picture away and brings it back on request', async () => {
+    setup();
+    await screen.findByText('Fixture ready');
+    const hide = screen.getByRole('button', { name: 'Hide the big picture' });
+    expect(hide.getAttribute('aria-expanded')).toBe('true');
+    // Starting playback counts as working on the canvas.
+    fireEvent.click(screen.getByRole('button', { name: 'Play the process' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close player' }));
+    const show = screen.getByRole('button', { name: 'Show the big picture' });
+    expect(show.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(show);
+    expect(
+      screen.getByRole('button', { name: 'Hide the big picture' }).getAttribute('aria-expanded'),
+    ).toBe('true');
+    // Once the reader opens it again it stays open while they work.
+    fireEvent.click(screen.getByRole('button', { name: 'Play the process' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close player' }));
+    expect(screen.getByRole('button', { name: 'Hide the big picture' })).toBeDefined();
+  });
+  it('opens each canvas’s own look page and paints the canvas in its colours', async () => {
+    setup();
+    await screen.findByText('Fixture ready');
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas colours' }));
+    expect(location.pathname).toBe('/canvas/settings');
+    expect(await screen.findByRole('heading', { level: 1, name: board.title })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Forest' }));
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue('--bp-bg-1')).toBe('#21503f'),
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Back to canvas' }));
+    expect(location.pathname).toBe('/canvas');
+    expect(screen.getByRole('navigation', { name: 'Diagram steps' })).toBeDefined();
+  });
+});
+
+describe('pages', () => {
+  it('lands on the home page and opens an example on the canvas', async () => {
+    history.replaceState(null, '', '/');
+    setup();
+    expect(screen.getByRole('heading', { level: 1, name: 'See what you mean.' })).toBeDefined();
+    // The sidebar on the landing page is navigation only; concepts belong to the canvas.
+    expect(screen.queryByRole('navigation', { name: 'Diagram steps' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
+    fireEvent.click(screen.getByRole('button', { name: 'Open example: An email’s journey' }));
+    await waitFor(() => expect(location.pathname).toBe('/canvas'));
+    expect(await screen.findByRole('button', { name: 'Play the process' })).toBeDefined();
+    expect(screen.getByRole('navigation', { name: 'Diagram steps' })).toBeDefined();
+  });
+  it('shows the board manager with a manager sidebar', async () => {
+    history.replaceState(null, '', '/boards');
+    setup();
+    expect(screen.getByRole('heading', { level: 1, name: 'Your boards' })).toBeDefined();
+    expect(screen.getByRole('link', { name: /Manage boards/ }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Home' }));
+    expect(location.pathname).toBe('/');
   });
 });

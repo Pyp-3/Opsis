@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import type { BoardLook } from '@opsis/schema';
 
 /**
  * Canvas palettes. All are dark so the pastel connection and illustration colours stay legible;
@@ -165,28 +165,47 @@ export type CanvasLook = {
 };
 export const DEFAULT_LOOK: CanvasLook = { canvas: 'blueprint', icon: 'gold' };
 
-const KEY = 'opsis:canvas-look:v1';
+/** Where earlier versions kept one look for every canvas in this browser. */
+const LEGACY_KEY = 'opsis:canvas-look:v1';
 
 export const paletteOf = (look: CanvasLook): CanvasPalette =>
   CANVAS_PALETTES.find((palette) => palette.id === look.canvas) ?? CANVAS_PALETTES[0];
 export const iconColorOf = (look: CanvasLook): string =>
   (ICON_COLORS.find((icon) => icon.id === look.icon) ?? ICON_COLORS[0]).color;
 
-function read(): CanvasLook {
-  try {
-    const stored = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<CanvasLook> | null;
-    return {
-      canvas: CANVAS_PALETTES.some((palette) => palette.id === stored?.canvas)
-        ? stored!.canvas!
-        : DEFAULT_LOOK.canvas,
-      icon: ICON_COLORS.some((icon) => icon.id === stored?.icon)
-        ? stored!.icon!
-        : DEFAULT_LOOK.icon,
-    };
-  } catch {
-    return DEFAULT_LOOK;
-  }
+/** Narrows stored ids to the palettes and tints this version knows, keeping what it can. */
+function known(look: Partial<BoardLook> | null | undefined, fallback: CanvasLook): CanvasLook {
+  return {
+    canvas: CANVAS_PALETTES.find((palette) => palette.id === look?.canvas)?.id ?? fallback.canvas,
+    icon: ICON_COLORS.find((icon) => icon.id === look?.icon)?.id ?? fallback.icon,
+  };
 }
+
+let legacy: CanvasLook | null = null;
+/**
+ * The look a canvas without its own colours is painted in: the single browser-wide choice
+ * earlier versions saved, so existing canvases keep their colours, or the default.
+ */
+export function fallbackLook(): CanvasLook {
+  if (!legacy)
+    try {
+      legacy = known(
+        JSON.parse(localStorage.getItem(LEGACY_KEY) ?? 'null') as Partial<BoardLook> | null,
+        DEFAULT_LOOK,
+      );
+    } catch {
+      legacy = DEFAULT_LOOK;
+    }
+  return legacy;
+}
+
+/** The colours a canvas is painted in. Each canvas keeps its own on the saved board. */
+export function lookOf(board: { look?: BoardLook | undefined } | null | undefined): CanvasLook {
+  return known(board?.look, fallbackLook());
+}
+
+export const sameLook = (a: CanvasLook, b: CanvasLook) =>
+  a.canvas === b.canvas && a.icon === b.icon;
 
 /** The CSS custom properties a look sets. */
 export function lookVariables(look: CanvasLook): Record<string, string> {
@@ -211,43 +230,10 @@ export function lookVariables(look: CanvasLook): Record<string, string> {
   };
 }
 
-let current: CanvasLook | null = null;
-const listeners = new Set<() => void>();
-
-function apply(look: CanvasLook) {
+/** Paints the canvas tokens on :root; the canvas, player and overlays all read them. */
+export function applyLook(look: CanvasLook) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   for (const [name, value] of Object.entries(lookVariables(look)))
     root.style.setProperty(name, value);
-}
-
-/** The viewer's chosen look. A per-browser preference: it never changes the saved board. */
-export function canvasLook(): CanvasLook {
-  if (!current) {
-    current = read();
-    apply(current);
-  }
-  return current;
-}
-
-export function setCanvasLook(next: CanvasLook) {
-  current = next;
-  apply(next);
-  try {
-    localStorage.setItem(KEY, JSON.stringify(next));
-  } catch {
-    // Remembering the look is a convenience; it still applies for this visit.
-  }
-  listeners.forEach((listener) => listener());
-}
-
-export function useCanvasLook(): CanvasLook {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    canvasLook,
-    () => DEFAULT_LOOK,
-  );
 }

@@ -1,5 +1,14 @@
 import { BOARD_MODEL_CHOICES, type BoardModelSettings } from '@opsis/schema';
 
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const EFFORT_LABELS: Record<BoardModelSettings['effort'], string> = {
+  low: 'Low · economical',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Maximum',
+};
+
 export function ModelControls({
   agent,
   value,
@@ -14,7 +23,9 @@ export function ModelControls({
   const choices = BOARD_MODEL_CHOICES[agent];
   const isCustom = !choices.some((choice) => choice.id === value.model);
   const noEffort = agent === 'claude' && value.model.includes('haiku');
-  const isAlias = agent === 'claude' && ['haiku', 'sonnet', 'opus'].includes(value.model);
+  const isAlias = agent === 'claude' && ['haiku', 'sonnet', 'opus', 'fable'].includes(value.model);
+  const efforts = choices.find((choice) => choice.id === value.model)?.efforts ?? EFFORTS;
+  const effort = efforts.includes(value.effort) ? value.effort : efforts[efforts.length - 1]!;
   const groups = [...new Set(choices.map((choice) => choice.group))];
   return (
     <div className="model-controls">
@@ -24,9 +35,14 @@ export function ModelControls({
           aria-label="Model"
           value={isCustom ? 'custom' : value.model}
           disabled={disabled}
-          onChange={(event) =>
-            onChange({ ...value, model: event.target.value === 'custom' ? '' : event.target.value })
-          }
+          onChange={(event) => {
+            const model = event.target.value === 'custom' ? '' : event.target.value;
+            const allowed = choices.find((choice) => choice.id === model)?.efforts ?? EFFORTS;
+            onChange({
+              model,
+              effort: allowed.includes(value.effort) ? value.effort : allowed[allowed.length - 1]!,
+            });
+          }}
         >
           {groups.map((group) => (
             <optgroup key={group} label={group}>
@@ -59,7 +75,7 @@ export function ModelControls({
         Effort
         <select
           aria-label="Reasoning effort"
-          value={noEffort ? 'unsupported' : value.effort}
+          value={noEffort ? 'unsupported' : effort}
           disabled={disabled || noEffort}
           onChange={(event) =>
             onChange({ ...value, effort: event.target.value as BoardModelSettings['effort'] })
@@ -68,13 +84,11 @@ export function ModelControls({
           {noEffort ? (
             <option value="unsupported">Not supported by Haiku</option>
           ) : (
-            <>
-              <option value="low">Low · economical</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="xhigh">Extra high</option>
-              <option value="max">Maximum</option>
-            </>
+            efforts.map((level) => (
+              <option key={level} value={level}>
+                {EFFORT_LABELS[level]}
+              </option>
+            ))
           )}
         </select>
       </label>

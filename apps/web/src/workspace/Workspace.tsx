@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Download,
   Expand,
@@ -28,6 +29,7 @@ import {
   GitBranch,
   ImageIcon,
   LoaderCircle,
+  Palette,
   PanelLeft,
   Play,
   Pencil,
@@ -53,7 +55,6 @@ import {
   withoutNarration,
   EDGE_COLORS,
   EMAIL_DEMO,
-  DNS_DEMO,
   type BoardGraph,
   type BoardAgent,
   type BoardAttachment,
@@ -72,7 +73,6 @@ import { NodeIcon } from './NodeIcon';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
-import { BrandMark } from './BrandMark';
 import { AgentLogo } from './AgentLogo';
 import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
 import { boardSvg, boardMarkdown, downloadPng, download } from './export';
@@ -91,13 +91,16 @@ import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
 import { ProcessPlayer } from './ProcessPlayer';
-import { CanvasLookPicker } from './CanvasLookPicker';
+import { applyLook, lookOf } from './canvas-theme';
 import { NextSteps, RETURN_PATHS } from './NextSteps';
+import { BrandMark } from './BrandMark';
 import { IconPicker } from './IconPicker';
 import { BoardsPage } from './BoardsPage';
+import { HomePage } from './HomePage';
+import { CanvasSettingsPage } from './CanvasSettingsPage';
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
-import { WorkspaceSidebar } from './WorkspaceSidebar';
+import { AppSidebar, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
 import { routeBoard } from './routing';
 import { RoutedConnection } from './RoutedConnection';
 import { AttachButton, AttachmentChips } from './Attachments';
@@ -257,7 +260,36 @@ function BoardWorkspace() {
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
   const path = usePath();
+  useEffect(() => {
+    const close = () => setRailOpen(false);
+    window.addEventListener(CLOSE_RAIL, close);
+    return () => window.removeEventListener(CLOSE_RAIL, close);
+  }, []);
+  const page: SidebarMode =
+    path === '/boards'
+      ? 'boards'
+      : path === '/canvas/settings' && board
+        ? 'settings'
+        : path.startsWith('/canvas')
+          ? 'canvas'
+          : 'home';
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The big picture opens with each canvas, tucks itself away once the reader starts working
+  // on the canvas, and stays the way the reader last set it until another canvas opens.
+  const [headingState, setHeadingState] = useState<{
+    boardId: string;
+    mode: 'auto' | 'open' | 'closed';
+  }>({ boardId: library.activeId, mode: 'auto' });
+  const headingMode = headingState.boardId === library.activeId ? headingState.mode : 'auto';
+  const headingOpen = headingMode !== 'closed';
+  const retractHeading = useCallback(() => {
+    if (headingMode === 'auto' && boardRef.current?.nodes.length)
+      setHeadingState({ boardId: library.activeId, mode: 'closed' });
+  }, [headingMode, boardRef, library.activeId]);
+  const { canvas: lookCanvas, icon: lookIcon } = lookOf(board);
+  useEffect(() => {
+    applyLook({ canvas: lookCanvas, icon: lookIcon });
+  }, [lookCanvas, lookIcon]);
 
   useEffect(() => {
     // The library can switch externally through board-manager creation/deletion.
@@ -301,11 +333,13 @@ function BoardWorkspace() {
     void flow.setViewport({ x: width / 2 - center, y: 210 - top, zoom: 1 }, { duration: 250 });
   }, [flow, boardRef]);
   const hasBoard = !!board;
+  const onCanvas = page === 'canvas';
   useEffect(() => {
+    if (!onCanvas) return;
     const timer = setTimeout(readingView, 100);
     readingTimer.current = timer;
     return () => clearTimeout(timer);
-  }, [hasBoard, library.activeId, readingView]);
+  }, [hasBoard, library.activeId, readingView, onCanvas]);
   async function arrangeDownward() {
     if (!board || busy || arranging) return;
     setArranging(true);
@@ -330,7 +364,9 @@ function BoardWorkspace() {
     },
     [busy, travel],
   );
+  const editing = page === 'canvas' || page === 'settings';
   useEffect(() => {
+    if (!editing) return;
     const handler = (event: KeyboardEvent) => {
       if (
         event.target instanceof HTMLElement &&
@@ -352,7 +388,7 @@ function BoardWorkspace() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo]);
+  }, [undo, editing]);
 
   useEffect(() => {
     const close = (event: PointerEvent) => {
@@ -412,6 +448,7 @@ function BoardWorkspace() {
       setAgent('demo');
       setSelected(null);
       setSelectedEdge(null);
+      navigate('/canvas');
       // On phones the sidebar covers the canvas; get it out of the way of the example.
       if (window.innerWidth <= 760) setRailOpen(false);
     } catch {
@@ -605,50 +642,96 @@ function BoardWorkspace() {
       });
   };
 
-  if (path === '/boards')
+  const newCanvas = async () => {
+    if (!(await library.open())) return false;
+    setSelected(null);
+    setSelectedEdge(null);
+    setPrompt('');
+    setError('');
+    return true;
+  };
+  const sidebar = (
+    <AppSidebar
+      mode={page}
+      board={board}
+      busy={busy}
+      library={library}
+      commit={commit}
+      selected={selected}
+      selectNode={selectNode}
+      onNew={async () => {
+        if (!(await newCanvas())) return;
+        navigate('/canvas');
+        if (window.innerWidth <= 760) setRailOpen(false);
+      }}
+    />
+  );
+  const railToggle = (
+    <button
+      className="rail-toggle"
+      aria-label={railOpen ? 'Hide sidebar' : 'Show sidebar'}
+      aria-expanded={railOpen}
+      onClick={() => setRailOpen(!railOpen)}
+    >
+      <PanelLeft size={18} />
+    </button>
+  );
+
+  if (page !== 'canvas')
     return (
-      <BoardsPage
-        library={library}
-        onBack={() => navigate('/')}
-        onOpen={async (id) => {
-          if (await openBoard(id)) navigate('/');
-        }}
-      />
+      <div className={`workspace is-page ${railOpen ? 'rail-open' : 'rail-closed'}`}>
+        {sidebar}
+        <div className="page-scroll">
+          <div className="page-toolbar">{railToggle}</div>
+          {page === 'boards' ? (
+            <BoardsPage
+              library={library}
+              onCreated={() => navigate('/canvas')}
+              onOpen={async (id) => {
+                if (await openBoard(id)) navigate('/canvas');
+              }}
+            />
+          ) : page === 'settings' && board ? (
+            <CanvasSettingsPage board={board} busy={busy} commit={commit} />
+          ) : (
+            <HomePage
+              board={board}
+              busy={busy}
+              library={library}
+              onStart={async (question) => {
+                if (!(await newCanvas())) return;
+                navigate('/canvas');
+                // Kept in the composer if the agent cannot run yet, so the question is not lost.
+                setPrompt(question);
+                void generate(undefined, question);
+              }}
+              onOpen={async (id) => {
+                if (await openBoard(id)) navigate('/canvas');
+              }}
+              onExample={(graph) => void demo(graph)}
+            />
+          )}
+        </div>
+      </div>
     );
   return (
     <div className={`workspace ${railOpen ? 'rail-open' : 'rail-closed'}`}>
-      <WorkspaceSidebar
-        board={board}
-        busy={busy}
-        library={library}
-        commit={commit}
-        selected={selected}
-        selectNode={selectNode}
-        demo={() => void demo()}
-        dnsDemo={() => void demo(DNS_DEMO)}
-        onNew={async () => {
-          if (!(await library.open())) return;
-          setSelected(null);
-          setSelectedEdge(null);
-          setPrompt('');
-          setError('');
-        }}
-        onOpen={openBoard}
-        onManage={() => navigate('/boards')}
-      />
+      {sidebar}
 
       <main className="workspace-main">
         <header className="workspace-header">
           <div className="header-breadcrumb">
-            <button
-              className="rail-toggle"
-              aria-label={railOpen ? 'Hide sidebar' : 'Show sidebar'}
-              aria-expanded={railOpen}
-              onClick={() => setRailOpen(!railOpen)}
+            {railToggle}
+            <a
+              href="/boards"
+              className="crumb-root"
+              onClick={(event) => {
+                event.preventDefault();
+                if (!busy) navigate('/boards');
+              }}
             >
-              <PanelLeft size={18} />
-            </button>
-            <span className="crumb-root">Workspace</span>
+              Boards
+            </a>
             <ChevronRight size={14} aria-hidden />
             <h1>{board?.title ?? 'Untitled canvas'}</h1>
           </div>
@@ -761,16 +844,26 @@ function BoardWorkspace() {
                 if (board && !busy) commit(connectBoard(board, connection, edge.id));
               }}
               onNodesChange={changePositions}
-              onNodeClick={(_, node) => selectNode(node.id)}
+              onNodeClick={(_, node) => {
+                retractHeading();
+                selectNode(node.id);
+              }}
               onEdgeClick={(_, edge) => {
+                retractHeading();
                 setSelectedEdge(edge.id);
                 setSelected(null);
               }}
               onPaneClick={() => {
+                retractHeading();
                 setSelected(null);
                 setSelectedEdge(null);
               }}
+              // Only the reader's own panning counts; programmatic moves pass no event.
+              onMoveStart={(event) => {
+                if (event) retractHeading();
+              }}
               onNodeDragStart={() => {
+                retractHeading();
                 begin();
               }}
               onNodeDragStop={(_, node) => {
@@ -812,13 +905,31 @@ function BoardWorkspace() {
               />
             </ReactFlow>
             {board && (
-              <div className="canvas-heading">
-                <span className="canvas-kicker">
-                  <span />
+              <div className={`canvas-heading ${headingOpen ? 'is-open' : 'is-collapsed'}`}>
+                <button
+                  className="canvas-kicker"
+                  aria-expanded={headingOpen}
+                  aria-controls="big-picture"
+                  aria-label={headingOpen ? 'Hide the big picture' : 'Show the big picture'}
+                  title={headingOpen ? 'Tuck away' : 'Show the big picture'}
+                  onClick={() =>
+                    setHeadingState({
+                      boardId: library.activeId,
+                      mode: headingOpen ? 'closed' : 'open',
+                    })
+                  }
+                >
+                  <span className="kicker-dot" />
                   THE BIG PICTURE
-                </span>
-                <h2>{board.title}</h2>
-                <p>{board.description}</p>
+                  <span className="kicker-title">{board.title}</span>
+                  <ChevronUp className="chevron" size={13} aria-hidden />
+                </button>
+                <div className="canvas-heading-body" id="big-picture" aria-hidden={!headingOpen}>
+                  <div>
+                    <h2>{board.title}</h2>
+                    <p>{board.description}</p>
+                  </div>
+                </div>
                 {/* In the heading's flow, so it always sits below the text rather than over it. */}
                 {!playerOpen && board.nodes.length > 0 && (
                   <button
@@ -827,6 +938,7 @@ function BoardWorkspace() {
                     onClick={() => {
                       setSelected(null);
                       setSelectedEdge(null);
+                      retractHeading();
                       setPlayerOpen(true);
                     }}
                   >
@@ -885,7 +997,14 @@ function BoardWorkspace() {
               >
                 <ListTree size={16} />
               </button>
-              <CanvasLookPicker />
+              <button
+                aria-label="Canvas colours"
+                title="Canvas look & details"
+                disabled={!board}
+                onClick={() => navigate('/canvas/settings')}
+              >
+                <Palette size={16} />
+              </button>
               <span />
               <button
                 aria-label="Add a concept"

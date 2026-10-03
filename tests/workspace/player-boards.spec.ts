@@ -271,7 +271,7 @@ test('the boards page is a real page with history, search and an accessible layo
   await page.getByLabel('Search boards').fill(`Alpha ${stamp}`);
   await expect(page.locator('.board-cards li')).toHaveCount(1);
   await page.getByRole('button', { name: new RegExp(`^Alpha ${stamp}`) }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/canvas$/);
   await expect(page.getByLabel('Board name')).toHaveValue(`Alpha ${stamp}`);
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Your boards', level: 1 })).toBeVisible();
@@ -286,16 +286,27 @@ test('the boards page is a real page with history, search and an accessible layo
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('a new canvas offers questions, and examples live in the sidebar', async ({ page }) => {
-  await expect(page.getByText('Start with a question')).toBeVisible();
+test('the landing page offers questions and examples, and an empty canvas offers questions', async ({
+  page,
+}) => {
+  await expect(page.getByRole('heading', { name: 'See what you mean.', level: 1 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Examples' }).getByRole('button')).toHaveCount(
     2,
   );
+  await page.getByRole('button', { name: /How does the water cycle work\?/ }).click();
+  const ask = page.getByLabel('Start a new canvas with a question');
+  await expect(ask).toHaveValue('How does the water cycle work?');
+  await expect(ask).toBeFocused();
+  let scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(scan.violations).toEqual([]);
+  await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+  await expect(page).toHaveURL(/\/canvas$/);
+  await expect(page.getByText('Start with a question')).toBeVisible();
   await page.getByRole('button', { name: 'How does the water cycle work?' }).click();
   await expect(page.getByLabel('What would you like to understand?')).toHaveValue(
     'How does the water cycle work?',
   );
   await expect(page.getByLabel('What would you like to understand?')).toBeFocused();
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(scan.violations).toEqual([]);
 });
