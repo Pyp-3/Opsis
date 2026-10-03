@@ -8,7 +8,6 @@ import {
   removeBoardNode,
   patchBoardNode,
   withoutBrokenProcesses,
-  withoutNarration,
   type BoardDocument,
   type BoardSnapshot,
 } from '@opsis/schema';
@@ -291,14 +290,10 @@ export function writeDiagram(snapshot: BoardSnapshot, input: DiagramInput) {
       kind: concept.kind ?? previous?.kind ?? 'step',
     };
     if (!previous) return fields;
-    const kept = { ...previous, ...fields };
-    if (previous.label !== fields.label || previous.summary !== fields.summary)
-      return withoutNarration(kept);
-    if (previous.icon !== fields.icon) {
-      delete kept.customIcon;
-      delete kept.illustration;
-    }
-    return kept;
+    return patchBoardNode(previous, fields, {
+      narration: previous.label !== fields.label || previous.summary !== fields.summary,
+      drawing: previous.icon !== fields.icon,
+    });
   });
   let board: BoardDocument = {
     ...before,

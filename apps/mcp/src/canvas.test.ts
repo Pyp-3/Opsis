@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { EMAIL_DEMO, type BoardDocument, type BoardSnapshot } from '@opsis/schema';
+import {
+  EMAIL_DEMO,
+  EMAIL_DEMO_ILLUSTRATIONS,
+  type BoardDocument,
+  type BoardSnapshot,
+} from '@opsis/schema';
 import {
   CanvasError,
   addConcept,
@@ -101,6 +106,30 @@ describe('agent canvas edits', () => {
       description: 'Where it goes.',
       look: { canvas: 'forest', icon: 'mint' },
     });
+  });
+
+  it('drops stale narration and drawings when a rewrite changes both words and icon', () => {
+    const node = {
+      ...board.nodes[0]!,
+      narration: 'The original spoken description.',
+      illustration: EMAIL_DEMO_ILLUSTRATIONS.sender!,
+      customIcon: {
+        name: 'Old icon',
+        layers: [{ shape: 'circle' as const, cx: 12, cy: 12, r: 8 }],
+      },
+    };
+    const next = writeDiagram(
+      { ...start, board: { ...board, nodes: [node], edges: [] } },
+      {
+        title: board.title,
+        description: board.description,
+        concepts: [{ id: node.id, label: 'Changed words', summary: node.summary, icon: 'inbox' }],
+        connections: [],
+      },
+    ).board!;
+    expect(next.nodes[0]).not.toHaveProperty('narration');
+    expect(next.nodes[0]).not.toHaveProperty('customIcon');
+    expect(next.nodes[0]).not.toHaveProperty('illustration');
   });
 
   it('rewrites a diagram, keeping the places of concepts that stay and placing new ones', () => {
