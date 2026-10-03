@@ -1,20 +1,16 @@
 /* ── Boards page ──────────────────────────────────────────────────────── */
-/* Artistic double grid (green warp + blue weft) under a soft green/white/blue wash.
-   Full-bleed behind the centred column so the library reads as drafting paper. */
+/* A soft green/white/blue wash — no grid across the page. The square grid is
+   kept to the create bar as one contained blueprint accent. */
 .page-scroll:has(.boards-main) {
   background:
-    linear-gradient(var(--grid-green) 1px, transparent 1px) -0.5px -0.5px / 26px 26px,
-    linear-gradient(90deg, var(--grid-green) 1px, transparent 1px) -0.5px -0.5px / 26px 26px,
-    linear-gradient(var(--grid-blue) 1px, transparent 1px) -0.5px -0.5px / 104px 104px,
-    linear-gradient(90deg, var(--grid-blue) 1px, transparent 1px) -0.5px -0.5px / 104px 104px,
     radial-gradient(
       ellipse 120% 90% at 12% -10%,
-      color-mix(in srgb, var(--accent) 12%, transparent),
-      transparent 60%
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 58%
     ),
     radial-gradient(
       ellipse 120% 90% at 100% 0%,
-      color-mix(in srgb, var(--bp-bg-1) 14%, transparent),
+      color-mix(in srgb, var(--bp-bg-1) 10%, transparent),
       transparent 55%
     ),
     var(--paper);
@@ -50,6 +46,8 @@
   color: var(--ink-2);
 }
 .boards-create {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: flex-end;
   gap: 10px;
@@ -62,6 +60,35 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+/* One slow green→blue pulse line travelling along the top edge of the grid. */
+.boards-create::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-text), #3f82b4, transparent);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  opacity: 0.7;
+  animation: boards-pulse 6s linear infinite;
+}
+@keyframes boards-pulse {
+  from {
+    background-position: -50% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boards-create::before {
+    animation: none;
+    background-position: 50% 0;
+    opacity: 0.4;
+  }
 }
 .boards-create label,
 .board-rename label {
