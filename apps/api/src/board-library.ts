@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { BoardSnapshotSchema } from '@opsis/schema';
+import { BoardSnapshotSchema, createEmptyBoard, recordBoardEdit } from '@opsis/schema';
 import { randomUUID } from 'node:crypto';
 import type { ApiStore, User } from './storage.js';
 import { requireUser } from './auth.js';
@@ -48,15 +48,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
       return reply.code(400).send({ message: 'Enter a board name (1–100 characters).' });
     const id = randomUUID();
     const snapshot = BoardSnapshotSchema.parse({
-      board: {
-        version: 2,
-        title: body.data.title,
-        description: '',
-        nodes: [],
-        edges: [],
-        positions: {},
-        agent: 'claude',
-      },
+      board: createEmptyBoard(body.data.title),
       past: [],
       future: [],
     });
@@ -89,18 +81,8 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     if (title === undefined || current.snapshot.board?.title === title)
       return view(store.getBoard(current.id)!, user);
     const before = current.snapshot.board;
-    const board = before
-      ? { ...before, title }
-      : {
-          version: 2 as const,
-          title,
-          description: '',
-          nodes: [],
-          edges: [],
-          positions: {},
-          agent: 'claude' as const,
-        };
-    const snapshot = { board, past: [...current.snapshot.past.slice(-39), before], future: [] };
+    const board = before ? { ...before, title } : createEmptyBoard(title);
+    const snapshot = recordBoardEdit(current.snapshot, board);
     const saved = store.saveBoard(current.id, snapshot, current.revision, user.id);
     if (!saved || saved === 'forbidden')
       return reply.code(409).send({ message: 'Board changed. Reopen the manager and retry.' });

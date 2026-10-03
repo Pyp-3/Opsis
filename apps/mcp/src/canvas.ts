@@ -3,6 +3,10 @@ import {
   BoardDocumentSchema,
   BoardEdgeKindSchema,
   EDGE_COLORS,
+  createEmptyBoard,
+  recordBoardEdit,
+  removeBoardNode,
+  patchBoardNode,
   withoutBrokenProcesses,
   withoutNarration,
   type BoardDocument,
@@ -14,8 +18,6 @@ import { z } from 'zod';
 const NODE_WIDTH = 224;
 const ROW_STEP = 240;
 const COLUMN_STEP = 304;
-/** The web app keeps 40 undo steps; agent edits join the same history. */
-const HISTORY = 40;
 
 export const ConceptIdSchema = z
   .string()
@@ -64,30 +66,16 @@ export function describeBoard(id: string, revision: number, board: BoardDocument
   };
 }
 
-const emptyBoard = (title = 'Untitled canvas'): BoardDocument => ({
-  version: 2,
-  title,
-  description: '',
-  nodes: [],
-  edges: [],
-  positions: {},
-  agent: 'claude',
-});
-
 /** Validates an edited board and records the previous one so the reader can undo it. */
 export function withEdit(snapshot: BoardSnapshot, next: BoardDocument): BoardSnapshot {
   const parsed = BoardDocumentSchema.safeParse(next);
   if (!parsed.success)
     throw new CanvasError(parsed.error.issues.map((issue) => issue.message).join(' '));
-  return {
-    board: parsed.data,
-    past: [...snapshot.past, snapshot.board].slice(-HISTORY),
-    future: [],
-  };
+  return recordBoardEdit(snapshot, parsed.data);
 }
 
 function boardOf(snapshot: BoardSnapshot) {
-  return snapshot.board ?? emptyBoard();
+  return snapshot.board ?? createEmptyBoard();
 }
 
 function requireNode(board: BoardDocument, id: string) {
@@ -199,14 +187,11 @@ export function updateConcept(snapshot: BoardSnapshot, id: string, patch: Concep
   if (patch.explanation !== undefined) updated.explanation = patch.explanation;
   if (patch.icon !== undefined) updated.icon = patch.icon;
   if (patch.kind !== undefined) updated.kind = patch.kind;
-  const changed = patch;
   // Same rules as editing on the canvas: new words drop stale narration, a new icon the drawing.
-  if (changed.label !== undefined || changed.summary !== undefined)
-    updated = withoutNarration(updated);
-  if (changed.icon && changed.icon !== node.icon) {
-    delete updated.customIcon;
-    delete updated.illustration;
-  }
+  updated = patchBoardNode(node, updated, {
+    narration: patch.label !== undefined || patch.summary !== undefined,
+    drawing: patch.icon !== undefined && patch.icon !== node.icon,
+  });
   return withEdit(snapshot, {
     ...board,
     nodes: board.nodes.map((item) => (item.id === id ? updated : item)),
@@ -216,14 +201,7 @@ export function updateConcept(snapshot: BoardSnapshot, id: string, patch: Concep
 export function removeConcept(snapshot: BoardSnapshot, id: string) {
   const board = boardOf(snapshot);
   requireNode(board, id);
-  const positions = { ...board.positions };
-  delete positions[id];
-  return withEdit(snapshot, {
-    ...board,
-    nodes: withoutBrokenProcesses(board.nodes.filter((node) => node.id !== id)),
-    edges: board.edges.filter((edge) => edge.source !== id && edge.target !== id),
-    positions,
-  });
+  return withEdit(snapshot, removeBoardNode(board, id));
 }
 
 function uniqueEdgeId(board: BoardDocument, from: string, to: string) {
