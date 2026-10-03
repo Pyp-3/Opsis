@@ -348,6 +348,26 @@ export function validateBoardReferences(
 export const BoardGraphSchema = BoardContentSchema.superRefine(validateBoardReferences);
 export const BoardPortSchema = z.enum(['left', 'right', 'top', 'bottom']);
 export type BoardPort = z.infer<typeof BoardPortSchema>;
+/** Canvas palettes and icon tints the web app paints; agents choose from these by id. */
+export const CANVAS_BACKGROUNDS = [
+  'blueprint',
+  'midnight',
+  'graphite',
+  'forest',
+  'ocean',
+  'plum',
+  'ember',
+] as const;
+export const CANVAS_ICON_TINTS = [
+  'gold',
+  'ivory',
+  'sky',
+  'mint',
+  'amber',
+  'coral',
+  'rose',
+  'lilac',
+] as const;
 /**
  * How this canvas is painted. Ids name palettes the web app defines; an id it does not know
  * falls back to the default, so the schema only bounds their shape.

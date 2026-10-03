@@ -100,11 +100,19 @@ CLI discovery searches the API process's `PATH`, then common user/system install
 | Undo/redo history                                                  | SQLite and recovery snapshot                                   | Up to 40 past/future states per board, survives reload |
 | Legacy OSG diagrams, cached results, explanations and share tokens | SQLite through `better-sqlite3` and Drizzle                    | Local API database                                     |
 
-Use **Manage boards** to create empty named boards, search, reopen, rename and delete them. Deletion requires confirmation and removes that board’s undo history; export a backup first if needed. **Recent boards** keeps five shortcuts in the minimal sidebar. **Board name** also supports inline renaming. **New canvas** saves the previous board before opening a fresh draft. Open views using the same API automatically check for saved updates every 1.5 seconds and on window focus; they retain their own active-board selection. Incoming updates wait during dragging, playback, generation and proposal review. Stale saves reconcile changes field by field and retry: unrelated edits are retained, and the retried local edit wins when both views change the same field. The other saved version is retained in undo history. If a board was deleted, repeated conflicts persist, or a combined board would exceed limits, unsaved edits are preserved as a separate board instead of blocking on a revision conflict. A clean view of a deleted board opens a fresh draft. Network/storage failures still retain local recovery and may block switching until saved. Wait for **Saved to SQLite** before treating an edit as durably saved.
+Use **Manage boards** to create empty named boards, search, reopen, rename and delete them. Deletion requires confirmation and removes that board’s undo history; export a backup first if needed. The home page lists recent boards and examples; inside a canvas the sidebar shows only that canvas. **Board name** also supports inline renaming. **New canvas** saves the previous board before opening a fresh draft. Open views using the same API automatically check for saved updates every 1.5 seconds and on window focus; they retain their own active-board selection. Incoming updates wait during dragging, playback, generation and proposal review. Stale saves reconcile changes field by field and retry: unrelated edits are retained, and the retried local edit wins when both views change the same field. The other saved version is retained in undo history. If a board was deleted, repeated conflicts persist, or a combined board would exceed limits, unsaved edits are preserved as a separate board instead of blocking on a revision conflict. A clean view of a deleted board opens a fresh draft. Network/storage failures still retain local recovery and may block switching until saved. Wait for **Saved to SQLite** before treating an edit as durably saved.
 
 The original `opsis:board:v2` browser board is imported on first use when no newer recovery snapshot exists; its old copy is retained. Clearing site data does not delete saved SQLite boards; reopen them from the manager. Pending edits can still be lost if both the API save and browser recovery fail. A drag is one undoable edit; intermediate pointer positions are not autosaved. Sync covers views connected to the same local API, with recovery baselines stored per tab. There is no hosted cross-device sync, archive UI, or unlimited revision archive yet.
 
 Use **Export → Editable board** for portable JSON backups and **Import** to reopen them. SVG and PNG are images; Markdown includes explanations and outgoing relationships. **Import** also accepts legacy OSG JSON: it creates a separate v2 board and marks flattened concepts as simplified. 3D geometry, animations and drill-down behavior are not preserved; unknown primitives become generic icons. Oversized/invalid imports are rejected, and original files remain unchanged. Existing legacy database records are not bulk-migrated automatically.
+
+## Agent access over MCP
+
+`apps/mcp` is an MCP server that lets your own agents (Claude Code, Codex, any MCP client) read
+and edit canvases directly: create boards, add and connect concepts, recolour them or write a
+whole diagram. Edits go through the local API, so an open canvas updates live and each agent
+edit can be undone. Claude Code in this repository picks it up from `.mcp.json`; see
+[apps/mcp/README.md](apps/mcp/README.md) for other agents.
 
 ## Follow-up safety and learning
 
@@ -144,6 +152,7 @@ apps/api/src/boards.ts   Agent discovery and v2 graph generation
 apps/api/src/harness/    Validated local CLI integration
 apps/api/src/storage.ts  SQLite persistence for v2 and legacy boards
 apps/api/src/board-library.ts V2 library list/load/save endpoints
+apps/mcp/                MCP server so external agents can edit canvases
 packages/schema/        Shared Zod contracts, including v2 boards
 packages/engine/        Rust/WASM calculations, bindings and shared engine contract
 packages/pipeline/      Legacy parsing, metaphor, layout and explanation pipeline

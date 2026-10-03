@@ -1,0 +1,24 @@
+{
+  "name": "@opsis/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that lets agents read and edit Opsis canvases through the local API",
+  "bin": {
+    "opsis-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@opsis/schema": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.7"
+  }
+}

@@ -2,7 +2,12 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
+import {
+  CANVAS_BACKGROUNDS,
+  CANVAS_ICON_TINTS,
+  EMAIL_DEMO,
+  type BoardDocument,
+} from '@opsis/schema';
 import { CanvasSettingsPage } from './CanvasSettingsPage';
 import {
   CANVAS_PALETTES,
@@ -36,6 +41,10 @@ function Harness({ onCommit }: { onCommit: (board: BoardDocument) => void }) {
 }
 
 describe('canvas colours', () => {
+  it('paints exactly the palettes and tints agents can choose', () => {
+    expect(CANVAS_PALETTES.map((palette) => palette.id)).toEqual([...CANVAS_BACKGROUNDS]);
+    expect(ICON_COLORS.map((icon) => icon.id)).toEqual([...CANVAS_ICON_TINTS]);
+  });
   it('defines every token for every palette and icon colour', () => {
     const names = Object.keys(lookVariables(DEFAULT_LOOK));
     for (const palette of CANVAS_PALETTES)

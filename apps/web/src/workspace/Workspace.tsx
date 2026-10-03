@@ -501,6 +501,16 @@ function BoardWorkspace() {
     },
     [flow, boardRef],
   );
+  // Links an agent shares through the MCP server open that board: /canvas?board=<id>.
+  const { open: openLibraryBoard, activeId: startingId } = library;
+  const linkHandled = useRef(false);
+  useEffect(() => {
+    const linked = new URLSearchParams(location.search).get('board');
+    if (!linked || linkHandled.current) return;
+    linkHandled.current = true;
+    window.history.replaceState(null, '', location.pathname);
+    if (linked !== startingId) void openLibraryBoard(linked);
+  }, [openLibraryBoard, startingId]);
   const openBoard = async (id: string) => {
     if (id !== library.activeId && !(await library.open(id))) return false;
     setSelected(null);

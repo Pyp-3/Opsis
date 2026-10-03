@@ -206,3 +206,12 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   await page.reload();
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
 });
+
+test('a shared /canvas?board= link opens that board, as agents link to it', async ({ page }) => {
+  const title = `Linked ${Date.now()}`;
+  const created = await page.request.post('/v1/boards', { data: { title } });
+  const { id } = (await created.json()) as { id: string };
+  await page.goto(`/canvas?board=${id}`);
+  await expect(page.getByLabel('Board name')).toHaveValue(title);
+  await expect(page).toHaveURL(/\/canvas$/);
+});
