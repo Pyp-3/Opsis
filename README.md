@@ -24,7 +24,7 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 - JSON/legacy OSG import and JSON, SVG, PNG, and Markdown export.
 - An email-flow demo that works without an agent subscription or model call.
 
-Opsis is a local-first development application. The current interface is entirely 2D; the older renderer and pipeline remain in the repository for compatibility. See [GOALS.md](GOALS.md) for the implemented baseline and prioritized roadmap.
+Opsis is a local-first development application. The current interface is entirely 2D. The older renderer and pipeline APIs have been retired; strict legacy OSG JSON import remains supported. See [GOALS.md](GOALS.md) for the implemented baseline and prioritized roadmap.
 
 ### Terminal-flow foundation prototype
 
@@ -36,11 +36,9 @@ Local recognition is deliberately limited to this pipeline (including `head -n 1
 
 ### Calculated process engine
 
-`@opsis/engine` is a Rust core compiled to WebAssembly, loaded in a dedicated browser worker. Its versioned input contract accepts synthetic text sources, pass-through, head, tail, lexical sort, literal substring filter and adjacent unique operations. Each node references its input node by ID. The engine returns exact text, row counts, retained input row indices and vector paths showing each row's journey. Playback shows a compact input → output view, moving packets along calculated paths and marking stopped rows. Reached icons show their calculated counts. The browser renders these values; the model supplies meaning and operations.
+`@opsis/engine` is a deterministic Rust core compiled to WebAssembly and loaded in a browser worker. Process contract v3 supports synthetic sources, pass-through, head/tail, sorting, literal filtering, adjacent unique, count, cut, character translation, concat and paste. It calculates intermediate text, row counts, provenance and playback paths. Failures propagate along dependencies while independent branches continue.
 
-Select a source icon and edit **Sample data → Update sample** to recalculate connected previews without calling an agent. This is one undoable, synchronized edit. Calculations also run before generation proposals are previewed or applied, so saved terminal output is populated by the engine. Existing boards without process metadata retain their original previews. The engine performs no shell execution, file access or network requests; its WASM loader fetches only the bundled application asset. Limits are 50 process nodes, 100 lines and 1000 characters per sample/output. Missing sources and dependency cycles are rejected; deleting a source drops dependent calculations while retaining their explanatory content.
-
-Head, tail and pass-through preserve line endings and unterminated final lines. Sort uses Unicode lexical ordering and terminates output lines with LF; it does not reproduce locale-dependent or numeric shell sorting. Filter is case-sensitive literal matching, and unique collapses adjacent equal lines without sorting. This first slice calculates the successful sample flow; stderr, exit statuses, SIGPIPE, shell concurrency and unsupported command behavior remain explanations. ELK, existing connector routing and SVG drawing remain in place. General vector geometry and domain-specific simulations can be added behind the same engine boundary after measurement. See [the engine contract](docs/PROCESS-ENGINE.md).
+Select a source icon and edit **Sample data → Update sample** to recalculate connected previews without a model call. This is one undoable, synchronized edit. Existing boards without process metadata retain their explanatory previews. The engine never executes commands or reads local files. See [the engine contract](docs/PROCESS-ENGINE.md) for limits, exact operation semantics and build instructions.
 
 ## Quick start
 
@@ -86,19 +84,19 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 | `OPSIS_SPEECH`     | `off` disables the API's natural narrator | on                           |
 | `OPSIS_MODEL_DIR`  | Where the narrator's speech model is kept | `apps/api/data/models`       |
 
-Use absolute executable paths when overriding the CLI locations. Executables and versions are validated by the harness. The `OPSIS_LLM_*` settings described in the [legacy API documentation](apps/api/README.md) configure the older pipeline; the new canvas sends its model selection from the UI.
+Use absolute executable paths when overriding the CLI locations. Executables and versions are validated by the harness. Model and effort settings come from the canvas request; the retired pipeline’s `OPSIS_LLM_*` configuration is no longer used. See [API documentation](apps/api/README.md) for current settings.
 
 CLI discovery searches the API process's `PATH`, then common user/system installation locations on Windows, Linux, and macOS (including Apple Silicon Homebrew). Windows npm installs are resolved to their package's native executable or JavaScript entry point; `.cmd`/`.ps1` npm overrides are supported without invoking a shell. Custom shell wrappers are unsupported. Restart the API after installing a CLI or changing its `PATH`. An explicit override takes precedence and fails if invalid instead of silently selecting another installation. Readiness checks do not verify login or model entitlement.
 
 ## Persistence: what is saved today?
 
-| Data                                                               | Storage                                                        | Scope                                                  |
-| ------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------ |
-| Named 2D boards, positions, connection sides and history           | SQLite `boards_v2` table                                       | Multiple boards in the local API database              |
-| Active-board recovery snapshot                                     | Browser local/session storage, key `opsis:library-recovery:v1` | Per-tab recovery plus a last-used browser copy         |
-| Agent/model/effort preferences                                     | Browser `localStorage`, key `opsis:model-settings:v1`          | Per-agent preferences on that browser/origin           |
-| Undo/redo history                                                  | SQLite and recovery snapshot                                   | Up to 40 past/future states per board, survives reload |
-| Legacy OSG diagrams, cached results, explanations and share tokens | SQLite through `better-sqlite3` and Drizzle                    | Local API database                                     |
+| Data                                                     | Storage                                                        | Scope                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
+| Named 2D boards, positions, connection sides and history | SQLite `boards_v2` table                                       | Multiple boards in the local API database              |
+| Active-board recovery snapshot                           | Browser local/session storage, key `opsis:library-recovery:v1` | Per-tab recovery plus a last-used browser copy         |
+| Agent/model/effort preferences                           | Browser `localStorage`, key `opsis:model-settings:v1`          | Per-agent preferences on that browser/origin           |
+| Undo/redo history                                        | SQLite and recovery snapshot                                   | Up to 40 past/future states per board, survives reload |
+| Historical OSG records, explanations and share tokens    | Existing SQLite tables left untouched                          | Retained data; retired API access is unavailable       |
 
 Use **Manage boards** to create empty named boards, search, reopen, rename and delete them. Deletion requires confirmation and removes that board’s undo history; export a backup first if needed. The home page lists recent boards and examples; inside a canvas the sidebar shows only that canvas. **Board name** also supports inline renaming. **New canvas** saves the previous board before opening a fresh draft. Open views using the same API automatically check for saved updates every 1.5 seconds and on window focus; they retain their own active-board selection. Incoming updates wait during dragging, playback, generation and proposal review. Stale saves reconcile changes field by field and retry: unrelated edits are retained, and the retried local edit wins when both views change the same field. The other saved version is retained in undo history. If a board was deleted, repeated conflicts persist, or a combined board would exceed limits, unsaved edits are preserved as a separate board instead of blocking on a revision conflict. A clean view of a deleted board opens a fresh draft. Network/storage failures still retain local recovery and may block switching until saved. Wait for **Saved to SQLite** before treating an edit as durably saved.
 
@@ -151,33 +149,31 @@ Targeted new-workspace coverage:
 pnpm exec vitest run apps/web/src/workspace apps/api/src/boards.test.ts
 ```
 
-`pnpm test:browser` runs the current workspace suite in `tests/workspace`; `pnpm test:qa` builds and runs unit/API and browser tests. Isolated test servers use ports 3100/8100 and an in-memory database; no paid agent calls or credentials are required. Tests cover board management/history, repeated dragging, the 50-node/100-edge limit, review, imports/exports, cancellation, walkthrough, accessibility and mobile overflow. See [the stress-test report](docs/QA-STRESS.md) for scope and limitations. Retired scenarios under `tests/e2e`, `tests/visual` and `tests/perf` are excluded from the default gate. Pixel-perfect baselines and broader performance budgets remain future work. The build still warns about large chunks, including lazy-loaded ELK.
+`pnpm test:browser` runs the current workspace suite in `tests/workspace`; `pnpm test:qa` builds and runs unit/API and browser tests. Isolated test servers use ports 3100/8100 and an in-memory database; no paid agent calls or credentials are required. Tests cover board management/history, repeated dragging, the 50-node/100-edge limit, review, imports/exports, cancellation, walkthrough, accessibility and mobile overflow. See [the stress-test report](docs/QA-STRESS.md) for scope and limitations. Obsolete pipeline and 3D scenarios have been removed; current coverage lives under `tests/workspace`. Pixel-perfect baselines and broader performance budgets remain future work. The build still warns about large chunks, including lazy-loaded ELK.
 
 An optional real Opus smoke check uses your local Claude login: `OPSIS_LIVE_OPUS=1 pnpm --filter api exec tsx ../../scripts/live-opus-smoke.ts`. It is excluded from CI, runs two application requests at medium effort, and caps CLI completions at three including repairs. This is a call-count guard, not a token/quota guarantee. Its report is written under `apps/api/output/qa/`.
 
 ### Repository layout
 
 ```text
-apps/web/src/workspace/   Current React Flow canvas, controls, layout and exports
-apps/web/src/LegacyApp.tsx Previous application, retained for compatibility
-apps/api/src/boards.ts   Agent discovery and v2 graph generation
+apps/web/src/workspace/  Canvas composition, feature components, board persistence and playback
+apps/web/src/auth/       Account entry screens and session requests
+apps/api/src/boards/     Prompts, agent workflows, validation and response streaming
 apps/api/src/harness/    Validated local CLI integration
-apps/api/src/storage.ts  SQLite persistence for v2 and legacy boards
-apps/api/src/board-library.ts V2 library list/load/save endpoints, ownership and sharing
-apps/api/src/auth.ts     Accounts, sessions and local-only agent keys
-apps/web/src/auth/       Sign-in and sign-up page
-apps/mcp/                MCP server so external agents can edit canvases
-packages/schema/        Shared Zod contracts, including v2 boards
-packages/engine/        Rust/WASM calculations, bindings and shared engine contract
-packages/pipeline/      Legacy parsing, metaphor, layout and explanation pipeline
-tests/workspace/        Current workspace browser regression suite
-docs/                   Design notes and implementation documentation
+apps/api/src/storage.ts  SQLite accounts, owned boards and revision transactions
+apps/mcp/               Agent tools for reading and editing canvases
+packages/schema/        Shared board contracts/rules and legacy OSG import validation
+packages/engine/        Rust/WASM contracts, operations, evaluation and drawing
+tests/workspace/        Current browser regression suite
+docs/                   Current reference docs and marked historical design notes
 ```
+
+Read [AGENTS.md](AGENTS.md) before changing code. [CLAUDE.md](CLAUDE.md) points to the same guide. [The refactoring record](docs/REFACTORING.md) explains module ownership, preserved contracts and intentional removals.
 
 ## Local-use boundaries
 
-Keep the API on loopback. Opsis has no user accounts or production authorization layer, and legacy ID-based write routes are unauthenticated. Do not expose it publicly without authentication and access controls. Prompts and graph context are sent through your selected agent provider when you generate; local storage does not mean model inference is offline.
+Keep the API on loopback. Opsis has accounts, board ownership and local-only agent keys, but public hosting still requires a separate deployment-hardening review. Legacy pipeline and OSG sharing routes are removed. Prompts and graph context are sent through your selected agent provider when you generate; local storage does not mean model inference is offline.
 
 Agent generation runs with bounded input/output and a deadline, validates the returned graph, and restricts CLI tools. Failures preserve the current diagram. Credentials, environment files, local databases, browser traces, and generated build/test output should never be committed.
 
-For further implementation details, see [the 2D workspace notes](docs/OPSIS-2D.md). `PLAN.md` and older design documents describe historical work; [GOALS.md](GOALS.md) tracks the current product direction.
+For current API and engine behavior, see [API documentation](apps/api/README.md) and [the engine contract](docs/PROCESS-ENGINE.md). `PLAN.md`, `PROMPT.md` and [the 2D workspace notes](docs/OPSIS-2D.md) describe historical work; [GOALS.md](GOALS.md) tracks the current product direction.

@@ -2,7 +2,9 @@
 
 > **Opsis** (Greek: ὄψις, "sight"). *See what you mean.*
 >
-> This document is the single source of truth for every agent working on Opsis. Read it fully before starting any task. When this document and a task ticket disagree, this document wins unless the ticket explicitly says it overrides a numbered section.
+> Historical specification for the retired pipeline and 3D application. Its workflow,
+> roles and precedence rules are superseded by [AGENTS.md](AGENTS.md). Retained as
+> design history; use README and current contracts for the supported application.
 
 ---
 

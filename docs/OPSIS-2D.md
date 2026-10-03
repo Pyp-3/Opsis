@@ -1,5 +1,9 @@
 # Opsis 2D workspace
 
+> Historical implementation notes. Some described boundaries predate accounts, MCP,
+> the process engine and legacy retirement. Follow the current [README](../README.md),
+> [agent guide](../AGENTS.md) and [refactoring record](REFACTORING.md).
+
 Goal: turn a prompt into an understandable, editable graph of icons and short labels, with explanations available when a concept is selected. The blueprint canvas is the main workspace. There is no 3D renderer or 3D toggle in the new application entry point.
 
 ## Run

@@ -1,5 +1,8 @@
 # Opsis plan
 
+> Historical implementation checklist for the retired pipeline. See [AGENTS.md](AGENTS.md),
+> [README](README.md), and [the refactoring record](docs/REFACTORING.md) for current guidance.
+
 Milestones follow PROMPT.md §13; no milestone starts until the previous one passes §14.
 Owners use the current agent roster: **claude-1** (coordinator, semantic-parser, metaphor,
 renderer-3d, explainer, ux-accessibility, pedagogy-reviewer) and **codex-2** (schema, layout,

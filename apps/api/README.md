@@ -1,62 +1,69 @@
 # Opsis API
 
-This page primarily documents the **legacy OSG pipeline**. The current 2D workspace uses
-`GET /v1/agents` and `POST /v1/boards/generate`, plus `GET /v1/boards`, `GET /v1/boards/:id`,
-and revision-checked `PUT /v1/boards/:id` for SQLite v2 snapshots and undo/redo history.
-These use the separate `boards_v2` table, not the OSG tables described below. See the [project README](../../README.md)
-and [2D workspace notes](../../docs/OPSIS-2D.md) for the current application.
+Fastify service for accounts, saved canvases, local agent generation and narrated playback.
 
-Fastify service for the Opsis parse → metaphor → layout pipeline, explanations, drill-down,
-persistence, and sharing.
+Run from the repository root with `pnpm --filter api dev`. The default address is
+`http://127.0.0.1:8000`. The application starts speech warmup in the background.
 
-## Run locally
+## Routes and ownership
 
-From the repository root:
+- `GET /v1/health` reports availability.
+- `/v1/auth/*` manages accounts, cookie sessions and revocable agent keys.
+- `GET /v1/agents` reports local Claude/Codex availability and the built-in demo.
+- `POST /v1/boards/generate` and `POST /v1/boards/illustrate` run the selected local agent.
+- `GET/POST /v1/boards` lists owned boards or creates one.
+- `GET /v1/boards/public` lists other accounts' public boards.
+- `GET/PUT/PATCH/DELETE /v1/boards/:id` reads, saves, renames/shares or deletes a board.
+- `GET/POST /v1/speech` checks narration availability or synthesizes speech;
+  `POST /v1/speech/warm` prepares the model.
 
-```sh
-corepack pnpm --filter api dev
-```
+Boards require an account. Owners can edit their boards; other signed-in accounts can
+read public boards. Private boards remain hidden. Agent keys work only for local,
+non-browser requests and act as their owning account.
 
-The server binds to `127.0.0.1:8000` by default. `POST /v1/visualize` returns JSON normally;
-send `Accept: text/event-stream` to receive `parsing`, `mapping`, `layout`, and `done` SSE events.
+Board writes check the expected revision. Stale writes return 409, deleted boards cannot
+be resurrected, and accepted content edits retain up to 40 undo steps. Changing visibility
+does not create a content revision.
 
-## Persistence and sharing
+Generation normally returns JSON. With `Accept: application/x-ndjson`, it returns
+progress events followed by `{ type: "result", status, body }`. Malformed model answers
+get at most one repair attempt. Provider failures never silently substitute demo content.
+Changes to existing diagram content return a review candidate before application.
 
-- `GET /v1/osg/:id` loads a stored diagram. `PUT /v1/osg/:id` saves edits.
-- Pipeline output never overwrites a stored diagram. OSG ids are deterministic per utterance and
-  seed, so visualizing the same sentence again (or reopening the same drill-down) returns the
-  stored document, including any edits the user saved.
-- `POST /v1/share/:id` creates a random share token and returns
-  `{ token, osgId, url: "/v1/shared/<token>", readOnly: true }`.
-- `GET /v1/shared/:token` is the only route that accepts a token, and it only reads. Unknown
-  tokens return `404 share_not_found`. Malformed tokens return `400 invalid_request`. Shared links
-  are rate-limited the same way as every other non-health route.
+## Code map
 
-**MVP limitation:** there are no accounts yet, so the id-based `PUT /v1/osg/:id` is
-unauthenticated. Anyone who knows a diagram's id can overwrite it, and the OSG body served by a
-share link includes that id. The share route is read-only, but full write protection will need a
-separate edit-capability design, such as an edit token issued at creation and required by `PUT`.
+- `app.ts`: application assembly, authentication requirement for generation, rate limits.
+- `board-library.ts` and `storage.ts`: owned board routes, SQLite transactions and account persistence.
+- `boards/`: prompt text, generation/illustration workflows, response validation and streaming.
+- `harness/`: local CLI invocation, bounded process execution and progress parsing.
+- `speech.ts`: narration model lifecycle and bounded generation queue.
 
-## Environment variables
+Use shared board operations from `@opsis/schema` when changing history or editing rules.
+Keep prompt edits separate from structural refactors so changes in agent output are reviewable.
 
-| Variable                     | Default                      | Purpose                                                                                |
-| ---------------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
-| `HOST`                       | `127.0.0.1`                  | Listen address. Keep loopback unless deployment explicitly requires another interface. |
-| `PORT`                       | `8000`                       | Listen port.                                                                           |
-| `OPSIS_DB_PATH`              | `apps/api/data/opsis.sqlite` | SQLite file used for cache entries, OSGs, explanations, and share tokens.              |
-| `OPSIS_MEMORY_CACHE_ENTRIES` | `256`                        | Maximum entries in the in-process LRU front cache.                                     |
-| `OPSIS_RATE_LIMIT`           | `60`                         | Maximum non-health requests per client in one window.                                  |
-| `OPSIS_RATE_WINDOW_MS`       | `60000`                      | Rate-limit window in milliseconds.                                                     |
-| `OPSIS_LLM_PROVIDER`         | `anthropic`                  | HTTP provider, or `harness:claude`, `harness:codex`, or `harness:agy`.                 |
-| `OPSIS_LLM_MODEL`            | unset                        | Provider model id. Required with an API key to enable LLM calls.                       |
-| `OPSIS_LLM_API_KEY`          | unset                        | Provider credential. When absent, the deterministic offline fallback is used.          |
-| `OPSIS_LLM_BASE_URL`         | provider default             | Optional Anthropic or OpenAI-compatible API base URL.                                  |
-| `OPSIS_HARNESS_BIN`          | unset                        | Absolute, allowlisted CLI path; required for a harness provider.                       |
-| `OPSIS_HARNESS_TIMEOUT_MS`   | `30000`                      | Harness deadline from 100 to 300000 milliseconds.                                      |
+## Configuration
 
-No key is required for local development or tests. Harness mode uses the CLI's existing session;
-Opsis never reads or stores CLI credential files. The audited paths and initial supported versions
-are Claude `/home/pyp/.local/share/claude/versions/2.1.281` (2.1.x), Codex `/usr/bin/codex`
-(0.156.x), and Agy `/home/pyp/.local/bin/agy` (1.2.x). Invalid or unavailable harness
-configuration fails closed to deterministic offline rules. Requests and responses are checked
-against the shared Zod contracts, and all API failures use `{ code, message, stage, retryable }`.
+| Variable                              | Default                      | Purpose                                   |
+| ------------------------------------- | ---------------------------- | ----------------------------------------- |
+| `HOST`                                | `127.0.0.1`                  | Listen address                            |
+| `PORT`                                | `8000`                       | Listen port                               |
+| `OPSIS_DB_PATH`                       | `apps/api/data/opsis.sqlite` | Account and board database                |
+| `OPSIS_RATE_LIMIT`                    | `60`                         | Requests per client per budget window     |
+| `OPSIS_RATE_WINDOW_MS`                | `60000`                      | Budget window in milliseconds             |
+| `OPSIS_CLAUDE_BIN`, `OPSIS_CODEX_BIN` | PATH lookup                  | Explicit CLI executable                   |
+| `OPSIS_SPEECH`                        | enabled                      | Set to `off` to disable natural narration |
+| `OPSIS_MODEL_DIR`                     | application model cache      | Speech model cache directory              |
+
+Board polling has a separate allowance ten times the normal budget. Authentication
+has its own budget. Health and speech do not consume these budgets.
+
+Models and reasoning effort come from the board request and its defaults. Agent runs use
+the CLI's existing login; no HTTP provider key or legacy startup LLM adapter is needed.
+Tests inject clients and speech engines without paid model calls.
+
+## Retired pipeline
+
+The former visualize, explain, drilldown, OSG and token-share endpoints have been removed.
+Their existing SQLite tables and records are left untouched; new databases create only
+the account and board tables. Existing pre-account boards still transfer to the first
+account during the ownership upgrade. Public board sharing is the supported sharing flow.

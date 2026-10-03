@@ -1,6 +1,6 @@
 # Opsis goals
 
-Last reviewed: 2026-09-27.
+Last reviewed: 2026-10-03.
 
 ## Product goal
 
@@ -48,7 +48,9 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Cached/deduplicated agent readiness probes (30 seconds).
 - [x] Portable harness supervision tests using the running Node executable, not `/usr/bin/node`.
 - [x] Shared schema, API/harness and workspace unit tests; direct browser interaction checks.
-- [x] Legacy SQLite storage retained for OSG documents, cache, explanations and share tokens.
+- [x] Legacy OSG JSON import retained; retired pipeline tables remain untouched in existing databases.
+- [x] Accounts, board ownership, read-only public boards and revocable local agent keys.
+- [x] External agent canvas editing over MCP, sharing the board API and undo history.
 
 ## Next: persistence and recovery — P0
 
@@ -98,7 +100,7 @@ Acceptance: a branching process remains understandable at normal zoom; manual la
 - [ ] Attach notes, references and source links to concepts.
 - [ ] Document/text import with source attribution and a review step.
 - [ ] Board comparison and version-history browsing.
-- [ ] Read-only v2 sharing after access controls and data-exposure rules are designed.
+- [x] Read-only public boards for signed-in users, with ownership controls and save-a-copy editing.
 - [ ] Optional collaboration/sync after durable local persistence is reliable.
 
 ## Quality and release readiness
@@ -111,7 +113,8 @@ Acceptance: a branching process remains understandable at normal zoom; manual la
 - [ ] Verify clean-clone installation, native SQLite setup and supported CLI versions in CI.
 - [x] Define and test explicit OSG JSON import; keep source records unchanged.
 - [ ] Add bulk legacy-database migration and richer primitive/geometry mapping.
-- [ ] Add authentication/authorization before any non-loopback deployment.
+- [x] Add account authentication and board authorization.
+- [ ] Review deployment hardening before supporting non-loopback hosting.
 
 ## Maintenance rules
 

@@ -82,6 +82,11 @@ The engine calculates successful example transformations. Command labels do not 
 
 ## Build and verification
 
+The Rust entrypoint delegates to `contract`, `text`, `operations`, `evaluator` and
+`drawing` modules. Tests retain the original property-test regression corpus.
+Build fingerprints include every Rust source recursively, its relative name, and
+the build/hash scripts; changing a nested module invalidates cached WASM output.
+
 ```sh
 pnpm install --frozen-lockfile
 pnpm engine:build
