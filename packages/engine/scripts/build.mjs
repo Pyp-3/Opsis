@@ -1,28 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sourceHash } from './source-hash.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const sources = [
-  'Cargo.toml',
-  'Cargo.lock',
-  'rust-toolchain.toml',
-  'scripts/build.mjs',
-  ...readdirSync(join(root, 'src'))
-    .filter((name) => name.endsWith('.rs'))
-    .map((name) => `src/${name}`),
-];
-const digest = () =>
-  createHash('sha256')
-    .update(
-      sources
-        .filter((name) => existsSync(join(root, name)))
-        .map((name) => readFileSync(join(root, name)))
-        .reduce((a, b) => Buffer.concat([a, b]), Buffer.alloc(0)),
-    )
-    .digest('hex');
+const digest = () => sourceHash(root);
 const stamp = join(root, 'dist', '.source-hash');
 if (
   existsSync(stamp) &&
