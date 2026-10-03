@@ -106,12 +106,24 @@ The original `opsis:board:v2` browser board is imported on first use when no new
 
 Use **Export → Editable board** for portable JSON backups and **Import** to reopen them. SVG and PNG are images; Markdown includes explanations and outgoing relationships. **Import** also accepts legacy OSG JSON: it creates a separate v2 board and marks flattened concepts as simplified. 3D geometry, animations and drill-down behavior are not preserved; unknown primitives become generic icons. Oversized/invalid imports are rejected, and original files remain unchanged. Existing legacy database records are not bulk-migrated automatically.
 
+## Accounts and sharing
+
+Opsis asks you to sign up or log in (name, email, password; no 2FA yet). Passwords are stored
+as salted scrypt hashes; sessions are HttpOnly cookies that last 30 days. Every board belongs
+to an account and starts **private**. Make one **public** from its **Look & details** page or
+the board manager, and anyone signed in to the same Opsis server can open it from **Public
+boards** or its link (`/canvas?board=<id>`), play it, and **Save a copy** to edit their own.
+They can never change yours. Boards saved before accounts existed go to the first account
+created on that database.
+
 ## Agent access over MCP
 
 `apps/mcp` is an MCP server that lets your own agents (Claude Code, Codex, any MCP client) read
 and edit canvases directly: create boards, add and connect concepts, recolour them or write a
 whole diagram. Edits go through the local API, so an open canvas updates live and each agent
-edit can be undone. Claude Code in this repository picks it up from `.mcp.json`; see
+edit can be undone. Agents authenticate with an agent key from **Account → Agent keys**, which
+works only for local agents (never from a browser or another machine). Claude Code in this
+repository picks the server up from `.mcp.json` with `OPSIS_AGENT_KEY` set in your shell; see
 [apps/mcp/README.md](apps/mcp/README.md) for other agents.
 
 ## Follow-up safety and learning
@@ -151,7 +163,9 @@ apps/web/src/LegacyApp.tsx Previous application, retained for compatibility
 apps/api/src/boards.ts   Agent discovery and v2 graph generation
 apps/api/src/harness/    Validated local CLI integration
 apps/api/src/storage.ts  SQLite persistence for v2 and legacy boards
-apps/api/src/board-library.ts V2 library list/load/save endpoints
+apps/api/src/board-library.ts V2 library list/load/save endpoints, ownership and sharing
+apps/api/src/auth.ts     Accounts, sessions and local-only agent keys
+apps/web/src/auth/       Sign-in and sign-up page
 apps/mcp/                MCP server so external agents can edit canvases
 packages/schema/        Shared Zod contracts, including v2 boards
 packages/engine/        Rust/WASM calculations, bindings and shared engine contract

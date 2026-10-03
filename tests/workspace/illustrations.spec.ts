@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { signUp } from './session';
 
 const SHOTS = process.env.OPSIS_SHOTS;
 
 test.beforeEach(async ({ page }) => {
+  await signUp(page);
   await page.route('**/v1/agents', (route) =>
     route.fulfill({
       json: [
@@ -60,7 +62,11 @@ test('icons come alive in playback and evolve into agent illustrations', async (
   await expect(page.locator('.illustration')).toHaveCount(0);
   const saved = await page.evaluate(
     () =>
-      JSON.parse(sessionStorage.getItem('opsis:library-recovery:v1')!).snapshot.board.nodes as {
+      JSON.parse(
+        sessionStorage.getItem(
+          Object.keys(sessionStorage).find((key) => key.startsWith('opsis:library-recovery:v1:'))!,
+        )!,
+      ).snapshot.board.nodes as {
         illustration?: unknown;
       }[],
   );

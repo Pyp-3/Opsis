@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUp, ArrowUpRight, Clock, FolderOpen, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUp,
+  ArrowUpRight,
+  Clock,
+  FolderOpen,
+  Globe,
+  Sparkles,
+} from 'lucide-react';
 import { DNS_DEMO, EMAIL_DEMO, type BoardDocument, type BoardGraph } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { BrandMark } from './BrandMark';
 import { NodeIcon } from './NodeIcon';
 import { boardIcons } from './icons';
-import { updatedLabel } from './BoardsPage';
+import { fetchPublicBoards, updatedLabel, type PublicBoard } from './BoardsPage';
 import { navigate } from '../router';
 
 const EXAMPLES = [
@@ -37,8 +45,17 @@ export function HomePage({
 }) {
   const [question, setQuestion] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const [shared, setShared] = useState<PublicBoard[]>([]);
   useEffect(() => {
     document.title = 'Opsis';
+    let live = true;
+    // Friends' public boards are a bonus here; the page works without them.
+    fetchPublicBoards()
+      .then((list) => live && setShared(list.slice(0, 6)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
   }, []);
   const recent = library.entries
     .filter((entry) => entry.id !== library.activeId)
@@ -160,6 +177,43 @@ export function HomePage({
                   >
                     <strong>{entry.title}</strong>
                     <small id={`updated-${entry.id}`}>{updatedLabel(entry.updatedAt)}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </section>
+      )}
+
+      {shared.length > 0 && (
+        <section className="home-section" aria-labelledby="home-shared">
+          <div className="home-section-head">
+            <h2 id="home-shared" className="home-section-title">
+              <Globe size={14} /> Shared by others
+            </h2>
+            <a
+              href="/boards"
+              onClick={(event) => {
+                event.preventDefault();
+                navigate('/boards');
+              }}
+            >
+              All boards <ArrowRight size={13} />
+            </a>
+          </div>
+          <nav aria-label="Public boards">
+            <ul className="home-cards">
+              {shared.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    disabled={busy}
+                    aria-label={`${entry.title} by ${entry.ownerName}`}
+                    onClick={() => onOpen(entry.id)}
+                  >
+                    <strong>{entry.title}</strong>
+                    <small>
+                      By {entry.ownerName} · {updatedLabel(entry.updatedAt)}
+                    </small>
                   </button>
                 </li>
               ))}

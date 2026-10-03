@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EMAIL_DEMO } from '@opsis/schema';
 import type { FastifyInstance } from 'fastify';
+import { signIn } from './test-session.js';
 import { buildApp } from './app.js';
 import { prepareAttachments } from './attachments.js';
 
@@ -61,6 +62,7 @@ describe('document uploads', () => {
       llm: null,
       boardClientFactory: async () => ({ model: 'test', complete }),
     });
+    await signIn(app);
     apps.push(app);
     const result = await app.inject({
       method: 'POST',
@@ -89,6 +91,7 @@ describe('document uploads', () => {
 
   it('refuses uploads for the demo agent', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null });
+    await signIn(app);
     apps.push(app);
     const result = await app.inject({
       method: 'POST',

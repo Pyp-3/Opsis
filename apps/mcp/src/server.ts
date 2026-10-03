@@ -26,6 +26,8 @@ const INSTRUCTIONS = `Opsis turns explanations into diagrams on a canvas: concep
 
 Every edit here is saved like an edit made in the app: a canvas the reader has open updates within a couple of seconds, and each tool call is one step they can undo with Ctrl/⌘ Z.
 
+Agents act as the account whose agent key they hold: they edit that account's boards and can read boards others have made public.
+
 Work like this: list or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.`;
 
 const boardId = z
@@ -74,6 +76,20 @@ export function createServer(client: OpsisClient, webUrl: string) {
   );
 
   server.registerTool(
+    'opsis_list_public_boards',
+    {
+      title: 'List public boards',
+      description:
+        'Lists boards other people have made public. They can be read with opsis_get_board but not edited.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async () =>
+      (await client.listPublic()).map((entry) => ({ ...entry, open: open(entry.id) })),
+    ),
+  );
+
+  server.registerTool(
     'opsis_get_board',
     {
       title: 'Read a board',
@@ -84,7 +100,12 @@ export function createServer(client: OpsisClient, webUrl: string) {
     },
     guarded(async ({ boardId: id }) => {
       const entry = await client.get(id);
-      return { ...describeBoard(entry.id, entry.revision, entry.snapshot.board), open: open(id) };
+      return {
+        ...describeBoard(entry.id, entry.revision, entry.snapshot.board),
+        // Someone else's public board: readable here, but edits will be refused.
+        ...(entry.access === 'viewer' ? { readOnly: true, owner: entry.owner?.name } : {}),
+        open: open(id),
+      };
     }),
   );
 

@@ -3,7 +3,11 @@
     "opsis": {
       "command": "apps/mcp/node_modules/.bin/tsx",
       "args": ["apps/mcp/src/main.ts"],
-      "env": { "OPSIS_API_URL": "http://127.0.0.1:8000", "OPSIS_WEB_URL": "http://127.0.0.1:3000" }
+      "env": {
+        "OPSIS_API_URL": "http://127.0.0.1:8000",
+        "OPSIS_WEB_URL": "http://127.0.0.1:3000",
+        "OPSIS_AGENT_KEY": "${OPSIS_AGENT_KEY}"
+      }
     }
   }
 }

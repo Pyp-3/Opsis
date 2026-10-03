@@ -12,16 +12,31 @@ through. So an agent's edit is an ordinary saved revision:
 
 Every result includes an `open` link (`/canvas?board=<id>`) that opens the board in the app.
 
+## Access: agent keys, local only
+
+An agent acts as one Opsis account, using an **agent key** that account creates under
+**Account → Agent keys** in the app (shown once; only a hash is stored; revocable there).
+
+Agent keys are internal-only. The API accepts one only when the request reaches it directly
+over loopback (127.0.0.1 / ::1) and carries none of the headers a browser (`Origin`,
+`Sec-Fetch-Site`, `Sec-Fetch-Dest`) or a forwarding proxy (`X-Forwarded-For`, `Forwarded`)
+adds. So a key cannot be used from a web page, or from another machine on your network.
+Agents cannot create or revoke keys themselves.
+
+With a key, an agent can edit its account's boards and read (never edit) boards other people
+have made public.
+
 ## Setup
 
-Start Opsis first (`pnpm dev`: API on :8000, web on :3000), then register the server with your
-agent. Use absolute paths; launching through `pnpm run` would print banners into the protocol
+Start Opsis first (`pnpm dev`: API on :8000, web on :3000), create an agent key under
+**Account → Agent keys**, then register the server with your agent. Use absolute paths; launching through `pnpm run` would print banners into the protocol
 stream.
 
-**Claude Code** — inside this repository it is already configured by `.mcp.json`. Elsewhere:
+**Claude Code** — inside this repository `.mcp.json` configures it and reads the key from
+your shell: `export OPSIS_AGENT_KEY=opsis_agent_…` before starting Claude Code. Elsewhere:
 
 ```sh
-claude mcp add opsis -- /path/to/Opsis/apps/mcp/node_modules/.bin/tsx /path/to/Opsis/apps/mcp/src/main.ts
+claude mcp add opsis --env OPSIS_AGENT_KEY=opsis_agent_… -- /path/to/Opsis/apps/mcp/node_modules/.bin/tsx /path/to/Opsis/apps/mcp/src/main.ts
 ```
 
 **Codex** — add to `~/.codex/config.toml`:
@@ -30,6 +45,7 @@ claude mcp add opsis -- /path/to/Opsis/apps/mcp/node_modules/.bin/tsx /path/to/O
 [mcp_servers.opsis]
 command = "/path/to/Opsis/apps/mcp/node_modules/.bin/tsx"
 args = ["/path/to/Opsis/apps/mcp/src/main.ts"]
+env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 ```
 
 `OPSIS_API_URL` (default `http://127.0.0.1:8000`) and `OPSIS_WEB_URL` (default
@@ -52,4 +68,4 @@ args = ["/path/to/Opsis/apps/mcp/src/main.ts"]
 
 New concepts are placed clear of existing ones; **Arrange downward** on the canvas tidies a
 larger agent-built diagram. Agents cannot see or change which board your browser has open, run
-generations, or delete boards.
+generations, delete boards, change sharing, or edit anyone else's boards.

@@ -1,5 +1,16 @@
-import { useEffect } from 'react';
-import { ArrowLeft, Check, Palette, RotateCcw, Shapes, Type } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Globe,
+  Lock,
+  Palette,
+  RotateCcw,
+  Shapes,
+  Share2,
+  Type,
+} from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import {
   CANVAS_PALETTES,
@@ -20,11 +31,22 @@ export function CanvasSettingsPage({
   board,
   busy,
   commit,
+  visibility = 'private',
+  onVisibility,
+  boardId,
 }: {
   board: BoardDocument;
   busy: boolean;
   commit: (board: BoardDocument) => void;
+  visibility?: 'private' | 'public';
+  /** Resolves true once the change is saved. */
+  onVisibility?: (visibility: 'private' | 'public') => Promise<boolean>;
+  boardId?: string;
 }) {
+  const [sharing, setSharing] = useState<'private' | 'public' | null>(null);
+  const [copied, setCopied] = useState(false);
+  const shown = sharing ?? visibility;
+  const link = boardId ? `${location.origin}/canvas?board=${boardId}` : '';
   const look = lookOf(board);
   const setLook = (next: CanvasLook) => {
     if (!sameLook(next, look) || !board.look) commit({ ...board, look: next });
@@ -54,6 +76,12 @@ export function CanvasSettingsPage({
         </span>
         <h1>{board.title}</h1>
         <p>These settings belong to this canvas only. Other canvases keep their own.</p>
+        {onVisibility && (
+          <span className={`visibility-badge is-${visibility}`}>
+            {visibility === 'public' ? <Globe size={12} /> : <Lock size={12} />}
+            {visibility === 'public' ? 'Public' : 'Private'}
+          </span>
+        )}
       </header>
 
       <div className="settings-layout">
@@ -88,6 +116,62 @@ export function CanvasSettingsPage({
               />
             </label>
           </fieldset>
+
+          {onVisibility && (
+            <fieldset className="settings-card" disabled={busy || sharing !== null}>
+              <legend>
+                <Share2 size={14} /> Sharing
+              </legend>
+              <div className="share-options" role="radiogroup" aria-label="Who can see this canvas">
+                {(
+                  [
+                    ['private', Lock, 'Private', 'Only you can open it.'],
+                    ['public', Globe, 'Public', 'Anyone signed in can open, play and copy it.'],
+                  ] as const
+                ).map(([value, Icon, title, note]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    role="radio"
+                    aria-checked={shown === value}
+                    onClick={async () => {
+                      if (value === visibility) return;
+                      setSharing(value);
+                      try {
+                        await onVisibility(value);
+                      } finally {
+                        setSharing(null);
+                      }
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span>
+                      <strong>{title}</strong>
+                      <small>{note}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className={`share-link ${shown === 'public' && link ? 'is-open' : ''}`}>
+                <div>
+                  <code>{link}</code>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(link).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1600);
+                      });
+                    }}
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}{' '}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            </fieldset>
+          )}
 
           <fieldset className="settings-card" disabled={busy}>
             <legend>

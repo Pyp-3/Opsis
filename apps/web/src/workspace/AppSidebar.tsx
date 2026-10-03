@@ -1,21 +1,24 @@
 import { useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
+  Eye,
   FolderOpen,
   House,
+  LogOut,
   Palette,
   Plus,
   Search,
   SquareDashedMousePointer,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
+import type { User } from '../auth/session';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { NodeIcon } from './NodeIcon';
 import { BrandMark } from './BrandMark';
 import { navigate } from '../router';
 
 /** Which page the sidebar sits beside; each shows only what that page needs. */
-export type SidebarMode = 'home' | 'boards' | 'canvas' | 'settings';
+export type SidebarMode = 'home' | 'boards' | 'canvas' | 'settings' | 'account';
 
 /** On phones the sidebar overlays the page, so it gets out of the way once you go somewhere. */
 function go(to: string) {
@@ -58,6 +61,9 @@ export function AppSidebar({
   mode,
   board,
   busy,
+  readOnly = false,
+  user,
+  onSignOut,
   library,
   onNew,
   commit,
@@ -67,6 +73,9 @@ export function AppSidebar({
   mode: SidebarMode;
   board: BoardDocument | null;
   busy: boolean;
+  readOnly?: boolean;
+  user?: User | undefined;
+  onSignOut?: (() => void) | undefined;
   library: ReturnType<typeof useBoardLibrary>;
   onNew: () => void;
   commit: (board: BoardDocument) => void;
@@ -104,6 +113,7 @@ export function AppSidebar({
           mode={mode}
           board={board}
           busy={busy}
+          readOnly={readOnly}
           library={library}
           commit={commit}
           selected={selected}
@@ -134,12 +144,41 @@ export function AppSidebar({
         </>
       )}
       <div className="rail-bottom">
-        <p className="rail-footnote">
-          <span className="active-dot" /> Private workspace · saved locally
-        </p>
+        {user ? (
+          <div className="rail-account">
+            <NavLink to="/account" current={mode === 'account'} label={`Account: ${user.name}`}>
+              <span className="avatar" aria-hidden>
+                {initials(user.name)}
+              </span>
+              <span className="rail-link-text">
+                {user.name}
+                <small>{user.email}</small>
+              </span>
+            </NavLink>
+            <button
+              className="rail-signout"
+              aria-label="Log out"
+              title="Log out"
+              onClick={onSignOut}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        ) : (
+          <p className="rail-footnote">
+            <span className="active-dot" /> Private workspace · saved locally
+          </p>
+        )}
       </div>
     </aside>
   );
+}
+
+export function initials(name: string) {
+  const parts = name.trim().split(/\s+/u);
+  return (
+    (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : '')
+  ).toUpperCase();
 }
 
 /** Inside a canvas the sidebar is about that canvas only: its name, views and concepts. */
@@ -147,6 +186,7 @@ function CanvasRail({
   mode,
   board,
   busy,
+  readOnly,
   library,
   commit,
   selected,
@@ -155,6 +195,7 @@ function CanvasRail({
   mode: 'canvas' | 'settings';
   board: BoardDocument | null;
   busy: boolean;
+  readOnly: boolean;
   library: ReturnType<typeof useBoardLibrary>;
   commit: (board: BoardDocument) => void;
   selected: string | null;
@@ -173,7 +214,15 @@ function CanvasRail({
       </NavLink>
       <section className="rail-section rail-canvas">
         <h2 className="rail-section-title">This canvas</h2>
-        {board ? (
+        {board && readOnly ? (
+          <p className="rail-viewing">
+            <Eye size={14} />
+            <span>
+              <strong>{board.title}</strong>
+              <small>Shared by {library.owner || 'someone'} · read-only</small>
+            </span>
+          </p>
+        ) : board ? (
           <label className="concept-search">
             <input
               key={library.activeId + board.title}
@@ -194,9 +243,11 @@ function CanvasRail({
           <NavLink to="/canvas" current={mode === 'canvas'}>
             <SquareDashedMousePointer size={15} /> Canvas
           </NavLink>
-          <NavLink to="/canvas/settings" current={mode === 'settings'} disabled={!board}>
-            <Palette size={15} /> Look &amp; details
-          </NavLink>
+          {!readOnly && (
+            <NavLink to="/canvas/settings" current={mode === 'settings'} disabled={!board}>
+              <Palette size={15} /> Look &amp; details
+            </NavLink>
+          )}
         </nav>
       </section>
       {board && mode === 'canvas' && (

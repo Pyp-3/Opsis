@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { signIn } from './test-session.js';
 import { ruleBasedParse, type LLMClient, type LLMRequest } from '@opsis/parse';
 import { ErrorResponseSchema, ExplanationSchema, OSGSchema } from '@opsis/schema';
 import { loadGoldenCases } from '../../../tests/golden/fixtures';
@@ -53,7 +54,9 @@ describe('LLM cache identity', () => {
     };
     const client = new SwitchableLLMClient();
     const providerApp = buildApp({ databasePath: ':memory:', llm: client, rateLimit: 1_000 });
+    await signIn(providerApp);
     const offlineApp = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1_000 });
+    await signIn(offlineApp);
 
     try {
       const degraded = await providerApp.inject({ method: 'POST', url: '/v1/visualize', payload });
@@ -315,6 +318,7 @@ describe('Opsis API', () => {
 describe('rate limiting', () => {
   it('bounds board polling separately without consuming the edit/model allowance', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
+    await signIn(app);
     for (let i = 0; i < 10; i++) {
       expect((await app.inject({ method: 'GET', url: '/v1/boards' })).statusCode).toBe(200);
     }
@@ -331,6 +335,7 @@ describe('rate limiting', () => {
   });
   it('limits each client with the shared error shape', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
+    await signIn(app);
     const id = '00000000-0000-4000-8000-000000000000';
     await app.inject({ method: 'GET', url: `/v1/osg/${id}` });
     const response = await app.inject({ method: 'GET', url: `/v1/osg/${id}` });
@@ -346,6 +351,7 @@ describe('rate limiting', () => {
 
   it('applies to shared links too', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null, rateLimit: 1 });
+    await signIn(app);
     const url = `/v1/shared/${'A'.repeat(32)}`;
     await app.inject({ method: 'GET', url });
     const response = await app.inject({ method: 'GET', url });

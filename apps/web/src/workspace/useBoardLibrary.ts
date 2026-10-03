@@ -4,7 +4,17 @@ import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
 import { restoreBoard } from './model';
 import { mergeBoardSnapshots } from './board-sync';
 
-const RECOVERY = 'opsis:library-recovery:v1';
+const RECOVERY_BASE = 'opsis:library-recovery:v1';
+/** Recovery copies are kept per account, so people sharing a browser never see each other's. */
+let RECOVERY = RECOVERY_BASE;
+let scoped = false;
+export function setRecoveryScope(userId: string) {
+  RECOVERY = `${RECOVERY_BASE}:${userId}`;
+  scoped = true;
+}
+/** Fired when the API says the session has ended; the app returns to sign-in. */
+export const AUTH_EXPIRED = 'opsis:auth-expired';
+export type BoardAccess = 'owner' | 'viewer';
 function writeRecovery(value: unknown) {
   const text = JSON.stringify(value);
   // A per-tab copy prevents another tab from replacing unsaved recovery data.
@@ -24,6 +34,9 @@ const Entry = z.object({
   revision: z.number().int().nonnegative(),
   snapshot: BoardSnapshotSchema,
   savedSnapshot: BoardSnapshotSchema.optional(),
+  /** `viewer` for someone else's public board: shown, never saved. */
+  access: z.enum(['owner', 'viewer']).optional(),
+  owner: z.object({ name: z.string() }).optional(),
 });
 const List = z.array(
   z.object({
@@ -31,6 +44,7 @@ const List = z.array(
     title: z.string(),
     revision: z.number(),
     updatedAt: z.number(),
+    visibility: z.enum(['private', 'public']).optional(),
   }),
 );
 export function restoreLibrary(): z.infer<typeof Entry> & { error: string } {
@@ -40,7 +54,8 @@ export function restoreLibrary(): z.infer<typeof Entry> & { error: string } {
     return {
       id: crypto.randomUUID(),
       revision: 0,
-      snapshot: { board: restoreBoard(), past: [], future: [] } as BoardSnapshot,
+      // The pre-library browser board belongs to whoever used this browser before accounts.
+      snapshot: { board: scoped ? null : restoreBoard(), past: [], future: [] } as BoardSnapshot,
       error: '',
     };
   } catch {
@@ -72,6 +87,14 @@ export function useBoardLibrary(
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(initial.error);
   const [activeId, setActiveId] = useState(initial.id);
+  const [access, setAccessState] = useState<BoardAccess>(initial.access ?? 'owner');
+  const [owner, setOwner] = useState(initial.owner?.name ?? '');
+  const accessRef = useRef(access);
+  const setAccess = useCallback((next: BoardAccess, ownerName = '') => {
+    accessRef.current = next;
+    setAccessState(next);
+    setOwner(ownerName);
+  }, []);
   useEffect(() => {
     current.current = snapshot;
     pausedRef.current = paused;
@@ -79,6 +102,10 @@ export function useBoardLibrary(
 
   const refresh = useCallback(async () => {
     const response = await fetch('/v1/boards');
+    if (response.status === 401) {
+      window.dispatchEvent(new Event(AUTH_EXPIRED));
+      throw new Error('Your session ended. Sign in again.');
+    }
     if (!response.ok) throw new Error('Saved-board service unavailable.');
     const next = List.parse(await response.json());
     setEntries((before) => (JSON.stringify(before) === JSON.stringify(next) ? before : next));
@@ -96,6 +123,8 @@ export function useBoardLibrary(
       .then(async () => {
         let target = current.current;
         const identity = active.current;
+        // Someone else's board is only viewed here; there is nothing of ours to save.
+        if (accessRef.current === 'viewer') return;
         if (lastSaved.current === target) return;
         if (lastSaved.current && JSON.stringify(lastSaved.current) === JSON.stringify(target)) {
           lastSaved.current = target;
@@ -220,10 +249,16 @@ export function useBoardLibrary(
             active.current = { id: crypto.randomUUID(), revision: 0 };
             current.current = empty;
             lastSaved.current = empty;
+            const wasShared = accessRef.current === 'viewer';
             setActiveId(active.current.id);
+            setAccess('owner');
             replace(empty);
             writeRecovery({ ...active.current, snapshot: empty, savedSnapshot: empty });
-            setStatus('Board deleted in another view · new canvas ready');
+            setStatus(
+              wasShared
+                ? 'That board is no longer shared · new canvas ready'
+                : 'Board deleted in another view · new canvas ready',
+            );
             setError('');
             return;
           }
@@ -260,7 +295,7 @@ export function useBoardLibrary(
       clearInterval(timer);
       window.removeEventListener('focus', sync);
     };
-  }, [refresh, replace]);
+  }, [refresh, replace, setAccess]);
 
   useEffect(() => {
     if (initial.error && !snapshot.board) return;
@@ -305,8 +340,9 @@ export function useBoardLibrary(
           warning = 'Browser recovery is unavailable; wait for SQLite saves before closing.';
         }
         setActiveId(entry.id);
+        setAccess(entry.access ?? 'owner', entry.owner?.name);
         replace(entry.snapshot);
-        setStatus(id ? 'Saved to SQLite' : '');
+        setStatus(id ? (entry.access === 'viewer' ? '' : 'Saved to SQLite') : '');
         setError(warning);
         return true;
       } catch (e) {
@@ -316,12 +352,14 @@ export function useBoardLibrary(
         setSwitching(false);
       }
     },
-    [save, replace],
+    [save, replace, setAccess],
   );
   const saveCopy = async () => {
     setSwitching(true);
     try {
       await queue.current.catch(() => undefined);
+      // A copy of someone else's board is yours to edit.
+      setAccess('owner');
       active.current = { id: crypto.randomUUID(), revision: 0 };
       setActiveId(active.current.id);
       lastSaved.current = null;
@@ -335,9 +373,10 @@ export function useBoardLibrary(
   };
   const managing = useRef(false);
   const manage = async (
-    action: 'create' | 'rename' | 'delete',
+    action: 'create' | 'rename' | 'delete' | 'share',
     entry?: z.infer<typeof List>[number],
     title?: string,
+    visibility?: 'private' | 'public',
   ) => {
     if (managing.current) return false;
     managing.current = true;
@@ -346,10 +385,10 @@ export function useBoardLibrary(
       await save();
       const isActive = entry?.id === active.current.id;
       const response = await fetch(action === 'create' ? '/v1/boards' : `/v1/boards/${entry!.id}`, {
-        method: action === 'create' ? 'POST' : action === 'rename' ? 'PATCH' : 'DELETE',
+        method: action === 'create' ? 'POST' : action === 'delete' ? 'DELETE' : 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          ...(action === 'delete' ? {} : { title }),
+          ...(action === 'delete' ? {} : action === 'share' ? { visibility } : { title }),
           ...(action === 'create'
             ? {}
             : { revision: isActive ? active.current.revision : entry!.revision }),
@@ -374,6 +413,7 @@ export function useBoardLibrary(
         current.current = next.snapshot;
         lastSaved.current = next.snapshot;
         setActiveId(next.id);
+        setAccess('owner');
         replace(next.snapshot);
         writeRecovery(next);
         setStatus(action === 'delete' ? '' : 'Saved to SQLite');
@@ -389,5 +429,18 @@ export function useBoardLibrary(
       setSwitching(false);
     }
   };
-  return { entries, status, switching, error, activeId, open, save, saveCopy, refresh, manage };
+  return {
+    entries,
+    status,
+    switching,
+    error,
+    activeId,
+    access,
+    owner,
+    open,
+    save,
+    saveCopy,
+    refresh,
+    manage,
+  };
 }

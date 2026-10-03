@@ -52,6 +52,7 @@ import { llmClientFromEnvironment, llmIdentity } from './llm.js';
 import { ApiStore } from './storage.js';
 import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 import { registerBoardLibrary } from './board-library.js';
+import { registerAuth } from './auth.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
 
 const IdParamsSchema = z.object({ id: z.string().uuid() }).strict();
@@ -238,6 +239,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify(fastifyOptions);
   registerBoardRoutes(app, boardClientFactory);
   const store = new ApiStore(databasePath, memoryCacheEntries);
+  registerAuth(app, store);
+  // Agent runs use the local CLIs and their accounts: only signed-in people may start them.
+  app.addHook('onRequest', async (request, reply) => {
+    if (
+      !request.user &&
+      /^\/v1\/(?:agents|boards\/(?:generate|illustrate))(?:[/?]|$)/u.test(request.url)
+    )
+      return reply.code(401).send({ message: 'Sign in to continue.' });
+  });
   registerBoardLibrary(app, store);
   registerSpeech(app, speech);
   const llm = providedLlm === undefined ? llmClientFromEnvironment() : providedLlm;
@@ -251,7 +261,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
       request.method === 'GET' && /^\/v1\/boards(?:\/[a-f\d-]{36})?(?:\?|$)/i.test(request.url);
-    const key = `${request.ip}:${boardRead ? 'board-read' : 'work'}`;
+    // Sign-in attempts have their own budget: guessing passwords cannot also starve real work,
+    // and real work cannot lock someone out of signing in.
+    const bucket = boardRead ? 'board-read' : request.url.startsWith('/v1/auth/') ? 'auth' : 'work';
+    const key = `${request.ip}:${bucket}`;
     const allowance = boardRead ? rateLimit * 10 : rateLimit;
     const recent = (requests.get(key) ?? []).filter((time) => now - time < rateWindowMs);
     if (recent.length >= allowance) {

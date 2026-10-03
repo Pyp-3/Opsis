@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Copy,
+  Eye,
   CircleAlert,
   Download,
   Expand,
@@ -97,6 +99,8 @@ import { BrandMark } from './BrandMark';
 import { IconPicker } from './IconPicker';
 import { BoardsPage } from './BoardsPage';
 import { HomePage } from './HomePage';
+import { AccountPage } from './AccountPage';
+import type { User } from '../auth/session';
 import { CanvasSettingsPage } from './CanvasSettingsPage';
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
@@ -214,7 +218,7 @@ function IconNode({ data, selected }: NodeProps<DiagramNode>) {
 const nodeTypes = { concept: IconNode };
 const edgeTypes = { routed: RoutedConnection };
 
-function BoardWorkspace() {
+function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => void }) {
   const [initial] = useState(restoreLibrary);
   const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
     useBoardHistory(initial.snapshot);
@@ -236,7 +240,11 @@ function BoardWorkspace() {
   );
   const { error, setError, setBusy } = generation;
   const { cancel: cancelIllustration } = illustrator;
-  const busy = generation.busy || library.switching || !!generation.review || arranging;
+  // `working`: something is in flight. `busy` also covers viewing someone else's public board,
+  // which can be explored and played but not changed.
+  const working = generation.busy || library.switching || !!generation.review || arranging;
+  const readOnly = library.access === 'viewer';
+  const busy = working || readOnly;
   const saved = library.status;
   const [agent, setAgent] = useState<BoardAgent>(initial.snapshot.board?.agent ?? 'claude');
   const [modelPreferences, setModelPreferences] = useState(readModelPreferences);
@@ -268,11 +276,13 @@ function BoardWorkspace() {
   const page: SidebarMode =
     path === '/boards'
       ? 'boards'
-      : path === '/canvas/settings' && board
-        ? 'settings'
-        : path.startsWith('/canvas')
-          ? 'canvas'
-          : 'home';
+      : path === '/account'
+        ? 'account'
+        : path === '/canvas/settings' && board && !readOnly
+          ? 'settings'
+          : path.startsWith('/canvas')
+            ? 'canvas'
+            : 'home';
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The big picture opens with each canvas, tucks itself away once the reader starts working
   // on the canvas, and stays the way the reader last set it until another canvas opens.
@@ -664,7 +674,10 @@ function BoardWorkspace() {
     <AppSidebar
       mode={page}
       board={board}
-      busy={busy}
+      busy={working}
+      readOnly={readOnly}
+      user={user}
+      onSignOut={onSignOut}
       library={library}
       commit={commit}
       selected={selected}
@@ -693,7 +706,9 @@ function BoardWorkspace() {
         {sidebar}
         <div className="page-scroll">
           <div className="page-toolbar">{railToggle}</div>
-          {page === 'boards' ? (
+          {page === 'account' && user ? (
+            <AccountPage user={user} onSignOut={onSignOut} />
+          ) : page === 'boards' ? (
             <BoardsPage
               library={library}
               onCreated={() => navigate('/canvas')}
@@ -702,11 +717,28 @@ function BoardWorkspace() {
               }}
             />
           ) : page === 'settings' && board ? (
-            <CanvasSettingsPage board={board} busy={busy} commit={commit} />
+            <CanvasSettingsPage
+              board={board}
+              busy={busy}
+              commit={commit}
+              visibility={
+                library.entries.find((entry) => entry.id === library.activeId)?.visibility ??
+                'private'
+              }
+              boardId={library.activeId}
+              onVisibility={async (visibility) => {
+                // Save first: a canvas that was never saved has no server record to share yet.
+                await library.save().catch(() => undefined);
+                const entry = (await library.refresh()).find(
+                  (item) => item.id === library.activeId,
+                );
+                return !!entry && library.manage('share', entry, undefined, visibility);
+              }}
+            />
           ) : (
             <HomePage
               board={board}
-              busy={busy}
+              busy={working}
               library={library}
               onStart={async (question) => {
                 if (!(await newCanvas())) return;
@@ -754,7 +786,7 @@ function BoardWorkspace() {
               className="header-button"
               title="Import a saved board"
               aria-label="Import board"
-              disabled={busy}
+              disabled={working}
               onClick={() => importInput.current?.click()}
             >
               <Upload size={15} />
@@ -944,7 +976,7 @@ function BoardWorkspace() {
                 {!playerOpen && board.nodes.length > 0 && (
                   <button
                     className="play-process"
-                    disabled={busy}
+                    disabled={working}
                     onClick={() => {
                       setSelected(null);
                       setSelectedEdge(null);
@@ -1010,7 +1042,7 @@ function BoardWorkspace() {
               <button
                 aria-label="Canvas colours"
                 title="Canvas look & details"
-                disabled={!board}
+                disabled={!board || readOnly}
                 onClick={() => navigate('/canvas/settings')}
               >
                 <Palette size={16} />
@@ -1138,20 +1170,42 @@ function BoardWorkspace() {
                 <ProcessPlayer
                   key={library.activeId}
                   board={board}
-                  disabled={busy}
+                  disabled={working}
                   process={process}
                   onBeat={followBeat}
                   onClose={closePlayer}
-                  illustration={{
-                    busy: illustrator.busy,
-                    elapsed: illustrator.elapsed,
-                    activity: illustrator.activity,
-                    message: illustrator.message,
-                    available: agent === 'demo' || status?.available !== false,
-                    redraw: board.nodes.every((node) => node.illustration),
-                    onIllustrate: () => void illustrator.illustrate(agent, modelPreferences),
-                  }}
+                  // Drawings change the board, so they are for the owner only.
+                  {...(readOnly
+                    ? {}
+                    : {
+                        illustration: {
+                          busy: illustrator.busy,
+                          elapsed: illustrator.elapsed,
+                          activity: illustrator.activity,
+                          message: illustrator.message,
+                          available: agent === 'demo' || status?.available !== false,
+                          redraw: board.nodes.every((node) => node.illustration),
+                          onIllustrate: () => void illustrator.illustrate(agent, modelPreferences),
+                        },
+                      })}
                 />
+              ) : readOnly && board ? (
+                <div className="viewer-bar" role="status">
+                  <span className="viewer-badge">
+                    <Eye size={14} /> Viewing
+                  </span>
+                  <span className="viewer-text">
+                    <strong>{library.owner || 'Someone'}’s canvas</strong>
+                    <small>Public · you can explore and play it, not change it</small>
+                  </span>
+                  <button
+                    className="viewer-copy"
+                    disabled={working}
+                    onClick={() => void library.saveCopy()}
+                  >
+                    <Copy size={14} /> Save a copy
+                  </button>
+                </div>
               ) : (
                 <>
                   {board && !busy && (
@@ -1675,10 +1729,10 @@ function BoardWorkspace() {
   );
 }
 
-export function Workspace() {
+export function Workspace(props: { user?: User; onSignOut?: () => void }) {
   return (
     <ReactFlowProvider>
-      <BoardWorkspace />
+      <BoardWorkspace {...props} />
     </ReactFlowProvider>
   );
 }

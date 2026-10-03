@@ -7,4 +7,7 @@ import { createServer } from './server.js';
 const api = process.env.OPSIS_API_URL ?? 'http://127.0.0.1:8000';
 const web = process.env.OPSIS_WEB_URL ?? 'http://127.0.0.1:3000';
 
-await createServer(opsisClient(api), web).connect(new StdioServerTransport());
+// Created by its owner under Account → Agent keys; it only works from this machine.
+const key = process.env.OPSIS_AGENT_KEY;
+
+await createServer(opsisClient(api, key), web).connect(new StdioServerTransport());

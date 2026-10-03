@@ -2,13 +2,22 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
 import { DNS_DEMO } from '../../packages/schema/src/dns-demo';
+import { signUp } from './session';
 
 const snapshot = (page: Page) =>
-  page.evaluate(() => JSON.parse(sessionStorage.getItem('opsis:library-recovery:v1')!).snapshot);
+  page.evaluate(
+    () =>
+      JSON.parse(
+        sessionStorage.getItem(
+          Object.keys(sessionStorage).find((key) => key.startsWith('opsis:library-recovery:v1:'))!,
+        )!,
+      ).snapshot,
+  );
 const saved = (page: Page) =>
   expect(page.getByText('Saved to SQLite', { exact: true })).toBeVisible();
 
 test.beforeEach(async ({ page }) => {
+  await signUp(page);
   await page.route('**/v1/agents', (route) =>
     route.fulfill({
       json: [

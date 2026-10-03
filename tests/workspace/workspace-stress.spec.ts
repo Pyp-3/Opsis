@@ -2,9 +2,17 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
+import { signUp } from './session';
 
 const snapshot = (page: Page) =>
-  page.evaluate(() => JSON.parse(sessionStorage.getItem('opsis:library-recovery:v1')!).snapshot);
+  page.evaluate(
+    () =>
+      JSON.parse(
+        sessionStorage.getItem(
+          Object.keys(sessionStorage).find((key) => key.startsWith('opsis:library-recovery:v1:'))!,
+        )!,
+      ).snapshot,
+  );
 const saved = (page: Page) =>
   expect(page.getByText('Saved to SQLite', { exact: true })).toBeVisible();
 async function endpoints(page: Page) {
@@ -17,7 +25,11 @@ async function endpoints(page: Page) {
         .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
         .map((animation) => animation.finished.catch(() => undefined)),
     );
-    const state = JSON.parse(sessionStorage.getItem('opsis:library-recovery:v1')!).snapshot;
+    const state = JSON.parse(
+      sessionStorage.getItem(
+        Object.keys(sessionStorage).find((key) => key.startsWith('opsis:library-recovery:v1:'))!,
+      )!,
+    ).snapshot;
     return state.board.edges.flatMap((edge: { id: string; source: string; target: string }) => {
       const path = document.querySelector(
         `[data-id="${edge.id}"] .react-flow__edge-path`,
@@ -47,6 +59,7 @@ async function endpoints(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await signUp(page);
   await page.route('**/v1/agents', (route) =>
     route.fulfill({
       json: [

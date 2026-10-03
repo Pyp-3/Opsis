@@ -7,6 +7,7 @@ import {
   TERMINAL_PIPELINE_EXAMPLE,
   boardOutputSchema,
 } from '@opsis/schema';
+import { signIn } from './test-session.js';
 import { buildApp } from './app.js';
 import type { FastifyInstance } from 'fastify';
 import { HarnessError } from './harness/errors.js';
@@ -30,6 +31,7 @@ describe('2D board API', () => {
     });
     const factory = vi.fn(async () => ({ model: 'test', complete }));
     const app = buildApp({ databasePath: ':memory:', llm: null, boardClientFactory: factory });
+    void signIn(app);
     apps.push(app);
     return { app, complete, factory };
   }

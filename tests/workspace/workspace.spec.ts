@@ -1,8 +1,10 @@
 import { test, expect, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
+import { signUp } from './session';
 
 test.beforeEach(async ({ page }) => {
+  await signUp(page);
   await page.route('**/v1/agents', (route) =>
     route.fulfill({
       json: [

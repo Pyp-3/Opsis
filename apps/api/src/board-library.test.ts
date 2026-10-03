@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { EMAIL_DEMO } from '@opsis/schema';
+import { signIn, withSession } from './test-session.js';
 import { buildApp } from './app.js';
 
 const board = { ...EMAIL_DEMO, version: 2, agent: 'demo', positions: {} };
@@ -11,6 +12,7 @@ const snapshot = { board, past: [null], future: [] };
 describe('SQLite v2 library', () => {
   it('creates empty named boards, renames with history, and rejects stale deletes and resurrection', async () => {
     const app = buildApp({ databasePath: ':memory:', llm: null });
+    await signIn(app);
     try {
       for (const title of ['', ' ', 'x'.repeat(101)])
         expect(
@@ -68,6 +70,7 @@ describe('SQLite v2 library', () => {
   it('keeps independent boards and history across restart; rejects stale writes', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'opsis-library-test-'));
     let app = buildApp({ databasePath: join(directory, 'boards.sqlite'), llm: null });
+    const session = await signIn(app);
     try {
       const first = randomUUID(),
         second = randomUUID();
@@ -81,6 +84,8 @@ describe('SQLite v2 library', () => {
       }
       await app.close();
       app = buildApp({ databasePath: join(directory, 'boards.sqlite'), llm: null });
+      // Sessions are stored, so the same login survives a restart.
+      withSession(app, session);
       expect((await app.inject('/v1/boards')).json()).toHaveLength(2);
       const restored = (await app.inject(`/v1/boards/${first}`)).json();
       expect(restored.snapshot).toEqual(snapshot);
