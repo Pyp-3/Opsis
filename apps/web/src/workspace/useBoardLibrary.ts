@@ -310,10 +310,11 @@ export function useBoardLibrary(
   };
   const managing = useRef(false);
   const manage = async (
-    action: 'create' | 'rename' | 'delete' | 'share',
+    action: 'create' | 'rename' | 'delete' | 'share' | 'template',
     entry?: z.infer<typeof List>[number],
     title?: string,
     visibility?: 'private' | 'public',
+    templateId?: string,
   ) => {
     if (managing.current) return false;
     managing.current = true;
@@ -322,6 +323,7 @@ export function useBoardLibrary(
       await save();
       const isActive = entry?.id === active.current.id;
       const response = await boardLibraryApi.manage(action, entry?.id, {
+        ...(action === 'create' && templateId ? { templateId } : {}),
         ...(action === 'delete' ? {} : action === 'share' ? { visibility } : { title }),
         ...(action === 'create'
           ? {}

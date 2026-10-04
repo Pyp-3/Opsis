@@ -33,6 +33,46 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     return user ? store.listBoards(user.id) : reply;
   });
+  app.get('/v1/templates', async (request, reply) => {
+    const user = requireUser(request, reply);
+    return user ? store.listTemplates(user.id) : reply;
+  });
+  app.post('/v1/templates', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const body = z
+      .object({
+        title: z.string().trim().min(1).max(100),
+        boardId: z.string().uuid(),
+        revision: z.number().int().positive(),
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ message: 'Invalid template name or source board.' });
+    const source = store.getBoard(body.data.boardId);
+    if (!source || source.ownerId !== user.id) return notFound(reply);
+    if (source.revision !== body.data.revision)
+      return reply
+        .code(409)
+        .send({ message: 'This board changed. Refresh the library and retry.' });
+    if (!source.snapshot.board)
+      return reply
+        .code(400)
+        .send({ message: 'Add content to this board before saving a template.' });
+    const id = randomUUID();
+    store.createTemplate(id, user.id, body.data.title, source.snapshot.board);
+    return reply.code(201).send({ id, title: body.data.title });
+  });
+  app.delete('/v1/templates/:id', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ message: 'Invalid template ID.' });
+    if (!store.deleteTemplate(params.data.id, user.id))
+      return reply.code(404).send({ message: 'Template not found.' });
+    return reply.code(204).send();
+  });
   app.get('/v1/boards/public', async (request, reply) => {
     const user = requireUser(request, reply);
     return user ? store.listPublicBoards(user.id) : reply;
@@ -41,14 +81,22 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     if (!user) return reply;
     const body = z
-      .object({ title: z.string().trim().min(1).max(100) })
+      .object({
+        title: z.string().trim().min(1).max(100),
+        templateId: z.string().uuid().optional(),
+      })
       .strict()
       .safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ message: 'Enter a board name (1–100 characters).' });
     const id = randomUUID();
+    const template = body.data.templateId
+      ? store.getTemplate(body.data.templateId, user.id)
+      : undefined;
+    if (body.data.templateId && !template)
+      return reply.code(404).send({ message: 'Template not found.' });
     const snapshot = BoardSnapshotSchema.parse({
-      board: createEmptyBoard(body.data.title),
+      board: template ? { ...template, title: body.data.title } : createEmptyBoard(body.data.title),
       past: [],
       future: [],
     });

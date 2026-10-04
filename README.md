@@ -14,7 +14,7 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 - Per-agent model and reasoning-effort controls, custom model IDs, economical defaults, and no automatic upgrade to a larger model.
 - Follow-up prompts that include the current graph and selected concept; existing node positions are retained.
 - Concept explanations, editable labels and icons, searchable navigation, and incoming/outgoing relationship navigation.
-- Named SQLite-backed boards, persistent undo/redo, and browser recovery copies.
+- Named SQLite-backed boards, reusable private templates, persistent undo/redo, and browser recovery copies.
 - Explicit review of agent changes to existing content; one bounded invalid-output repair attempt.
 - Topic-specific next steps in a small menu above the composer (hidden until opened), per-concept uncertainty annotations, and a guided walkthrough.
 - **Play the process**: a scrubbable, video-like playback with captions and an optional British narrator. Agents write a short spoken script alongside each diagram (an opening, plus a line for every object and arrow, in playback order), so the narration reads as connected, grammatical prose rather than read-out labels. Older boards without a script are narrated from their summaries; editing an object or arrow by hand drops its now-stale line. The natural voices (Emma, George, Isabella, Fable) come from the open [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) speech model, run locally by the API. The model (about 330 MB) downloads/loads in the background when the API starts, into the gitignored `apps/api/data/models/` directory. Later starts reuse the cached model; the four voice files are bundled in the ignored `node_modules` directory. You can use the app while it prepares; narration waits for readiness if you play immediately. If the API has speech turned off, the browser runs a smaller copy of the model itself, which is slower. If neither is available, your device's own voices are used.
@@ -114,6 +114,8 @@ The original `opsis:board:v2` browser board is imported on first use when no new
 Use **Export → Editable board** for portable JSON backups and **Import** to reopen them. SVG and PNG are images; Markdown includes explanations and outgoing relationships. **Import** also accepts legacy OSG JSON: it creates a separate v2 board and marks flattened concepts as simplified. 3D geometry, animations and drill-down behavior are not preserved; unknown primitives become generic icons. Oversized/invalid imports are rejected, and original files remain unchanged. Existing legacy database records are not bulk-migrated automatically.
 
 ## Accounts and sharing
+
+In **Manage boards → My boards**, use a board’s **Save as template** action and give it a name. Open **Templates**, select a template, and name the new project board. Templates persist privately in SQLite for your account, preserving board content, layout, and appearance. Each use creates an independent private board with fresh undo/redo history. Editing or deleting the source board does not change its templates; deleting a template does not remove boards created from it.
 
 Opsis asks you to sign up or log in (name, email, password; no 2FA yet). Passwords are stored
 as salted scrypt hashes; sessions are HttpOnly cookies that last 30 days. Every board belongs

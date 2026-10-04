@@ -21,6 +21,16 @@
   margin: 0 auto;
   padding: 36px 24px 64px;
 }
+/* The library title sits over the same circuit-trace backdrop as the home hero. */
+.boards-intro {
+  position: relative;
+  isolation: isolate;
+  padding: 24px 0 8px;
+}
+.boards-intro > *:not(.home-backdrop) {
+  position: relative;
+  z-index: 1;
+}
 /* A diagonal green→blue hairline under the library title. */
 .boards-intro .eyebrow {
   padding: 3px 10px;
@@ -607,10 +617,11 @@
 }
 .home-backdrop {
   position: absolute;
-  inset: -56px calc(50% - 50vw) -24px;
-  width: 100vw;
+  top: -56px;
+  left: calc(50% - 50vw);
   z-index: 0;
   pointer-events: none;
+  /* Width and height are set explicitly in JS (a <canvas> can't be sized by top/bottom insets). */
   /* Fade the field into the page so it reads as a backdrop, not a panel. */
   -webkit-mask-image: radial-gradient(
     120% 92% at 50% 42%,
@@ -1262,11 +1273,11 @@
   border-radius: var(--radius);
 }
 
-/* Boards: mine / public tabs */
+/* Board library tabs */
 .boards-tabs {
   position: relative;
   display: inline-grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   margin-top: 24px;
   padding: 4px;
   background: var(--sunken);
@@ -1277,7 +1288,7 @@
   top: 4px;
   bottom: 4px;
   left: 4px;
-  width: calc(50% - 4px);
+  width: calc((100% - 8px) / 3);
   background: var(--surface);
   border-radius: 9px;
   box-shadow:
@@ -1288,11 +1299,14 @@
 .boards-tabs-thumb[data-tab='public'] {
   transform: translateX(100%);
 }
+.boards-tabs-thumb[data-tab='templates'] {
+  transform: translateX(200%);
+}
 .boards-tabs button {
   position: relative;
   gap: 6px;
   height: 34px;
-  padding: 0 16px;
+  padding: 0 10px;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-3);

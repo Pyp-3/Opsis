@@ -9,8 +9,11 @@ import {
   Plus,
   Search,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
+import { TemplatesPanel } from './TemplatesPanel';
+import { HomeBackdrop } from './HomeBackdrop';
 
 export type PublicBoard = {
   id: string;
@@ -56,9 +59,11 @@ export function BoardsPage({
   const [sort, setSort] = useState<'recent' | 'name'>('recent');
   const [title, setTitle] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const [editAction, setEditAction] = useState<'rename' | 'template'>('rename');
+  const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [tab, setTab] = useState<'mine' | 'public'>('mine');
+  const [tab, setTab] = useState<'mine' | 'public' | 'templates'>('mine');
   const [shared, setShared] = useState<PublicBoard[] | null>(null);
   const [sharedError, setSharedError] = useState('');
   useEffect(() => {
@@ -90,6 +95,7 @@ export function BoardsPage({
   return (
     <main className="page-main boards-main">
       <div className="boards-intro">
+        <HomeBackdrop />
         <span className="eyebrow">
           <LayoutGrid size={13} /> Library
         </span>
@@ -107,8 +113,14 @@ export function BoardsPage({
         <button role="tab" aria-selected={tab === 'public'} onClick={() => setTab('public')}>
           <Globe size={14} /> Public boards
         </button>
+        <button role="tab" aria-selected={tab === 'templates'} onClick={() => setTab('templates')}>
+          <Copy size={14} /> Templates
+        </button>
       </div>
-      {tab === 'public' ? (
+      {notice && <p role="status">{notice}</p>}
+      {tab === 'templates' ? (
+        <TemplatesPanel library={library} onCreated={onCreated} />
+      ) : tab === 'public' ? (
         <section className="boards-public" aria-label="Public boards">
           <label className="concept-search">
             <Search size={14} />
@@ -218,12 +230,15 @@ export function BoardsPage({
                       className="board-rename"
                       onSubmit={async (event) => {
                         event.preventDefault();
-                        if (name.trim() && (await library.manage('rename', entry, name.trim())))
+                        if (name.trim() && (await library.manage(editAction, entry, name.trim()))) {
                           setEditing(null);
+                          if (editAction === 'template')
+                            setNotice(`Template “${name.trim()}” saved. Find it in Templates.`);
+                        }
                       }}
                     >
                       <label>
-                        Rename board
+                        {editAction === 'template' ? 'Template name' : 'Rename board'}
                         <input
                           autoFocus
                           value={name}
@@ -234,13 +249,15 @@ export function BoardsPage({
                         />
                       </label>
                       <div>
-                        <button disabled={library.switching || !name.trim()}>Save name</button>
+                        <button disabled={library.switching || !name.trim()}>
+                          {editAction === 'template' ? 'Save template' : 'Save name'}
+                        </button>
                         <button
                           type="button"
                           disabled={library.switching}
                           onClick={() => setEditing(null)}
                         >
-                          Cancel rename
+                          {editAction === 'template' ? 'Cancel template' : 'Cancel rename'}
                         </button>
                       </div>
                     </form>
@@ -265,6 +282,20 @@ export function BoardsPage({
                         </span>
                       </button>
                       <div className="board-card-actions">
+                        <button
+                          aria-label={`Save ${entry.title} as template`}
+                          title="Save as template"
+                          disabled={library.switching}
+                          onClick={() => {
+                            setEditing(entry.id);
+                            setEditAction('template');
+                            setName(entry.title);
+                            setDeleting(null);
+                            setNotice('');
+                          }}
+                        >
+                          <Copy size={15} />
+                        </button>
                         <button
                           aria-label={
                             entry.visibility === 'public'
@@ -294,6 +325,7 @@ export function BoardsPage({
                           disabled={library.switching}
                           onClick={() => {
                             setEditing(entry.id);
+                            setEditAction('rename');
                             setName(entry.title);
                             setDeleting(null);
                           }}

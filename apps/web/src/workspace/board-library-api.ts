@@ -35,17 +35,30 @@ export const boardLibraryApi = {
       body: JSON.stringify({ snapshot, revision }),
     }),
   manage: (
-    action: 'create' | 'rename' | 'delete' | 'share',
+    action: 'create' | 'rename' | 'delete' | 'share' | 'template',
     id: string | undefined,
     body: {
       title?: string | undefined;
       visibility?: 'private' | 'public' | undefined;
       revision?: number;
+      templateId?: string;
     },
   ) =>
-    fetch(action === 'create' ? '/v1/boards' : `/v1/boards/${id}`, {
-      method: action === 'create' ? 'POST' : action === 'delete' ? 'DELETE' : 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
+    fetch(
+      action === 'template'
+        ? '/v1/templates'
+        : action === 'create'
+          ? '/v1/boards'
+          : `/v1/boards/${id}`,
+      {
+        method:
+          action === 'create' || action === 'template'
+            ? 'POST'
+            : action === 'delete'
+              ? 'DELETE'
+              : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(action === 'template' ? { ...body, boardId: id } : body),
+      },
+    ),
 };

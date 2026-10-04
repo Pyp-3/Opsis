@@ -1,7 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
+import {
+  BoardDocumentSchema,
+  BoardSnapshotSchema,
+  type BoardDocument,
+  type BoardSnapshot,
+} from '@opsis/schema';
 
 export type User = { id: string; email: string; name: string };
 export type Visibility = 'private' | 'public';
@@ -47,6 +52,11 @@ export class ApiStore {
         name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL,
         last_used_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS board_templates (
+        id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL, board TEXT NOT NULL, created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS board_templates_owner ON board_templates (owner_id);
     `);
     // Boards predate accounts: add ownership in place. Unowned boards go to the first account.
     const columns = this.sqlite.prepare('PRAGMA table_info(boards_v2)').all() as { name: string }[];
@@ -56,6 +66,38 @@ export class ApiStore {
         ALTER TABLE boards_v2 ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private';
       `);
     this.sqlite.exec('CREATE INDEX IF NOT EXISTS boards_v2_owner ON boards_v2 (owner_id)');
+  }
+
+  /** Templates are private snapshots, independent of source boards and their history. */
+  listTemplates(ownerId: string) {
+    return this.sqlite
+      .prepare(
+        'SELECT id, title, created_at AS createdAt FROM board_templates WHERE owner_id = ? ORDER BY created_at DESC',
+      )
+      .all(ownerId) as { id: string; title: string; createdAt: number }[];
+  }
+
+  createTemplate(id: string, ownerId: string, title: string, board: BoardDocument) {
+    this.sqlite
+      .prepare(
+        'INSERT INTO board_templates (id, owner_id, title, board, created_at) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(id, ownerId, title, JSON.stringify(board), Date.now());
+  }
+
+  getTemplate(id: string, ownerId: string) {
+    const row = this.sqlite
+      .prepare('SELECT board FROM board_templates WHERE id = ? AND owner_id = ?')
+      .get(id, ownerId) as { board: string } | undefined;
+    return row ? BoardDocumentSchema.parse(JSON.parse(row.board)) : undefined;
+  }
+
+  deleteTemplate(id: string, ownerId: string) {
+    return (
+      this.sqlite
+        .prepare('DELETE FROM board_templates WHERE id = ? AND owner_id = ?')
+        .run(id, ownerId).changes > 0
+    );
   }
 
   /** The boards one account owns. */
