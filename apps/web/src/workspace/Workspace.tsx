@@ -65,6 +65,7 @@ import { HomePage } from './HomePage';
 import { AccountPage } from './AccountPage';
 import type { User } from '../auth/session';
 import { CanvasSettingsPage } from './CanvasSettingsPage';
+import { SettingsPage } from './SettingsPage';
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
 import { AppSidebar, applySavedRailWidth, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
@@ -181,11 +182,13 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       ? 'boards'
       : path === '/account'
         ? 'account'
-        : path === '/canvas/settings' && board && !readOnly
-          ? 'settings'
-          : path.startsWith('/canvas')
-            ? 'canvas'
-            : 'home';
+        : path === '/settings'
+          ? 'appearance'
+          : path === '/canvas/settings' && board && !readOnly
+            ? 'settings'
+            : path.startsWith('/canvas')
+              ? 'canvas'
+              : 'home';
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The big picture opens with each canvas, tucks itself away once the reader starts working
   // on the canvas, and stays the way the reader last set it until another canvas opens.
@@ -518,7 +521,9 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         {sidebar}
         <div className="page-scroll">
           <div className="page-toolbar">{railToggle}</div>
-          {page === 'account' && user ? (
+          {page === 'appearance' ? (
+            <SettingsPage />
+          ) : page === 'account' && user ? (
             <AccountPage user={user} onSignOut={onSignOut} />
           ) : page === 'boards' ? (
             <BoardsPage

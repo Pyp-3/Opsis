@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   SquareDashedMousePointer,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
@@ -24,7 +25,7 @@ import { BrandMark } from './BrandMark';
 import { navigate } from '../router';
 
 /** Which page the sidebar sits beside; each shows only what that page needs. */
-export type SidebarMode = 'home' | 'boards' | 'canvas' | 'settings' | 'account';
+export type SidebarMode = 'home' | 'boards' | 'canvas' | 'settings' | 'appearance' | 'account';
 
 /** On phones the sidebar overlays the page, so it gets out of the way once you go somewhere. */
 function go(to: string) {
@@ -151,6 +152,9 @@ export function AppSidebar({
                   </span>
                 </NavLink>
               )}
+              <NavLink to="/settings" current={mode === 'appearance'}>
+                <Settings size={16} /> Appearance
+              </NavLink>
             </nav>
           </div>
         </>
