@@ -79,7 +79,7 @@ export function useBoardLibrary(
         if (!target.board && !target.past.length && !target.future.length) {
           await refresh();
           setStatus('');
-          setError('');
+          // A no-op autosave must not dismiss a failed board-open message.
           return;
         }
         setStatus('Saving…');

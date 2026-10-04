@@ -54,6 +54,33 @@ it('retains the current board when a save fails and blocks switching until it is
   await waitFor(() => expect(result.current.library.error).toBe(''));
 });
 
+it('keeps a failed board-open message through an empty-canvas autosave', async () => {
+  const empty: BoardSnapshot = { board: null, past: [], future: [] };
+  const initial = { id: crypto.randomUUID(), revision: 0, snapshot: empty, error: '' };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/v1/boards' ? Response.json([]) : new Response(null, { status: 404 }),
+    ),
+  );
+  const { result } = renderHook(() => {
+    const history = useBoardHistory(empty);
+    return useBoardLibrary(initial, history.snapshot, history.replace);
+  });
+  await act(async () => {
+    expect(await result.current.open(crypto.randomUUID())).toBe(false);
+  });
+  expect(result.current.error).toBe('Could not open this board.');
+  await act(async () => {
+    await result.current.save();
+  });
+  expect(result.current.error).toBe('Could not open this board.');
+  await act(async () => {
+    expect(await result.current.open()).toBe(true);
+  });
+  expect(result.current.error).toBe('');
+});
+
 it('syncs two views, merges concurrent edits, and allows a new canvas after a stale save', async () => {
   const id = crypto.randomUUID();
   let server = { id, revision: 1, snapshot: structuredClone(snapshot) };
