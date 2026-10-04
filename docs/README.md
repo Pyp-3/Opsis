@@ -9,10 +9,11 @@ examples before connecting an agent.
 - [Getting started](GETTING-STARTED.md): prerequisites, installation, your first board,
   release downloads, and startup troubleshooting.
 - [User guide](USER-GUIDE.md): editing, templates, saving, sharing, playback, and exports.
-- [Agent and model settings](../README.md#agents-and-model-configuration): CLI setup,
+- [Canvas and generation features](FEATURES.md): diagrams, playback, uploads and proposal review.
+- [Agent and model settings](AGENT-CONFIGURATION.md): CLI setup,
   model choice, effort, and environment configuration.
-- [Release downloads](https://github.com/Pyp-3/Opsis/releases): source plus compiled
-  assets, with a version tracker and SHA-256 checksum.
+- [Release downloads](https://github.com/Pyp-3/Opsis/releases): Linux desktop builds
+  and developer bundles, with version metadata and SHA-256 checksums.
 
 ## Developing and integrating
 
@@ -23,7 +24,7 @@ examples before connecting an agent.
 - [Process engine](PROCESS-ENGINE.md): synthetic calculations, contracts, limits, and builds.
 - [Architecture and refactoring](REFACTORING.md): module boundaries and preserved behavior.
 - [Development instructions](../AGENTS.md): the authoritative guide for coding agents.
-- [Release workflow](../README.md#automatic-build-releases): versioning, packaging, and CI.
+- [Release workflow](RELEASES.md): versioning, packaging, and CI.
 
 ## Project history
 

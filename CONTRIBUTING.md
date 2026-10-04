@@ -61,4 +61,4 @@ artifacts.
 Pull requests run checks without publishing. Successful branch pushes in the
 repository publish versioned prerelease bundles. `VERSION` tracks the base version;
 the run number and commit identify each build. See the
-[release workflow](README.md#automatic-build-releases) for details.
+[release workflow](docs/RELEASES.md) for details.

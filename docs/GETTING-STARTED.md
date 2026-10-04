@@ -56,7 +56,7 @@ computer is not a hosted account or cross-device synchronization service.
 To generate other diagrams, install and sign in to your preferred agent CLI
 separately, then select it in the composer. Choose the model and effort before
 submitting. Agent generation can consume your provider subscription or quota.
-See [agent configuration](../README.md#agents-and-model-configuration).
+See [agent configuration](AGENT-CONFIGURATION.md).
 
 ## Download a versioned release
 
@@ -68,7 +68,7 @@ files. Download its matching `.sha256` checksum if you want to verify the ZIP.
 Extract it, open a terminal in the extracted directory, and follow the same launch
 steps above. Dependencies and prerequisites are still required: this is a developer
 bundle, not a standalone desktop installer. `release.json` identifies the exact
-commit and CI run. See [release versioning](../README.md#automatic-build-releases).
+commit and CI run. See [release versioning](RELEASES.md).
 
 ## Troubleshooting
 
@@ -80,7 +80,7 @@ commit and CI run. See [release versioning](../README.md#automatic-build-release
 | The web page cannot reach the API       | Keep both processes running and check ports 3000/8000. Read the terminal error before starting a second copy.                                                                                |
 | An agent is unavailable                 | Confirm its CLI is installed and signed in, then restart the API so it sees the updated PATH.                                                                                                |
 | Natural narration takes time to start   | The API may be downloading/loading its local speech model. A device voice is available as a fallback. `OPSIS_SPEECH=off` disables the API speech engine, not every browser narration option. |
-| A PDF cannot be read                    | Text-layer extraction requires Poppler's `pdftotext`. Scanned-PDF support differs between agents; see [document upload details](../README.md#current-capabilities).                          |
+| A PDF cannot be read                    | Text-layer extraction requires Poppler's `pdftotext`. Scanned-PDF support differs between agents; see [document upload details](FEATURES.md).                                                |
 
 If the issue persists, [report it](https://github.com/Pyp-3/Opsis/issues/new)
 with your OS, Node/pnpm versions, commit or release version, and a minimal

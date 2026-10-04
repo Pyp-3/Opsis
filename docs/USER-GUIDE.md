@@ -34,7 +34,7 @@ when you need to retain an editable copy.
 
 Open views connected to the same API synchronize saved changes. Unsaved work also
 has account-scoped browser recovery. This is local persistence, not hosted cloud
-backup. See [persistence details](../README.md#persistence-what-is-saved-today).
+backup. See [persistence details](PERSISTENCE.md).
 
 ## Reuse a template
 
@@ -56,7 +56,7 @@ Viewers can play a board or save their own copy; they cannot edit your original.
 
 “Public” here means visible within that Opsis instance. It does not publish a board
 to GitHub, create a hosted website, or make a localhost link reachable from another
-computer. See [accounts and sharing](../README.md#accounts-and-sharing).
+computer. See [accounts and sharing](P2-WORKFLOWS.md#shared-editing-on-one-server).
 
 ## Play a process
 
