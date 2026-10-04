@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -185,4 +186,12 @@ func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor
 		limit = 32 * 1024 * 1024
 	}
 	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: input.Request.System + "\n\n" + input.Request.User, Directory: directory, Environment: ChildEnvironment(), Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
+}
+
+func NodePath(directory string) string {
+	name := "node"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(directory, name)
 }

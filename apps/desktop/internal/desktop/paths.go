@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type Paths struct {
@@ -22,7 +23,16 @@ func UserPaths() (Paths, error) {
 	}
 	data := os.Getenv("OPSIS_DATA_DIR")
 	if data == "" {
-		data = os.Getenv("XDG_DATA_HOME")
+		if runtime.GOOS == "windows" {
+			data = os.Getenv("LOCALAPPDATA")
+			if data == "" {
+				data = filepath.Join(home, "AppData", "Local")
+			}
+		} else if runtime.GOOS == "darwin" {
+			data = filepath.Join(home, "Library", "Application Support")
+		} else {
+			data = os.Getenv("XDG_DATA_HOME")
+		}
 		if data == "" {
 			data = filepath.Join(home, ".local", "share")
 		}

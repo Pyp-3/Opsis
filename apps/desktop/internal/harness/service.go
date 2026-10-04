@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
 type Service struct {
 	URL   *url.URL
 	cmd   *exec.Cmd
+	tree  *processTree
 	input io.WriteCloser
 	done  chan struct{}
 	once  sync.Once
@@ -27,10 +27,9 @@ type Service struct {
 // Start launches packaged Kokoro inference without a shell. Its process group
 // is terminated on shutdown, including any native inference workers.
 func Start(ctx context.Context, runtimeDir, models string) (*Service, error) {
-	cmd := exec.Command(filepath.Join(runtimeDir, "node"), filepath.Join(runtimeDir, "api", "desktop.mjs"))
+	cmd := exec.Command(NodePath(runtimeDir), filepath.Join(runtimeDir, "api", "desktop.mjs"))
 	cmd.Dir = filepath.Join(runtimeDir, "api")
 	cmd.Env = append(os.Environ(), "OPSIS_MODEL_DIR="+models)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -41,10 +40,11 @@ func Start(ctx context.Context, runtimeDir, models string) (*Service, error) {
 	}
 	// The service has logging disabled. Never forward provider output or credentials.
 	cmd.Stderr = io.Discard
-	if err := cmd.Start(); err != nil {
+	tree, err := startProcess(cmd)
+	if err != nil {
 		return nil, fmt.Errorf("start bundled Node runtime: %w", err)
 	}
-	s := &Service{cmd: cmd, input: input, done: make(chan struct{})}
+	s := &Service{cmd: cmd, tree: tree, input: input, done: make(chan struct{})}
 	ready := make(chan string, 1)
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -72,6 +72,7 @@ func Start(ctx context.Context, runtimeDir, models string) (*Service, error) {
 		s.URL = u
 		return s, nil
 	case <-s.done:
+		tree.close()
 		return nil, errors.New("local service exited before becoming ready")
 	case <-timer.C:
 		s.Close()
@@ -88,12 +89,13 @@ func (s *Service) Close() {
 	s.once.Do(func() {
 		_ = s.input.Close()
 		// Cancel the whole inference group.
-		_ = syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+		s.tree.kill(false)
 		select {
 		case <-s.done:
 		case <-time.After(5 * time.Second):
 		}
-		_ = syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
+		s.tree.kill(true)
 		<-s.done
+		s.tree.close()
 	})
 }

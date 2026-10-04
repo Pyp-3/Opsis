@@ -163,7 +163,7 @@ func run() error {
 		return err
 	}
 	defer nativeAPI.Close()
-	workflows, err := generation.New(harness.ProcessRunner{Node: filepath.Join(runtimeDir, "node")})
+	workflows, err := generation.New(harness.ProcessRunner{Node: harness.NodePath(runtimeDir)})
 	if err != nil {
 		return err
 	}

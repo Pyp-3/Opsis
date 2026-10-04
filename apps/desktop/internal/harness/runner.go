@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -65,13 +64,14 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 	cmd.Dir = request.Directory
 	cmd.Env = request.Environment
 	cmd.Stdin = strings.NewReader(request.Stdin)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	chunks := make(chan outputChunk, 16)
 	cmd.Stdout = channelWriter{true, chunks}
 	cmd.Stderr = channelWriter{false, chunks}
-	if err := cmd.Start(); err != nil {
+	tree, err := startProcess(cmd)
+	if err != nil {
 		return "", Error("harness_missing")
 	}
+	defer tree.close()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait(); close(chunks) }()
 	var stdout bytes.Buffer
@@ -85,7 +85,7 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 			return
 		}
 		failure = code
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+		tree.kill(false)
 		timer = time.NewTimer(2 * time.Second)
 		kill = timer.C
 	}
@@ -105,7 +105,7 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 			}
 			terminate(code)
 		case <-kill:
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			tree.kill(true)
 			kill = nil
 		case chunk, ok := <-chunks:
 			if !ok {
