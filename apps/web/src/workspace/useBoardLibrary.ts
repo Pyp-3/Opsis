@@ -310,11 +310,13 @@ export function useBoardLibrary(
   };
   const managing = useRef(false);
   const manage = async (
-    action: 'create' | 'rename' | 'delete' | 'share' | 'template',
+    action:
+      'create' | 'rename' | 'delete' | 'share' | 'template' | 'duplicate' | 'archive' | 'unarchive',
     entry?: z.infer<typeof List>[number],
     title?: string,
     visibility?: 'private' | 'public',
     templateId?: string,
+    fromRevision?: number,
   ) => {
     if (managing.current) return false;
     managing.current = true;
@@ -324,7 +326,14 @@ export function useBoardLibrary(
       const isActive = entry?.id === active.current.id;
       const response = await boardLibraryApi.manage(action, entry?.id, {
         ...(action === 'create' && templateId ? { templateId } : {}),
-        ...(action === 'delete' ? {} : action === 'share' ? { visibility } : { title }),
+        ...(action === 'delete'
+          ? {}
+          : action === 'share'
+            ? { visibility }
+            : action === 'archive' || action === 'unarchive'
+              ? { archived: action === 'archive' }
+              : { title }),
+        ...(fromRevision === undefined ? {} : { fromRevision }),
         ...(action === 'create'
           ? {}
           : { revision: isActive ? active.current.revision : entry!.revision }),
@@ -333,6 +342,8 @@ export function useBoardLibrary(
         throw new Error((await response.json()).message ?? 'Board operation failed.');
       if (
         action === 'create' ||
+        action === 'duplicate' ||
+        ((action === 'archive' || action === 'unarchive') && isActive) ||
         (action === 'rename' && isActive) ||
         (action === 'delete' && isActive)
       ) {

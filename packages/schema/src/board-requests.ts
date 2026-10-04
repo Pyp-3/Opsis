@@ -13,12 +13,28 @@ export const BoardUpdateRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(100).optional(),
     visibility: z.enum(['private', 'public']).optional(),
+    archived: z.boolean().optional(),
     revision: z.number().int().positive(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (body) =>
+      body.archived === undefined || (body.title === undefined && body.visibility === undefined),
+    'Archive separately from renaming or sharing.',
+  );
 export const BoardDeleteRequestSchema = z
   .object({ revision: z.number().int().positive() })
   .strict();
+export const BoardDuplicateRequestSchema = z
+  .object({
+    revision: z.number().int().positive(),
+    title: z.string().trim().min(1).max(100).optional(),
+    fromRevision: z.number().int().positive().optional(),
+  })
+  .strict();
+export const BoardRevisionQuerySchema = z.object({
+  before: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+});
 export const BoardSaveRequestSchema = z
   .object({
     snapshot: BoardSnapshotSchema,

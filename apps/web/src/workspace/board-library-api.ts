@@ -21,6 +21,7 @@ export const BoardListSchema = z.array(
     revision: z.number(),
     updatedAt: z.number(),
     visibility: z.enum(['private', 'public']).optional(),
+    archived: z.boolean().optional(),
   }),
 );
 
@@ -35,13 +36,16 @@ export const boardLibraryApi = {
       body: JSON.stringify({ snapshot, revision }),
     }),
   manage: (
-    action: 'create' | 'rename' | 'delete' | 'share' | 'template',
+    action:
+      'create' | 'rename' | 'delete' | 'share' | 'template' | 'duplicate' | 'archive' | 'unarchive',
     id: string | undefined,
     body: {
       title?: string | undefined;
       visibility?: 'private' | 'public' | undefined;
       revision?: number;
       templateId?: string;
+      archived?: boolean;
+      fromRevision?: number;
     },
   ) =>
     fetch(
@@ -49,10 +53,12 @@ export const boardLibraryApi = {
         ? '/v1/templates'
         : action === 'create'
           ? '/v1/boards'
-          : `/v1/boards/${id}`,
+          : action === 'duplicate'
+            ? `/v1/boards/${id}/duplicate`
+            : `/v1/boards/${id}`,
       {
         method:
-          action === 'create' || action === 'template'
+          action === 'create' || action === 'template' || action === 'duplicate'
             ? 'POST'
             : action === 'delete'
               ? 'DELETE'

@@ -9,6 +9,8 @@ import {
   BoardDeleteRequestSchema,
   BoardSaveRequestSchema,
   TemplateCreateRequestSchema,
+  BoardDuplicateRequestSchema,
+  BoardRevisionQuerySchema,
 } from '@opsis/schema';
 import { randomUUID } from 'node:crypto';
 import type { ApiStore, User } from './storage.js';
@@ -25,20 +27,68 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
   /** The board, if `user` may read it. */
   const readable = (id: string, user: User) => {
     const board = store.getBoard(id);
-    return board && (board.ownerId === user.id || board.visibility === 'public') ? board : null;
+    return board &&
+      (board.ownerId === user.id || (board.visibility === 'public' && !board.archived))
+      ? board
+      : null;
   };
   const view = (board: NonNullable<ReturnType<ApiStore['getBoard']>>, user: User) => ({
     id: board.id,
     revision: board.revision,
     snapshot: board.snapshot,
     visibility: board.visibility,
+    archived: board.archived,
     access: board.ownerId === user.id ? ('owner' as const) : ('viewer' as const),
     owner: { name: board.ownerName ?? 'Unknown' },
   });
 
   app.get('/v1/boards', async (request, reply) => {
     const user = requireUser(request, reply);
-    return user ? store.listBoards(user.id) : reply;
+    return user ? store.listBoards(user.id, true) : reply;
+  });
+  app.get('/v1/boards/:id/revisions', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    const query = BoardRevisionQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success)
+      return reply.code(400).send({ message: 'Invalid revision query.' });
+    if (store.getBoard(params.data.id)?.ownerId !== user.id) return notFound(reply);
+    return store.listRevisions(params.data.id, query.data.before);
+  });
+  app.get('/v1/boards/:id/revisions/:revision', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = request.params as { id: string; revision: string };
+    const revision = Number(params.revision);
+    if (!idSchema.safeParse(params).success || !Number.isSafeInteger(revision) || revision < 1)
+      return reply.code(400).send({ message: 'Invalid revision.' });
+    if (store.getBoard(params.id)?.ownerId !== user.id) return notFound(reply);
+    const board = store.readRevision(params.id, revision);
+    return board === undefined ? notFound(reply) : { revision, board };
+  });
+  app.post('/v1/boards/:id/duplicate', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    const body = BoardDuplicateRequestSchema.safeParse(request.body);
+    if (!params.success || !body.success)
+      return reply.code(400).send({ message: 'Invalid copy request.' });
+    const id = randomUUID();
+    const result = store.duplicateBoard(
+      params.data.id,
+      user.id,
+      body.data.revision,
+      id,
+      body.data.title,
+      body.data.fromRevision,
+    );
+    if (result === 'missing') return notFound(reply);
+    if (result === 'conflict')
+      return reply
+        .code(409)
+        .send({ message: 'This board changed. Refresh the library and retry.' });
+    return reply.code(201).send(view(store.getBoard(id)!, user));
   });
   app.get('/v1/templates', async (request, reply) => {
     const user = requireUser(request, reply);
@@ -110,6 +160,14 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
       return reply.code(409).send({
         message: 'This board changed in another tab. Reopen the board manager and retry.',
       });
+    if (body.data.archived !== undefined) {
+      if (current.archived === body.data.archived) return view(current, user);
+      if (!store.setArchived(current.id, body.data.archived, current.revision))
+        return reply
+          .code(409)
+          .send({ message: 'This board changed. Refresh the library and retry.' });
+      return view(store.getBoard(current.id)!, user);
+    }
     // Sharing is a property of the board, not an edit to it: no revision or undo step.
     if (body.data.visibility) store.setVisibility(current.id, body.data.visibility);
     const title = body.data.title;

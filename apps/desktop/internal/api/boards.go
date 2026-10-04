@@ -26,7 +26,7 @@ func (s *Server) boardRoutes() {
 		if err != nil {
 			return err
 		}
-		boards, err := s.listBoards(user.ID, false)
+		boards, err := s.listBoards(user.ID, false, true)
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ func (s *Server) boardRoutes() {
 		if err != nil {
 			return err
 		}
-		boards, err := s.listBoards(user.ID, true)
+		boards, err := s.listBoards(user.ID, true, false)
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ func (s *Server) boardRoutes() {
 		if err != nil {
 			return err
 		}
-		if board == nil || (board.OwnerID.String != user.ID && board.Visibility != "public") {
+		if board == nil || (board.OwnerID.String != user.ID && (board.Visibility != "public" || board.Archived)) {
 			return boardMissing()
 		}
 		writeJSON(w, 200, board.view(user))
@@ -132,7 +132,7 @@ func (s *Server) boardRoutes() {
 			if err != nil {
 				return err
 			}
-			if board != nil && board.Visibility == "public" {
+			if board != nil && board.Visibility == "public" && !board.Archived {
 				return failure(403, "This board belongs to someone else. Save a copy to edit it.")
 			}
 			return boardMissing()
@@ -152,6 +152,7 @@ func (s *Server) boardRoutes() {
 		var body struct {
 			Title      *string `json:"title"`
 			Visibility string  `json:"visibility"`
+			Archived   *bool   `json:"archived"`
 			Revision   int64   `json:"revision"`
 		}
 		if !s.validID(id) {
@@ -174,6 +175,11 @@ func (s *Server) boardRoutes() {
 		}
 		if board.Revision != body.Revision {
 			return failure(409, "This board changed in another tab. Reopen the board manager and retry.")
+		}
+		if body.Archived != nil && *body.Archived != board.Archived {
+			if _, err := tx.Exec(`UPDATE boards_v2 SET archived=?,revision=revision+1,updated_at=? WHERE id=?`, *body.Archived, time.Now().UnixMilli(), id); err != nil {
+				return err
+			}
 		}
 		if body.Visibility != "" {
 			if _, err := tx.Exec(`UPDATE boards_v2 SET visibility=? WHERE id=?`, body.Visibility, id); err != nil {
@@ -246,6 +252,7 @@ func (s *Server) boardRoutes() {
 		return nil
 	})
 	s.templateRoutes()
+	s.boardHistoryRoutes()
 }
 
 func (s *Server) templateRoutes() {

@@ -59,7 +59,7 @@ export function HomePage({
     };
   }, []);
   const recent = library.entries
-    .filter((entry) => entry.id !== library.activeId)
+    .filter((entry) => !entry.archived && entry.id !== library.activeId)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 6);
   const start = (text: string) => {

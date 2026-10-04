@@ -141,7 +141,9 @@ export function AppSidebar({
               </NavLink>
               <NavLink to="/boards" current={mode === 'boards'} disabled={busy}>
                 <FolderOpen size={16} /> Manage boards
-                <span className="rail-count">{library.entries.length}</span>
+                <span className="rail-count">
+                  {library.entries.filter((entry) => !entry.archived).length}
+                </span>
               </NavLink>
               {board && (
                 <NavLink to="/canvas" label={`Open canvas: ${board.title}`}>

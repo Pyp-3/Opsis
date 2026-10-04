@@ -1,11 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import Database from 'better-sqlite3';
+import { PERSISTENCE_MIGRATIONS } from './persistence/migrations.js';
 import {
   BoardDocumentSchema,
   BoardSnapshotSchema,
   type BoardDocument,
   type BoardSnapshot,
+  copyBoardSnapshot,
 } from '@opsis/schema';
 
 export type User = { id: string; email: string; name: string };
@@ -16,6 +18,7 @@ export type BoardListing = {
   revision: number;
   updatedAt: number;
   visibility: Visibility;
+  archived: boolean;
 };
 
 function databasePath(path: string): string {
@@ -31,9 +34,10 @@ export class ApiStore {
 
   constructor(path: string) {
     this.sqlite = new Database(databasePath(path));
-    this.sqlite.pragma('journal_mode = WAL');
-    this.sqlite.pragma('foreign_keys = ON');
-    this.sqlite.exec(`
+    try {
+      this.sqlite.pragma('journal_mode = WAL');
+      this.sqlite.pragma('foreign_keys = ON');
+      this.sqlite.exec(`
       CREATE TABLE IF NOT EXISTS boards_v2 (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, snapshot TEXT NOT NULL,
         revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
@@ -58,14 +62,39 @@ export class ApiStore {
       );
       CREATE INDEX IF NOT EXISTS board_templates_owner ON board_templates (owner_id);
     `);
-    // Boards predate accounts: add ownership in place. Unowned boards go to the first account.
-    const columns = this.sqlite.prepare('PRAGMA table_info(boards_v2)').all() as { name: string }[];
-    if (!columns.some((column) => column.name === 'owner_id'))
-      this.sqlite.exec(`
+      // Boards predate accounts: add ownership in place. Unowned boards go to the first account.
+      const columns = this.sqlite.prepare('PRAGMA table_info(boards_v2)').all() as {
+        name: string;
+      }[];
+      if (!columns.some((column) => column.name === 'owner_id'))
+        this.sqlite.exec(`
         ALTER TABLE boards_v2 ADD COLUMN owner_id TEXT;
         ALTER TABLE boards_v2 ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private';
       `);
-    this.sqlite.exec('CREATE INDEX IF NOT EXISTS boards_v2_owner ON boards_v2 (owner_id)');
+      this.sqlite.exec('CREATE INDEX IF NOT EXISTS boards_v2_owner ON boards_v2 (owner_id)');
+      this.sqlite.exec(
+        'CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, name TEXT NOT NULL)',
+      );
+      this.sqlite.transaction(() => {
+        const applied = this.sqlite.prepare('SELECT version FROM schema_migrations').all() as {
+          version: number;
+        }[];
+        if (
+          applied.some(({ version }) => !PERSISTENCE_MIGRATIONS.some((m) => m.version === version))
+        )
+          throw new Error('This database requires a newer version of Opsis.');
+        for (const migration of PERSISTENCE_MIGRATIONS) {
+          if (applied.some(({ version }) => version === migration.version)) continue;
+          this.sqlite.exec(migration.sql);
+          this.sqlite
+            .prepare('INSERT INTO schema_migrations VALUES (?,?)')
+            .run(migration.version, migration.name);
+        }
+      })();
+    } catch (error) {
+      this.sqlite.close();
+      throw error;
+    }
   }
 
   /** Templates are private snapshots, independent of source boards and their history. */
@@ -101,13 +130,16 @@ export class ApiStore {
   }
 
   /** The boards one account owns. */
-  listBoards(ownerId: string) {
-    return this.sqlite
+  listBoards(ownerId: string, includeArchived = false) {
+    const rows = this.sqlite
       .prepare(
-        `SELECT id, title, revision, updated_at AS updatedAt, visibility FROM boards_v2
-         WHERE owner_id = ? ORDER BY updated_at DESC`,
+        `SELECT id, title, revision, updated_at AS updatedAt, visibility, archived FROM boards_v2
+         WHERE owner_id = ? AND (? OR archived=0) ORDER BY updated_at DESC`,
       )
-      .all(ownerId) as BoardListing[];
+      .all(ownerId, Number(includeArchived)) as (Omit<BoardListing, 'archived'> & {
+      archived: number;
+    })[];
+    return rows.map((row) => ({ ...row, archived: Boolean(row.archived) }));
   }
 
   /** Other people's public boards, newest first. */
@@ -117,16 +149,16 @@ export class ApiStore {
         `SELECT b.id, b.title, b.revision, b.updated_at AS updatedAt, b.visibility,
                 u.name AS ownerName
          FROM boards_v2 b JOIN users u ON u.id = b.owner_id
-         WHERE b.visibility = 'public' AND b.owner_id != ?
+         WHERE b.visibility = 'public' AND b.archived=0 AND b.owner_id != ?
          ORDER BY b.updated_at DESC LIMIT ?`,
       )
-      .all(exceptOwnerId, limit) as (BoardListing & { ownerName: string })[];
+      .all(exceptOwnerId, limit) as (Omit<BoardListing, 'archived'> & { ownerName: string })[];
   }
 
   getBoard(id: string) {
     const row = this.sqlite
       .prepare(
-        `SELECT b.snapshot, b.revision, b.owner_id AS ownerId, b.visibility, u.name AS ownerName
+        `SELECT b.snapshot, b.revision, b.owner_id AS ownerId, b.visibility, b.archived, u.name AS ownerName
          FROM boards_v2 b LEFT JOIN users u ON u.id = b.owner_id WHERE b.id = ?`,
       )
       .get(id) as
@@ -135,6 +167,7 @@ export class ApiStore {
           revision: number;
           ownerId: string | null;
           visibility: Visibility;
+          archived: number;
           ownerName: string | null;
         }
       | undefined;
@@ -146,6 +179,7 @@ export class ApiStore {
           ownerId: row.ownerId,
           ownerName: row.ownerName,
           visibility: row.visibility,
+          archived: Boolean(row.archived),
         }
       : undefined;
   }
@@ -175,6 +209,52 @@ export class ApiStore {
           ownerId,
         );
       return { id, revision: next };
+    })();
+  }
+
+  setArchived(id: string, archived: boolean, revision: number) {
+    return (
+      this.sqlite
+        .prepare(
+          'UPDATE boards_v2 SET archived=?, revision=revision+1, updated_at=? WHERE id=? AND revision=?',
+        )
+        .run(Number(archived), Date.now(), id, revision).changes > 0
+    );
+  }
+
+  listRevisions(id: string, before = Number.MAX_SAFE_INTEGER) {
+    return this.sqlite
+      .prepare(
+        'SELECT revision,title,saved_at AS savedAt FROM board_revisions WHERE board_id=? AND revision<? ORDER BY revision DESC LIMIT 50',
+      )
+      .all(id, before) as { revision: number; title: string; savedAt: number }[];
+  }
+
+  readRevision(id: string, revision: number) {
+    const row = this.sqlite
+      .prepare('SELECT document FROM board_revisions WHERE board_id=? AND revision=?')
+      .get(id, revision) as { document: string } | undefined;
+    return row ? BoardDocumentSchema.nullable().parse(JSON.parse(row.document)) : undefined;
+  }
+
+  duplicateBoard(
+    id: string,
+    ownerId: string,
+    revision: number,
+    newId: string,
+    title?: string,
+    fromRevision?: number,
+  ) {
+    return this.sqlite.transaction(() => {
+      const source = this.getBoard(id);
+      if (!source || source.ownerId !== ownerId) return 'missing' as const;
+      if (source.revision !== revision) return 'conflict' as const;
+      const board =
+        fromRevision === undefined ? source.snapshot.board : this.readRevision(id, fromRevision);
+      if (board === undefined) return 'missing' as const;
+      const snapshot = copyBoardSnapshot(board, title);
+      this.saveBoard(newId, snapshot, 0, ownerId);
+      return 'created' as const;
     })();
   }
 

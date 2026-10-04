@@ -262,11 +262,10 @@
   transform: translateX(3px);
 }
 .board-card-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px 10px;
 }
 .board-card-actions button {
   width: 32px;
@@ -1455,7 +1454,8 @@
 .boards-tabs {
   position: relative;
   display: inline-grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 100%;
   margin-top: 24px;
   padding: 4px;
   background: var(--sunken);
@@ -1466,7 +1466,7 @@
   top: 4px;
   bottom: 4px;
   left: 4px;
-  width: calc((100% - 8px) / 3);
+  width: calc((100% - 8px) / 4);
   background: var(--surface);
   border-radius: 9px;
   box-shadow:
@@ -1479,6 +1479,9 @@
 }
 .boards-tabs-thumb[data-tab='templates'] {
   transform: translateX(200%);
+}
+.boards-tabs-thumb[data-tab='archive'] {
+  transform: translateX(300%);
 }
 .boards-tabs button {
   position: relative;
@@ -1630,5 +1633,46 @@
   .account-new-key {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+.revision-panel {
+  padding: 20px;
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.revision-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.revision-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 0;
+  list-style: none;
+}
+.revision-preview {
+  max-height: 360px;
+  overflow: auto;
+  margin: 12px 0;
+}
+.revision-preview li {
+  margin: 8px 0;
+}
+@media (max-width: 480px) {
+  .boards-tabs button {
+    padding: 0 5px;
+    font-size: 11px;
+    gap: 3px;
+  }
+  .boards-tabs button svg {
+    display: none;
   }
 }

@@ -11,6 +11,13 @@ import (
 // ImportDatabase takes a consistent SQLite snapshot, including committed WAL
 // content. It never replaces an existing destination or modifies the source.
 func ImportDatabase(source, destination string) error {
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Lstat(destination + suffix); err == nil {
+			return errors.New("destination has SQLite sidecar files; choose a new database path")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	if _, err := os.Stat(destination); err == nil {
 		return errors.New("destination database already exists; choose a new OPSIS_DATA_DIR")
 	} else if !errors.Is(err, os.ErrNotExist) {

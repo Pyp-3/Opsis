@@ -10,10 +10,15 @@ import {
   Search,
   Trash2,
   Copy,
+  Archive,
+  ArchiveRestore,
+  History,
+  CopyPlus,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
 import { HomeBackdrop } from './HomeBackdrop';
+import { BoardRevisionPanel } from './BoardRevisionPanel';
 
 export type PublicBoard = {
   id: string;
@@ -63,9 +68,10 @@ export function BoardsPage({
   const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [tab, setTab] = useState<'mine' | 'public' | 'templates'>('mine');
+  const [tab, setTab] = useState<'mine' | 'public' | 'templates' | 'archive'>('mine');
   const [shared, setShared] = useState<PublicBoard[] | null>(null);
   const [sharedError, setSharedError] = useState('');
+  const [historyId, setHistoryId] = useState<string | null>(null);
   useEffect(() => {
     void refresh().catch(() => undefined);
   }, [refresh]);
@@ -89,7 +95,11 @@ export function BoardsPage({
       document.title = 'Opsis';
     };
   }, []);
-  const entries = library.entries
+  const visibleEntries = library.entries.filter(
+    (entry) => Boolean(entry.archived) === (tab === 'archive'),
+  );
+  const historyEntry = library.entries.find((entry) => entry.id === historyId);
+  const entries = visibleEntries
     .filter((entry) => entry.title.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : b.updatedAt - a.updatedAt));
   return (
@@ -116,8 +126,26 @@ export function BoardsPage({
         <button role="tab" aria-selected={tab === 'templates'} onClick={() => setTab('templates')}>
           <Copy size={14} /> Templates
         </button>
+        <button role="tab" aria-selected={tab === 'archive'} onClick={() => setTab('archive')}>
+          <Archive size={14} /> Archive
+        </button>
       </div>
       {notice && <p role="status">{notice}</p>}
+      {historyEntry && (
+        <BoardRevisionPanel
+          key={historyEntry.id}
+          entry={historyEntry}
+          library={library}
+          onClose={() => setHistoryId(null)}
+          onCreated={onCreated}
+        />
+      )}
+      {tab === 'archive' && (
+        <p>
+          Archived boards stay on this computer and are hidden from public viewing. Unarchiving
+          restores their previous sharing setting.
+        </p>
+      )}
       {tab === 'templates' ? (
         <TemplatesPanel library={library} onCreated={onCreated} />
       ) : tab === 'public' ? (
@@ -212,7 +240,7 @@ export function BoardsPage({
               </select>
             </label>
             <span className="boards-count">
-              {entries.length} of {library.entries.length} boards
+              {entries.length} of {visibleEntries.length} boards
             </span>
           </div>
           {library.error && (
@@ -274,6 +302,7 @@ export function BoardsPage({
                         <strong>{entry.title}</strong>
                         <small>
                           {current ? 'Open now · ' : ''}
+                          {entry.archived ? 'Archived · ' : ''}
                           {entry.visibility === 'public' ? 'Public · ' : ''}
                           {updatedLabel(entry.updatedAt)}
                         </small>
@@ -282,6 +311,46 @@ export function BoardsPage({
                         </span>
                       </button>
                       <div className="board-card-actions">
+                        <button
+                          aria-label={`Duplicate ${entry.title}`}
+                          title="Duplicate as private board"
+                          disabled={library.switching}
+                          onClick={async () => {
+                            if (await library.manage('duplicate', entry)) {
+                              setNotice('Private copy created with fresh undo history.');
+                              onCreated();
+                            }
+                          }}
+                        >
+                          <CopyPlus size={15} />
+                        </button>
+                        <button
+                          aria-label={`${entry.archived ? 'Unarchive' : 'Archive'} ${entry.title}`}
+                          title={
+                            entry.archived ? 'Unarchive' : 'Archive (hide from public viewing)'
+                          }
+                          disabled={library.switching}
+                          onClick={async () => {
+                            if (
+                              await library.manage(entry.archived ? 'unarchive' : 'archive', entry)
+                            )
+                              setNotice(
+                                entry.archived
+                                  ? 'Board unarchived.'
+                                  : 'Board archived. Find it in Archive.',
+                              );
+                          }}
+                        >
+                          {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                        </button>
+                        <button
+                          aria-label={`Revision history for ${entry.title}`}
+                          title="Revision history"
+                          disabled={library.switching}
+                          onClick={() => setHistoryId(entry.id)}
+                        >
+                          <History size={15} />
+                        </button>
                         <button
                           aria-label={`Save ${entry.title} as template`}
                           title="Save as template"
@@ -352,8 +421,8 @@ export function BoardsPage({
                       aria-label="Confirm board deletion"
                     >
                       <p>
-                        Delete “{entry.title}” and its undo history? This cannot be undone. Export a
-                        backup first if needed.
+                        Delete “{entry.title}”, its undo history and saved revisions? This cannot be
+                        undone. Export a backup first if needed.
                       </p>
                       <div>
                         <button
@@ -375,8 +444,12 @@ export function BoardsPage({
               );
             })}
           </ul>
-          {!library.entries.length ? (
-            <p className="boards-empty">No saved boards yet. Create your first board above.</p>
+          {!visibleEntries.length ? (
+            <p className="boards-empty">
+              {tab === 'archive'
+                ? 'No archived boards.'
+                : 'No saved boards yet. Create your first board above.'}
+            </p>
           ) : (
             !entries.length && <p className="boards-empty">No boards match “{query}”.</p>
           )}

@@ -11,9 +11,18 @@ Run from the repository root with `pnpm --filter api dev`. The default address i
 - `/v1/auth/*` manages accounts, cookie sessions and revocable agent keys.
 - `GET /v1/agents` reports local Claude/Codex availability and the built-in demo.
 - `POST /v1/boards/generate` and `POST /v1/boards/illustrate` run the selected local agent.
-- `GET/POST /v1/boards` lists owned boards or creates one.
+- `GET/POST /v1/boards` lists owned boards (including their `archived` flag) or creates one.
 - `GET /v1/boards/public` lists other accounts' public boards.
-- `GET/PUT/PATCH/DELETE /v1/boards/:id` reads, saves, renames/shares or deletes a board.
+- `GET/PUT/PATCH/DELETE /v1/boards/:id` reads, saves, renames/shares, archives or deletes a board.
+  Archive requests use `{ revision, archived }`, separately from renaming/sharing, and
+  advance the revision without adding an undo step.
+- `POST /v1/boards/:id/duplicate` accepts `{ revision, title?, fromRevision? }` and creates
+  an independent private copy with fresh undo history. Only the source owner may copy
+  through this endpoint; stale source revisions return 409.
+- `GET /v1/boards/:id/revisions?before=N` returns up to 50 saved revisions newest first;
+  `GET /v1/boards/:id/revisions/:revision` returns `{ revision, board }`. Both are owner-only,
+  even when a board is public. Omit `before` for the newest page and use its last revision
+  as the next cursor. `fromRevision` restores one as a new private board.
 - `GET/POST /v1/templates` lists private templates or saves a snapshot of an owned board;
   `DELETE /v1/templates/:id` removes an owned template. `POST /v1/boards` accepts an
   optional `templateId` to create an independent private board with fresh history.
@@ -21,12 +30,17 @@ Run from the repository root with `pnpm --filter api dev`. The default address i
   `POST /v1/speech/warm` prepares the model.
 
 Boards require an account. Owners can edit their boards; other signed-in accounts can
-read public boards. Private boards remain hidden. Agent keys work only for local,
+read unarchived public boards. Archived boards are owner-only; unarchiving restores
+their previous sharing setting. Private boards remain hidden. Agent keys work only for local,
 non-browser requests and act as their owning account.
 
 Board writes check the expected revision. Stale writes return 409, deleted boards cannot
 be resurrected, and accepted content edits retain up to 40 undo steps. Changing visibility
 does not create a content revision.
+
+The separate revision archive retains saves from migration onwards until permanent
+board deletion. Both hosts apply the same SQL migration catalogue. Full-database
+backup/restore commands and retention details are in [Persistence and recovery](../../docs/PERSISTENCE.md).
 
 Generation normally returns JSON. With `Accept: application/x-ndjson`, it returns
 progress events followed by `{ type: "result", status, body }`. Malformed model answers

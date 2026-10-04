@@ -4,14 +4,18 @@ import {
   BoardUpdateRequestSchema,
   BoardDeleteRequestSchema,
   BoardSaveRequestSchema,
+  BoardDuplicateRequestSchema,
+  BoardRevisionQuerySchema,
   TemplateCreateRequestSchema,
   BoardSnapshotSchema,
   BoardDocumentSchema,
   createEmptyBoard,
   recordBoardEdit,
+  copyBoardSnapshot,
 } from '../../packages/schema/src/index';
 import { SignUpSchema, LogInSchema, AgentKeyNameSchema } from '../api/src/auth-contract';
 import { z } from 'zod';
+import { PERSISTENCE_MIGRATIONS } from '../api/src/persistence/migrations';
 
 const parsers = {
   id: BoardIdSchema,
@@ -19,6 +23,8 @@ const parsers = {
   update: BoardUpdateRequestSchema,
   delete: BoardDeleteRequestSchema,
   save: BoardSaveRequestSchema,
+  duplicate: BoardDuplicateRequestSchema,
+  revisionQuery: BoardRevisionQuerySchema,
   template: TemplateCreateRequestSchema,
   snapshot: BoardSnapshotSchema,
   board: BoardDocumentSchema,
@@ -33,12 +39,19 @@ export function apply(operation: string, json: string): string {
   try {
     const input: unknown = JSON.parse(json);
     let value: unknown;
-    if (operation === 'empty') {
+    if (operation === 'migrations') {
+      value = PERSISTENCE_MIGRATIONS;
+    } else if (operation === 'empty') {
       value = BoardSnapshotSchema.parse({
         board: createEmptyBoard(z.string().parse(input)),
         past: [],
         future: [],
       });
+    } else if (operation === 'copy') {
+      const { board, title } = z
+        .object({ board: BoardDocumentSchema.nullable(), title: z.string().optional() })
+        .parse(input);
+      value = copyBoardSnapshot(board, title);
     } else if (operation === 'fromTemplate') {
       const { board, title } = z
         .object({ board: BoardDocumentSchema, title: z.string() })

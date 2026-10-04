@@ -97,12 +97,22 @@ func run() error {
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
 	}
-	if mode != "" && mode != "--mcp" && mode != "--diagnose" && mode != "--smoke-test" && mode != "--serve" && mode != "--import-database" {
-		return errors.New("usage: opsis [--mcp | --diagnose | --smoke-test | --serve | --import-database PATH]")
+	if mode != "" && mode != "--mcp" && mode != "--diagnose" && mode != "--smoke-test" && mode != "--serve" && mode != "--import-database" && mode != "--backup-database" {
+		return errors.New("usage: opsis [--mcp | --diagnose | --smoke-test | --serve | --import-database PATH | --backup-database NEW_PATH]")
 	}
 	paths, err := desktop.UserPaths()
 	if err != nil {
 		return err
+	}
+	if mode == "--backup-database" {
+		if len(os.Args) != 3 {
+			return errors.New("usage: opsis --backup-database NEW_PATH")
+		}
+		if err := api.ImportDatabase(paths.Database, os.Args[2]); err != nil {
+			return err
+		}
+		fmt.Println("Database backup created at " + os.Args[2])
+		return nil
 	}
 	if mode == "--import-database" {
 		if len(os.Args) != 3 {

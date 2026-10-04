@@ -47,7 +47,10 @@ CREATE INDEX IF NOT EXISTS board_templates_owner ON board_templates(owner_id);`)
 		}
 	}
 	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS boards_v2_owner ON boards_v2(owner_id)`)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.applyMigrations()
 }
 
 type Board struct {
@@ -57,6 +60,7 @@ type Board struct {
 	OwnerID    sql.NullString
 	OwnerName  sql.NullString
 	Visibility string
+	Archived   bool
 }
 
 type boardReader interface{ QueryRow(string, ...any) *sql.Row }
@@ -64,7 +68,7 @@ type boardReader interface{ QueryRow(string, ...any) *sql.Row }
 func (s *Server) readBoard(reader boardReader, id string) (*Board, error) {
 	board := &Board{ID: id}
 	var snapshot string
-	err := reader.QueryRow(`SELECT b.snapshot,b.revision,b.owner_id,b.visibility,u.name FROM boards_v2 b LEFT JOIN users u ON u.id=b.owner_id WHERE b.id=?`, id).Scan(&snapshot, &board.Revision, &board.OwnerID, &board.Visibility, &board.OwnerName)
+	err := reader.QueryRow(`SELECT b.snapshot,b.revision,b.owner_id,b.visibility,u.name,b.archived FROM boards_v2 b LEFT JOIN users u ON u.id=b.owner_id WHERE b.id=?`, id).Scan(&snapshot, &board.Revision, &board.OwnerID, &board.Visibility, &board.OwnerName, &board.Archived)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -87,7 +91,7 @@ func (board *Board) view(user *User) map[string]any {
 	if board.OwnerName.Valid {
 		name = board.OwnerName.String
 	}
-	return map[string]any{"id": board.ID, "revision": board.Revision, "snapshot": board.Snapshot, "visibility": board.Visibility, "access": access, "owner": map[string]string{"name": name}}
+	return map[string]any{"id": board.ID, "revision": board.Revision, "snapshot": board.Snapshot, "visibility": board.Visibility, "archived": board.Archived, "access": access, "owner": map[string]string{"name": name}}
 }
 
 func snapshotBoard(snapshot json.RawMessage) (json.RawMessage, string, error) {
@@ -145,10 +149,10 @@ func (s *Server) saveBoard(id string, snapshot json.RawMessage, revision int64, 
 	return "saved", tx.Commit()
 }
 
-func (s *Server) listBoards(user string, public bool) ([]map[string]any, error) {
-	query := `SELECT id,title,revision,updated_at,visibility,NULL FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
+func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]map[string]any, error) {
+	query := `SELECT id,title,revision,updated_at,visibility,NULL,archived FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
 	if public {
-		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
+		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name,b.archived FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.archived=0 AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
 	}
 	rows, err := s.db.Query(query, user)
 	if err != nil {
@@ -160,10 +164,14 @@ func (s *Server) listBoards(user string, public bool) ([]map[string]any, error) 
 		var id, title, visibility string
 		var revision, updated int64
 		var owner sql.NullString
-		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner); err != nil {
+		var archived bool
+		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner, &archived); err != nil {
 			return nil, err
 		}
-		board := map[string]any{"id": id, "title": title, "revision": revision, "updatedAt": updated, "visibility": visibility}
+		if archived && !includeArchived {
+			continue
+		}
+		board := map[string]any{"archived": archived, "id": id, "title": title, "revision": revision, "updatedAt": updated, "visibility": visibility}
 		if public {
 			board["ownerName"] = owner.String
 		}

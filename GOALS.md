@@ -1,6 +1,19 @@
 # Opsis goals
 
-Last reviewed: 2026-10-03.
+Last reviewed: 2026-10-04.
+
+## Current delivery
+
+P0 persistence is complete as of 2026-10-04: private duplicates, reversible archive,
+transactional database migrations, manual full-database backup/restore, and an
+owner-only saved-revision browser with restore-as-copy. Both Fastify and the Linux
+Go desktop host are verified. Existing data, ownership, revision guards, deletion
+tombstones, and the 40-entry undo limit are preserved.
+
+The separately requested Kimi/Grok/Antigravity providers, API-key and fallback-model
+settings, usage/cost reporting, and complete Windows/macOS packaging remain pending.
+Appearance settings and initial native platform plumbing have shipped; they do not
+complete those goals. The Linux desktop and browser application remain supported.
 
 ## Product goal
 
@@ -52,19 +65,33 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Accounts, board ownership, read-only public boards and revocable local agent keys.
 - [x] External agent canvas editing over MCP, sharing the board API and undo history.
 
-## Next: persistence and recovery — P0
+## Completed: persistence and recovery — P0
 
 - [x] Add a separate v2 SQLite table and revision-checked create/load/update endpoints.
 - [x] Add a named-board library: create, rename and reopen; separate-copy recovery on conflicts.
 - [x] Board search and confirmed deletion.
-- [ ] Routine duplicate and archive actions (separate-copy conflict recovery already exists).
+- [x] Routine private duplicate and reversible archive/unarchive actions, with revision checks.
 - [x] Import the existing browser board without deleting its source; show successful database save status.
 - [x] Add save-state/error feedback, retry behavior and per-tab recovery after interruption.
-- [ ] Add database migrations, backup/restore and documented retention behavior.
+- [x] Add transactional, versioned database migrations, manual full-database backup/restore and documented retention behavior.
 - [x] Persist bounded undo/redo history, with explicit restore actions.
-- [ ] Add a browsable long-term revision archive.
+- [x] Add an owner-only, paginated long-term revision archive with previews and restore-as-private-copy.
 
 Acceptance: several boards survive API/browser restarts; edits and connection ports round-trip exactly; migration and backup/restore have automated tests. Browser storage must not be the only copy after a successful migration.
+
+Verified 2026-10-04: 321 unit/API/schema tests, 24 Rust tests, native race tests,
+lint/type checks, 29 browser scenarios against each API host, database-import/MCP
+integration, 19 hidden Wayland checks, and both packaged and development backup/
+restore commands. Persistence regression tests cover legacy migration and rollback,
+future-version refusal, live WAL snapshots, preserved ownership/templates/tombstones,
+private revision access, archive across reload, pagination beyond 40 undo states,
+and copy restoration without modifying the source. See [persistence documentation](docs/PERSISTENCE.md).
+
+Limits: revision history starts with the state present at migration; older discarded
+saves cannot be reconstructed. Revisions remain until board deletion and can grow
+storage use. Full backups are manual, include credential records, and restore into a
+new destination without merging. There is no scheduled backup/pruning or new
+Windows/macOS runtime validation in this delivery.
 
 ## Improve: model management and usage — P1
 
