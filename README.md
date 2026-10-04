@@ -44,7 +44,18 @@ Local recognition is deliberately limited to this pipeline (including `head -n 1
 
 Select a source icon and edit **Sample data → Update sample** to recalculate connected previews without a model call. This is one undoable, synchronized edit. Existing boards without process metadata retain their explanatory previews. The engine never executes commands or reads local files. See [the engine contract](docs/PROCESS-ENGINE.md) for limits, exact operation semantics and build instructions.
 
-## Quick start
+## Desktop app (Linux)
+
+Build a React + Go/Wails executable with `pnpm desktop:build`, then run
+`./output/desktop/opsis`. It embeds the frontend and runtime; no separate API or
+Node installation is needed to run the app. GTK 3 and WebKitGTK 4.1 are required.
+The packaged Node runtime is retained only for Kokoro speech and JS provider CLIs.
+
+See [the desktop guide](docs/DESKTOP.md) for downloads, build dependencies,
+Hyprland usage, safe database import, MCP setup, and the feature migration matrix.
+Your existing development database is not moved or replaced automatically.
+
+## Browser development quick start
 
 Requirements: Node.js **20.19+**, **pnpm 10.34.5** and [Rust via rustup](https://rustup.rs/). The engine pins Rust **1.89.0** and the browser WASM target in `packages/engine/rust-toolchain.toml`; rustup installs these on its first build. Native Rust tests require your platform's C/C++ linker (Windows: Visual Studio Build Tools with Desktop development with C++; macOS: Xcode command-line tools; Linux: a C compiler).
 
@@ -71,8 +82,8 @@ The API uses the native `better-sqlite3` dependency even when working with the n
 ## Automatic build releases
 
 Every branch push runs CI. After lint, type checks, Rust tests, and the complete QA
-suite pass, CI publishes a GitHub **prerelease** with a compiled ZIP, SHA-256 checksum,
-and `release.json` tracker. Pull requests run checks without publishing. Failed pushes
+suite and native desktop checks pass, CI publishes a GitHub **prerelease** with a
+Linux x64 desktop tarball, a developer ZIP, SHA-256 checksums, and release metadata. Pull requests run checks without publishing. Failed pushes
 do not publish; rapid successive pushes each retain their own run. Release tags do not
 trigger another build.
 
@@ -203,6 +214,7 @@ An optional real Opus smoke check uses your local Claude login: `OPSIS_LIVE_OPUS
 ### Repository layout
 
 ```text
+apps/desktop/           Go/Wails host, native API/MCP, packaged speech runtime
 apps/web/src/workspace/  Canvas composition, feature components, board persistence and playback
 apps/web/src/auth/       Account entry screens and session requests
 apps/api/src/boards/     Prompts, agent workflows, validation and response streaming

@@ -48,7 +48,7 @@ export function opsisClient(
       });
     } catch {
       throw new CanvasError(
-        `Opsis is not reachable at ${base}. Start it with \`pnpm dev\` (or set OPSIS_API_URL).`,
+        `Opsis is not reachable at ${base}. Start Opsis (or set OPSIS_API_URL).`,
       );
     }
     if (response.status === 401) throw new CanvasError(REJECTED_KEY);

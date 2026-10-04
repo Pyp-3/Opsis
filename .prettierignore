@@ -7,3 +7,7 @@ skills/
 .playwright-cli/
 target/
 .claude/settings.local.json
+apps/desktop/assets/
+apps/desktop/bundle/
+apps/desktop/build/
+apps/web/wailsjs/

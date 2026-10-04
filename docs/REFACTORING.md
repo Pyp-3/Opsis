@@ -115,3 +115,25 @@ Local verification passed: production build, lint, typecheck, Rust formatting an
 Clippy, 302 unit/API/schema tests across 42 files, 24 native Rust tests, and all 27
 Chromium workspace scenarios. Vite still reports the existing large-chunk warning
 for the application and lazy-loaded dependencies; bundle optimization is separate work.
+
+## Native desktop host
+
+The Linux desktop target lives in `apps/desktop`. React remains the canvas owner;
+Go/Wails owns the window, local API, SQLite, process lifecycle, and MCP protocol.
+The former Node API remains the browser-development target. Its request schemas,
+provider arguments/version rules, attachment contract, and MCP catalogue were
+extracted without changing their public contracts so both hosts consume them.
+
+Native Go VMs execute those fixed TS contracts and workflows with explicit JSON
+inputs and narrowly scoped native callbacks. They do not load user code. Shared
+board rules remain in `packages/schema`; Rust/WASM remains the synthetic calculation
+engine. Kokoro inference is the one packaged Node service, with its own runtime
+and model cache. There is no general-purpose Node application server in the native
+host.
+
+The native boundary preserves session hashing, existing database tables, revisions,
+tombstones, owner/public access, local-only agent keys, 40-entry history, explicit
+model settings, proposal review, bounded repair, and cancellation. Database import
+uses a consistent SQLite snapshot and never overwrites its destination. See
+[desktop migration coverage](DESKTOP.md#feature-ownership-and-migration-coverage)
+for verification, packaging and the remaining platform-specific limitations.

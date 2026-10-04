@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "description": "Opsis accounts, saved boards and local agent API (Fastify)",
   "scripts": {
     "dev": "tsx watch src/main.ts",

@@ -17,10 +17,15 @@
     "docs:wiki": "node scripts/build-wiki.mjs",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "pnpm engine:build && pnpm -r typecheck && tsc -p tsconfig.json",
+    "typecheck": "pnpm engine:build && pnpm -r typecheck && tsc -p tsconfig.json && tsc -p apps/desktop/tsconfig.json",
     "test": "pnpm engine:build && vitest run",
     "test:browser": "playwright test",
-    "test:qa": "pnpm build && pnpm test && pnpm test:browser"
+    "test:qa": "pnpm build && pnpm test && pnpm test:browser",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:test": "node scripts/build-desktop-code.mjs && cd apps/desktop && go test -race ./internal/...",
+    "desktop:check": "node scripts/build-desktop-code.mjs && tsc -p apps/desktop/tsconfig.json && cd apps/desktop && go vet ./internal/...",
+    "desktop:package": "node scripts/package-desktop.mjs",
+    "desktop:integration": "pnpm --filter api exec tsx ../../scripts/test-desktop-integration.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -28,6 +33,7 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.4",
     "@vitest/coverage-v8": "^3.2.7",
+    "esbuild": "0.28.2",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
@@ -36,6 +42,7 @@
     "typescript-eslint": "^8.70.1",
     "vitest": "^3.2.7",
     "wasm-pack": "0.15.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "3.25.1"
   }
 }

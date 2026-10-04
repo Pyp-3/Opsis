@@ -1,15 +1,20 @@
 # Working on Opsis
 
-Opsis is a local-first React canvas application with a Fastify API, an MCP server,
-shared TypeScript contracts, and a deterministic Rust/WASM process engine.
+Opsis is a local-first React canvas application with a Go/Wails Linux desktop host,
+a Fastify browser-development API, MCP tools, shared TypeScript contracts, and a
+deterministic Rust/WASM process engine.
 This file is the authoritative development guide for all coding agents.
 
 ## Find the owner before changing behavior
 
 - `apps/web/src/App.tsx` owns the session shell; `workspace/` owns the current
   canvas, board library, playback, import/export, and account pages.
-- `apps/api/src/` owns authentication, persistence, board generation, and speech.
-  Only `harness/` may launch runtime child processes.
+- `apps/desktop/internal/` owns the native API, SQLite, MCP protocol and desktop
+  runtime. Its Go VMs embed the existing pure TS contracts/workflows/tool catalogue;
+  do not duplicate shared board rules in Go. `main.go` owns Wails and native bridges.
+- `apps/api/src/` owns the browser-development API and shared generation/speech
+  features. `desktop.ts` is the packaged speech-only adapter. In either application,
+  only `harness/` may launch runtime child processes.
 - `apps/mcp/src/` adapts agent tools to the same board API and edit history.
 - `packages/schema/` owns contracts and pure shared board rules. It must not
   import another Opsis package or application. Search here before duplicating a rule.
@@ -68,11 +73,16 @@ pnpm typecheck
 pnpm engine:check
 pnpm engine:test
 pnpm test:qa
+pnpm desktop:check
+pnpm desktop:test
 ```
 
 Browser coverage lives in `tests/workspace/`. It runs isolated servers and an
 in-memory database with speech disabled; use demo/fake agents without paid model
 calls. Do not run live-provider smoke scripts without explicit authorization.
+For desktop changes, also build the executable, run the browser suite against it,
+and use the isolated hidden WebView smoke test described in `docs/DESKTOP.md`.
+On Hyprland, inspect the current display/workspace before any visible UI launch.
 
 ## Coordinate and deliver
 

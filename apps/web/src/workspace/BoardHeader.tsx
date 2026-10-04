@@ -42,7 +42,7 @@ export function BoardHeader({
     return () => document.removeEventListener('pointerdown', close);
   }, []);
   const exportAs = (content: string, filename: string, type: string) => {
-    download(content, filename, type);
+    void download(content, filename, type).catch((e: Error) => setError(e.message));
     if (exportMenu.current) exportMenu.current.open = false;
   };
   const exportRaster = (format: RasterFormat) => {

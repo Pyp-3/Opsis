@@ -69,3 +69,9 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 New concepts are placed clear of existing ones; **Arrange downward** on the canvas tidies a
 larger agent-built diagram. Agents cannot see or change which board your browser has open, run
 generations, delete boards, change sharing, or edit anyone else's boards.
+
+## Packaged desktop app
+
+The Linux desktop executable also provides the same tools with `opsis --mcp`.
+It discovers the running desktop API automatically; use your agent key as usual.
+See [desktop MCP setup](../../docs/DESKTOP.md#mcp).

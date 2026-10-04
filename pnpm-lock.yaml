@@ -23,6 +23,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^3.2.7
         version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jsdom@26.1.0)(tsx@4.23.15))
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       eslint:
         specifier: ^9.39.5
         version: 9.39.5
@@ -50,6 +53,9 @@ importers:
       zod:
         specifier: ^3.25.76
         version: 3.25.76
+      zod-to-json-schema:
+        specifier: 3.25.1
+        version: 3.25.1(zod@3.25.76)
 
   apps/api:
     dependencies:
@@ -2664,6 +2670,11 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod-to-json-schema@3.25.1:
+    resolution: {integrity: sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA==}
+    peerDependencies:
+      zod: ^3.25 || ^4
+
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
@@ -5154,6 +5165,10 @@ snapshots:
   yallist@5.0.0: {}
 
   yocto-queue@0.1.0: {}
+
+  zod-to-json-schema@3.25.1(zod@3.25.76):
+    dependencies:
+      zod: 3.25.76
 
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:

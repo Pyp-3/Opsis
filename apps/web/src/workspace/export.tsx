@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { saveBlob } from '../desktop';
 import type { BoardDocument } from '@opsis/schema';
 import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
@@ -94,12 +95,7 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
 }
 
 export function download(content: string, name: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return saveBlob(new Blob([content], { type }), name);
 }
 
 export function boardMarkdown(board: BoardDocument): string {
@@ -162,12 +158,7 @@ export async function downloadRaster(board: BoardDocument, format: RasterFormat)
         quality,
       ),
     );
-    const outUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = outUrl;
-    link.download = `opsis-diagram.${ext}`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(outUrl), 1000);
+    await saveBlob(blob, `opsis-diagram.${ext}`);
   } finally {
     URL.revokeObjectURL(url);
   }

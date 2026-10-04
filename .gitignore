@@ -23,3 +23,9 @@ apps/api/data/models/
 
 # Rust compilation cache (WASM/glue are generated into the ignored dist directory)
 target/
+
+# Wails embeds these build products, including the packaged Node service runtime.
+apps/desktop/assets/
+apps/desktop/bundle/
+apps/desktop/build/
+apps/web/wailsjs/

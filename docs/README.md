@@ -48,3 +48,5 @@ default branch. Preserve any wiki pages not managed by the generator.
 GitHub requires an initial page to be saved through the wiki's web interface before
 the wiki repository can be cloned. The main repository's CI/CD release workflow
 does not publish wiki changes automatically.
+
+- [Desktop app](DESKTOP.md): Go/Wails builds, Hyprland, database import, native MCP, and migration coverage.

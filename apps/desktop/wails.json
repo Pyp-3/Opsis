@@ -1,0 +1,11 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Opsis",
+  "outputfilename": "opsis",
+  "frontend:dir": "../web",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": { "name": "Opsis" }
+}

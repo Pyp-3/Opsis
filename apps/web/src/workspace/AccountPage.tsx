@@ -3,6 +3,7 @@ import { Bot, Check, Copy, KeyRound, LogOut, Plus, Trash2, UserRound } from 'luc
 import type { User } from '../auth/session';
 import { initials } from './AppSidebar';
 import { updatedLabel } from './BoardsPage';
+import { copyText } from '../desktop';
 
 type AgentKey = { id: string; name: string; createdAt: number; lastUsedAt: number | null };
 
@@ -14,10 +15,12 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       className="secondary-button"
       aria-label={copied ? 'Copied' : label}
       onClick={() => {
-        void navigator.clipboard?.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1600);
-        });
+        void copyText(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1600);
+          })
+          .catch(() => setCopied(false));
       }}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}

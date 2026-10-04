@@ -72,9 +72,76 @@ jobs:
             playwright-report/
           retention-days: 7
 
+  desktop:
+    name: Linux desktop
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.89.0'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev xvfb dbus-x11 poppler-utils
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check native code
+        run: pnpm desktop:check
+      - name: Native race and contract tests
+        run: pnpm desktop:test
+      - name: Build packaged executable
+        run: pnpm desktop:build
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Existing database and packaged MCP integration
+        run: pnpm desktop:integration
+      - name: Browser feature parity against Go API
+        env:
+          OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis
+        run: pnpm test:browser
+      - name: Hidden WebKit, React and WASM smoke
+        run: |
+          profile=$(mktemp -d)
+          trap 'rm -rf "$profile"' EXIT
+          xvfb-run -a env GDK_BACKEND=x11 OPSIS_DATA_DIR="$profile" OPSIS_SPEECH=off ./output/desktop/opsis --smoke-test
+      - name: Package desktop release
+        if: github.event_name == 'push'
+        run: pnpm desktop:package
+      - name: Upload desktop release
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release
+          path: output/desktop-release/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-browser-failures
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
   release:
-    name: Publish ZIP prerelease
-    needs: check
+    name: Publish desktop and developer prerelease
+    needs: [check, desktop]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -83,6 +150,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-bundle
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-release
           path: release
       - name: Publish release for this commit
         env:
