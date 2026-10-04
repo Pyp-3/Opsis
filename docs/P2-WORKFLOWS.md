@@ -2,7 +2,7 @@
 
 ## Nested groups
 
-Open **Groups and subgraphs** above the canvas. Create a group, select its concepts,
+Open **Groups** (Groups and subgraphs) in the board header. Create a group, select its concepts,
 and optionally choose a parent group. Each concept belongs directly to one group;
 parents include all descendants. Cycles and duplicate membership are rejected.
 **Show group boundary** draws an optional outline. **Collapse subgraph** substitutes
@@ -10,7 +10,7 @@ a representative concept and redirects the visible external connections. It does
 not delete concepts, calculations, original endpoints or positions. Expand before
 editing the hidden concepts individually. Group edits are undoable and saved with
 the board, copies, templates and revisions. Deleting a group keeps its concepts.
-Public viewers can expand/collapse locally under **Explore subgraphs** without
+Public viewers can expand/collapse locally under the header's **Groups** menu without
 changing the owner's document. JSON includes groups; picture exports intentionally
 show the full graph, and playback still follows every underlying concept.
 
@@ -84,7 +84,7 @@ is shown for a CLI that does not emit it.
 
 ## Shared editing on one server
 
-An owner opens **Shared editing** and enters another existing account's email to
+An owner opens **Share** (Shared editing) in the board header and enters another existing account's email to
 **Grant editing**. This changes that board only. The invitee finds it under
 **Boards → Shared with you**. Owners can revoke editing at any time. Editors can
 change content; they cannot change sharing, archive/delete the original, manage its

@@ -1799,15 +1799,21 @@
   }
 }
 
-.board-sharing {
-  padding: 8px 18px;
-  max-height: 28vh;
-  overflow: auto;
-}
 .board-sharing label {
-  display: inline-grid;
+  display: grid;
   gap: 5px;
-  margin-right: 10px;
+  margin-bottom: 8px;
+}
+.board-sharing ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.board-sharing li {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
 }
 .streamed-preview {
   padding: 12px 18px;

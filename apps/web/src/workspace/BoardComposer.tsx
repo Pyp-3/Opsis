@@ -50,6 +50,8 @@ type BoardComposerProps = {
   setAgent: (agent: BoardAgent) => void;
   setSettingsOpen: (open: boolean) => void;
   setSelected: (id: string | null) => void;
+  /** Tucks the composer into a small button; omitted while it must stay open. */
+  onMinimize?: () => void;
 };
 
 export function BoardComposer({
@@ -76,6 +78,7 @@ export function BoardComposer({
   setAgent,
   setSettingsOpen,
   setSelected,
+  onMinimize,
 }: BoardComposerProps) {
   const [suggestions, setSuggestions] = useState(false);
   const [task, setTask] = useState('overview');
@@ -387,6 +390,17 @@ export function BoardComposer({
             onClick={() => setSelected(null)}
           >
             1 step selected <X size={12} />
+          </button>
+        )}
+        {onMinimize && (
+          <button
+            type="button"
+            className="composer-minimize"
+            aria-label="Minimize composer"
+            title="Tuck the composer away"
+            onClick={onMinimize}
+          >
+            <ChevronDown size={15} />
           </button>
         )}
       </div>

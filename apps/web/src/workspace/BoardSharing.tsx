@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown, Users } from 'lucide-react';
 export function BoardSharing({ id, owner }: { id: string; owner: boolean }) {
   const [editors, setEditors] = useState<{ email: string; name: string }[]>([]);
   const [email, setEmail] = useState('');
@@ -42,42 +43,59 @@ export function BoardSharing({ id, owner }: { id: string; owner: boolean }) {
       setBusy(false);
     }
   }
+  const summary = (
+    <summary aria-label="Shared editing" title="Shared editing">
+      <Users size={15} aria-hidden /> <span className="button-label">Share</span>
+      <ChevronDown className="chevron" size={14} aria-hidden />
+    </summary>
+  );
   if (!owner)
     return (
-      <p>You can edit this shared board. Its owner manages sharing and saved revision history.</p>
+      <details className="header-menu board-sharing">
+        {summary}
+        <div className="header-menu-panel">
+          <p className="header-menu-title">Shared editing</p>
+          <p>
+            You can edit this shared board. Its owner manages sharing and saved revision history.
+          </p>
+        </div>
+      </details>
     );
   return (
-    <details className="board-sharing">
-      <summary>Shared editing</summary>
-      <p>
-        Grant editing to an existing account on this Opsis server. Editors can change all content;
-        only you can manage sharing, archive, delete or browse saved revisions. Changes sync while
-        idle; simultaneous edits are revision checked.
-      </p>
-      <label>
-        Editor email
-        <input
-          type="email"
-          value={email}
-          maxLength={254}
-          onChange={(event) => setEmail(event.target.value)}
-          disabled={busy}
-        />
-      </label>
-      <button disabled={busy || !email.trim()} onClick={() => void change(email.trim(), true)}>
-        Grant editing
-      </button>
-      <ul>
-        {editors.map((editor) => (
-          <li key={editor.email}>
-            {editor.name} · {editor.email}{' '}
-            <button disabled={busy} onClick={() => void change(editor.email, false)}>
-              Revoke editing for {editor.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {error && <p role="alert">{error}</p>}
+    <details className="header-menu board-sharing">
+      {summary}
+      <div className="header-menu-panel">
+        <p className="header-menu-title">Shared editing</p>
+        <p>
+          Grant editing to an existing account on this Opsis server. Editors can change all content;
+          only you can manage sharing, archive, delete or browse saved revisions. Changes sync while
+          idle; simultaneous edits are revision checked.
+        </p>
+        <label>
+          Editor email
+          <input
+            type="email"
+            value={email}
+            maxLength={254}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <button disabled={busy || !email.trim()} onClick={() => void change(email.trim(), true)}>
+          Grant editing
+        </button>
+        <ul>
+          {editors.map((editor) => (
+            <li key={editor.email}>
+              {editor.name} · {editor.email}{' '}
+              <button disabled={busy} onClick={() => void change(editor.email, false)}>
+                Revoke editing for {editor.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {error && <p role="alert">{error}</p>}
+      </div>
     </details>
   );
 }

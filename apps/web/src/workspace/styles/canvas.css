@@ -171,6 +171,9 @@
 .canvas-tools button:hover:not(:disabled) {
   background: var(--bp-panel-hover);
 }
+.canvas-tools.is-collapsed {
+  padding: 2px;
+}
 .canvas-tools > span {
   width: 1px;
   height: 20px;

@@ -58,6 +58,8 @@ test('nested groups, sources and notes survive reload and collapse without delet
   await groups.getByLabel('Choose group').selectOption(outer);
   await groups.getByLabel('Collapse subgraph').uncheck();
   await expect(page.locator('[data-id="outgoing"]')).toHaveCount(1);
+  // Header menus drop over the canvas; close it before reading a concept.
+  await page.keyboard.press('Escape');
   await page.locator('[data-id="sender"]').click();
   await expect(details.getByLabel('Personal notes')).toHaveValue('Keep the original source.');
   await expect(details.getByRole('link', { name: 'Reference document' })).toHaveAttribute(
@@ -141,9 +143,12 @@ test('owner invites an editor, sees edits sync and revokes access without exposi
     await expect
       .poll(async () => (await savedBoard(page)).snapshot.board.nodes[0].notes)
       .toBe('Editor note');
+    // Header menus drop over the canvas; close sharing before reading a concept.
+    await page.keyboard.press('Escape');
     await page.locator('[data-id="sender"]').click();
     await expect(page.getByLabel('Personal notes')).toHaveValue('Editor note');
     expect((await editor.request.get(`/v1/boards/${original.id}/revisions`)).status()).toBe(404);
+    await page.locator('.board-sharing summary').click();
     await page.getByRole('button', { name: 'Revoke editing for Invited editor' }).click();
     await expect
       .poll(async () => (await editor.request.get(`/v1/boards/${original.id}`)).status())

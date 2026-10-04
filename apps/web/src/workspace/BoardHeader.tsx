@@ -19,6 +19,8 @@ type BoardHeaderProps = {
   working: boolean;
   saved: string;
   railToggle: ReactNode;
+  /** Board-level dropdowns (sharing, groups), kept in the header so the canvas keeps its height. */
+  menus?: ReactNode;
   onImport: () => void;
   setError: (error: string) => void;
 };
@@ -29,17 +31,33 @@ export function BoardHeader({
   working,
   saved,
   railToggle,
+  menus,
   onImport,
   setError,
 }: BoardHeaderProps) {
+  const header = useRef<HTMLElement>(null);
   const exportMenu = useRef<HTMLDetailsElement>(null);
+  // Every header dropdown closes on an outside press or Escape, so none is left over the canvas.
   useEffect(() => {
+    const openMenus = () =>
+      Array.from(header.current?.querySelectorAll<HTMLDetailsElement>('details[open]') ?? []);
     const close = (event: PointerEvent) => {
-      const menu = exportMenu.current;
-      if (menu?.open && !menu.contains(event.target as globalThis.Node)) menu.open = false;
+      for (const menu of openMenus())
+        if (!menu.contains(event.target as globalThis.Node)) menu.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      for (const menu of openMenus()) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
     };
     document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', escape);
+    };
   }, []);
   const exportAs = (content: string, filename: string, type: string) => {
     void download(content, filename, type).catch((e: Error) => setError(e.message));
@@ -51,7 +69,7 @@ export function BoardHeader({
   };
 
   return (
-    <header className="workspace-header">
+    <header className="workspace-header" ref={header}>
       <div className="header-breadcrumb">
         {railToggle}
         <a
@@ -72,6 +90,7 @@ export function BoardHeader({
           {saved && !saved.startsWith('Could') && <Check size={13} />}
           {saved}
         </span>
+        {menus}
         <button
           className="header-button"
           title="Import a saved board"
@@ -82,11 +101,11 @@ export function BoardHeader({
           <Upload size={15} />
           <span className="button-label">Import</span>
         </button>
-        <details className="export-menu" ref={exportMenu}>
+        <details className="header-menu export-menu" ref={exportMenu}>
           <summary>
             <Download size={15} /> Export <ChevronDown className="chevron" size={14} />
           </summary>
-          <div className="export-menu-panel">
+          <div className="header-menu-panel export-menu-panel">
             <p className="export-menu-group">Picture of the diagram</p>
             <button disabled={!board} onClick={() => exportRaster('png')}>
               <ImageIcon size={16} />

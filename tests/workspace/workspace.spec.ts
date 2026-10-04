@@ -148,6 +148,37 @@ test('next steps stay tucked away until opened, and remember being opened', asyn
   await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
 });
 
+test('board menus, canvas tools and composer tuck away to give the canvas room', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  // Sharing and groups drop down from the header instead of taking rows above the canvas.
+  const header = page.locator('.workspace-header');
+  const canvas = page.getByRole('region', { name: 'Interactive diagram canvas' });
+  expect((await canvas.boundingBox())!.y).toBe((await header.boundingBox())!.height);
+  await page.locator('.board-groups summary').click();
+  await expect(page.getByLabel('New group name')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('New group name')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Hide canvas tools' }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Minimize composer' }).click();
+  await expect(page.getByLabel('What would you like to understand?')).toHaveCount(0);
+  await page.reload();
+  const ask = page.getByRole('button', { name: 'Ask a follow-up' });
+  await expect(ask).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show canvas tools' })).toBeVisible();
+  // Explore this step reopens the composer, so a suggested prompt is never sent blind.
+  await page.locator('[data-id="sender"]').click();
+  await page.getByRole('button', { name: /Explore this step/ }).click();
+  await expect(page.getByLabel('What would you like to understand?')).toBeFocused();
+  await expect(page.getByLabel('What would you like to understand?')).toHaveValue(/Expand/);
+  await page.getByRole('button', { name: 'Show canvas tools' }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
+});
+
 test('mobile canvas remains usable without horizontal page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();

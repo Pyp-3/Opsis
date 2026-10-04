@@ -655,7 +655,7 @@ body.is-resizing-rail {
   color: var(--ok);
 }
 .header-button,
-.export-menu summary {
+.header-menu summary {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -669,12 +669,60 @@ body.is-resizing-rail {
   box-shadow: var(--shadow-sm);
 }
 .header-button:hover:not(:disabled),
-.export-menu summary:hover {
+.header-menu summary:hover {
   background: var(--hover);
 }
-.export-menu {
+/* Board menus and export drop down from the header instead of taking rows above the canvas. */
+.header-menu {
   position: relative;
   z-index: 20;
+}
+.header-menu summary .chevron {
+  margin-left: -2px;
+  transition: transform 150ms ease;
+}
+.header-menu[open] summary .chevron {
+  transform: rotate(180deg);
+}
+.header-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.header-menu-panel > p {
+  margin: 0 0 10px;
+  color: var(--ink-2);
+}
+.header-menu-panel:not(.export-menu-panel) button {
+  justify-self: start;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.header-menu-panel:not(.export-menu-panel) button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.header-menu-panel > .header-menu-title {
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 .export-menu summary {
   color: var(--accent-fg);
@@ -684,23 +732,10 @@ body.is-resizing-rail {
 .export-menu summary:hover {
   background: var(--accent-hover);
 }
-.export-menu summary .chevron {
-  margin-left: -2px;
-  transition: transform 150ms ease;
-}
-.export-menu[open] summary .chevron {
-  transform: rotate(180deg);
-}
 .export-menu-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
   width: 250px;
+  max-height: none;
   padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
 }
 .export-menu-panel button {
   width: 100%;

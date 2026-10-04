@@ -52,6 +52,11 @@ The current experience is close to the intended visual direction. This checklist
 - [x] Click-to-read concept details and navigation through connected concepts.
 - [x] Editable concepts, icons and relationships; add/remove concepts.
 - [x] Refined header, collapsible/searchable concept sidebar and detail inspector.
+- [x] Canvas-first workspace (2026-10-04): sharing and groups drop down from the header
+      instead of taking rows above the canvas; the canvas toolbar and composer can be
+      tucked away, and that choice is remembered per device (localStorage, not board data).
+      The composer stays open on empty canvases and during generation, and reopens for
+      suggestions. Covered by a browser regression test and a reviewed baseline update.
 - [x] Prompt-to-graph generation via local Claude and Codex CLIs.
 - [x] Follow-up generation using the current graph and selected concept.
 - [x] Preserve existing node positions through graph expansions.

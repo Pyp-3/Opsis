@@ -1,5 +1,6 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { ChevronDown, Lightbulb, X } from 'lucide-react';
+import { useRememberedOpen } from './useRememberedOpen';
 
 export type NextStep = { label: string; prompt: string };
 
@@ -7,15 +8,6 @@ export const RETURN_PATHS: NextStep = {
   label: 'Show return paths',
   prompt:
     'Audit the actual interactions in this diagram. Add genuine response, acknowledgment, feedback or retry edges to their actual recipients, with explicit kinds and labels. Do not invent reverse flows. Preserve unrelated content and IDs; explain any necessary correction to existing relationships.',
-};
-
-const OPEN_KEY = 'opsis:next-steps-open';
-const readOpen = () => {
-  try {
-    return localStorage.getItem(OPEN_KEY) === 'true';
-  } catch {
-    return false;
-  }
 };
 
 /**
@@ -29,16 +21,8 @@ export function NextSteps({
   suggestions: NextStep[];
   onPick: (step: NextStep) => void;
 }) {
-  const [open, setOpenState] = useState(readOpen);
+  const [open, setOpen] = useRememberedOpen('opsis:next-steps-open', false);
   const panel = useId();
-  const setOpen = (next: boolean) => {
-    setOpenState(next);
-    try {
-      localStorage.setItem(OPEN_KEY, String(next));
-    } catch {
-      // Remembering the choice is a convenience only.
-    }
-  };
   if (!suggestions.length) return null;
   return (
     <div

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronDown, Group } from 'lucide-react';
 import { ViewportPortal } from '@xyflow/react';
 import { BoardDocumentSchema, groupMembers, visibleBoard, type BoardDocument } from '@opsis/schema';
 import { NODE_WIDTH, nodeHeight } from './geometry';
@@ -65,9 +66,10 @@ export function BoardGroups({
     update(groups.map((item) => (item.id === selected ? { ...item, ...value } : item)));
   }
   return (
-    <details className="board-groups">
-      <summary>Groups and subgraphs</summary>
-      <div className="group-controls">
+    <details className="header-menu board-groups">
+      <GroupsSummary />
+      <div className="header-menu-panel group-controls">
+        <p className="header-menu-title">Groups and subgraphs</p>
         <label>
           New group name
           <input
@@ -190,5 +192,14 @@ export function BoardGroups({
         {error && <p role="alert">{error}</p>}
       </div>
     </details>
+  );
+}
+
+export function GroupsSummary() {
+  return (
+    <summary aria-label="Groups and subgraphs" title="Groups and subgraphs">
+      <Group size={15} aria-hidden /> <span className="button-label">Groups</span>
+      <ChevronDown className="chevron" size={14} aria-hidden />
+    </summary>
   );
 }

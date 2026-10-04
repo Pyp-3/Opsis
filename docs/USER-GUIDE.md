@@ -12,6 +12,14 @@ Use **Arrange downward** to lay out a crowded diagram, **Read from top** for a
 legible starting view, and **Fit diagram** for an overview. Undo and redo retain
 up to 40 past/future states. A drag is one undoable action.
 
+To give the canvas more room, tuck the workspace away: the sidebar button hides the
+sidebar, **The big picture** folds into one line, **Hide canvas tools** shrinks the
+toolbar to a single button, and the composer's minimize arrow turns it into an
+**Ask a follow-up** button. Board menus (**Share**, **Groups**, **Import**, **Export**)
+drop down from the header and close on Escape or a click elsewhere. The toolbar and
+composer choices are remembered on this device. The composer stays open on an empty
+canvas and while an agent is working, and reopens when a suggestion is chosen.
+
 Agent proposals for an existing board are reviewed before application. Compare
 **Proposed** and **Current**, then choose **Apply reviewed changes** or
 **Keep current board**. Use the change checkboxes to accept only part of a proposal.
@@ -92,11 +100,11 @@ account. Keep them out of Git commits, public issues, and screenshots.
 
 ## Groups, sources and collaboration
 
-Use **Groups and subgraphs** above the canvas to create nested groups, optionally
+Use **Groups** in the board header to create nested groups, optionally
 show outlines and collapse sections. Groups preserve the underlying concepts and
 layout. Add personal notes and HTTP/HTTPS sources in concept details.
 
-Owners grant/revoke editing to existing accounts under **Shared editing**. Invitees
+Owners grant/revoke editing to existing accounts under **Share** in the board header. Invitees
 open boards from **Boards → Shared with you**. This works on one local Opsis server;
 public visibility alone remains read-only. Idle views synchronize revisions, and
 conflict recovery preserves unsaved edits. **Compare boards or saved revisions**

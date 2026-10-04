@@ -1,6 +1,7 @@
 import { LegacyBatchReview } from './LegacyBatchReview';
 import { BoardSharing } from './BoardSharing';
-import { BoardGroups, GroupBoundaries } from './BoardGroups';
+import { BoardGroups, GroupBoundaries, GroupsSummary } from './BoardGroups';
+import { useRememberedOpen } from './useRememberedOpen';
 import { readingViewport, NODE_HEIGHT } from './geometry';
 import { BoardHeader } from './BoardHeader';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
@@ -31,6 +32,8 @@ import {
 import {
   ArrowUpRight,
   ChevronUp,
+  ChevronsRight,
+  MessageSquarePlus,
   Copy,
   Eye,
   CircleAlert,
@@ -46,6 +49,7 @@ import {
   ZoomOut,
   ListTree,
   ArrowDownToLine,
+  Wrench,
 } from 'lucide-react';
 import {
   LegacyBundleSchema,
@@ -180,6 +184,18 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const [importPreview, setImportPreview] = useState<BoardDocument | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
+  // The composer and canvas tools can be tucked away to give the canvas more room.
+  const [composerPreference, setComposerPreference] = useRememberedOpen(
+    'opsis:composer-open',
+    true,
+  );
+  const [toolsOpen, setToolsOpen] = useRememberedOpen('opsis:canvas-tools-open', true);
+  const focusAfterOpen = useRef(false);
+  useEffect(() => {
+    if (!composerPreference || !focusAfterOpen.current) return;
+    focusAfterOpen.current = false;
+    promptInput.current?.focus();
+  }, [composerPreference]);
   const flow = useReactFlow();
   const path = usePath();
   useEffect(() => {
@@ -560,6 +576,16 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       }}
     />
   );
+  // An empty canvas or a running generation keeps the composer open: it is the way to begin,
+  // and the only place to cancel.
+  const composerOpen = composerPreference || generation.busy || !board || board.nodes.length === 0;
+  const focusPrompt = () => {
+    if (promptInput.current) promptInput.current.focus();
+    else {
+      focusAfterOpen.current = true;
+      setComposerPreference(true);
+    }
+  };
   const railToggle = (
     <button
       className="rail-toggle"
@@ -644,6 +670,44 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
           working={working}
           saved={saved}
           railToggle={railToggle}
+          menus={
+            <>
+              {board &&
+                library.access !== 'viewer' &&
+                (library.access === 'editor' ||
+                  library.entries.some((entry) => entry.id === library.activeId)) && (
+                  <BoardSharing
+                    key={library.activeId}
+                    id={library.activeId}
+                    owner={library.access === 'owner'}
+                  />
+                )}
+              {board && !readOnly && <BoardGroups board={board} disabled={busy} commit={commit} />}
+              {readOnly && !!presentation?.groups?.length && (
+                <details className="header-menu board-groups">
+                  <GroupsSummary />
+                  <div className="header-menu-panel group-controls">
+                    <p className="header-menu-title">Explore subgraphs</p>
+                    {presentation.groups.map((group) => (
+                      <label key={group.id}>
+                        <input
+                          type="checkbox"
+                          checked={group.collapsed}
+                          onChange={(event) =>
+                            setViewGroups((current) => ({
+                              ...current,
+                              [group.id]: event.target.checked,
+                            }))
+                          }
+                        />
+                        Collapse {group.label}
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          }
           onImport={() => importInput.current?.click()}
           setError={setError}
         />
@@ -720,34 +784,6 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
             </button>
             <button onClick={() => setImportPreview(null)}>Discard import</button>
           </section>
-        )}
-        {board &&
-          library.access !== 'viewer' &&
-          (library.access === 'editor' ||
-            library.entries.some((entry) => entry.id === library.activeId)) && (
-            <BoardSharing
-              key={library.activeId}
-              id={library.activeId}
-              owner={library.access === 'owner'}
-            />
-          )}
-        {board && !readOnly && <BoardGroups board={board} disabled={busy} commit={commit} />}
-        {readOnly && !!presentation?.groups?.length && (
-          <details className="board-groups">
-            <summary>Explore subgraphs</summary>
-            {presentation.groups.map((group) => (
-              <label key={group.id}>
-                <input
-                  type="checkbox"
-                  checked={group.collapsed}
-                  onChange={(event) =>
-                    setViewGroups((current) => ({ ...current, [group.id]: event.target.checked }))
-                  }
-                />
-                Collapse {group.label}
-              </label>
-            ))}
-          </details>
         )}
         {generation.busy && generation.activity.nodes.length > 0 && (
           <section className="streamed-preview" aria-label="Draft concepts">
@@ -890,100 +926,127 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                 )}
               </div>
             )}
-            <div className="canvas-tools" role="toolbar" aria-label="Canvas tools">
-              <button
-                aria-label="Undo"
-                title="Undo (Ctrl / ⌘ Z)"
-                disabled={busy || !history.past.length}
-                onClick={() => undo()}
-              >
-                <Undo2 size={16} />
-              </button>
-              <button
-                aria-label="Redo"
-                title="Redo"
-                disabled={busy || !history.future.length}
-                onClick={() => undo(true)}
-              >
-                <Redo2 size={16} />
-              </button>
-              <span />
-              <button
-                aria-label="Zoom out"
-                title="Zoom out"
-                onClick={() => void flow.zoomOut({ duration: 200 })}
-              >
-                <ZoomOut size={16} />
-              </button>
-              <button
-                aria-label="Zoom in"
-                title="Zoom in"
-                onClick={() => void flow.zoomIn({ duration: 200 })}
-              >
-                <ZoomIn size={16} />
-              </button>
-              <button aria-label="Fit diagram" title="Fit diagram" onClick={fit}>
-                <Expand size={16} />
-              </button>
-              <button
-                aria-label="Read from top"
-                title="Read from top at 100%"
-                onClick={readingView}
-              >
-                <ArrowDownToLine size={16} />
-              </button>
-              <button
-                aria-label="Arrange downward"
-                title="Arrange downward (undoable)"
-                disabled={busy || arranging || !board}
-                onClick={() => void arrangeDownward()}
-              >
-                <ListTree size={16} />
-              </button>
-              <button
-                aria-label="Canvas colours"
-                title="Canvas look & details"
-                disabled={!board || readOnly}
-                onClick={() => navigate('/canvas/settings')}
-              >
-                <Palette size={16} />
-              </button>
-              <span />
-              <button
-                aria-label="Add a concept"
-                title="Add a concept"
-                disabled={busy || !board || board.nodes.length >= 50}
-                onClick={() => {
-                  if (!board) return;
-                  const id = crypto.randomUUID();
-                  const x = Math.min(...Object.values(board.positions).map((p) => p.x), 24);
-                  const y = board.nodes.length
-                    ? Math.max(
-                        ...board.nodes.map(
-                          (node) => (board.positions[node.id]?.y ?? 0) + nodeHeight(node),
-                        ),
-                      ) + ROW_GAP
-                    : 24;
-                  commit({
-                    ...board,
-                    nodes: [
-                      ...board.nodes,
-                      {
-                        id,
-                        label: 'New concept',
-                        icon: 'lightbulb',
-                        summary: 'Add a short description.',
-                        explanation: 'Describe this concept and how it connects to the diagram.',
-                        kind: 'step',
-                      },
-                    ],
-                    positions: { ...board.positions, [id]: { x, y } },
-                  });
-                  selectNode(id);
-                }}
-              >
-                <Plus size={17} />
-              </button>
+            <div
+              className={`canvas-tools ${toolsOpen ? '' : 'is-collapsed'}`}
+              role="toolbar"
+              aria-label="Canvas tools"
+            >
+              {toolsOpen ? (
+                <>
+                  <button
+                    aria-label="Undo"
+                    title="Undo (Ctrl / ⌘ Z)"
+                    disabled={busy || !history.past.length}
+                    onClick={() => undo()}
+                  >
+                    <Undo2 size={16} />
+                  </button>
+                  <button
+                    aria-label="Redo"
+                    title="Redo"
+                    disabled={busy || !history.future.length}
+                    onClick={() => undo(true)}
+                  >
+                    <Redo2 size={16} />
+                  </button>
+                  <span />
+                  <button
+                    aria-label="Zoom out"
+                    title="Zoom out"
+                    onClick={() => void flow.zoomOut({ duration: 200 })}
+                  >
+                    <ZoomOut size={16} />
+                  </button>
+                  <button
+                    aria-label="Zoom in"
+                    title="Zoom in"
+                    onClick={() => void flow.zoomIn({ duration: 200 })}
+                  >
+                    <ZoomIn size={16} />
+                  </button>
+                  <button aria-label="Fit diagram" title="Fit diagram" onClick={fit}>
+                    <Expand size={16} />
+                  </button>
+                  <button
+                    aria-label="Read from top"
+                    title="Read from top at 100%"
+                    onClick={readingView}
+                  >
+                    <ArrowDownToLine size={16} />
+                  </button>
+                  <button
+                    aria-label="Arrange downward"
+                    title="Arrange downward (undoable)"
+                    disabled={busy || arranging || !board}
+                    onClick={() => void arrangeDownward()}
+                  >
+                    <ListTree size={16} />
+                  </button>
+                  <button
+                    aria-label="Canvas colours"
+                    title="Canvas look & details"
+                    disabled={!board || readOnly}
+                    onClick={() => navigate('/canvas/settings')}
+                  >
+                    <Palette size={16} />
+                  </button>
+                  <span />
+                  <button
+                    aria-label="Add a concept"
+                    title="Add a concept"
+                    disabled={busy || !board || board.nodes.length >= 50}
+                    onClick={() => {
+                      if (!board) return;
+                      const id = crypto.randomUUID();
+                      const x = Math.min(...Object.values(board.positions).map((p) => p.x), 24);
+                      const y = board.nodes.length
+                        ? Math.max(
+                            ...board.nodes.map(
+                              (node) => (board.positions[node.id]?.y ?? 0) + nodeHeight(node),
+                            ),
+                          ) + ROW_GAP
+                        : 24;
+                      commit({
+                        ...board,
+                        nodes: [
+                          ...board.nodes,
+                          {
+                            id,
+                            label: 'New concept',
+                            icon: 'lightbulb',
+                            summary: 'Add a short description.',
+                            explanation:
+                              'Describe this concept and how it connects to the diagram.',
+                            kind: 'step',
+                          },
+                        ],
+                        positions: { ...board.positions, [id]: { x, y } },
+                      });
+                      selectNode(id);
+                    }}
+                  >
+                    <Plus size={17} />
+                  </button>
+                  <span />
+                  <button
+                    aria-label="Hide canvas tools"
+                    title="Tuck the tools away"
+                    aria-expanded
+                    onClick={() => setToolsOpen(false)}
+                  >
+                    <ChevronsRight size={16} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  aria-label="Show canvas tools"
+                  title="Undo, zoom, fit and more"
+                  aria-expanded={false}
+                  onClick={() => setToolsOpen(true)}
+                >
+                  <Wrench size={16} />
+                </button>
+              )}
             </div>
             {(!board || board.nodes.length === 0) && (
               <section className="canvas-welcome" aria-label="Welcome to Opsis">
@@ -1011,7 +1074,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                         disabled={busy}
                         onClick={() => {
                           setPrompt(question);
-                          promptInput.current?.focus();
+                          focusPrompt();
                         }}
                       >
                         <span>{question}</span>
@@ -1026,7 +1089,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
               OPSIS / VISUAL FIELD{' '}
               {board ? `— ${String(board.nodes.length).padStart(2, '0')} CONCEPTS` : '— 01'}
             </span>
-            <div className="composer-wrap">
+            <div className={`composer-wrap ${composerOpen ? '' : 'is-minimized'}`}>
               {library.error && (
                 <div className="workspace-error" role="alert">
                   <span>{library.error}</span>
@@ -1113,6 +1176,17 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                     <Copy size={14} /> Save a copy
                   </button>
                 </div>
+              ) : !composerOpen ? (
+                <button
+                  className="composer-pill"
+                  aria-expanded={false}
+                  title="Show the composer"
+                  onClick={focusPrompt}
+                >
+                  <MessageSquarePlus size={15} aria-hidden />
+                  {prompt.trim() ? 'Continue your request' : 'Ask a follow-up'}
+                  <ChevronUp className="chevron" size={14} aria-hidden />
+                </button>
               ) : (
                 <>
                   {board && !busy && (
@@ -1123,7 +1197,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                       ]}
                       onPick={(suggestion) => {
                         setPrompt(suggestion.prompt);
-                        promptInput.current?.focus();
+                        focusPrompt();
                       }}
                     />
                   )}
@@ -1162,6 +1236,9 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                     setAgent={setAgent}
                     setSettingsOpen={setSettingsOpen}
                     setSelected={setSelected}
+                    {...(composerPreference && board?.nodes.length && !generation.busy
+                      ? { onMinimize: () => setComposerPreference(false) }
+                      : {})}
                   />
                   {!busy && (
                     <p className="composer-hint">
@@ -1185,7 +1262,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
               process={process}
               busy={busy}
               showIcons={showIcons}
-              promptInput={promptInput}
+              focusPrompt={focusPrompt}
               commit={commit}
               editNode={editNode}
               selectNode={selectNode}

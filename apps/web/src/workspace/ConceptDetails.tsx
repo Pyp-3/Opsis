@@ -29,7 +29,8 @@ type ConceptDetailsProps = {
   process: ProcessState;
   busy: boolean;
   showIcons: boolean;
-  promptInput: RefObject<HTMLTextAreaElement>;
+  /** Opens the composer if it is tucked away, then focuses it. */
+  focusPrompt: () => void;
   commit: (board: BoardDocument) => void;
   editNode: (patch: Partial<BoardDocument['nodes'][number]>) => void;
   selectNode: (id: string) => void;
@@ -47,7 +48,7 @@ export function ConceptDetails({
   process,
   busy,
   showIcons,
-  promptInput,
+  focusPrompt,
   commit,
   editNode,
   selectNode,
@@ -267,7 +268,7 @@ export function ConceptDetails({
             setPrompt(
               `Expand “${activeNode.label}” into its substeps while keeping the rest of the diagram`,
             );
-            promptInput.current?.focus();
+            focusPrompt();
           }}
         >
           <GitBranch size={15} /> Explore this step <ArrowRight size={15} />

@@ -549,6 +549,52 @@
   display: block;
   margin-top: 3px;
 }
+.composer-minimize {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  color: var(--ink-3);
+  border-radius: 999px;
+}
+.composer-minimize:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.composer-footer > :is(.provider-pill, .selection-pill) ~ .composer-minimize {
+  margin-left: 2px;
+}
+/* Minimized, only the pill takes pointer events; the rest of the dock area is canvas. */
+.composer-wrap.is-minimized {
+  pointer-events: none;
+}
+.composer-wrap.is-minimized > * {
+  pointer-events: auto;
+}
+.composer-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  height: 38px;
+  margin: 0 auto;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 38%), var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-sheen),
+    var(--shadow-lg);
+  animation: dock-in 280ms var(--ease-out) both;
+}
+.composer-pill .chevron {
+  color: var(--ink-3);
+}
 .composer-hint {
   margin: 10px 0 0;
   text-align: center;
