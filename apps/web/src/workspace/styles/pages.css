@@ -595,8 +595,35 @@
   max-width: 920px;
 }
 .home-hero {
-  padding: 40px 0 12px;
+  position: relative;
+  isolation: isolate;
+  padding: 72px 0 28px;
   text-align: center;
+}
+/* Keep every real element above the animated grid backdrop. */
+.home-hero > *:not(.home-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+.home-backdrop {
+  position: absolute;
+  inset: -56px calc(50% - 50vw) -24px;
+  width: 100vw;
+  z-index: 0;
+  pointer-events: none;
+  /* Fade the field into the page so it reads as a backdrop, not a panel. */
+  -webkit-mask-image: radial-gradient(
+    120% 92% at 50% 42%,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.6) 55%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    120% 92% at 50% 42%,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.6) 55%,
+    transparent 100%
+  );
 }
 .home-hero .welcome-identity {
   justify-content: center;

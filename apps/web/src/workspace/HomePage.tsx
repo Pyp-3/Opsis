@@ -11,6 +11,7 @@ import {
 import { DNS_DEMO, EMAIL_DEMO, type BoardDocument, type BoardGraph } from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { BrandMark } from './BrandMark';
+import { HomeBackdrop } from './HomeBackdrop';
 import { NodeIcon } from './NodeIcon';
 import { boardIcons } from './icons';
 import { fetchPublicBoards, updatedLabel, type PublicBoard } from './BoardsPage';
@@ -67,6 +68,7 @@ export function HomePage({
   return (
     <main className="page-main home-page">
       <section className="home-hero">
+        <HomeBackdrop />
         <div className="welcome-identity">
           <span className="welcome-mark">
             <BrandMark size={56} />
