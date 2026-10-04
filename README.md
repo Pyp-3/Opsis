@@ -1,5 +1,9 @@
 # Opsis
 
+[![CI](https://github.com/Pyp-3/Opsis/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyp-3/Opsis/actions/workflows/ci.yml)
+
+[GitHub Wiki](https://github.com/Pyp-3/Opsis/wiki) · [Getting started](docs/GETTING-STARTED.md) · [User guide](docs/USER-GUIDE.md) · [Documentation sources](docs/README.md) · [Downloads](https://github.com/Pyp-3/Opsis/releases) · [Contributing](CONTRIBUTING.md)
+
 **See what you mean.** Opsis turns explanations into editable, connected icons on a 2D blueprint canvas. Ask an agent to explain a process, follow the arrows, and select a concept when you want the details.
 
 The aim is visual understanding: short labels on the canvas, deeper explanations on demand, and agents that can extend the diagram as your questions develop.
@@ -21,7 +25,7 @@ The aim is visual understanding: short labels on the canvas, deeper explanations
 - Motion graphics during playback: the current arrow draws itself in and a packet travels along it, the current object pops in with a pulse, and new boards assemble one concept at a time. Everything stops when reduced motion is requested.
 - **Evolving icons**: during playback the current icon comes alive the way its subject does. Wind streams, gears turn, hearts beat, rain falls, and anything else draws itself in. Press **Illustrate** in the player and the agent draws an animated illustration for each object, such as air streaming past, a seed sprouting or a letter dropping into an inbox. As playback reaches an object, its icon evolves into that drawing. The drawing plays while the object is current and rests once playback has passed it. Drawings arrive while the film plays, are saved with the board and can be undone. Closing the player brings the icons back. Illustrations are declarative, validated data (shapes, inks and keyframed motions on a 100 × 100 canvas) rendered as SVG animation, never raw markup from a model. They are not sent back to agents on follow-ups, and an object keeps its drawing unless its icon changes. Illustrating is a separate, explicit model call, which normal usage applies to. The demo agent illustrates the email example without one.
 - **Document uploads**: attach up to five files (PDF, text, Markdown, CSV, JSON, code, or PNG/JPEG/GIF/WebP images; 10 MB each) for the agent to diagram. Text and PDF text layers (extracted with Poppler’s `pdftotext`, which must be installed) are sent inline to both agents. Claude reads images and scanned PDFs itself with its read-only Read tool, limited to a private temporary folder; Codex attaches images with `--image` and cannot read scanned PDFs. Document contents are treated as untrusted data.
-- JSON/legacy OSG import and JSON, SVG, PNG, and Markdown export.
+- JSON/legacy OSG import and JSON, SVG, PNG, JPEG, and Markdown export.
 - An email-flow demo that works without an agent subscription or model call.
 
 Opsis is a local-first development application. The current interface is entirely 2D. The older renderer and pipeline APIs have been retired; strict legacy OSG JSON import remains supported. See [GOALS.md](GOALS.md) for the implemented baseline and prioritized roadmap.
@@ -45,7 +49,7 @@ Select a source icon and edit **Sample data → Update sample** to recalculate c
 Requirements: Node.js **20.19+**, **pnpm 10.34.5** and [Rust via rustup](https://rustup.rs/). The engine pins Rust **1.89.0** and the browser WASM target in `packages/engine/rust-toolchain.toml`; rustup installs these on its first build. Native Rust tests require your platform's C/C++ linker (Windows: Visual Studio Build Tools with Desktop development with C++; macOS: Xcode command-line tools; Linux: a C compiler).
 
 ```sh
-git clone git@github.com:Pyp-3/Opsis.git
+git clone https://github.com/Pyp-3/Opsis.git
 cd Opsis
 ./opsis dev
 ```

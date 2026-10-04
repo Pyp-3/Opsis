@@ -14,6 +14,9 @@ Run from the repository root with `pnpm --filter api dev`. The default address i
 - `GET/POST /v1/boards` lists owned boards or creates one.
 - `GET /v1/boards/public` lists other accounts' public boards.
 - `GET/PUT/PATCH/DELETE /v1/boards/:id` reads, saves, renames/shares or deletes a board.
+- `GET/POST /v1/templates` lists private templates or saves a snapshot of an owned board;
+  `DELETE /v1/templates/:id` removes an owned template. `POST /v1/boards` accepts an
+  optional `templateId` to create an independent private board with fresh history.
 - `GET/POST /v1/speech` checks narration availability or synthesizes speech;
   `POST /v1/speech/warm` prepares the model.
 

@@ -34,7 +34,7 @@ export function includeSource(path) {
   if (/(^|\/)(\.env(?:\..*)?|.*\.sqlite(?:-wal|-shm)?|.*\.local\..*)$/.test(path)) return false;
   return (
     /^(apps|packages|scripts|tests|docs|fixtures|assets)\//.test(path) ||
-    /^(VERSION|README\.md|AGENTS\.md|CLAUDE\.md|opsis|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(?:\.base)?\.json|vitest\.config\.ts|playwright\.config\.ts|eslint\.config\.js|\.prettierrc\.json|\.prettierignore|\.gitignore)$/.test(
+    /^(VERSION|README\.md|CONTRIBUTING\.md|AGENTS\.md|CLAUDE\.md|opsis|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(?:\.base)?\.json|vitest\.config\.ts|playwright\.config\.ts|eslint\.config\.js|\.prettierrc\.json|\.prettierignore|\.gitignore)$/.test(
       path,
     )
   );

@@ -34,6 +34,7 @@ test('excludes local settings, credentials, databases, caches and dependencies',
     'packages/engine/src/lib.rs',
     'pnpm-lock.yaml',
     'VERSION',
+    'CONTRIBUTING.md',
   ])
     assert.equal(includeSource(file), true, file);
 });

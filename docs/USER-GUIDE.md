@@ -1,0 +1,82 @@
+# User guide
+
+[Documentation index](README.md) · [Getting started](GETTING-STARTED.md)
+
+## Explore and edit a board
+
+Start with an example or ask a question in the composer. Select a concept to read
+its explanation. Drag icons to change their positions; use connection ports to
+connect concepts. Select a connection to edit its label, color, or type.
+
+Use **Arrange downward** to lay out a crowded diagram, **Read from top** for a
+legible starting view, and **Fit diagram** for an overview. Undo and redo retain
+up to 40 past/future states. A drag is one undoable action.
+
+Agent proposals for an existing board are reviewed before application. Compare
+**Proposed** and **Current**, then choose **Apply reviewed changes** or
+**Keep current board**. Reading existing explanations does not make a model call.
+
+## Save and organize projects
+
+Boards autosave. Wait for **Saved** to confirm that the API accepted your changes.
+Use **Manage boards** to create, search, open, rename, or delete boards. Deletion
+requires confirmation and removes that board's history; export a JSON backup first
+when you need to retain an editable copy.
+
+Open views connected to the same API synchronize saved changes. Unsaved work also
+has account-scoped browser recovery. This is local persistence, not hosted cloud
+backup. See [persistence details](../README.md#persistence-what-is-saved-today).
+
+## Reuse a template
+
+1. Open **Manage boards → My boards**.
+2. On the source board, choose **Save as template** and enter a template name.
+3. Open **Templates** and select the saved template.
+4. Enter a new project board name and choose **Create from template**.
+
+Templates preserve board content, layout, and appearance privately for your account.
+Each use creates an independent private board with fresh history. Editing or
+deleting the source does not change its templates. Deleting a template leaves
+existing project boards intact.
+
+## Share with another local account
+
+A board is private by default. Make it public from the board library or its
+sharing controls so other signed-in accounts using the same API can view it.
+Viewers can play a board or save their own copy; they cannot edit your original.
+
+“Public” here means visible within that Opsis instance. It does not publish a board
+to GitHub, create a hosted website, or make a localhost link reachable from another
+computer. See [accounts and sharing](../README.md#accounts-and-sharing).
+
+## Play a process
+
+Choose **Play the process**, then use play/pause, step controls, or the timeline to
+follow the sequence. The narrator settings offer available natural or device voices.
+**Illustrate** requests animated concept drawings; with a real agent this is a
+separate model call. Closing the player returns to the editable canvas.
+
+For supported synthetic terminal flows, edit **Sample data → Update sample** to
+recalculate previews. These calculations do not execute displayed commands or read
+files from your computer. See the [process engine](PROCESS-ENGINE.md).
+
+## Import and export
+
+Use **Import** for saved board JSON or supported legacy OSG JSON. From **Export**:
+
+| Format                   | Use                                                  |
+| ------------------------ | ---------------------------------------------------- |
+| Editable board (`.json`) | Back up board content or import it later.            |
+| Vector image (`.svg`)    | Share a scalable diagram.                            |
+| PNG image (`.png`)       | Share a raster diagram with transparency support.    |
+| JPEG image (`.jpg`)      | Share a raster diagram suited to email or documents. |
+| Markdown notes (`.md`)   | Read the concepts and connections as text.           |
+
+Exports contain the board's content; check them for sensitive information before
+sharing. Image and Markdown exports are not editable board backups.
+
+## Connect a coding agent
+
+Create a revocable key under **Account → Agent keys**, then follow the
+[MCP setup guide](../apps/mcp/README.md). Keys are local-only and act as their owning
+account. Keep them out of Git commits, public issues, and screenshots.
