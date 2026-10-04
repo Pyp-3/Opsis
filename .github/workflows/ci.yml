@@ -2,16 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Every push gets a release; only superseded PR checks may be cancelled.
+  group: ci-${{ github.event_name }}-${{ github.event_name == 'push' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.package.outputs.tag }}
+      version: ${{ steps.package.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,10 +44,24 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Lint
         run: pnpm lint
+      - name: Test release packaging
+        run: pnpm release:test
       - name: Typecheck
         run: pnpm typecheck
       - name: QA gate
         run: pnpm test:qa
+      - name: Package versioned release
+        if: github.event_name == 'push'
+        id: package
+        run: pnpm release:package
+      - name: Upload release bundle
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: output/releases/
+          if-no-files-found: error
+          compression-level: 0
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -50,3 +71,36 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 7
+
+  release:
+    name: Publish ZIP prerelease
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-bundle
+          path: release
+      - name: Publish release for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.check.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.check.outputs.version }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
+            echo "Release already published: $RELEASE_TAG"
+            exit 0
+          fi
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "$RELEASE_COMMIT" \
+              --title "Opsis $RELEASE_VERSION" \
+              --draft --prerelease --latest=false --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" release/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

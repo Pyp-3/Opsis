@@ -12,6 +12,8 @@
     "engine:test": "pnpm --filter @opsis/engine test:rust",
     "engine:check": "pnpm --filter @opsis/engine check:rust",
     "build": "pnpm -r build",
+    "release:package": "node scripts/package-release.mjs",
+    "release:test": "node --test scripts/package-release.test.mjs",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "pnpm engine:build && pnpm -r typecheck && tsc -p tsconfig.json",

@@ -85,4 +85,7 @@ Keep structural refactors, intentional removals, and behavior fixes in separate,
 reviewable commits where possible. Inspect the complete staged diff. Never commit
 credentials, local databases, generated WASM/build output, recordings, or test
 artifacts. Preserve existing user changes and commits. Report actual validation
-results and limitations. Push only when requested, using a normal non-force push.
+results and limitations. The user's standing delivery preference is to commit and
+push completed, validated work using a normal non-force push, so CI/CD runs for
+each delivery. Do not ask again for routine commits and pushes. Honor an explicit
+request to keep a particular task local; never include unrelated user changes.

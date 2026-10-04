@@ -18,4 +18,5 @@ Keep shared project rules in `AGENTS.md`; do not rely on a Markdown link to load
 - Report actual check results and any unresolved failures. Do not describe CI as green
   unless the relevant run passed. Local checks do not update a remote run.
 - Preserve user changes and local settings. Do not commit credentials or local agent
-  configuration. Push only when the user requests it.
+  configuration. Follow the standing commit-and-push delivery preference in `AGENTS.md`;
+  completed, validated work should trigger CI/CD unless the user asks to keep it local.
