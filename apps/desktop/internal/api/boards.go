@@ -21,6 +21,7 @@ func invalidBody(err error, message string) error {
 }
 
 func (s *Server) boardRoutes() {
+	s.collaborationRoutes()
 	s.handle("GET /v1/boards", func(w http.ResponseWriter, r *http.Request) error {
 		user, err := requireUser(r)
 		if err != nil {
@@ -58,10 +59,18 @@ func (s *Server) boardRoutes() {
 		if err != nil {
 			return err
 		}
-		if board == nil || (board.OwnerID.String != user.ID && (board.Visibility != "public" || board.Archived)) {
+		editor, err := isBoardEditor(s.db, id, user.ID)
+		if err != nil {
+			return err
+		}
+		if board == nil || (board.OwnerID.String != user.ID && (board.Archived || (board.Visibility != "public" && !editor))) {
 			return boardMissing()
 		}
-		writeJSON(w, 200, board.view(user))
+		view := board.view(user)
+		if board.OwnerID.String != user.ID && editor && !board.Archived {
+			view["access"] = "editor"
+		}
+		writeJSON(w, 200, view)
 		return nil
 	})
 	s.handle("POST /v1/boards", func(w http.ResponseWriter, r *http.Request) error {

@@ -41,6 +41,14 @@ export function removeBoardNode(board: BoardDocument, id: string): BoardDocument
     nodes: withoutBrokenProcesses(board.nodes.filter((node) => node.id !== id)),
     edges: board.edges.filter((edge) => edge.source !== id && edge.target !== id),
     positions,
+    ...(board.groups
+      ? {
+          groups: board.groups.map((group) => ({
+            ...group,
+            nodeIds: group.nodeIds.filter((item) => item !== id),
+          })),
+        }
+      : {}),
     ...(board.pinnedNodeIds
       ? { pinnedNodeIds: board.pinnedNodeIds.filter((item) => item !== id) }
       : {}),

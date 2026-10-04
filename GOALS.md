@@ -4,6 +4,13 @@ Last reviewed: 2026-10-04.
 
 ## Current delivery
 
+P2 and the quality/release-readiness checklist are complete for the web and Linux
+Go/Wails application as of 2026-10-04. Shared editing is opt-in for named accounts
+on one server, with owner invitations/revocation and revision-based recovery.
+Groups, notes/sources, reviewed imports, comparison, examples and provisional streamed
+concepts are implemented. See the verification and scope limits below; this does
+not complete the separate provider and Windows/macOS work.
+
 Both P1 sections are complete as of 2026-10-04 on the web and Linux desktop:
 model settings/profiles/diagnostics, reported usage and explicit limits, consent-based
 suggestions, keyboard connection editing, branch metadata, pins, selective proposal
@@ -151,30 +158,57 @@ validated declarative icon format. Windows/macOS packaging, new providers,
 API-key/fallback settings and pricing-based cost projections remain separate work.
 See [model and canvas controls](docs/P1-CONTROLS.md).
 
-## Future features — P2
+## Completed: richer workflows — P2
 
-- [ ] Nested, collapsible subgraphs with optional group boundaries (no mandatory frames around individual icons).
+- [x] Nested, collapsible subgraphs with optional group boundaries (no mandatory frames around individual icons).
 - [x] Overview, selected-concept detail and a step-by-step walkthrough.
-- [ ] Incrementally stream validated nodes instead of waiting for the complete graph.
-- [ ] Reusable process templates and a richer no-call example library.
-- [ ] Attach notes, references and source links to concepts.
-- [ ] Document/text import with source attribution and a review step.
-- [ ] Board comparison and version-history browsing.
+- [x] Incrementally stream validated nodes instead of waiting for the complete graph.
+- [x] Reusable process templates and a richer no-call example library.
+- [x] Attach notes, references and source links to concepts.
+- [x] Document/text import with source attribution and a review step.
+- [x] Board comparison and version-history browsing.
 - [x] Read-only public boards for signed-in users, with ownership controls and save-a-copy editing.
-- [ ] Optional collaboration/sync after durable local persistence is reliable.
+- [x] Optional collaboration/sync after durable local persistence is reliable.
 
 ## Quality and release readiness
 
 - [x] Default QA gate now covers v2 saved boards/history, generation review, branching/dragging, exports and walkthrough.
 - [x] Add automated accessibility and mobile-overflow checks for the new workspace.
-- [ ] Expand browser coverage for reconnection, legacy imports, network loss and visual screenshot baselines.
-- [ ] Test larger graphs, long-running generation, cancellation and malformed responses.
-- [ ] Reduce initial bundle cost and investigate the ELK chunk warning.
-- [ ] Verify clean-clone installation, native SQLite setup and supported CLI versions in CI.
+- [x] Expand browser coverage for reconnection, legacy imports, network loss and visual screenshot baselines.
+- [x] Test larger graphs, long-running generation, cancellation and malformed responses.
+- [x] Reduce initial bundle cost and investigate the ELK chunk warning.
+- [x] Verify clean-clone installation, native SQLite setup and supported CLI versions in CI.
 - [x] Define and test explicit OSG JSON import; keep source records unchanged.
-- [ ] Add bulk legacy-database migration and richer primitive/geometry mapping.
+- [x] Add bulk legacy-database migration and richer primitive/geometry mapping.
 - [x] Add account authentication and board authorization.
-- [ ] Review deployment hardening before supporting non-loopback hosting.
+- [x] Review deployment hardening before supporting non-loopback hosting.
+
+Verified 2026-10-04: 345 unit/API/schema tests, 24 Rust tests, lint/typecheck,
+Go vet/race tests and 42 headless browser scenarios against each API host. Packaged
+Linux verification includes database-import/MCP integration and 24 hidden Wayland
+WebView checks. Regression coverage includes source-link validation in Go's pure
+contract VM, delayed polling access guards, repeated batch selection, and persistence
+of groups/notes/sources. No paid model calls or visible desktop windows were used.
+
+A fresh dependency tree installed from the frozen lockfile and passed native SQLite
+write/read/WAL/integrity verification. CI now runs that probe and recorded CLI
+compatibility checks explicitly. The production initial entry decreased from about
+782 kB (249 kB gzip) to 277 kB (86 kB gzip); ELK runs as an on-demand bounded worker,
+with its large worker asset retained. The default chunk-warning threshold remains.
+Screenshot coverage includes a reviewed branching-canvas baseline and framing checks.
+
+Limits: source links and excerpts are user-supplied, not independently verified.
+Local text/Markdown import is deterministic and bounded, not semantic document
+analysis. Legacy bundles are explicit private-copy imports, not full database backups;
+reimport can create additional copies. Claude structured deltas allow early concept
+previews; the current Codex envelope yields them at message completion. Provisional
+concepts never bypass full validation or review. Shared editing uses revision polling
+on one server, without cross-install synchronization or live cursors. The deployment
+review identifies public-hosting blockers; both hosts retain loopback-only entrypoints.
+Windows/macOS packages and live-provider availability remain unverified separate goals.
+See [P2 workflows](docs/P2-WORKFLOWS.md) and the
+[release readiness review](docs/RELEASE-READINESS.md). Remote CI status is reported
+with delivery; local results alone are not a claim that a GitHub run passed.
 
 ## Maintenance rules
 

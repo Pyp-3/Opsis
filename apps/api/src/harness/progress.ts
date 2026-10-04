@@ -1,5 +1,5 @@
+import { StreamedNodes } from './streamed-nodes';
 import { reportedUsage } from './usage';
-import type { ReportedUsage } from '@opsis/schema';
 import type { HarnessProvider } from './types.js';
 
 /**
@@ -7,14 +7,8 @@ import type { HarnessProvider } from './types.js';
  * shown live, the way Claude Code shows its own progress. Thinking text itself is not exposed
  * by the CLIs; only how much of it there is.
  */
-export type HarnessProgress =
-  | { type: 'usage'; usage: ReportedUsage }
-  | { type: 'phase'; phase: 'starting' | 'thinking' | 'writing' | 'drafting' }
-  | { type: 'thinking'; tokens: number }
-  /** A progress note the agent wrote; `done` is false while the line is still arriving. */
-  | { type: 'note'; text: string; done: boolean }
-  /** The answer as it is written: how many objects and connections, and the latest named. */
-  | { type: 'drafting'; items: number; links: number; latest: string | null };
+export type { AgentProgress as HarnessProgress } from '@opsis/schema';
+import type { AgentProgress as HarnessProgress } from '@opsis/schema';
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): Json | null =>
@@ -87,6 +81,7 @@ export function progressReader(provider: HarnessProvider) {
   let phase = '';
   let thinking = 0;
   const draft = new DraftReader();
+  const streamedNodes = new StreamedNodes();
   const enter = (next: 'starting' | 'thinking' | 'writing' | 'drafting'): HarnessProgress[] => {
     if (phase === next) return [];
     phase = next;
@@ -131,7 +126,12 @@ export function progressReader(provider: HarnessProvider) {
     }
     if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
       const drafted = draft.add(delta.partial_json);
-      return drafted ? [drafted] : [];
+      return [
+        ...(drafted ? [drafted] : []),
+        ...streamedNodes
+          .add(delta.partial_json)
+          .map((node): HarnessProgress => ({ type: 'node', node })),
+      ];
     }
     return [];
   }
@@ -145,7 +145,13 @@ export function progressReader(provider: HarnessProvider) {
       const text = clean(item.text.split('\n').find((line) => line.trim()) ?? '');
       return text ? [{ type: 'note', text, done: true }] : [];
     }
-    if (item.type === 'agent_message') return enter('drafting');
+    if (item.type === 'agent_message')
+      return [
+        ...enter('drafting'),
+        ...(typeof item.text === 'string'
+          ? streamedNodes.add(item.text).map((node): HarnessProgress => ({ type: 'node', node }))
+          : []),
+      ];
     return [];
   }
 

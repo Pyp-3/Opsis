@@ -210,7 +210,7 @@ it('migrates legacy data in place and backs up/restores live WAL, archives, hist
     const inspection = new Database(restored);
     expect(inspection.prepare('SELECT * FROM old_pipeline').get()).toEqual({ value: 'preserve' });
     expect(inspection.prepare('SELECT count(*) AS total FROM schema_migrations').get()).toEqual({
-      total: 1,
+      total: 2,
     });
     expect(
       inspection

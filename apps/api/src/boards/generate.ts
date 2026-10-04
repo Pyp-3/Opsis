@@ -122,6 +122,7 @@ export async function generateBoard(
     let repair = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       if (signal.aborted) throw new Error('Cancelled');
+      progress({ type: 'preview-reset' });
       let output: string;
       try {
         output = await client.complete(

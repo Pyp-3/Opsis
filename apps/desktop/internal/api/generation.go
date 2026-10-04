@@ -51,7 +51,7 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 			send := func(value any) { _ = json.NewEncoder(w).Encode(value); _ = http.NewResponseController(w).Flush() }
 			if stream {
 				w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-				w.Header().Set("Cache-Control", "no-cache")
+				w.Header().Set("Cache-Control", "no-store")
 				w.Header().Set("X-Content-Type-Options", "nosniff")
 				w.WriteHeader(200)
 			}

@@ -71,7 +71,7 @@ files from your computer. See the [process engine](PROCESS-ENGINE.md).
 
 ## Import and export
 
-Use **Import** for saved board JSON or supported legacy OSG JSON. From **Export**:
+Use **Import** for saved board JSON, legacy OSG, text/Markdown or a legacy database bundle. Inspect the preview before creating private copies. From **Export**:
 
 | Format                   | Use                                                  |
 | ------------------------ | ---------------------------------------------------- |
@@ -89,3 +89,18 @@ sharing. Image and Markdown exports are not editable board backups.
 Create a revocable key under **Account → Agent keys**, then follow the
 [MCP setup guide](../apps/mcp/README.md). Keys are local-only and act as their owning
 account. Keep them out of Git commits, public issues, and screenshots.
+
+## Groups, sources and collaboration
+
+Use **Groups and subgraphs** above the canvas to create nested groups, optionally
+show outlines and collapse sections. Groups preserve the underlying concepts and
+layout. Add personal notes and HTTP/HTTPS sources in concept details.
+
+Owners grant/revoke editing to existing accounts under **Shared editing**. Invitees
+open boards from **Boards → Shared with you**. This works on one local Opsis server;
+public visibility alone remains read-only. Idle views synchronize revisions, and
+conflict recovery preserves unsaved edits. **Compare boards or saved revisions**
+in Boards compares content and layout without changing either version.
+
+See [P2 workflows](P2-WORKFLOWS.md) for exact import limits, templates, streaming
+previews, collaboration behavior and persistence details.

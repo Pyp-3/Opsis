@@ -34,6 +34,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ...fastifyOptions
   } = options;
   const app = Fastify(fastifyOptions);
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    if (request.url.startsWith('/v1/')) reply.header('Cache-Control', 'no-store');
+    if (
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
+      request.headers['sec-fetch-site'] === 'cross-site'
+    )
+      return reply.code(403).send({ message: 'Cross-site writes are not allowed.' });
+  });
   registerBoardRoutes(app, boardClientFactory);
   const store = new ApiStore(databasePath);
   registerAuth(app, store);

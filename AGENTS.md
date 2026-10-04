@@ -43,10 +43,14 @@ See `docs/REFACTORING.md` for the principles and retirement record.
 
 - Preserve board document v2, process contract v3, active HTTP/NDJSON responses,
   MCP tools, and the WASM entrypoint unless a requested change explicitly revises them.
-- Preserve private ownership, read-only public viewing, account-scoped recovery,
+- Preserve private ownership, explicit per-board editor invitations/revocation,
+  read-only public viewing without an invitation, account-scoped recovery,
   local-only agent keys, and revocation. Never log credentials or tokens.
 - Saves use revisions; conflicts retain unrelated changes and recover unsaved work.
   Keep save ordering, stale-response guards, deletion tombstones, and paused polling.
+- Groups, notes and references are saved document data. Collapse is presentation only;
+  preserve hidden concepts, positions, process inputs and original endpoints. Streamed
+  concepts are provisional; only a fully validated/reviewed result enters saved history.
 - Board history is bounded to 40 entries. A drag or MCP edit is one undoable action;
   normal edits clear redo. Keep proposal review before applying agent changes.
 - Keep explicit model choices, bounded generation and one invalid-output repair;

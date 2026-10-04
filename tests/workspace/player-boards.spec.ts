@@ -299,7 +299,7 @@ test('the landing page offers questions and examples, and an empty canvas offers
 }) => {
   await expect(page.getByRole('heading', { name: 'See what you mean.', level: 1 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Examples' }).getByRole('button')).toHaveCount(
-    2,
+    4,
   );
   await page.getByRole('button', { name: /How does the water cycle work\?/ }).click();
   const ask = page.getByLabel('Start a new canvas with a question');

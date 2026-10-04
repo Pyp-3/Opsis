@@ -31,7 +31,8 @@ export async function respond(request: FastifyRequest, reply: FastifyReply, work
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': 'application/x-ndjson; charset=utf-8',
-      'cache-control': 'no-cache',
+      'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer',
       'x-content-type-options': 'nosniff',
     });
     const send = (event: object) => {

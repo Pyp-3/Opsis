@@ -101,7 +101,7 @@ func TestMigratesAndRestoresArchivedDataWithHistory(t *testing.T) {
 	}
 	defer reopened.Close()
 	var count int
-	if err := reopened.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 1 {
+	if err := reopened.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 2 {
 		t.Fatal("migration ledger incorrect", err)
 	}
 }

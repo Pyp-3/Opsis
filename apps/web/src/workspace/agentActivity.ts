@@ -1,11 +1,7 @@
+import { BoardNodeSchema, type BoardDocument } from '@opsis/schema';
 import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
-/** Progress events the API relays from an agent's CLI while it works. */
-export type AgentProgress =
-  | { type: 'usage'; usage: ReportedUsage }
-  | { type: 'phase'; phase: 'starting' | 'thinking' | 'writing' | 'drafting' }
-  | { type: 'thinking'; tokens: number }
-  | { type: 'note'; text: string; done: boolean }
-  | { type: 'drafting'; items: number; links: number; latest: string | null };
+import { AgentProgressSchema, type AgentProgress } from '@opsis/schema';
+export type { AgentProgress } from '@opsis/schema';
 
 /** What the live status line shows. */
 export type AgentActivity = {
@@ -14,6 +10,7 @@ export type AgentActivity = {
   verb: string;
   thinking: number;
   usage: ReportedUsage[];
+  nodes: BoardDocument['nodes'];
   /** Finished notes, oldest first. */
   notes: string[];
   /** The note being written now. */
@@ -41,6 +38,7 @@ export function startActivity(random = Math.random): AgentActivity {
     verb: VERBS[Math.floor(random() * VERBS.length)]!,
     thinking: 0,
     usage: [],
+    nodes: [],
     notes: [],
     note: null,
     drafted: null,
@@ -48,7 +46,20 @@ export function startActivity(random = Math.random): AgentActivity {
 }
 
 export function applyProgress(activity: AgentActivity, progress: AgentProgress): AgentActivity {
+  const checked = AgentProgressSchema.safeParse(progress);
+  if (!checked.success) return activity;
+  progress = checked.data;
   switch (progress.type) {
+    case 'preview-reset':
+      return { ...activity, nodes: [] };
+    case 'node': {
+      const parsed = BoardNodeSchema.safeParse(progress.node);
+      return parsed.success &&
+        activity.nodes.length < 50 &&
+        !activity.nodes.some((node) => node.id === parsed.data.id)
+        ? { ...activity, nodes: [...activity.nodes, parsed.data] }
+        : activity;
+    }
     case 'usage': {
       const parsed = ReportedUsageSchema.safeParse(progress.usage);
       return parsed.success
@@ -66,7 +77,7 @@ export function applyProgress(activity: AgentActivity, progress: AgentProgress):
             notes:
               activity.notes.at(-1) === progress.text
                 ? activity.notes
-                : [...activity.notes, progress.text],
+                : [...activity.notes, progress.text].slice(-50),
             note: null,
           }
         : { ...activity, note: progress.text };
@@ -94,6 +105,10 @@ export async function agentResponse(
   let pending = '';
   for (;;) {
     const { value, done } = await reader.read();
+    if (pending.length + (value?.length ?? 0) > 20_000_000) {
+      await reader.cancel();
+      throw new Error('The agent response exceeded the stream limit.');
+    }
     const lines = (pending + (value ?? '')).split('\n');
     pending = done ? '' : (lines.pop() ?? '');
     for (const line of lines) {
@@ -101,8 +116,11 @@ export async function agentResponse(
       const event = JSON.parse(line) as
         | { type: 'progress'; progress: AgentProgress }
         | { type: 'result'; status: number; body: Record<string, unknown> };
-      if (event.type === 'progress') onProgress(event.progress);
-      else return { ok: event.status < 400, status: event.status, body: event.body };
+      if (event.type === 'progress') {
+        const parsed = AgentProgressSchema.safeParse(event.progress);
+        if (parsed.success) onProgress(parsed.data);
+      } else if (event.type === 'result')
+        return { ok: event.status < 400, status: event.status, body: event.body };
     }
     if (done) throw new Error('The agent’s response ended unexpectedly.');
   }

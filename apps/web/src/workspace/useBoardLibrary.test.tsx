@@ -222,3 +222,34 @@ it('opens a fresh draft when a clean board is deleted elsewhere without recreati
     fetch.mock.calls.every(([url]) => url === '/v1/boards' || url === `/v1/boards/${id}`),
   ).toBe(true);
 });
+
+it('ignores access changes when an interaction starts while the response body is pending', async () => {
+  const id = crypto.randomUUID();
+  let finish!: (value: unknown) => void;
+  const json = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/v1/boards' ? Response.json([]) : { ok: true, status: 200, json },
+    ),
+  );
+  const initial = { id, revision: 1, snapshot, savedSnapshot: snapshot, error: '' };
+  const { result, rerender } = renderHook(
+    ({ paused }) => {
+      const history = useBoardHistory(snapshot);
+      return useBoardLibrary(initial, history.snapshot, history.replace, paused);
+    },
+    { initialProps: { paused: false } },
+  );
+  await waitFor(() => expect(json).toHaveBeenCalled());
+  rerender({ paused: true });
+  await act(async () => {
+    finish({ id, revision: 1, snapshot, access: 'viewer' });
+  });
+  expect(result.current.access).toBe('owner');
+});

@@ -38,6 +38,33 @@ export const TerminalStepSchema = z
   .strict();
 export type TerminalStep = z.infer<typeof TerminalStepSchema>;
 
+export const ConceptReferenceSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    url: z
+      .string()
+      .max(2000)
+      // Go's pure contract VM has no browser URL constructor. Keep this bounded
+      // syntax check identical in the browser, Node and native host.
+      .regex(
+        /^https?:\/\/(?:\[[0-9a-f:.]+\]|[^\s/?#:@\\]+)(?::\d{1,5})?(?:[/?#][^\s\\]*)?$/i,
+        'Use an HTTP or HTTPS source link without credentials or whitespace.',
+      )
+      .optional(),
+    excerpt: z.string().max(3000).optional(),
+  })
+  .strict();
+export const BoardGroupSchema = z
+  .object({
+    id,
+    label: z.string().trim().min(1).max(80),
+    nodeIds: z.array(id).max(50),
+    parentId: id.optional(),
+    collapsed: z.boolean(),
+    boundary: z.boolean(),
+  })
+  .strict();
+
 export const BoardNodeSchema = z
   .object({
     id,
@@ -50,6 +77,8 @@ export const BoardNodeSchema = z
     kind: z.enum(['step', 'decision', 'note']),
     confidence: z.enum(['normal', 'simplified', 'uncertain']).optional(),
     caveat: z.string().max(500).optional(),
+    notes: z.string().max(5000).optional(),
+    references: z.array(ConceptReferenceSchema).max(10).optional(),
     terminal: TerminalStepSchema.optional(),
     /** The engine calculates sample data from these operations, independently of narration. */
     process: ProcessStepSchema.optional(),
@@ -153,9 +182,36 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
     .max(50)
     .refine((ids) => new Set(ids).size === ids.length, 'Pinned concepts must be unique.')
     .optional(),
+  groups: z.array(BoardGroupSchema).max(20).optional(),
   look: BoardLookSchema.optional(),
 }).superRefine((board, context) => {
   validateBoardReferences(board, context);
+  const groups = board.groups ?? [];
+  const members = groups.flatMap((group) => group.nodeIds);
+  if (
+    new Set(groups.map((group) => group.id)).size !== groups.length ||
+    new Set(members).size !== members.length ||
+    members.some((id) => !board.nodes.some((node) => node.id === id))
+  )
+    context.addIssue({
+      code: 'custom',
+      message: 'Groups need unique IDs and each existing concept can belong to one group.',
+    });
+  for (const group of groups) {
+    const seen = new Set([group.id]);
+    let parent = group.parentId;
+    while (parent) {
+      if (seen.has(parent) || !groups.some((item) => item.id === parent)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Group parents must exist and cannot form a cycle.',
+        });
+        break;
+      }
+      seen.add(parent);
+      parent = groups.find((item) => item.id === parent)?.parentId;
+    }
+  }
   if (board.pinnedNodeIds?.some((id) => !board.nodes.some((node) => node.id === id)))
     context.addIssue({
       code: 'custom',

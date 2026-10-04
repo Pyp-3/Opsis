@@ -94,7 +94,7 @@ describe('current workspace integration', () => {
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
     expect(screen.getByRole('complementary', { name: 'Details for You write' })).toBeDefined();
-    const timeline = screen.getByRole('slider', { name: 'Process timeline' });
+    const timeline = await screen.findByRole('slider', { name: 'Process timeline' });
     const beats = playbackTimeline(board);
     const inbox = beats.findIndex((beat) => beat.nodeId === 'recipient');
     const sender = beats.findIndex((beat) => beat.nodeId === 'sender');

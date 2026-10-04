@@ -163,6 +163,15 @@ func requireUser(r *http.Request) (*User, error) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	if strings.HasPrefix(r.URL.Path, "/v1/") {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		writeJSON(w, 403, map[string]string{"message": "Cross-site writes are not allowed."})
+		return
+	}
 	if r.URL.Path != "/v1/health" && !strings.HasPrefix(r.URL.Path, "/v1/speech") && !s.allow(r) {
 		writeJSON(w, 429, map[string]any{"code": "rate_limit_exceeded", "message": "Too many requests. Wait a minute and try again.", "stage": "request", "retryable": true})
 		return

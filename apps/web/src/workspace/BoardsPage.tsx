@@ -1,3 +1,5 @@
+import { SharedBoards } from './BoardSharing';
+import { BoardComparison } from './BoardComparison';
 import { useEffect, useState } from 'react';
 import {
   ArrowRight,
@@ -115,6 +117,8 @@ export function BoardsPage({
           start fresh. Make a board public to share it with friends.
         </p>
       </div>
+      <SharedBoards onOpen={onOpen} />
+      <BoardComparison entries={library.entries} />
       <div className="boards-tabs" role="tablist" aria-label="Boards">
         <span className="boards-tabs-thumb" data-tab={tab} aria-hidden />
         <button role="tab" aria-selected={tab === 'mine'} onClick={() => setTab('mine')}>

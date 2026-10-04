@@ -3,7 +3,7 @@ import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
 
 /** Fired when the API says the session has ended; the app returns to sign-in. */
 export const AUTH_EXPIRED = 'opsis:auth-expired';
-export type BoardAccess = 'owner' | 'viewer';
+export type BoardAccess = 'owner' | 'editor' | 'viewer';
 
 export const BoardEntrySchema = z.object({
   id: z.string().uuid(),
@@ -11,7 +11,7 @@ export const BoardEntrySchema = z.object({
   snapshot: BoardSnapshotSchema,
   savedSnapshot: BoardSnapshotSchema.optional(),
   /** `viewer` for someone else's public board: shown, never saved. */
-  access: z.enum(['owner', 'viewer']).optional(),
+  access: z.enum(['owner', 'editor', 'viewer']).optional(),
   owner: z.object({ name: z.string() }).optional(),
 });
 export const BoardListSchema = z.array(

@@ -1,3 +1,4 @@
+import { ConceptSources } from './ConceptSources';
 import type { RefObject } from 'react';
 import {
   ArrowRight,
@@ -258,6 +259,7 @@ export function ConceptDetails({
             );
           })()}
         </section>
+        <ConceptSources key={activeNode.id} node={activeNode} disabled={busy} onChange={editNode} />
         <button
           className="expand-concept"
           disabled={busy}

@@ -1,3 +1,6 @@
+import { LegacyBatchReview } from './LegacyBatchReview';
+import { BoardSharing } from './BoardSharing';
+import { BoardGroups, GroupBoundaries } from './BoardGroups';
 import { readingViewport, NODE_HEIGHT } from './geometry';
 import { BoardHeader } from './BoardHeader';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
@@ -5,7 +8,16 @@ import { BoardComposer } from './BoardComposer';
 import { IconNode, type DiagramNode } from './IconNode';
 import { ConceptDetails } from './ConceptDetails';
 import { ConnectionDetails } from './ConnectionDetails';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -36,6 +48,9 @@ import {
   ArrowDownToLine,
 } from 'lucide-react';
 import {
+  LegacyBundleSchema,
+  boardFromText,
+  type BoardDocument,
   BOARD_MODEL_CHOICES,
   BoardAgentsSchema,
   BoardModelSettingsSchema,
@@ -57,16 +72,22 @@ import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
-import { ProcessPlayer } from './ProcessPlayer';
+const ProcessPlayer = lazy(() =>
+  import('./ProcessPlayer').then((module) => ({ default: module.ProcessPlayer })),
+);
 import { applyLook, lookOf } from './canvas-theme';
 import { NextSteps, RETURN_PATHS } from './NextSteps';
 import { BrandMark } from './BrandMark';
 import { BoardsPage } from './BoardsPage';
 import { HomePage } from './HomePage';
-import { AccountPage } from './AccountPage';
+const AccountPage = lazy(() =>
+  import('./AccountPage').then((module) => ({ default: module.AccountPage })),
+);
 import type { User } from '../auth/session';
 import { CanvasSettingsPage } from './CanvasSettingsPage';
-import { SettingsPage } from './SettingsPage';
+const SettingsPage = lazy(() =>
+  import('./SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
 import { navigate, usePath } from '../router';
 import { revealed, type Beat } from './playback';
 import { AppSidebar, applySavedRailWidth, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
@@ -116,6 +137,20 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const [connectionError, setConnectionError] = useState('');
   const [prompt, setPrompt] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+  const [viewGroups, setViewGroups] = useState<Record<string, boolean>>({});
+  const presentation = useMemo(
+    () =>
+      board && readOnly
+        ? {
+            ...board,
+            groups: board.groups?.map((group) => ({
+              ...group,
+              collapsed: viewGroups[group.id] ?? group.collapsed,
+            })),
+          }
+        : board,
+    [board, readOnly, viewGroups],
+  );
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
@@ -138,6 +173,11 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
   const [playback, setPlayback] = useState<PlaybackFocus | null>(null);
+  const [legacyBundle, setLegacyBundle] = useState<{
+    id: string;
+    data: ReturnType<typeof LegacyBundleSchema.parse>;
+  } | null>(null);
+  const [importPreview, setImportPreview] = useState<BoardDocument | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const flow = useReactFlow();
@@ -211,6 +251,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   useEffect(() => {
     // The library can switch externally through board-manager creation/deletion.
     setAgent(boardRef.current?.agent ?? 'claude');
+    setViewGroups({});
     setSelected(null);
     setSelectedEdge(null);
     setPlayerOpen(false);
@@ -234,7 +275,19 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
 
   const fit = useCallback(() => {
     if (readingTimer.current) clearTimeout(readingTimer.current);
-    void flow.fitView({ padding: 0.22, duration: 300, maxZoom: 1.1 });
+    const canvas = document.querySelector('.blueprint');
+    const height = canvas?.clientHeight ?? 700;
+    const heading = canvas?.querySelector<HTMLElement>('.canvas-heading')?.offsetHeight ?? 0;
+    const composer = canvas?.querySelector<HTMLElement>('.composer-wrap')?.offsetHeight ?? 0;
+    void flow.fitView({
+      padding: {
+        top: `${Math.min(height * 0.3, heading + 32)}px`,
+        bottom: `${Math.min(height * 0.4, composer + 36)}px`,
+        x: '48px',
+      },
+      duration: 300,
+      maxZoom: 1.1,
+    });
   }, [flow]);
   const readingView = useCallback(() => {
     const current = boardRef.current;
@@ -444,7 +497,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       : (BOARD_MODEL_CHOICES[agent].find((choice) => choice.id === modelPreferences[agent].model)
           ?.label ??
         (modelPreferences[agent].model || 'Choose a model'));
-  const { nodes, edges } = useBoardDiagram(board, selected, selectedEdge, playback, process);
+  const { nodes, edges } = useBoardDiagram(presentation, selected, selectedEdge, playback, process);
   const changePositions = (changes: NodeChange<DiagramNode>[]) => {
     if (busy) return;
     setBoard((current) => {
@@ -525,9 +578,13 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         <div className="page-scroll">
           <div className="page-toolbar">{railToggle}</div>
           {page === 'appearance' ? (
-            <SettingsPage preferences={modelPreferences} onChange={setModelPreferences} />
+            <Suspense fallback={<p role="status">Loading settings…</p>}>
+              <SettingsPage preferences={modelPreferences} onChange={setModelPreferences} />
+            </Suspense>
           ) : page === 'account' && user ? (
-            <AccountPage user={user} onSignOut={onSignOut} />
+            <Suspense fallback={<p role="status">Loading account…</p>}>
+              <AccountPage user={user} onSignOut={onSignOut} />
+            </Suspense>
           ) : page === 'boards' ? (
             <BoardsPage
               library={library}
@@ -593,28 +650,122 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         <input
           ref={importInput}
           type="file"
-          accept=".json,application/json"
+          accept=".json,.txt,.md,application/json,text/plain,text/markdown"
           hidden
           onChange={async (event) => {
             const file = event.target.files?.[0];
             event.target.value = '';
             if (!file) return;
             try {
-              if (file.size > 1_000_000) throw new Error('This file is too large.');
-              const next = await importBoard(JSON.parse(await file.text()));
-              if (!(await library.open())) return;
-              commit(next);
-              setAgent(next.agent);
-              setSelected(null);
-              setSelectedEdge(null);
+              if (file.size > 20_000_000) throw new Error('This file is too large.');
+              const text = await file.text();
+              if (/\.json$/i.test(file.name)) {
+                const bundle = LegacyBundleSchema.safeParse(JSON.parse(text));
+                if (bundle.success) {
+                  setLegacyBundle({ id: crypto.randomUUID(), data: bundle.data });
+                  setImportPreview(null);
+                  setError('');
+                  return;
+                }
+              }
+              const next = /\.(txt|md)$/i.test(file.name)
+                ? boardFromText(text, file.name)
+                : await importBoard(JSON.parse(text));
+              setImportPreview(next);
+              setLegacyBundle(null);
               setError('');
             } catch {
               setError(
-                'This file could not be imported as a v2 board or legacy OSG. Your current canvas is unchanged.',
+                'Could not import this file. Use a v2/legacy JSON board or plain text/Markdown with up to 50 sections and 100,000 characters. Your canvas is unchanged.',
               );
             }
           }}
         />
+        {legacyBundle && (
+          <LegacyBatchReview
+            key={legacyBundle.id}
+            bundle={legacyBundle.data}
+            onClose={() => setLegacyBundle(null)}
+            onSaved={library.refresh}
+          />
+        )}
+        {importPreview && (
+          <section className="import-preview" aria-label="Import review">
+            <h2>Review import: {importPreview.title}</h2>
+            <p>{importPreview.description}</p>
+            <p>
+              {importPreview.nodes.length} concepts · {importPreview.edges.length} relationships.
+              Original file remains unchanged.
+            </p>
+            <ul>
+              {importPreview.nodes.map((node) => (
+                <li key={node.id}>
+                  <strong>{node.label}</strong>
+                  <p>{node.summary}</p>
+                </li>
+              ))}
+            </ul>
+            <button
+              disabled={working}
+              onClick={async () => {
+                if (!(await library.open())) return;
+                commit(importPreview);
+                setAgent(importPreview.agent);
+                setSelected(null);
+                setSelectedEdge(null);
+                setImportPreview(null);
+              }}
+            >
+              Import as new board
+            </button>
+            <button onClick={() => setImportPreview(null)}>Discard import</button>
+          </section>
+        )}
+        {board &&
+          library.access !== 'viewer' &&
+          (library.access === 'editor' ||
+            library.entries.some((entry) => entry.id === library.activeId)) && (
+            <BoardSharing
+              key={library.activeId}
+              id={library.activeId}
+              owner={library.access === 'owner'}
+            />
+          )}
+        {board && !readOnly && <BoardGroups board={board} disabled={busy} commit={commit} />}
+        {readOnly && !!presentation?.groups?.length && (
+          <details className="board-groups">
+            <summary>Explore subgraphs</summary>
+            {presentation.groups.map((group) => (
+              <label key={group.id}>
+                <input
+                  type="checkbox"
+                  checked={group.collapsed}
+                  onChange={(event) =>
+                    setViewGroups((current) => ({ ...current, [group.id]: event.target.checked }))
+                  }
+                />
+                Collapse {group.label}
+              </label>
+            ))}
+          </details>
+        )}
+        {generation.busy && generation.activity.nodes.length > 0 && (
+          <section className="streamed-preview" aria-label="Draft concepts">
+            <h2>Draft concepts · not saved</h2>
+            <p>
+              Individual concepts validated as they arrive. Connections and the full diagram still
+              need validation and review.
+            </p>
+            <div>
+              {generation.activity.nodes.map((node) => (
+                <article key={node.id}>
+                  <strong>{node.label}</strong>
+                  <p>{node.summary}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
         <div className="canvas-and-detail">
           <section
             className={`blueprint ${playerOpen ? 'is-playing' : ''}`}
@@ -694,6 +845,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                 color="var(--bp-grid-major)"
                 lineWidth={1}
               />
+              {presentation && <GroupBoundaries board={presentation} />}
             </ReactFlow>
             {board && (
               <div className={`canvas-heading ${headingOpen ? 'is-open' : 'is-collapsed'}`}>
@@ -916,31 +1068,34 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                 />
               )}
               {board && playerOpen ? (
-                <ProcessPlayer
-                  key={library.activeId}
-                  board={board}
-                  disabled={working}
-                  process={process}
-                  onBeat={followBeat}
-                  onClose={closePlayer}
-                  // Drawings change the board, so they are for the owner only.
-                  {...(readOnly
-                    ? {}
-                    : {
-                        illustration: {
-                          busy: illustrator.busy,
-                          elapsed: illustrator.elapsed,
-                          activity: illustrator.activity,
-                          message: illustrator.message,
-                          available:
-                            agent === 'demo' ||
-                            !!modelPreferences[agent].executablePath ||
-                            status?.available !== false,
-                          redraw: board.nodes.every((node) => node.illustration),
-                          onIllustrate: () => void illustrator.illustrate(agent, modelPreferences),
-                        },
-                      })}
-                />
+                <Suspense fallback={<p role="status">Loading player…</p>}>
+                  <ProcessPlayer
+                    key={library.activeId}
+                    board={board}
+                    disabled={working}
+                    process={process}
+                    onBeat={followBeat}
+                    onClose={closePlayer}
+                    // Drawings change the board, so they are for the owner only.
+                    {...(readOnly
+                      ? {}
+                      : {
+                          illustration: {
+                            busy: illustrator.busy,
+                            elapsed: illustrator.elapsed,
+                            activity: illustrator.activity,
+                            message: illustrator.message,
+                            available:
+                              agent === 'demo' ||
+                              !!modelPreferences[agent].executablePath ||
+                              status?.available !== false,
+                            redraw: board.nodes.every((node) => node.illustration),
+                            onIllustrate: () =>
+                              void illustrator.illustrate(agent, modelPreferences),
+                          },
+                        })}
+                  />
+                </Suspense>
               ) : readOnly && board ? (
                 <div className="viewer-bar" role="status">
                   <span className="viewer-badge">

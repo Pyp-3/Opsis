@@ -133,7 +133,13 @@ func (s *Server) saveBoard(id string, snapshot json.RawMessage, revision int64, 
 		return "", err
 	}
 	if current != nil && current.OwnerID.String != user {
-		return "forbidden", nil
+		editor, err := isBoardEditor(tx, id, user)
+		if err != nil {
+			return "", err
+		}
+		if !editor || current.Archived {
+			return "forbidden", nil
+		}
 	}
 	if (current == nil && revision != 0) || (current != nil && current.Revision != revision) {
 		return "conflict", nil

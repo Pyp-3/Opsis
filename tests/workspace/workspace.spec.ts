@@ -120,6 +120,12 @@ for (const [width, height] of [
     await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
     const play = page.getByRole('button', { name: 'Play the process' });
     await expect(play).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator('.canvas-heading').evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+      );
+    });
     const tools = page.getByRole('toolbar', { name: 'Canvas tools' });
     const title = page.locator('.canvas-heading h2');
     const description = page.locator('.canvas-heading p');
@@ -198,12 +204,18 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   };
   await expectAttached();
   const before = await edge.getAttribute('d');
+  // Move the same canvas distance at every overview zoom, retaining the expected port sides.
+  const zoom = await edge.evaluate((element) => (element as SVGPathElement).getScreenCTM()!.a);
   const icon = await page.locator('[data-id="outgoing"] .node-symbol').boundingBox();
   await page.mouse.move(icon!.x + icon!.width / 2, icon!.y + icon!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(icon!.x + icon!.width / 2 + 40, icon!.y + icon!.height / 2 + 70, {
-    steps: 10,
-  });
+  await page.mouse.move(
+    icon!.x + icon!.width / 2 + 40 * zoom,
+    icon!.y + icon!.height / 2 + 70 * zoom,
+    {
+      steps: 10,
+    },
+  );
   await expect(edge).not.toHaveAttribute('d', before!);
   await page.mouse.up();
   await expectAttached();

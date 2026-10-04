@@ -91,10 +91,18 @@ export function useBoardLibrary(
           lastSaved.current = null;
           target = current.current;
           recoveredCopy = true;
+          setAccess('owner');
         };
         let response: Response | undefined;
         for (let attempt = 0; attempt < 4; attempt++) {
           response = await boardLibraryApi.save(identity.id, target, identity.revision);
+          if (
+            (response.status === 403 || response.status === 404) &&
+            accessRef.current === 'editor'
+          ) {
+            preserveCopy();
+            continue;
+          }
           if (response.status !== 409) break;
           const latest = await boardLibraryApi.read(identity.id);
           if (latest.status === 404) {
@@ -131,7 +139,12 @@ export function useBoardLibrary(
         lastSaved.current = target;
         // Never replace a newer local edit with this completed request's older snapshot.
         try {
-          writeRecovery({ ...active.current, snapshot: current.current, savedSnapshot: target });
+          writeRecovery({
+            access: accessRef.current,
+            ...active.current,
+            snapshot: current.current,
+            savedSnapshot: target,
+          });
           setError('');
         } catch {
           setError('Saved, but browser recovery storage is unavailable.');
@@ -151,7 +164,7 @@ export function useBoardLibrary(
       setStatus('Could not save · retry or export');
       throw e;
     });
-  }, [refresh, replace]);
+  }, [refresh, replace, setAccess]);
 
   useEffect(() => {
     let disposed = false;
@@ -186,11 +199,16 @@ export function useBoardLibrary(
             active.current = { id: crypto.randomUUID(), revision: 0 };
             current.current = empty;
             lastSaved.current = empty;
-            const wasShared = accessRef.current === 'viewer';
+            const wasShared = accessRef.current !== 'owner';
             setActiveId(active.current.id);
             setAccess('owner');
             replace(empty);
-            writeRecovery({ ...active.current, snapshot: empty, savedSnapshot: empty });
+            writeRecovery({
+              access: accessRef.current,
+              ...active.current,
+              snapshot: empty,
+              savedSnapshot: empty,
+            });
             setStatus(
               wasShared
                 ? 'That board is no longer shared · new canvas ready'
@@ -202,17 +220,24 @@ export function useBoardLibrary(
           if (!response.ok) return;
           const remote = Entry.parse(await response.json());
           if (
+            disposed ||
             identity !== active.current ||
             local !== current.current ||
-            pausedRef.current ||
-            remote.revision === identity.revision
+            pausedRef.current
           )
             return;
+          setAccess(remote.access ?? 'owner', remote.owner?.name);
+          if (remote.revision === identity.revision) return;
           identity.revision = remote.revision;
           current.current = remote.snapshot;
           lastSaved.current = remote.snapshot;
           replace(remote.snapshot);
-          writeRecovery({ ...identity, snapshot: remote.snapshot, savedSnapshot: remote.snapshot });
+          writeRecovery({
+            access: accessRef.current,
+            ...identity,
+            snapshot: remote.snapshot,
+            savedSnapshot: remote.snapshot,
+          });
           setStatus('Synced');
           setError('');
           await refresh();
@@ -237,7 +262,12 @@ export function useBoardLibrary(
   useEffect(() => {
     if (initial.error && !snapshot.board) return;
     try {
-      writeRecovery({ ...active.current, snapshot, savedSnapshot: lastSaved.current ?? undefined });
+      writeRecovery({
+        access: accessRef.current,
+        ...active.current,
+        snapshot,
+        savedSnapshot: lastSaved.current ?? undefined,
+      });
     } catch {
       // Report a real external storage failure; this is not derived render state.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -300,7 +330,7 @@ export function useBoardLibrary(
       active.current = { id: crypto.randomUUID(), revision: 0 };
       setActiveId(active.current.id);
       lastSaved.current = null;
-      writeRecovery({ ...active.current, snapshot: current.current });
+      writeRecovery({ access: accessRef.current, ...active.current, snapshot: current.current });
       await save();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save a separate copy.');

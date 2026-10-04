@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { MarkerType } from '@xyflow/react';
-import type { BoardDocument } from '@opsis/schema';
+import { visibleBoard, type BoardDocument } from '@opsis/schema';
 import type { DiagramNode } from './IconNode';
 import type { ProcessState } from './useProcessEngine';
 import { NODE_WIDTH, nodeHeight } from './geometry';
@@ -16,12 +16,13 @@ export type PlaybackFocus = {
 
 /** Translate board data into the diagram library's presentation model. */
 export function useBoardDiagram(
-  board: BoardDocument | null,
+  source: BoardDocument | null,
   selected: string | null,
   selectedEdge: string | null,
   playback: PlaybackFocus | null,
   process: ProcessState,
 ) {
+  const board = useMemo(() => (source ? visibleBoard(source) : null), [source]);
   const nodes: DiagramNode[] = useMemo(
     () =>
       board?.nodes.map((node, index) => ({

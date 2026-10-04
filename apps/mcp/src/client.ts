@@ -6,7 +6,7 @@ const Entry = z.object({
   id: z.string().uuid(),
   revision: z.number().int().nonnegative(),
   snapshot: BoardSnapshotSchema,
-  access: z.enum(['owner', 'viewer']).optional(),
+  access: z.enum(['owner', 'editor', 'viewer']).optional(),
   owner: z.object({ name: z.string() }).optional(),
 });
 export type BoardEntry = z.infer<typeof Entry>;

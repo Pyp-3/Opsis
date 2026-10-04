@@ -122,6 +122,36 @@
     );
     const boards = await (await fetch('/v1/boards')).json();
     assert(boards.length >= 2, 'React canvas persisted to native SQLite');
+    document.querySelector('.board-groups summary').click();
+    fill('.group-controls input[maxlength="80"]', 'Desktop group');
+    [...document.querySelectorAll('.group-controls button')]
+      .find((button) => button.textContent.trim() === 'Add group')
+      .click();
+    await until(
+      () => document.querySelector('.group-controls fieldset'),
+      'Group editor did not render',
+    );
+    const groupChecks = document.querySelectorAll(
+      '.group-controls fieldset input[type="checkbox"]',
+    );
+    groupChecks[2].click();
+    groupChecks[0].click();
+    await until(
+      () => document.querySelector('.save-status')?.textContent.includes('Saved'),
+      'Group did not save',
+    );
+    // The save label can briefly refer to the preceding edit; poll the durable snapshot too.
+    let grouped;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      grouped = await (await fetch('/v1/boards/' + boards[0].id)).json();
+      if (grouped.snapshot.board.groups?.[0]?.collapsed) break;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    assert(
+      grouped.snapshot.board.groups?.[0]?.collapsed,
+      'native WebView group collapsed and persisted',
+    );
+    assert(grouped.snapshot.board.nodes.length >= 4, 'collapsed group retained original concepts');
     history.pushState({}, '', '/settings');
     window.dispatchEvent(new Event('popstate'));
     await until(() => document.querySelector('.agent-settings'), 'Model settings did not render');

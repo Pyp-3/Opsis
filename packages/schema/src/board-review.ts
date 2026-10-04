@@ -69,6 +69,14 @@ export function selectBoardChanges(
     ...(keys.has('metadata') ? metadata(candidate) : {}),
     nodes,
     edges,
+    ...(before.groups
+      ? {
+          groups: before.groups.map((group) => ({
+            ...group,
+            nodeIds: group.nodeIds.filter((id) => ids.has(id)),
+          })),
+        }
+      : {}),
     positions: Object.fromEntries(
       nodes.map((node) => [
         node.id,

@@ -40,3 +40,13 @@ describe('agent activity', () => {
     expect(meta()).toBe('(75s · 3 objects, 2 links)');
   });
 });
+
+it('ignores malformed progress and bounds accumulated notes without losing valid state', () => {
+  let state = startActivity();
+  expect(applyProgress(state, { type: 'node', node: { id: 'invalid' } } as never)).toBe(state);
+  expect(applyProgress(state, { type: 'phase', phase: 'unknown' } as never)).toBe(state);
+  for (let i = 0; i < 80; i++)
+    state = applyProgress(state, { type: 'note', text: `Note ${i}`, done: true });
+  expect(state.notes).toHaveLength(50);
+  expect(state.notes.at(-1)).toBe('Note 79');
+});

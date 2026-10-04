@@ -732,3 +732,63 @@
   border-radius: 6px;
   font: inherit;
 }
+
+.board-groups {
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--bp-line);
+  max-height: 35vh;
+  overflow: auto;
+}
+.board-groups summary {
+  cursor: pointer;
+}
+.group-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
+  align-items: start;
+}
+.group-controls label,
+.concept-sources label {
+  display: grid;
+  gap: 5px;
+}
+.group-controls fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 100%;
+}
+.group-controls input,
+.group-controls select,
+.concept-sources input,
+.concept-sources textarea {
+  max-width: 100%;
+  background: var(--bp-deep);
+  color: var(--bp-ink);
+  border: 1px solid var(--bp-line);
+  padding: 7px;
+}
+.group-boundaries {
+  pointer-events: none;
+}
+.group-boundary {
+  position: absolute;
+  border: 1px dashed #90adc680;
+  border-radius: 12px;
+  pointer-events: none;
+}
+.group-boundary span {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--bp-deep);
+}
+.concept-sources blockquote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.concept-sources a {
+  overflow-wrap: anywhere;
+}

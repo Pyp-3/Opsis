@@ -1,7 +1,8 @@
+import { listenHost } from './listen-host.js';
 import { buildApp } from './app.js';
 import { kokoroEngine } from './speech.js';
 
-const host = process.env.HOST ?? '127.0.0.1';
+const host = listenHost(process.env.HOST);
 const port = Number(process.env.PORT ?? 8000);
 
 const speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine();

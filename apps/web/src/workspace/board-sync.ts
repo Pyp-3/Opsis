@@ -54,6 +54,11 @@ export function mergeBoardSnapshots(
     mergeItems(base.board.nodes, local.board.nodes, remote.board.nodes),
   );
   const ids = new Set(board.nodes.map((node) => node.id));
+  if (board.groups)
+    board.groups = board.groups.map((group) => ({
+      ...group,
+      nodeIds: group.nodeIds.filter((id) => ids.has(id)),
+    }));
   board.edges = mergeItems(base.board.edges, local.board.edges, remote.board.edges).filter(
     (edge) => ids.has(edge.source) && ids.has(edge.target),
   );

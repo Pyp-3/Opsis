@@ -186,13 +186,18 @@ export class ApiStore {
 
   /**
    * Saves a revision. A new id becomes a board owned by `ownerId`; an existing one is only
-   * saved for its owner (`'forbidden'` otherwise).
+   * saved for its owner or an invited editor of an active board (`'forbidden'` otherwise).
    */
   saveBoard(id: string, snapshot: BoardSnapshot, revision: number, ownerId: string) {
     return this.sqlite.transaction(() => {
       if (this.sqlite.prepare('SELECT id FROM deleted_boards_v2 WHERE id = ?').get(id)) return null;
       const current = this.getBoard(id);
-      if (current && current.ownerId !== ownerId) return 'forbidden' as const;
+      if (
+        current &&
+        current.ownerId !== ownerId &&
+        (current.archived || !this.isEditor(id, ownerId))
+      )
+        return 'forbidden' as const;
       if ((current?.revision ?? 0) !== revision) return null;
       const next = revision + 1;
       this.sqlite
@@ -209,6 +214,42 @@ export class ApiStore {
           ownerId,
         );
       return { id, revision: next };
+    })();
+  }
+
+  isEditor(id: string, userId: string) {
+    return !!this.sqlite
+      .prepare('SELECT 1 FROM board_editors WHERE board_id=? AND user_id=?')
+      .get(id, userId);
+  }
+  listEditors(id: string) {
+    return this.sqlite
+      .prepare(
+        'SELECT u.email,u.name FROM board_editors e JOIN users u ON u.id=e.user_id WHERE e.board_id=? ORDER BY u.name',
+      )
+      .all(id);
+  }
+  listSharedBoards(userId: string) {
+    return this.sqlite
+      .prepare(
+        'SELECT b.id,b.title,b.revision,b.updated_at AS updatedAt,u.name AS ownerName FROM board_editors e JOIN boards_v2 b ON b.id=e.board_id JOIN users u ON u.id=b.owner_id WHERE e.user_id=? AND b.archived=0 ORDER BY b.updated_at DESC',
+      )
+      .all(userId);
+  }
+  setEditor(id: string, ownerId: string, email: string, enabled: boolean, revision: number) {
+    return this.sqlite.transaction(() => {
+      const board = this.getBoard(id);
+      if (!board || board.ownerId !== ownerId) return 'missing';
+      if (board.revision !== revision) return 'conflict';
+      const user = this.findUserByEmail(email);
+      if (!user || user.id === ownerId) return 'account';
+      if (enabled)
+        this.sqlite.prepare('INSERT OR IGNORE INTO board_editors VALUES(?,?)').run(id, user.id);
+      else
+        this.sqlite
+          .prepare('DELETE FROM board_editors WHERE board_id=? AND user_id=?')
+          .run(id, user.id);
+      return 'saved';
     })();
   }
 

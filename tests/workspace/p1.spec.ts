@@ -213,10 +213,10 @@ test('model suggestions require consent and settings fit a narrow screen', async
   await page.getByRole('button', { name: 'Apply suggested model and effort' }).click();
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('sonnet');
   await expect(page.getByLabel('Reasoning effort')).toHaveValue('medium');
-  await page.goto('/settings');
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/settings');
   await expect(page.getByRole('region', { name: 'Agents and models' })).toBeVisible();
-  await page.getByRole('button', { name: 'Hide sidebar' }).click();
+  await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );

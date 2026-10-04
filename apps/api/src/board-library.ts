@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  BoardCollaboratorRequestSchema,
   BoardSnapshotSchema,
   createEmptyBoard,
   recordBoardEdit,
@@ -17,9 +18,8 @@ import type { ApiStore, User } from './storage.js';
 import { requireUser } from './auth.js';
 
 /**
- * Each account's boards. Owners read and write their own; a public board can be read (never
- * written) by any signed-in account, which is how friends share canvases. A private board
- * someone else owns answers 404, so its existence is not revealed.
+ * Owners manage boards and may invite named editors. Public visibility grants only
+ * read access to signed-in accounts. Uninvited private boards answer 404.
  */
 export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
   const idSchema = BoardIdSchema;
@@ -28,7 +28,8 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
   const readable = (id: string, user: User) => {
     const board = store.getBoard(id);
     return board &&
-      (board.ownerId === user.id || (board.visibility === 'public' && !board.archived))
+      (board.ownerId === user.id ||
+        (!board.archived && (board.visibility === 'public' || store.isEditor(id, user.id))))
       ? board
       : null;
   };
@@ -38,13 +39,51 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     snapshot: board.snapshot,
     visibility: board.visibility,
     archived: board.archived,
-    access: board.ownerId === user.id ? ('owner' as const) : ('viewer' as const),
+    access:
+      board.ownerId === user.id
+        ? ('owner' as const)
+        : !board.archived && store.isEditor(board.id, user.id)
+          ? ('editor' as const)
+          : ('viewer' as const),
     owner: { name: board.ownerName ?? 'Unknown' },
   });
 
   app.get('/v1/boards', async (request, reply) => {
     const user = requireUser(request, reply);
     return user ? store.listBoards(user.id, true) : reply;
+  });
+  app.get('/v1/boards/shared', async (request, reply) => {
+    const user = requireUser(request, reply);
+    return user ? store.listSharedBoards(user.id) : reply;
+  });
+  app.get('/v1/boards/:id/editors', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    if (!params.success || store.getBoard(params.data.id)?.ownerId !== user.id)
+      return notFound(reply);
+    return store.listEditors(params.data.id);
+  });
+  app.put('/v1/boards/:id/editors', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    const body = BoardCollaboratorRequestSchema.safeParse(request.body);
+    if (!params.success || !body.success)
+      return reply.code(400).send({ message: 'Invalid editor settings.' });
+    const result = store.setEditor(
+      params.data.id,
+      user.id,
+      body.data.email,
+      body.data.enabled,
+      body.data.revision,
+    );
+    if (result === 'missing') return notFound(reply);
+    if (result === 'conflict')
+      return reply.code(409).send({ message: 'Board changed. Refresh and retry.' });
+    if (result === 'account')
+      return reply.code(400).send({ message: 'Choose another existing account on this server.' });
+    return store.listEditors(params.data.id);
   });
   app.get('/v1/boards/:id/revisions', async (request, reply) => {
     const user = requireUser(request, reply);

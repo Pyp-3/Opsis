@@ -1,3 +1,4 @@
+import { arrangeGraph } from './layout-engine';
 import {
   BoardDocumentSchema,
   type BoardDocument,
@@ -20,9 +21,7 @@ export async function layoutBoard(
   preservePositions: 'all' | 'pinned' = 'all',
 ): Promise<BoardDocument> {
   graph = await populateProcess(graph);
-  const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
-  const elk = new ELK();
-  const result = await elk.layout({
+  const result = await arrangeGraph({
     id: 'board',
     layoutOptions: {
       'elk.algorithm': 'layered',
@@ -146,8 +145,13 @@ export async function layoutBoard(
   // and a custom icon an agent left out while keeping the same fallback.
   const nodes = graph.nodes.map((node) => {
     const before = previous?.nodes.find((item) => item.id === node.id);
-    if (!before || before.icon !== node.icon) return node;
-    const kept = { ...node };
+    if (!before) return node;
+    const kept = {
+      ...node,
+      ...(before.notes !== undefined && node.notes === undefined ? { notes: before.notes } : {}),
+      ...(before.references && !node.references ? { references: before.references } : {}),
+    };
+    if (before.icon !== node.icon) return kept;
     if (before.customIcon && !node.customIcon) kept.customIcon = before.customIcon;
     if (before.illustration && !node.illustration) kept.illustration = before.illustration;
     return kept;
@@ -160,6 +164,14 @@ export async function layoutBoard(
     agent,
     positions,
     edgePorts,
+    ...(previous?.groups
+      ? {
+          groups: previous.groups.map((group) => ({
+            ...group,
+            nodeIds: group.nodeIds.filter((id) => nodes.some((node) => node.id === id)),
+          })),
+        }
+      : {}),
     ...(previous?.pinnedNodeIds
       ? {
           pinnedNodeIds: previous.pinnedNodeIds.filter((id) =>

@@ -222,6 +222,7 @@ test('edits, icon changes, deletion and all export formats round trip without lo
       await page
         .locator('input[type="file"]')
         .setInputFiles({ name: 'roundtrip.json', mimeType: 'application/json', buffer: bytes });
+      await page.getByRole('button', { name: 'Import as new board', exact: true }).click();
       await expect.poll(async () => (await snapshot(page)).board).toEqual(exported);
     }
   }
@@ -238,7 +239,7 @@ test('invalid imports and generation errors preserve the board; cancellation ign
     mimeType: 'application/json',
     buffer: Buffer.from('{broken'),
   });
-  await expect(page.getByRole('alert')).toContainText('could not be imported');
+  await expect(page.getByRole('alert')).toContainText('Could not import');
   expect((await snapshot(page)).board).toEqual(before);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'too-large.json',

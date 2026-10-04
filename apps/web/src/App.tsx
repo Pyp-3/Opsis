@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Workspace } from './workspace/Workspace';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+const Workspace = lazy(() =>
+  import('./workspace/Workspace').then((module) => ({ default: module.Workspace })),
+);
+import './workspace/styles/foundation.css';
 import { BrandMark } from './workspace/BrandMark';
 import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
 import { AuthPage } from './auth/AuthPage';
@@ -70,15 +73,23 @@ export function App() {
       />
     );
   return (
-    <Workspace
-      // A different account starts from a clean workspace.
-      key={session.user.id}
-      user={session.user}
-      onSignOut={async () => {
-        await logOut();
-        setSession({ status: 'out' });
-        navigate('/login', true);
-      }}
-    />
+    <Suspense
+      fallback={
+        <div className="auth-splash" role="status">
+          Loading workspace…
+        </div>
+      }
+    >
+      <Workspace
+        // A different account starts from a clean workspace.
+        key={session.user.id}
+        user={session.user}
+        onSignOut={async () => {
+          await logOut();
+          setSession({ status: 'out' });
+          navigate('/login', true);
+        }}
+      />
+    </Suspense>
   );
 }

@@ -301,6 +301,14 @@ export function writeDiagram(snapshot: BoardSnapshot, input: DiagramInput) {
     description: input.description,
     nodes: withoutBrokenProcesses(nodes),
     edges: [],
+    ...(before.groups
+      ? {
+          groups: before.groups.map((group) => ({
+            ...group,
+            nodeIds: group.nodeIds.filter((id) => nodes.some((node) => node.id === id)),
+          })),
+        }
+      : {}),
     ...(before.pinnedNodeIds
       ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => nodes.some((node) => node.id === id)) }
       : {}),

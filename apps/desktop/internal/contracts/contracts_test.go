@@ -40,3 +40,20 @@ func TestSharedContractsValidateAndBoundHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestConceptSourceLinksUsePortableValidation(t *testing.T) {
+	c, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, link := range []string{"https://example.com/reference", "http://localhost:8100/source?q=1#section"} {
+		board := map[string]any{"version": 2, "agent": "demo", "title": "Sources", "description": "", "positions": map[string]any{}, "nodes": []any{map[string]any{"id": "source", "label": "Source", "icon": "file", "explanation": "Source document", "summary": "Source document", "kind": "note", "references": []any{map[string]any{"title": "Reference", "url": link}}}}, "edges": []any{}}
+		if _, err := c.Apply("board", board); err != nil {
+			t.Fatalf("valid source %q rejected: %v", link, err)
+		}
+		board["nodes"].([]any)[0].(map[string]any)["references"] = []any{map[string]any{"title": "Unsafe", "url": "javascript:alert(1)"}}
+		if _, err := c.Apply("board", board); err == nil {
+			t.Fatal("non-HTTP source accepted")
+		}
+	}
+}

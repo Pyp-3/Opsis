@@ -1753,3 +1753,74 @@
   background: var(--accent);
   color: var(--accent-fg);
 }
+
+.import-preview {
+  padding: 20px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.import-preview ul {
+  max-height: 30vh;
+  overflow: auto;
+}
+.board-comparison {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--bp-line);
+}
+.board-comparison fieldset {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 100%;
+}
+.board-comparison label {
+  display: grid;
+  gap: 5px;
+}
+.board-comparison select,
+.board-comparison input {
+  max-width: 100%;
+}
+.comparison-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.comparison-values pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+}
+@media (max-width: 600px) {
+  .comparison-values {
+    grid-template-columns: 1fr;
+  }
+}
+
+.board-sharing {
+  padding: 8px 18px;
+  max-height: 28vh;
+  overflow: auto;
+}
+.board-sharing label {
+  display: inline-grid;
+  gap: 5px;
+  margin-right: 10px;
+}
+.streamed-preview {
+  padding: 12px 18px;
+  max-height: 35vh;
+  overflow: auto;
+}
+.streamed-preview > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.streamed-preview article {
+  padding: 12px;
+  border: 1px solid var(--bp-line);
+  width: 220px;
+}

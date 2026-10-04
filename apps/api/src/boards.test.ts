@@ -414,11 +414,13 @@ describe('2D board API', () => {
       payload: { agent: 'claude', prompt: 'Explain email' },
     });
     expect(reply.headers['content-type']).toContain('application/x-ndjson');
+    expect(reply.headers['cache-control']).toBe('no-store');
     const events = reply.body
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line));
-    expect(events[0]).toEqual({
+    expect(events[0]).toEqual({ type: 'progress', progress: { type: 'preview-reset' } });
+    expect(events[1]).toEqual({
       type: 'progress',
       progress: { type: 'note', text: 'Tracing the email to its inbox', done: true },
     });

@@ -1,4 +1,5 @@
 import {
+  BoardCollaboratorRequestSchema,
   BoardIdSchema,
   BoardCreateRequestSchema,
   BoardUpdateRequestSchema,
@@ -18,6 +19,7 @@ import { z } from 'zod';
 import { PERSISTENCE_MIGRATIONS } from '../api/src/persistence/migrations';
 
 const parsers = {
+  editor: BoardCollaboratorRequestSchema,
   id: BoardIdSchema,
   create: BoardCreateRequestSchema,
   update: BoardUpdateRequestSchema,

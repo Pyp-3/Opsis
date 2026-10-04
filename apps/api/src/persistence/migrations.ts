@@ -20,4 +20,16 @@ export const PERSISTENCE_MIGRATIONS = [
       END;
     `,
   },
+  {
+    version: 2,
+    name: 'named-board-editors',
+    sql: `
+    CREATE TABLE board_editors (
+      board_id TEXT NOT NULL REFERENCES boards_v2(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY(board_id,user_id)
+    );
+    CREATE INDEX board_editors_user ON board_editors(user_id);
+  `,
+  },
 ] as const;

@@ -48,3 +48,12 @@ export const TemplateCreateRequestSchema = z
     revision: z.number().int().positive(),
   })
   .strict();
+
+/** Owners explicitly grant/revoke editing to an existing account on this server. */
+export const BoardCollaboratorRequestSchema = z
+  .object({
+    email: z.string().trim().email().max(254),
+    enabled: z.boolean(),
+    revision: z.number().int().positive(),
+  })
+  .strict();

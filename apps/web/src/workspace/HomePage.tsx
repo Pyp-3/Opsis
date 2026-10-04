@@ -8,7 +8,13 @@ import {
   Globe,
   Sparkles,
 } from 'lucide-react';
-import { DNS_DEMO, EMAIL_DEMO, type BoardDocument, type BoardGraph } from '@opsis/schema';
+import {
+  DNS_DEMO,
+  EMAIL_DEMO,
+  PROCESS_EXAMPLES,
+  type BoardDocument,
+  type BoardGraph,
+} from '@opsis/schema';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { BrandMark } from './BrandMark';
 import { HomeBackdrop } from './HomeBackdrop';
@@ -20,6 +26,7 @@ import { navigate } from '../router';
 const EXAMPLES = [
   { title: 'An email’s journey', graph: EMAIL_DEMO },
   { title: 'DNS lookups', graph: DNS_DEMO },
+  ...PROCESS_EXAMPLES.map((graph) => ({ title: graph.title, graph })),
 ] as const;
 
 const QUESTIONS = [
