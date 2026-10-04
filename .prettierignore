@@ -6,3 +6,4 @@ PROMPT.md
 skills/
 .playwright-cli/
 target/
+.claude/settings.local.json

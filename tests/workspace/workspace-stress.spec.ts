@@ -13,8 +13,7 @@ const snapshot = (page: Page) =>
         )!,
       ).snapshot,
   );
-const saved = (page: Page) =>
-  expect(page.getByText('Saved to SQLite', { exact: true })).toBeVisible();
+const saved = (page: Page) => expect(page.locator('.save-status')).toHaveText('Saved');
 async function endpoints(page: Page) {
   const gaps = await page.evaluate(async () => {
     // Objects animate into place (after a reload, for example); measuring mid-entrance
@@ -201,19 +200,22 @@ test('edits, icon changes, deletion and all export formats round trip without lo
     label: 'Edited sender',
     icon: 'cloud',
   });
-  for (const name of [
-    'Editable board .json · import it again later',
-    'Diagram image .svg · for slides and documents',
-    'Markdown notes',
-    'PNG image',
-  ]) {
+  for (const [name, extension] of [
+    ['Editable board .json · import it again later', 'json'],
+    ['Vector image .svg · scales losslessly for slides', 'svg'],
+    ['Markdown notes .md · every concept and path as text', 'md'],
+    ['PNG image .png · full diagram, crisp, transparent-safe', 'png'],
+    ['JPEG image .jpg · full diagram, smaller file for email', 'jpg'],
+  ] as const) {
     await page.locator('.export-menu summary').click();
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name, exact: true }).click();
     const download = await pending;
     expect(await download.failure()).toBeNull();
+    expect(download.suggestedFilename()).toMatch(new RegExp(`\\.${extension}$`));
     const bytes = await readFile((await download.path())!);
     expect(bytes.length).toBeGreaterThan(50);
+    if (extension === 'jpg') expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     if (name.startsWith('Editable board')) {
       const exported = JSON.parse(bytes.toString());
       expect(exported).toEqual((await snapshot(page)).board);

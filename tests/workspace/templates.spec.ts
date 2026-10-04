@@ -25,6 +25,12 @@ test('saves a named template, reuses it after reload, and deletes it without del
   await expect(page.locator('.react-flow__node')).toHaveCount(sourceNodes);
   await page.getByRole('link', { name: 'Manage boards' }).click();
   await page.getByRole('tab', { name: 'Templates', exact: true }).click();
+  // Measure the settled panel: its entrance fade temporarily lowers text contrast.
+  await expect(page.getByRole('main')).toHaveCSS('opacity', '1');
+  await expect(page.getByRole('region', { name: 'Templates', exact: true })).toHaveCSS(
+    'opacity',
+    '1',
+  );
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);

@@ -20,12 +20,12 @@ test('keeps named boards and undo history after reload, exports and walks throug
   page,
 }) => {
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.getByText('Saved to SQLite')).toBeVisible();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
   const title = `Email ${Date.now()}`;
   await page.getByLabel('Board name').fill(title);
   await page.getByLabel('Board name').press('Tab');
   await expect(page.getByRole('heading', { name: title, exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Saved to SQLite')).toBeVisible();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
   await page.reload();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByLabel('Board name')).toHaveValue(EMAIL_DEMO.title);
@@ -48,7 +48,10 @@ test('keeps named boards and undo history after reload, exports and walks throug
   await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(3);
   await page.getByRole('button', { name: 'Close player' }).click();
   await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(0);
-  for (const name of ['Markdown notes', 'PNG image']) {
+  for (const name of [
+    'Markdown notes .md · every concept and path as text',
+    'PNG image .png · full diagram, crisp, transparent-safe',
+  ]) {
     await page.locator('.export-menu summary').click();
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name, exact: true }).click();
@@ -154,7 +157,7 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   // Reading mode intentionally keeps distant nodes offscreen at a legible zoom.
   // Use the explicit overview for this whole-graph connection-editing scenario.
-  await expect(page.getByText('Saved to SQLite')).toBeVisible();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
   await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
   await page.waitForTimeout(400); // The overview transition lasts 300ms.
   const port = (node: string, side: string) =>
@@ -204,7 +207,7 @@ test('reuses ports for branches and keeps arrows attached while dragging', async
   await expect(edge).not.toHaveAttribute('d', before!);
   await page.mouse.up();
   await expectAttached();
-  await expect(page.getByText('Saved to SQLite')).toBeVisible();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
   await page.reload();
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
 });

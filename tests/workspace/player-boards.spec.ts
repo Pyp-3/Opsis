@@ -13,8 +13,7 @@ const snapshot = (page: Page) =>
         )!,
       ).snapshot,
   );
-const saved = (page: Page) =>
-  expect(page.getByText('Saved to SQLite', { exact: true })).toBeVisible();
+const saved = (page: Page) => expect(page.locator('.save-status')).toHaveText('Saved');
 
 test.beforeEach(async ({ page }) => {
   await signUp(page);

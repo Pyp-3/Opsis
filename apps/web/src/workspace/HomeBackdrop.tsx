@@ -129,7 +129,10 @@ export function HomeBackdrop() {
       const gx = Math.max(2, Math.floor(cols / PITCH));
       const gy = Math.max(2, Math.floor(rows / PITCH));
       const anchor = (i: number, j: number): Pt => {
-        const base = { x: Math.round(((i + 0.5) / gx) * cols), y: Math.round(((j + 0.5) / gy) * rows) };
+        const base = {
+          x: Math.round(((i + 0.5) / gx) * cols),
+          y: Math.round(((j + 0.5) / gy) * rows),
+        };
         const jx = Math.round((Math.random() - 0.5) * (PITCH - 3));
         const jy = Math.round((Math.random() - 0.5) * (PITCH - 3));
         return {
@@ -172,7 +175,11 @@ export function HomeBackdrop() {
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           if (masks[idx(x, y)]) continue;
-          octx.fillText(x % 4 === 0 && y % 4 === 0 ? '+' : '·', x * CELL + CELL / 2, y * CELL + CELL / 2);
+          octx.fillText(
+            x % 4 === 0 && y % 4 === 0 ? '+' : '·',
+            x * CELL + CELL / 2,
+            y * CELL + CELL / 2,
+          );
         }
       }
       // Traces and nodes.
@@ -297,7 +304,13 @@ function withAlpha(color: string, alpha: number): string {
   const c = color.trim();
   if (c.startsWith('#')) {
     const hex = c.slice(1);
-    const full = hex.length === 3 ? hex.split('').map((h) => h + h).join('') : hex;
+    const full =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((h) => h + h)
+            .join('')
+        : hex;
     const n = parseInt(full, 16);
     const r = (n >> 16) & 255;
     const g = (n >> 8) & 255;
@@ -305,7 +318,11 @@ function withAlpha(color: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
   if (c.startsWith('rgb')) {
-    const nums = c.replace(/rgba?\(|\)/g, '').split(',').slice(0, 3).map((v) => v.trim());
+    const nums = c
+      .replace(/rgba?\(|\)/g, '')
+      .split(',')
+      .slice(0, 3)
+      .map((v) => v.trim());
     return `rgba(${nums.join(', ')}, ${alpha})`;
   }
   return c;

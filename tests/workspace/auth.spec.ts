@@ -60,7 +60,7 @@ test('friends share public canvases read-only and can save their own copy', asyn
   const bob = await person(browser, 'Bob');
   try {
     await ada.page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-    await expect(ada.page.getByText('Saved to SQLite')).toBeVisible();
+    await expect(ada.page.locator('.save-status')).toHaveText('Saved');
     const id = await ada.page.evaluate(async () => {
       const list = (await (await fetch('/v1/boards')).json()) as { id: string }[];
       return list[0]!.id;
@@ -102,7 +102,7 @@ test('friends share public canvases read-only and can save their own copy', asyn
     await expect(bob.page.getByLabel('What would you like to understand?')).toBeVisible();
     await bob.page.getByLabel('Board name').fill('Bob’s mail notes');
     await bob.page.getByLabel('Board name').press('Tab');
-    await expect(bob.page.getByText('Saved to SQLite')).toBeVisible();
+    await expect(bob.page.locator('.save-status')).toHaveText('Saved');
     // The copy is Bob's; Ada's original is untouched.
     const titles = await ada.page.evaluate(async () =>
       ((await (await fetch('/v1/boards')).json()) as { title: string }[]).map((b) => b.title),
