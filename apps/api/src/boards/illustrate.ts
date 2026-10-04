@@ -5,7 +5,7 @@ import {
   DEFAULT_BOARD_MODELS,
   illustrateOutputSchema,
 } from '@opsis/schema';
-import { HarnessError } from '../harness/index.js';
+import { HarnessError } from '../harness/errors.js';
 import type { BoardClientFactory } from './client.js';
 import { ILLUSTRATE_SYSTEM, DRAWING_NOTES, progressNotes } from './prompts.js';
 import { envelopeRepairPrompt, agentLabel, acceptIllustrations } from './results.js';

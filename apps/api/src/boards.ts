@@ -3,6 +3,7 @@ import { localBoardClient, type BoardClientFactory } from './boards/client.js';
 import { generateBoard } from './boards/generate.js';
 import { illustrateBoard } from './boards/illustrate.js';
 import { respond } from './boards/transport.js';
+import { prepareAttachments } from './attachments.js';
 
 export { localBoardClient, type BoardClient, type BoardClientFactory } from './boards/client.js';
 
@@ -45,7 +46,9 @@ export function registerBoardRoutes(
   });
 
   app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, (request, reply) =>
-    respond(request, reply, (context) => generateBoard(request.body, factory, context)),
+    respond(request, reply, (context) =>
+      generateBoard(request.body, factory, context, prepareAttachments),
+    ),
   );
   app.post('/v1/boards/illustrate', { bodyLimit: 4_000_000 }, (request, reply) =>
     respond(request, reply, (context) => illustrateBoard(request.body, factory, context)),

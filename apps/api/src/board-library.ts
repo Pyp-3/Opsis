@@ -1,11 +1,18 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { z } from 'zod';
-import { BoardSnapshotSchema, createEmptyBoard, recordBoardEdit } from '@opsis/schema';
+import {
+  BoardSnapshotSchema,
+  createEmptyBoard,
+  recordBoardEdit,
+  BoardIdSchema,
+  BoardCreateRequestSchema,
+  BoardUpdateRequestSchema,
+  BoardDeleteRequestSchema,
+  BoardSaveRequestSchema,
+  TemplateCreateRequestSchema,
+} from '@opsis/schema';
 import { randomUUID } from 'node:crypto';
 import type { ApiStore, User } from './storage.js';
 import { requireUser } from './auth.js';
-
-const VisibilitySchema = z.enum(['private', 'public']);
 
 /**
  * Each account's boards. Owners read and write their own; a public board can be read (never
@@ -13,7 +20,7 @@ const VisibilitySchema = z.enum(['private', 'public']);
  * someone else owns answers 404, so its existence is not revealed.
  */
 export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
-  const idSchema = z.object({ id: z.string().uuid() });
+  const idSchema = BoardIdSchema;
   const notFound = (reply: FastifyReply) => reply.code(404).send({ message: 'Board not found.' });
   /** The board, if `user` may read it. */
   const readable = (id: string, user: User) => {
@@ -40,14 +47,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
   app.post('/v1/templates', async (request, reply) => {
     const user = requireUser(request, reply);
     if (!user) return reply;
-    const body = z
-      .object({
-        title: z.string().trim().min(1).max(100),
-        boardId: z.string().uuid(),
-        revision: z.number().int().positive(),
-      })
-      .strict()
-      .safeParse(request.body);
+    const body = TemplateCreateRequestSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ message: 'Invalid template name or source board.' });
     const source = store.getBoard(body.data.boardId);
@@ -80,13 +80,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
   app.post('/v1/boards', async (request, reply) => {
     const user = requireUser(request, reply);
     if (!user) return reply;
-    const body = z
-      .object({
-        title: z.string().trim().min(1).max(100),
-        templateId: z.string().uuid().optional(),
-      })
-      .strict()
-      .safeParse(request.body);
+    const body = BoardCreateRequestSchema.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ message: 'Enter a board name (1–100 characters).' });
     const id = randomUUID();
@@ -107,14 +101,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     if (!user) return reply;
     const params = idSchema.safeParse(request.params);
-    const body = z
-      .object({
-        title: z.string().trim().min(1).max(100).optional(),
-        visibility: VisibilitySchema.optional(),
-        revision: z.number().int().positive(),
-      })
-      .strict()
-      .safeParse(request.body);
+    const body = BoardUpdateRequestSchema.safeParse(request.body);
     if (!params.success || !body.success)
       return reply.code(400).send({ message: 'Invalid board name or revision.' });
     const current = store.getBoard(params.data.id);
@@ -140,10 +127,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     if (!user) return reply;
     const params = idSchema.safeParse(request.params);
-    const body = z
-      .object({ revision: z.number().int().positive() })
-      .strict()
-      .safeParse(request.body);
+    const body = BoardDeleteRequestSchema.safeParse(request.body);
     if (!params.success || !body.success)
       return reply.code(400).send({ message: 'Invalid board ID or revision.' });
     if (store.getBoard(params.data.id)?.ownerId !== user.id) return notFound(reply);
@@ -167,10 +151,7 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     if (!user) return reply;
     const params = idSchema.safeParse(request.params);
-    const body = z
-      .object({ snapshot: BoardSnapshotSchema, revision: z.number().int().nonnegative() })
-      .strict()
-      .safeParse(request.body);
+    const body = BoardSaveRequestSchema.safeParse(request.body);
     if (!params.success || !body.success)
       return reply.code(400).send({ message: 'Invalid saved board.' });
     const result = store.saveBoard(params.data.id, body.data.snapshot, body.data.revision, user.id);

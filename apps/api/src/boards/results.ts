@@ -4,7 +4,7 @@ import {
   type BoardAgent,
   type Illustration,
 } from '@opsis/schema';
-import { HarnessError } from '../harness/index.js';
+import { HarnessError } from '../harness/errors.js';
 
 /** Only a malformed answer is repairable; provider failures retain their original handling. */
 export function envelopeRepairPrompt(error: unknown, attempt: number): string {

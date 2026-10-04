@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ApiStore, User } from './storage.js';
+import { SignUpSchema, LogInSchema, AgentKeyNameSchema } from './auth-contract.js';
 
 const scryptAsync = promisify(scrypt) as (
   password: string,
@@ -78,19 +79,6 @@ export function isInternalRequest(request: FastifyRequest) {
     !headers.forwarded
   );
 }
-
-const EmailSchema = z.string().trim().toLowerCase().email().max(254);
-const SignUpSchema = z
-  .object({
-    name: z.string().trim().min(1, 'Tell us your name.').max(60),
-    email: EmailSchema,
-    password: z
-      .string()
-      .min(8, 'Use at least 8 characters.')
-      .max(200, 'Use at most 200 characters.'),
-  })
-  .strict();
-const LogInSchema = z.object({ email: EmailSchema, password: z.string().min(1).max(200) }).strict();
 
 /** Same work whether or not the email exists, so timing does not reveal accounts. */
 const DUMMY_HASH = hashPassword(randomUUID());
@@ -180,10 +168,7 @@ export function registerAuth(app: FastifyInstance, store: ApiStore) {
   app.post('/v1/auth/agent-keys', async (request, reply) => {
     const user = sessionOnly(request, reply);
     if (!user) return reply;
-    const body = z
-      .object({ name: z.string().trim().min(1).max(60) })
-      .strict()
-      .safeParse(request.body);
+    const body = AgentKeyNameSchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ message: 'Name the key (1–60 characters).' });
     const key = `${AGENT_KEY_PREFIX}${randomBytes(24).toString('base64url')}`;
     const id = randomUUID();

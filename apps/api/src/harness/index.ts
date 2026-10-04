@@ -2,6 +2,7 @@ import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HarnessError } from './errors.js';
+import { parseVersion } from './version.js';
 import { readHarnessConfig } from './config.js';
 import {
   HarnessLLMClient,
@@ -17,18 +18,6 @@ const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
   codex: ['/usr/bin/codex'],
   agy: ['/home/pyp/.local/bin/agy'],
 };
-
-const VERSION_PATTERNS: Record<HarnessProvider, RegExp> = {
-  claude: /(?:^|\s)2\.1\.\d+(?:\s|$)/u,
-  codex: /(?:^|\s)0\.(?:156|157|159)\.\d+(?:\s|$)/u,
-  agy: /(?:^|\s)1\.2\.\d+(?:\s|$)/u,
-};
-
-function parseVersion(provider: HarnessProvider, output: string): string {
-  const match = VERSION_PATTERNS[provider].exec(output);
-  if (!match) throw new HarnessError('harness_config');
-  return match[0].trim();
-}
 
 export type CreateHarnessOptions = {
   resultSchema?: string;

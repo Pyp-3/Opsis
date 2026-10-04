@@ -9,8 +9,12 @@ import {
   type BoardGraph,
 } from '@opsis/schema';
 import type { LLMRequest } from '../harness/types.js';
-import { HarnessError } from '../harness/index.js';
-import { AttachmentError, attachmentInstructions, prepareAttachments } from '../attachments.js';
+import { HarnessError } from '../harness/errors.js';
+import {
+  AttachmentError,
+  attachmentInstructions,
+  type AttachmentPreparer,
+} from '../attachment-contract.js';
 import type { BoardClientFactory } from './client.js';
 import { SYSTEM, DIAGRAM_NOTES, progressNotes } from './prompts.js';
 import { envelopeRepairPrompt, agentLabel, withoutInvalidCustomIcons } from './results.js';
@@ -20,6 +24,7 @@ export async function generateBoard(
   body: unknown,
   factory: BoardClientFactory,
   { signal, progress }: Parameters<AgentWork>[0],
+  prepareAttachments: AttachmentPreparer,
 ): Promise<Outcome> {
   const parsed = BoardRequestSchema.safeParse(body);
   if (!parsed.success)

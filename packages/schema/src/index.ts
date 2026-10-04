@@ -2,6 +2,7 @@ export * from './legacy-osg';
 export * from './errors';
 export * from './board';
 export * from './board-operations';
+export * from './board-requests';
 export * from './illustration';
 export * from './demo-illustrations';
 export * from './dns-demo';
