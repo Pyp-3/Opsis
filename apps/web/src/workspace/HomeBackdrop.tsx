@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * The landing backdrop: the Opsis eye drawn in monospace grid characters, with light pulses
- * that trace along the grid lines and around the eye's lids. The static field (grid + eye) is
- * painted once to an offscreen canvas and blitted each frame; only the tracers animate, so the
- * whole thing stays cheap. Honours prefers-reduced-motion by drawing a single still frame.
+ * The landing backdrop: a circuit of orthogonal traces with right-angle bends and junction nodes,
+ * laid on a faint grid, with light pulses that flow along the traces and flare each node they reach.
+ * It echoes what Opsis draws — concepts wired together — without depicting anything literal.
  *
- * Colours are read from the live theme (CSS custom properties) so it follows light/dark.
+ * The grid and traces are painted once to an offscreen canvas and blitted each frame; only the
+ * pulses animate, so the whole thing stays cheap. Colours follow the live theme, and
+ * prefers-reduced-motion gets a single still frame with no animation loop.
  */
 export function HomeBackdrop() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,11 +19,13 @@ export function HomeBackdrop() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const CELL = 15; // px per character cell
-    const FONT = `12px ${getComputedStyle(document.body).getPropertyValue('--font-mono') ||
-      'ui-monospace, SFMono-Regular, Menlo, monospace'}`;
+    const CELL = 16; // px per character cell
+    const PITCH = 7; // lattice spacing (in cells) between candidate nodes
+    const FONT = `12px ${
+      getComputedStyle(document.body).getPropertyValue('--font-mono') ||
+      'ui-monospace, SFMono-Regular, Menlo, monospace'
+    }`;
 
-    // Theme colours, resolved to concrete values for canvas fillStyle.
     const read = (name: string, fallback: string) =>
       getComputedStyle(document.body).getPropertyValue(name).trim() || fallback;
     let ink = read('--ink', '#1f2d27');
@@ -38,70 +41,123 @@ export function HomeBackdrop() {
     const offscreen = document.createElement('canvas');
     const octx = offscreen.getContext('2d')!;
 
-    // The eye bounding box in grid cells, centred, recomputed on resize.
-    let eye = { cx: 0, cy: 0, rx: 0, ry: 0 };
+    // Direction bits for a trace cell: which neighbours it links to.
+    const U = 1;
+    const D = 2;
+    const L = 4;
+    const R = 8;
+    const GLYPH: Record<number, string> = {
+      [L | R]: '─',
+      [U | D]: '│',
+      [D | R]: '┌',
+      [D | L]: '┐',
+      [U | R]: '└',
+      [U | L]: '┘',
+      [U | D | R]: '├',
+      [U | D | L]: '┤',
+      [D | L | R]: '┬',
+      [U | L | R]: '┴',
+      [U | D | L | R]: '┼',
+      [U]: '╵',
+      [D]: '╷',
+      [L]: '╴',
+      [R]: '╶',
+    };
+    const glyphOf = (mask: number) => GLYPH[mask] ?? '·';
 
-    /** Pick a line glyph from a slope angle (radians), using light box-drawing characters. */
-    const slopeGlyph = (angle: number) => {
-      const a = ((angle % Math.PI) + Math.PI) % Math.PI; // 0..π
-      if (a < Math.PI / 8 || a > (7 * Math.PI) / 8) return '─';
-      if (a < (3 * Math.PI) / 8) return '╱';
-      if (a < (5 * Math.PI) / 8) return '│';
-      return '╲';
+    type Pt = { x: number; y: number };
+    let masks!: Int8Array; // connection bitmask per cell
+    let nodes!: Uint8Array; // 1 where a junction node sits
+    let paths: Pt[][] = []; // ordered cell routes, for pulses to follow
+    const idx = (x: number, y: number) => y * cols + x;
+    const inBounds = (x: number, y: number) => x >= 0 && x < cols && y >= 0 && y < rows;
+
+    const addBits = (i: number, bits: number) => {
+      masks[i] = (masks[i]! | bits) as number;
+    };
+    const link = (a: Pt, b: Pt) => {
+      // Set the mutual direction bits between two orthogonally adjacent cells.
+      if (!inBounds(a.x, a.y) || !inBounds(b.x, b.y)) return;
+      const ia = idx(a.x, a.y);
+      const ib = idx(b.x, b.y);
+      if (b.x === a.x + 1) {
+        addBits(ia, R);
+        addBits(ib, L);
+      } else if (b.x === a.x - 1) {
+        addBits(ia, L);
+        addBits(ib, R);
+      } else if (b.y === a.y + 1) {
+        addBits(ia, D);
+        addBits(ib, U);
+      } else if (b.y === a.y - 1) {
+        addBits(ia, U);
+        addBits(ib, D);
+      }
     };
 
-    type Cell = { ch: string; eye: boolean };
-    let field: Cell[] = [];
-    const at = (c: number, r: number) => field[r * cols + c];
+    /** Walk a straight run of cells from a to b (must share a row or column). */
+    const run = (a: Pt, b: Pt): Pt[] => {
+      const cells: Pt[] = [];
+      const sx = Math.sign(b.x - a.x);
+      const sy = Math.sign(b.y - a.y);
+      let { x, y } = a;
+      cells.push({ x, y });
+      while (x !== b.x || y !== b.y) {
+        x += sx;
+        y += sy;
+        cells.push({ x, y });
+      }
+      return cells;
+    };
 
-    const buildField = () => {
-      field = new Array(cols * rows);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          // Faint grid: a dot everywhere, a cross at every 4th intersection.
-          const cross = c % 4 === 0 && r % 4 === 0;
-          field[r * cols + c] = { ch: cross ? '+' : '·', eye: false };
+    /** An L-shaped route from a to b: along one axis, a right-angle bend, then the other. */
+    const route = (a: Pt, b: Pt): Pt[] => {
+      const corner: Pt = Math.random() < 0.5 ? { x: b.x, y: a.y } : { x: a.x, y: b.y };
+      const first = run(a, corner);
+      const second = run(corner, b);
+      const cells = first.concat(second.slice(1));
+      for (let i = 0; i + 1 < cells.length; i++) link(cells[i]!, cells[i + 1]!);
+      return cells;
+    };
+
+    const build = () => {
+      masks = new Int8Array(cols * rows);
+      nodes = new Uint8Array(cols * rows);
+      paths = [];
+
+      // Jittered lattice of candidate nodes, then wire some neighbours with L-routes.
+      const gx = Math.max(2, Math.floor(cols / PITCH));
+      const gy = Math.max(2, Math.floor(rows / PITCH));
+      const anchor = (i: number, j: number): Pt => {
+        const base = { x: Math.round(((i + 0.5) / gx) * cols), y: Math.round(((j + 0.5) / gy) * rows) };
+        const jx = Math.round((Math.random() - 0.5) * (PITCH - 3));
+        const jy = Math.round((Math.random() - 0.5) * (PITCH - 3));
+        return {
+          x: Math.min(cols - 1, Math.max(0, base.x + jx)),
+          y: Math.min(rows - 1, Math.max(0, base.y + jy)),
+        };
+      };
+      const grid: Pt[][] = [];
+      for (let i = 0; i < gx; i++) {
+        grid[i] = [];
+        for (let j = 0; j < gy; j++) grid[i]![j] = anchor(i, j);
+      }
+
+      const connect = (a: Pt, b: Pt) => {
+        const cells = route(a, b);
+        if (cells.length > 1) {
+          paths.push(cells);
+          nodes[idx(a.x, a.y)] = 1;
+          nodes[idx(b.x, b.y)] = 1;
+        }
+      };
+      for (let i = 0; i < gx; i++) {
+        for (let j = 0; j < gy; j++) {
+          const a = grid[i]![j]!;
+          if (i + 1 < gx && Math.random() < 0.72) connect(a, grid[i + 1]![j]!);
+          if (j + 1 < gy && Math.random() < 0.52) connect(a, grid[i]![j + 1]!);
         }
       }
-
-      eye.cx = (cols - 1) / 2;
-      eye.cy = (rows - 1) / 2;
-      eye.rx = Math.min(cols * 0.32, 26);
-      eye.ry = eye.rx * 0.46;
-      const { cx, cy, rx, ry } = eye;
-
-      const plot = (c: number, r: number, ch: string) => {
-        const cc = Math.round(c);
-        const rr = Math.round(r);
-        if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) return;
-        field[rr * cols + cc] = { ch, eye: true };
-      };
-
-      // Two almond lids: upper and lower half-ellipses meeting at the corners (ports).
-      const steps = Math.max(48, Math.floor(rx * 6));
-      for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * Math.PI; // 0..π traces one lid from corner to corner
-        const ux = Math.cos(t) * rx;
-        const slopeU = Math.atan2(ry * Math.cos(t), rx * Math.sin(t));
-        plot(cx + ux, cy - Math.sin(t) * ry, slopeGlyph(slopeU));
-        plot(cx + ux, cy + Math.sin(t) * ry, slopeGlyph(-slopeU));
-      }
-
-      // Corner ports (the eye's connection points).
-      plot(cx - rx, cy, 'o');
-      plot(cx + rx, cy, 'o');
-
-      // Pupil: a small ring with a node at the centre.
-      const pr = Math.max(2, Math.round(ry * 0.5));
-      const ringSteps = Math.max(16, pr * 8);
-      for (let i = 0; i < ringSteps; i++) {
-        const t = (i / ringSteps) * Math.PI * 2;
-        plot(cx + Math.cos(t) * pr * 1.3, cy + Math.sin(t) * pr * 0.8, '◦');
-      }
-      plot(cx, cy, '●');
-
-      // The little gaze arrow riding the upper lid, echoing the brand mark.
-      plot(cx + rx * 0.62, cy - ry * 0.86, '▲');
     };
 
     const paintStatic = () => {
@@ -110,78 +166,62 @@ export function HomeBackdrop() {
       octx.font = FONT;
       octx.textAlign = 'center';
       octx.textBaseline = 'middle';
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const cell = at(c, r);
-          if (!cell) continue;
-          const x = c * CELL + CELL / 2;
-          const y = r * CELL + CELL / 2;
-          if (cell.eye) {
-            octx.fillStyle = withAlpha(accent, 0.5);
+
+      // Faint grid field.
+      octx.fillStyle = withAlpha(ink, 0.05);
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (masks[idx(x, y)]) continue;
+          octx.fillText(x % 4 === 0 && y % 4 === 0 ? '+' : '·', x * CELL + CELL / 2, y * CELL + CELL / 2);
+        }
+      }
+      // Traces and nodes.
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const m = masks[idx(x, y)];
+          if (!m) continue;
+          const px = x * CELL + CELL / 2;
+          const py = y * CELL + CELL / 2;
+          if (nodes[idx(x, y)]) {
+            octx.fillStyle = withAlpha(accent, 0.42);
+            octx.fillText('◆', px, py);
           } else {
-            octx.fillStyle = withAlpha(ink, cell.ch === '+' ? 0.07 : 0.05);
+            octx.fillStyle = withAlpha(accent, 0.22);
+            octx.fillText(glyphOf(m), px, py);
           }
-          octx.fillText(cell.ch, x, y);
         }
       }
     };
 
-    // Tracers: bright pulses travelling along a grid row/column, or around the eye lids.
-    type Tracer =
-      | { kind: 'row' | 'col'; index: number; pos: number; speed: number; len: number }
-      | { kind: 'lid'; lid: 1 | -1; pos: number; speed: number; len: number };
-    let tracers: Tracer[] = [];
-
-    const spawn = (): Tracer => {
-      const roll = Math.random();
-      if (roll < 0.35) {
-        return { kind: 'lid', lid: Math.random() < 0.5 ? 1 : -1, pos: 0, speed: 0.006 + Math.random() * 0.006, len: 10 };
-      }
-      if (roll < 0.68) {
-        return { kind: 'row', index: Math.floor(Math.random() * rows), pos: -8, speed: 0.4 + Math.random() * 0.5, len: 7 + Math.random() * 6 };
-      }
-      return { kind: 'col', index: Math.floor(Math.random() * cols), pos: -8, speed: 0.3 + Math.random() * 0.4, len: 7 + Math.random() * 6 };
+    // Pulses flow along a trace route, bright head with a fading trail.
+    type Pulse = { path: Pt[]; pos: number; speed: number; len: number };
+    let pulses: Pulse[] = [];
+    const spawn = (): Pulse | null => {
+      if (paths.length === 0) return null;
+      const path = paths[Math.floor(Math.random() * paths.length)]!;
+      return { path, pos: 0, speed: 0.18 + Math.random() * 0.22, len: 6 };
     };
 
-    const drawGlyph = (c: number, r: number, ch: string, alpha: number) => {
-      const cc = Math.round(c);
-      const rr = Math.round(r);
-      if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) return;
-      ctx.fillStyle = withAlpha(accent, alpha);
-      ctx.fillText(ch, cc * CELL + CELL / 2, rr * CELL + CELL / 2);
-    };
-
-    const stepTracer = (t: Tracer) => {
+    const drawPulse = (p: Pulse) => {
       ctx.font = FONT;
-      if (t.kind === 'lid') {
-        // Travel 0..1 along one lid, head bright, trailing fade.
-        for (let k = 0; k < t.len; k++) {
-          const p = t.pos - k * 0.03;
-          if (p < 0 || p > 1) continue;
-          const ang = p * Math.PI;
-          const x = eye.cx + Math.cos(ang) * eye.rx;
-          const y = eye.cy + t.lid * -Math.sin(ang) * eye.ry;
-          const slope = Math.atan2(eye.ry * Math.cos(ang), eye.rx * Math.sin(ang));
-          const glyph = slopeGlyph(t.lid > 0 ? slope : -slope);
-          drawGlyph(x, y, glyph, (1 - k / t.len) * 0.85);
-        }
-        t.pos += t.speed;
-        return t.pos <= 1.1;
-      }
-      for (let k = 0; k < t.len; k++) {
-        const p = t.pos - k;
-        const alpha = (1 - k / t.len) * 0.7;
-        if (t.kind === 'row') {
-          const cell = at(Math.round(p), t.index);
-          drawGlyph(p, t.index, cell?.eye ? cell.ch : k === 0 ? '━' : '─', alpha);
+      const head = Math.floor(p.pos);
+      for (let k = 0; k < p.len; k++) {
+        const i = head - k;
+        if (i < 0 || i >= p.path.length) continue;
+        const cell = p.path[i]!;
+        const alpha = (1 - k / p.len) * 0.9;
+        const x = cell.x * CELL + CELL / 2;
+        const y = cell.y * CELL + CELL / 2;
+        if (nodes[idx(cell.x, cell.y)]) {
+          ctx.fillStyle = withAlpha(accent, Math.min(1, alpha + 0.1));
+          ctx.fillText('◆', x, y);
         } else {
-          const cell = at(t.index, Math.round(p));
-          drawGlyph(t.index, p, cell?.eye ? cell.ch : k === 0 ? '┃' : '│', alpha);
+          ctx.fillStyle = withAlpha(accent, alpha);
+          ctx.fillText(glyphOf(masks[idx(cell.x, cell.y)]!), x, y);
         }
       }
-      t.pos += t.speed;
-      const limit = t.kind === 'row' ? cols : rows;
-      return t.pos - t.len <= limit + 2;
+      p.pos += p.speed;
+      return p.pos - p.len < p.path.length;
     };
 
     let raf = 0;
@@ -194,13 +234,15 @@ export function HomeBackdrop() {
       ctx.drawImage(offscreen, 0, 0, width, height);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      tracers = tracers.filter((t) => stepTracer(t));
-      if (tracers.length < 7 && Math.random() < 0.08 * dt) tracers.push(spawn());
+      pulses = pulses.filter((p) => drawPulse(p));
+      if (pulses.length < 9 && Math.random() < 0.09 * dt) {
+        const p = spawn();
+        if (p) pulses.push(p);
+      }
       raf = requestAnimationFrame(frame);
     };
 
     const resize = () => {
-      // Measure the canvas's own rendered box: CSS makes it full-bleed, wider than the host.
       const rect = canvas.getBoundingClientRect();
       width = Math.round(rect.width);
       height = Math.round(rect.height);
@@ -213,8 +255,9 @@ export function HomeBackdrop() {
       offscreen.height = height * dpr;
       ink = read('--ink', '#1f2d27');
       accent = read('--accent-text', '#3d6a4b');
-      buildField();
+      build();
       paintStatic();
+      pulses = [];
       if (reduced) {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, width, height);
