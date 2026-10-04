@@ -278,6 +278,7 @@ body.is-resizing-rail {
   display: none;
 }
 .rail-head {
+  flex-shrink: 0;
   padding: 18px 16px 14px;
 }
 .brand {
@@ -325,6 +326,9 @@ body.is-resizing-rail {
 .rail-scroll {
   flex: 1;
   min-height: 0;
+  /* Only .node-list scrolls; hide here so a tall "This canvas" header can never
+     spill over and cover the pinned account/logout bar below. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 8px 16px 0;
@@ -503,6 +507,9 @@ body.is-resizing-rail {
   color: var(--ink-2);
 }
 .rail-bottom {
+  /* Pinned to the rail's foot: never shrink, so the profile and logout controls
+     stay visible however many concepts the scroll area holds. */
+  flex-shrink: 0;
   padding: 14px 16px 0;
   border-top: 1px solid var(--line);
 }
