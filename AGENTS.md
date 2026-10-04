@@ -86,6 +86,16 @@ On Hyprland, inspect the current display/workspace before any visible UI launch.
 
 ## Coordinate and deliver
 
+### Track the roadmap
+
+- Read `GOALS.md` before starting feature work and identify the relevant goals and acceptance criteria.
+- Keep requested scope changes, partial progress, remaining work, and validation evidence in
+  `GOALS.md` so another session can continue without relying on chat history.
+- Check off a goal only after its user-facing behavior and persistence implications are verified
+  on the applicable web and desktop paths. Record tests and platform limitations alongside it.
+- Update the review date and keep README capabilities aligned when delivering goal work.
+  Never mark a whole goal complete when only one part has shipped.
+
 For multi-agent work, assign disjoint files and communicate shared interfaces before
 consumers change. One coordinator owns manifests, lockfile, shared contracts, final
 integration, and commits. Workers report files changed, behavior preserved, tests,

@@ -5,6 +5,12 @@
 The imported guide is authoritative for architecture, invariants, and development.
 Keep shared project rules in `AGENTS.md`; do not rely on a Markdown link to load it.
 
+@GOALS.md
+
+Use `GOALS.md` as the persistent roadmap: follow the tracking rules in `AGENTS.md`,
+record scope and remaining work as it changes, and update verified progress before delivery.
+Unchecked or partially completed goals must remain visible to the next session.
+
 ## Required before handoff or commit
 
 - Format changed files with `pnpm exec prettier --write <paths>`. `pnpm lint`
