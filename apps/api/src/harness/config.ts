@@ -9,7 +9,7 @@ export const HARNESS_ENV = {
   timeoutMs: 'OPSIS_HARNESS_TIMEOUT_MS',
 } as const;
 
-const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/u;
+const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/u;
 const PROVIDERS = new Set<HarnessProvider>(['claude', 'codex', 'agy']);
 
 /** Reads and validates harness settings, returning null for non-harness providers. */
@@ -37,5 +37,18 @@ export function readHarnessConfig(
   ) {
     throw new HarnessError('harness_config');
   }
-  return { provider, model, executable, timeoutMs, ...(effort ? { effort } : {}) };
+  const budget = env.OPSIS_LLM_MAX_BUDGET_USD ? Number(env.OPSIS_LLM_MAX_BUDGET_USD) : undefined;
+  if (
+    budget !== undefined &&
+    (provider !== 'claude' || !Number.isFinite(budget) || budget < 0.01 || budget > 100)
+  )
+    throw new HarnessError('harness_config');
+  return {
+    provider,
+    model,
+    executable,
+    timeoutMs,
+    ...(effort ? { effort } : {}),
+    ...(budget !== undefined ? { maxBudgetUSD: budget } : {}),
+  };
 }

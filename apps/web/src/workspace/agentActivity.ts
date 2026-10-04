@@ -1,5 +1,7 @@
+import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
 /** Progress events the API relays from an agent's CLI while it works. */
 export type AgentProgress =
+  | { type: 'usage'; usage: ReportedUsage }
   | { type: 'phase'; phase: 'starting' | 'thinking' | 'writing' | 'drafting' }
   | { type: 'thinking'; tokens: number }
   | { type: 'note'; text: string; done: boolean }
@@ -11,6 +13,7 @@ export type AgentActivity = {
   /** A verb for the wait before the agent says anything, chosen once per request. */
   verb: string;
   thinking: number;
+  usage: ReportedUsage[];
   /** Finished notes, oldest first. */
   notes: string[];
   /** The note being written now. */
@@ -37,6 +40,7 @@ export function startActivity(random = Math.random): AgentActivity {
     phase: 'waiting',
     verb: VERBS[Math.floor(random() * VERBS.length)]!,
     thinking: 0,
+    usage: [],
     notes: [],
     note: null,
     drafted: null,
@@ -45,6 +49,12 @@ export function startActivity(random = Math.random): AgentActivity {
 
 export function applyProgress(activity: AgentActivity, progress: AgentProgress): AgentActivity {
   switch (progress.type) {
+    case 'usage': {
+      const parsed = ReportedUsageSchema.safeParse(progress.usage);
+      return parsed.success
+        ? { ...activity, usage: [...activity.usage, parsed.data].slice(-10) }
+        : activity;
+    }
     case 'phase':
       return { ...activity, phase: progress.phase };
     case 'thinking':

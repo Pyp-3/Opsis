@@ -1,3 +1,4 @@
+import { modelSettingsProblem } from '@opsis/schema';
 import {
   IllustrateRequestSchema,
   EMAIL_DEMO,
@@ -19,6 +20,11 @@ export async function illustrateBoard(
   const parsed = IllustrateRequestSchema.safeParse(body);
   if (!parsed.success) return outcome(400, { message: 'The diagram is invalid.' });
   const input = parsed.data;
+  if (input.agent !== 'demo' && input.settings) {
+    const problem = modelSettingsProblem(input.agent, input.settings);
+    if (problem) return outcome(400, { message: problem });
+  }
+
   if (input.settings?.model === 'default')
     return outcome(400, { message: 'Choose an explicit model so your usage is predictable.' });
   const ids = new Set(input.board.nodes.map((node) => node.id));
@@ -113,6 +119,11 @@ export async function illustrateBoard(
         'The agent’s drawings were invalid after one repair attempt. Your icons are unchanged.',
     });
   } catch (error) {
+    if (error instanceof HarnessError && error.code === 'harness_request_limit')
+      return outcome(400, {
+        message:
+          'Request exceeds your character limit, including instructions, diagram, documents and any repair. Increase it in model settings or use a smaller board/request.',
+      });
     const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
     return outcome(502, {
       message: timeout

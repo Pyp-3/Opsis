@@ -1,3 +1,5 @@
+import { reportedUsage } from './usage';
+import type { ReportedUsage } from '@opsis/schema';
 import type { HarnessProvider } from './types.js';
 
 /**
@@ -6,6 +8,7 @@ import type { HarnessProvider } from './types.js';
  * by the CLIs; only how much of it there is.
  */
 export type HarnessProgress =
+  | { type: 'usage'; usage: ReportedUsage }
   | { type: 'phase'; phase: 'starting' | 'thinking' | 'writing' | 'drafting' }
   | { type: 'thinking'; tokens: number }
   /** A progress note the agent wrote; `done` is false while the line is still arriving. */
@@ -154,6 +157,8 @@ export function progressReader(provider: HarnessProvider) {
       return [];
     }
     if (!event) return [];
+    const usage = reportedUsage(provider, event);
+    if (usage) return [{ type: 'usage', usage }];
     return provider === 'claude' ? claude(event) : provider === 'codex' ? codex(event) : [];
   };
 }

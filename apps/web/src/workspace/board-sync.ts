@@ -60,6 +60,10 @@ export function mergeBoardSnapshots(
   board.positions = Object.fromEntries(
     Object.entries(board.positions).filter(([id]) => ids.has(id)),
   );
+  if (board.pinnedNodeIds)
+    board.pinnedNodeIds = board.pinnedNodeIds.filter((id) =>
+      board.nodes.some((node) => node.id === id),
+    );
   if (board.edgePorts) {
     const edges = new Set(board.edges.map((edge) => edge.id));
     board.edgePorts = Object.fromEntries(

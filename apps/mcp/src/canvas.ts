@@ -301,6 +301,9 @@ export function writeDiagram(snapshot: BoardSnapshot, input: DiagramInput) {
     description: input.description,
     nodes: withoutBrokenProcesses(nodes),
     edges: [],
+    ...(before.pinnedNodeIds
+      ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => nodes.some((node) => node.id === id)) }
+      : {}),
     positions: Object.fromEntries(
       Object.entries(before.positions).filter(([id]) => nodes.some((node) => node.id === id)),
     ),

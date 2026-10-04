@@ -19,7 +19,7 @@ describe('agent activity', () => {
     const thinking = applyProgress(quiet, { type: 'thinking', tokens: 4200 });
     const { rerender } = render(<AgentActivity activity={thinking} elapsed={1} agent="Claude" />);
     expect(headline()).toBe(`${VERBS[0]}…`);
-    expect(meta()).toBe('(1s · 4.2k tokens)');
+    expect(meta()).toBe('(1s · 4.2k tokens estimated thinking)');
     rerender(<AgentActivity activity={thinking} elapsed={7} agent="Claude" />);
     expect(headline()).toBe(`${VERBS[2]}…`);
   });

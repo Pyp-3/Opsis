@@ -19,6 +19,7 @@ import type { ProcessState } from './useProcessEngine';
 import { NodeIcon } from './NodeIcon';
 import { IconPicker } from './IconPicker';
 import { removeNode } from './model';
+import { connectBoard } from './connections';
 
 type ConceptDetailsProps = {
   board: BoardDocument;
@@ -31,6 +32,7 @@ type ConceptDetailsProps = {
   commit: (board: BoardDocument) => void;
   editNode: (patch: Partial<BoardDocument['nodes'][number]>) => void;
   selectNode: (id: string) => void;
+  selectEdge: (id: string) => void;
   setSelected: (id: string | null) => void;
   setPrompt: (prompt: string) => void;
   setShowIcons: (show: boolean) => void;
@@ -48,6 +50,7 @@ export function ConceptDetails({
   commit,
   editNode,
   selectNode,
+  selectEdge,
   setSelected,
   setPrompt,
   setShowIcons,
@@ -162,7 +165,56 @@ export function ConceptDetails({
             }}
           />
         )}
+        <label className="detail-section">
+          <input
+            type="checkbox"
+            checked={board.pinnedNodeIds?.includes(activeNode.id) ?? false}
+            disabled={busy}
+            onChange={(event) =>
+              commit({
+                ...board,
+                pinnedNodeIds: event.target.checked
+                  ? [...(board.pinnedNodeIds ?? []), activeNode.id]
+                  : (board.pinnedNodeIds ?? []).filter((id) => id !== activeNode.id),
+              })
+            }
+          />
+          Pin position (including during rearrangement)
+        </label>
         <section className="detail-section" aria-label="Connected concepts">
+          <p className="detail-note">
+            Drag a connection dot to another concept, or choose a destination below. Select a
+            connection to change either endpoint.
+          </p>
+          <label>
+            Connect to
+            <select
+              value=""
+              disabled={busy || board.edges.length >= 100}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                const id = crypto.randomUUID();
+                commit(
+                  connectBoard(board, { source: activeNode.id, target: event.target.value }, id),
+                );
+                selectEdge(id);
+              }}
+            >
+              <option value="">Choose a concept…</option>
+              {board.nodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {board.edges
+            .filter((edge) => edge.source === activeNode.id || edge.target === activeNode.id)
+            .map((edge) => (
+              <button key={edge.id} type="button" onClick={() => selectEdge(edge.id)}>
+                Edit connection: {edge.condition || edge.label || edge.id}
+              </button>
+            ))}
           {(() => {
             const links = board.edges.filter(
               (edge) => edge.source === activeNode.id || edge.target === activeNode.id,
@@ -223,6 +275,19 @@ export function ConceptDetails({
             <Pencil size={14} /> Edit this concept <ChevronRight size={14} />
           </summary>
           <fieldset disabled={busy}>
+            <label>
+              Concept type
+              <select
+                value={activeNode.kind}
+                onChange={(event) =>
+                  editNode({ kind: event.target.value as typeof activeNode.kind })
+                }
+              >
+                <option value="step">Step</option>
+                <option value="decision">Decision</option>
+                <option value="note">Note</option>
+              </select>
+            </label>
             <label>
               Label
               <input

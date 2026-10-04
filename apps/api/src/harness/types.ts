@@ -10,6 +10,7 @@ export type HarnessConfig = {
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   executable: string;
   timeoutMs: number;
+  maxBudgetUSD?: number;
 };
 
 /** A bounded child-process request. Implementations must never invoke a shell. */

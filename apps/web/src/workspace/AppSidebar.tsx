@@ -155,7 +155,7 @@ export function AppSidebar({
                 </NavLink>
               )}
               <NavLink to="/settings" current={mode === 'appearance'}>
-                <Settings size={16} /> Appearance
+                <Settings size={16} /> Settings
               </NavLink>
             </nav>
           </div>

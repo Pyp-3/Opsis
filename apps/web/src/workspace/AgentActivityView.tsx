@@ -75,7 +75,7 @@ export function AgentActivity({
   const drafted = activity.drafted && !catchingUp ? activity.drafted : null;
   const meta = [
     `${elapsed}s`,
-    activity.thinking > 0 && tokens(activity.thinking),
+    activity.thinking > 0 && `${tokens(activity.thinking)} estimated thinking`,
     drafted &&
       drafted.items > 0 &&
       [plural(drafted.items, 'object'), drafted.links > 0 && plural(drafted.links, 'link')]

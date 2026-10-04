@@ -69,6 +69,8 @@ export const BoardEdgeSchema = z
     source: id,
     target: id,
     label: z.string().max(100),
+    condition: z.string().max(100).optional(),
+    description: z.string().max(1000).optional(),
     kind: BoardEdgeKindSchema.optional(),
     color: z.enum(EDGE_COLORS).optional(),
     /** What the narrator says as playback follows this arrow. */
@@ -146,8 +148,20 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
   edgePorts: z
     .record(z.object({ source: BoardPortSchema, target: BoardPortSchema }).strict())
     .optional(),
+  pinnedNodeIds: z
+    .array(id)
+    .max(50)
+    .refine((ids) => new Set(ids).size === ids.length, 'Pinned concepts must be unique.')
+    .optional(),
   look: BoardLookSchema.optional(),
-}).superRefine(validateBoardReferences);
+}).superRefine((board, context) => {
+  validateBoardReferences(board, context);
+  if (board.pinnedNodeIds?.some((id) => !board.nodes.some((node) => node.id === id)))
+    context.addIssue({
+      code: 'custom',
+      message: 'Pinned positions must reference existing concepts.',
+    });
+});
 /** Largest single upload, in bytes; base64 inflates it by a third on the wire. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 5;

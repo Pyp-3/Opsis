@@ -4,6 +4,12 @@ Last reviewed: 2026-10-04.
 
 ## Current delivery
 
+Both P1 sections are complete as of 2026-10-04 on the web and Linux desktop:
+model settings/profiles/diagnostics, reported usage and explicit limits, consent-based
+suggestions, keyboard connection editing, branch metadata, pins, selective proposal
+acceptance, readable framing and denser-graph routing improvements. See the P1
+evidence and limitations below.
+
 P0 persistence is complete as of 2026-10-04: private duplicates, reversible archive,
 transactional database migrations, manual full-database backup/restore, and an
 owner-only saved-revision browser with restore-as-copy. Both Fastify and the Linux
@@ -11,7 +17,7 @@ Go desktop host are verified. Existing data, ownership, revision guards, deletio
 tombstones, and the 40-entry undo limit are preserved.
 
 The separately requested Kimi/Grok/Antigravity providers, API-key and fallback-model
-settings, usage/cost reporting, and complete Windows/macOS packaging remain pending.
+settings, pricing-based cost projections/graphs, and complete Windows/macOS packaging remain pending.
 Appearance settings and initial native platform plumbing have shipped; they do not
 complete those goals. The Linux desktop and browser application remain supported.
 
@@ -93,30 +99,57 @@ storage use. Full backups are manual, include credential records, and restore in
 new destination without merging. There is no scheduled backup/pruning or new
 Windows/macOS runtime validation in this delivery.
 
-## Improve: model management and usage — P1
+## Completed: model management and usage — P1
 
-- [ ] Dedicated settings page for agents, executable paths, model presets and default effort.
-- [ ] Add/edit/remove named model profiles without editing source code.
-- [ ] Show supported model/effort combinations and clear CLI/account diagnostics.
-- [ ] Display actual usage when reported by the provider; distinguish unavailable usage from zero.
-- [ ] Add explicit request/output limits where supported and warnings before expensive choices.
-- [ ] Optional task-based model suggestions, always requiring consent for an upgrade.
+- [x] Dedicated settings page for agents, executable paths, model presets and default effort.
+- [x] Add/edit/remove named model profiles without editing source code.
+- [x] Show supported model/effort combinations and clear CLI/account diagnostics.
+- [x] Display actual usage when reported by the provider; distinguish unavailable usage from zero.
+- [x] Add explicit request/output limits where supported and warnings before expensive choices.
+- [x] Optional task-based model suggestions, always requiring consent for an upgrade.
 
 Acceptance: defaults remain inexpensive; each request shows its selected agent/model/effort; unavailable configurations fail clearly; usage estimates are never presented as actual billing.
 
-## Improve: canvas and explanations — P1
+## Completed: canvas and explanations — P1
 
-- [ ] More discoverable connection/reconnection affordances and keyboard-accessible connection editing.
+- [x] More discoverable connection/reconnection affordances and keyboard-accessible connection editing.
 - [x] Route common chains, branching bypasses and returns around node/text footprints and separate edge labels from arrows.
-- [ ] Further optimize crossings and routing performance for very dense or overlapping hand-arranged graphs.
-- [ ] Better initial framing and readable labels across small screens and large graphs.
-- [ ] Named branch conditions, clearer decision nodes and optional edge descriptions.
-- [ ] Searchable icon picker with broader categories; evaluate safe custom SVG import.
+- [x] Further optimize crossings and routing performance for very dense or overlapping hand-arranged graphs.
+- [x] Better initial framing and readable labels across small screens and large graphs.
+- [x] Named branch conditions, clearer decision nodes and optional edge descriptions.
+- [x] Searchable icon picker with broader categories; evaluate safe custom SVG import.
 - [x] Preview changes/removals to existing content before applying agent revisions.
-- [ ] Let users pin positions and selectively accept generated changes.
-- [ ] Stronger visual hierarchy and spacing in the composer, settings and sidebars.
+- [x] Let users pin positions and selectively accept generated changes.
+- [x] Stronger visual hierarchy and spacing in the composer, settings and sidebars.
 
 Acceptance: a branching process remains understandable at normal zoom; manual layout survives follow-ups; users can inspect and reject destructive graph edits.
+
+Verified 2026-10-04: all integration gates pass (lint, typecheck, Rust checks and
+24 tests, 332 unit/API/schema tests, Go vet/race tests), plus 34 browser scenarios
+against each API host, packaged database-import/MCP integration and 22 hidden
+Wayland WebView checks. New coverage verifies profile persistence/edit/removal,
+invalid executable diagnostics without a model call, measured-zero versus missing
+usage, consent before changing model/effort, keyboard endpoint/port editing,
+branch metadata across reload, pins and selective acceptance as one undo action.
+Mobile settings pass overflow/accessibility checks. Existing icon search/category
+coverage passes on both hosts.
+
+Dense irregular 50-node/100-edge routing benchmark on the development machine:
+about 1,122 ms before versus 724 ms after; cached geometry returned below the
+benchmark's 1 ms display precision. This is one fixture, not a universal latency
+guarantee. Regression coverage includes dense and overlapping layouts.
+
+Limits: profiles/defaults and the last 100 usage records are device/origin
+localStorage preferences, shared across accounts in that browser profile, not
+SQLite records or part of database backups. Usage is only what the CLI reports;
+cost is explicitly labeled a CLI estimate, never billing. No paid provider calls
+were made during verification. CLI account entitlement/quota remain unverified by
+the no-call check. Output-token caps are unavailable in these CLI integrations;
+request character limits and Claude budgets per attempt are enforced where
+supported. Raw SVG import was evaluated and deferred in favor of the existing
+validated declarative icon format. Windows/macOS packaging, new providers,
+API-key/fallback settings and pricing-based cost projections remain separate work.
+See [model and canvas controls](docs/P1-CONTROLS.md).
 
 ## Future features — P2
 

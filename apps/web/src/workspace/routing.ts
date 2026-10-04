@@ -180,6 +180,8 @@ class Heap {
 
 /** Existing arrows, indexed by their exact line so A* can price overlaps and crossings. */
 class Occupancy {
+  private horizontalLines: number[] = [];
+  private verticalLines: number[] = [];
   horizontal = new Map<number, [number, number][]>();
   vertical = new Map<number, [number, number][]>();
   add(points: Point[]) {
@@ -187,6 +189,8 @@ class Occupancy {
       if (a.y === b.y && a.x !== b.x) this.push(this.horizontal, a.y, a.x, b.x);
       else if (a.x === b.x && a.y !== b.y) this.push(this.vertical, a.x, a.y, b.y);
     }
+    this.horizontalLines = [...this.horizontal.keys()].sort((a, b) => a - b);
+    this.verticalLines = [...this.vertical.keys()].sort((a, b) => a - b);
   }
   private push(map: Map<number, [number, number][]>, key: number, a: number, b: number) {
     const list = map.get(key) ?? [];
@@ -205,10 +209,23 @@ class Occupancy {
       const shared = Math.min(hi, e) - Math.max(lo, s);
       if (shared > 0) cost += SHARE + shared * 0.5;
     }
-    // Crossing: a perpendicular arrow passing strictly through the point we arrive at.
-    const across = a.y === b.y ? this.vertical.get(b.x) : this.horizontal.get(b.y);
+    // Include crossings inside a grid segment, not only at its destination.
+    const across = a.y === b.y ? this.vertical : this.horizontal;
+    const lines = a.y === b.y ? this.verticalLines : this.horizontalLines;
     const at = a.y === b.y ? b.y : b.x;
-    for (const [s, e] of across ?? []) if (at > s && at < e) cost += CROSS;
+    const arrival = a.y === b.y ? b.x : b.y;
+    let lower = 0,
+      upper = lines.length;
+    while (lower < upper) {
+      const middle = (lower + upper) >>> 1;
+      if (lines[middle]! < lo) lower = middle + 1;
+      else upper = middle;
+    }
+    for (let index = lower; index < lines.length && lines[index]! <= hi; index++) {
+      const coordinate = lines[index]!;
+      if ((coordinate > lo && coordinate < hi) || coordinate === arrival)
+        for (const [s, e] of across.get(coordinate)!) if (at > s && at < e) cost += CROSS;
+    }
     return cost;
   }
 }
@@ -271,6 +288,9 @@ function search(
   const index = (x: number, y: number, d: number) => (y * W + x) * 4 + d;
   const best = new Float64Array(W * H * 4).fill(Infinity);
   const parent = new Int32Array(W * H * 4).fill(-1);
+  // Geometry and occupancy are fixed within this search. Cache each directed step
+  // once across the four possible incoming directions, including blocked steps.
+  const steps = new Float64Array(W * H * 4).fill(-1);
   const heap = new Heap();
   let order = 0;
   const h = (x: number, y: number) => Math.abs(xs[x]! - goal.x) + Math.abs(ys[y]! - goal.y);
@@ -296,11 +316,18 @@ function search(
       const nx = x + DX[nd]!,
         ny = y + DY[nd]!;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-      const a = { x: xs[x]!, y: ys[y]! },
-        b = { x: xs[nx]!, y: ys[ny]! };
-      if (!free(a, b)) continue;
-      const step =
-        Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + (nd === d ? 0 : BEND) + occupancy.cost(a, b);
+      const stepIndex = cell * 4 + nd;
+      let distance = steps[stepIndex]!;
+      if (distance === -1) {
+        const a = { x: xs[x]!, y: ys[y]! },
+          b = { x: xs[nx]!, y: ys[ny]! };
+        distance = free(a, b)
+          ? Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + occupancy.cost(a, b)
+          : Infinity;
+        steps[stepIndex] = distance;
+      }
+      if (!Number.isFinite(distance)) continue;
+      const step = distance + (nd === d ? 0 : BEND);
       const next = index(nx, ny, nd);
       const total = g + step + (nx === gx && ny === gy && nd !== goalDirection ? BEND : 0);
       if (total < best[next]!) {
@@ -489,7 +516,29 @@ function nudge(
 }
 
 /** Orthogonal arrows that route around objects with few turns, then share corridors as lanes. */
+const routeCache = new Map<string, Record<string, RoutedEdge>>();
 export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
+  // Descriptions, drawings, selections and colour changes do not alter geometry.
+  const key = JSON.stringify({
+    nodes: board.nodes.map((node) => [node.id, nodeHeight(node)]),
+    positions: board.positions,
+    ports: board.edgePorts,
+    edges: board.edges.map((edge) => [
+      edge.id,
+      edge.source,
+      edge.target,
+      edge.kind,
+      connectionLabel(edge),
+    ]),
+  });
+  const cached = routeCache.get(key);
+  if (cached) return cached;
+  const result = computeRoutes(board);
+  if (routeCache.size >= 4) routeCache.delete(routeCache.keys().next().value!);
+  routeCache.set(key, result);
+  return result;
+}
+function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
   const boxes: Footprint[] = board.nodes.map((node) => ({
     id: node.id,
     ...(board.positions[node.id] ?? { x: 0, y: 0 }),

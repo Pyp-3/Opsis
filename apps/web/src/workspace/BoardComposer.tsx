@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { readModelProfiles } from './model-profiles';
+import { DEFAULT_BOARD_MODELS } from '@opsis/schema';
 import type { FormEvent, RefObject } from 'react';
 import {
   ArrowUp,
@@ -74,6 +77,26 @@ export function BoardComposer({
   setSettingsOpen,
   setSelected,
 }: BoardComposerProps) {
+  const [suggestions, setSuggestions] = useState(false);
+  const [task, setTask] = useState('overview');
+  const profiles = readModelProfiles();
+  const suggestion =
+    agent === 'demo'
+      ? null
+      : task === 'branches'
+        ? {
+            model: agent === 'claude' ? 'sonnet' : DEFAULT_BOARD_MODELS.codex.model,
+            effort: 'medium' as const,
+          }
+        : DEFAULT_BOARD_MODELS[agent];
+  const applySettings = (value: ModelPreferences) => {
+    setModelPreferences(value);
+    try {
+      localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(value));
+    } catch {
+      setError('Settings apply now but could not be saved on this device.');
+    }
+  };
   const providerBlocked = agent !== 'demo' && provider.enabled && !!provider.status?.blocked;
   const providerTracked = agent !== 'demo' && provider.enabled && !!provider.status?.tracked;
   return (
@@ -138,7 +161,10 @@ export function BoardComposer({
             disabled={
               busy ||
               !prompt.trim() ||
-              (!localTerminalExample && agent !== 'demo' && status?.available === false) ||
+              (!localTerminalExample &&
+                agent !== 'demo' &&
+                status?.available === false &&
+                !modelPreferences[agent].executablePath) ||
               (!localTerminalExample && providerBlocked)
             }
           >
@@ -146,8 +172,83 @@ export function BoardComposer({
           </button>
         )}
       </div>
+      {agent !== 'demo' && (
+        <p className="request-identity">
+          Next request: {agent} · {modelPreferences[agent].model || 'Choose a model'} ·{' '}
+          {agent === 'claude' && modelPreferences[agent].model.includes('haiku')
+            ? 'built-in reasoning'
+            : modelPreferences[agent].effort}
+        </p>
+      )}
       {agent !== 'demo' && settingsOpen && (
         <div className="model-settings" id="model-settings">
+          <label>
+            Named profile
+            <select
+              value=""
+              disabled={busy}
+              onChange={(event) => {
+                const profile = profiles.find((item) => item.id === event.target.value);
+                if (profile) applySettings({ ...modelPreferences, [agent]: profile.settings });
+              }}
+            >
+              <option value="">Choose saved settings…</option>
+              {profiles
+                .filter((profile) => profile.agent === agent)
+                .map((profile) => (
+                  <option value={profile.id} key={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={suggestions}
+              onChange={(event) => setSuggestions(event.target.checked)}
+            />{' '}
+            Show task-based suggestions
+          </label>
+          {suggestions && (
+            <div className="model-suggestion">
+              <label>
+                Task
+                <select
+                  aria-label="Task"
+                  value={task}
+                  onChange={(event) => setTask(event.target.value)}
+                >
+                  <option value="overview">Quick overview</option>
+                  <option value="branches">Detailed branch analysis</option>
+                </select>
+              </label>
+              <p>
+                Suggested: {agent} · <code>{suggestion?.model}</code> · {suggestion?.effort} effort
+              </p>
+              <p>
+                {task === 'overview'
+                  ? 'Try the economical default with low effort.'
+                  : 'Consider medium effort for checking multiple branches. This may consume more tokens; model access depends on your account.'}{' '}
+                Your choice changes only when you apply this suggestion.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  applySettings({
+                    ...modelPreferences,
+                    [agent]: {
+                      ...modelPreferences[agent],
+                      ...suggestion,
+                    },
+                  })
+                }
+              >
+                Apply suggested model and effort
+              </button>
+            </div>
+          )}
           <ModelControls
             agent={agent}
             value={modelPreferences[agent]}

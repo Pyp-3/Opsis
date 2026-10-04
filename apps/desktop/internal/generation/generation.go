@@ -65,8 +65,8 @@ func (e *Engine) execute(ctx context.Context, method string, args []string, prog
 			progress(json.RawMessage(data))
 		}
 	})
-	_ = vm.Set("nativePrepareClient", func(agent string) string {
-		executable, version, err := harness.Probe(ctx, e.Runner, agent)
+	_ = vm.Set("nativePrepareClient", func(agent, configuredPath string) string {
+		executable, version, err := harness.ProbePath(ctx, e.Runner, agent, configuredPath)
 		if err == nil {
 			approved[executable] = true
 		}

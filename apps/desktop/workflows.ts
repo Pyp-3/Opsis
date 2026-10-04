@@ -1,3 +1,4 @@
+import { checkAgent } from '../api/src/boards/check-agent';
 import { generateBoard } from '../api/src/boards/generate';
 import { illustrateBoard } from '../api/src/boards/illustrate';
 import { prepareAttachments } from '../api/src/attachments';
@@ -9,9 +10,13 @@ import { parseVersion } from '../api/src/harness/version';
 import type { BoardClientFactory } from '../api/src/boards/client';
 import type { HarnessFile, LLMRequest } from '../api/src/harness/types';
 import type { HarnessProgress } from '../api/src/harness/progress';
-import { DEFAULT_BOARD_MODELS, boardOutputSchema } from '../../packages/schema/src/index';
+import {
+  DEFAULT_BOARD_MODELS,
+  boardOutputSchema,
+  modelSettingsProblem,
+} from '../../packages/schema/src/index';
 
-declare function nativePrepareClient(agent: string): string;
+declare function nativePrepareClient(agent: string, executablePath: string): string;
 declare function nativeComplete(
   request: string,
   argumentsFor: (schemaPath: string, paths: string) => string,
@@ -45,7 +50,11 @@ const factory: BoardClientFactory = async (
   settings = DEFAULT_BOARD_MODELS[agent],
   schema = boardOutputSchema,
 ) => {
-  const prepared = result<{ executable: string; version: string }>(nativePrepareClient(agent));
+  const problem = modelSettingsProblem(agent, settings);
+  if (problem) throw new Error(problem);
+  const prepared = result<{ executable: string; version: string }>(
+    nativePrepareClient(agent, settings.executablePath ?? ''),
+  );
   parseVersion(agent, prepared.version);
   return {
     model: settings.model,
@@ -55,6 +64,8 @@ const factory: BoardClientFactory = async (
       files: readonly HarnessFile[] = [],
       onProgress?: (progress: HarnessProgress) => void,
     ) {
+      if (request.system.length + request.user.length > (settings.maxRequestCharacters ?? 768000))
+        throw new HarnessError('harness_request_limit');
       const read = progressReader(agent);
       const config = {
         provider: agent,
@@ -62,6 +73,7 @@ const factory: BoardClientFactory = async (
         ...(settings.effort ? { effort: settings.effort } : {}),
         executable: prepared.executable,
         timeoutMs: 180000,
+        ...(settings.maxBudgetUSD !== undefined ? { maxBudgetUSD: settings.maxBudgetUSD } : {}),
       };
       const response = result<{ stdout: string }>(
         nativeComplete(
@@ -94,9 +106,11 @@ export async function run(operation: string, body: string): Promise<string> {
     progress: (value: unknown) => nativeProgress(JSON.stringify(value)),
   };
   const outcome =
-    operation === 'generate'
-      ? await generateBoard(JSON.parse(body), factory, context, prepareAttachments)
-      : await illustrateBoard(JSON.parse(body), factory, context);
+    operation === 'check-agent'
+      ? await checkAgent(JSON.parse(body), factory)
+      : operation === 'generate'
+        ? await generateBoard(JSON.parse(body), factory, context, prepareAttachments)
+        : await illustrateBoard(JSON.parse(body), factory, context);
   return JSON.stringify(outcome);
 }
 
@@ -105,7 +119,7 @@ export async function agents(): Promise<string> {
   for (const id of ['claude', 'codex'] as const) {
     try {
       await factory(id);
-      agents.push({ id, available: true, detail: 'CLI ready · uses your local login' });
+      agents.push({ id, available: true, detail: 'CLI ready · account access unverified' });
     } catch {
       agents.push({
         id,

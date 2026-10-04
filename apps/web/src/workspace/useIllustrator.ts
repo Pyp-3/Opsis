@@ -1,3 +1,5 @@
+import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
+import { recordReportedUsage } from './reported-usage';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { IllustrateResponseSchema, type BoardAgent, type BoardDocument } from '@opsis/schema';
 import type { ModelPreferences } from './model-settings';
@@ -37,6 +39,8 @@ export function useIllustrator(
     async (agent: BoardAgent, preferences: ModelPreferences) => {
       const board = boardRef.current;
       if (!board?.nodes.length || request.current) return;
+      const usages: ReportedUsage[] = [];
+      let called = false;
       const controller = new AbortController();
       request.current = controller;
       const missing = board.nodes.filter((node) => !node.illustration);
@@ -48,6 +52,7 @@ export function useIllustrator(
       setMessage('');
       setActivity(startActivity());
       try {
+        called = true;
         const response = await fetch('/v1/boards/illustrate', {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: STREAM_ACCEPT },
@@ -60,6 +65,10 @@ export function useIllustrator(
           }),
         });
         const { ok, body: payload } = await agentResponse(response, (progress) => {
+          if (progress.type === 'usage') {
+            const parsed = ReportedUsageSchema.safeParse(progress.usage);
+            if (parsed.success) usages.push(parsed.data);
+          }
           if (!controller.signal.aborted)
             setActivity((current) => applyProgress(current, progress));
         });
@@ -86,6 +95,8 @@ export function useIllustrator(
         if (!controller.signal.aborted)
           setMessage(e instanceof Error ? e.message : 'Could not connect to the agent.');
       } finally {
+        if (called && agent !== 'demo')
+          recordReportedUsage(agent, preferences[agent], usages, 'illustration');
         if (request.current === controller) {
           request.current = null;
           setBusy(false);

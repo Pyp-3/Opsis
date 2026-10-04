@@ -35,6 +35,47 @@ describe('2D board API', () => {
     apps.push(app);
     return { app, complete, factory };
   }
+
+  it('checks configuration without a completion and rejects invalid model/effort combinations', async () => {
+    const { app, complete, factory } = setup();
+    const result = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/check-agent',
+      payload: {
+        agent: 'codex',
+        settings: { model: 'gpt-6-luna', effort: 'low', executablePath: '/tmp/selected-cli' },
+      },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().message).toContain('not verified');
+    expect(complete).not.toHaveBeenCalled();
+    expect(factory).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({ executablePath: '/tmp/selected-cli' }),
+    );
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: {
+        agent: 'codex',
+        prompt: 'Explain email',
+        settings: { model: 'gpt-5.5', effort: 'max' },
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(complete).not.toHaveBeenCalled();
+  });
+  it('does not repair or retry a request that exceeds its configured character limit', async () => {
+    const { app, complete } = setup(new HarnessError('harness_request_limit'));
+    const result = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain email' },
+    });
+    expect(result.statusCode).toBe(400);
+    expect(result.json().message).toContain('character limit');
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
   it.each(['claude', 'codex'])(
     'requests coherent example data and retains terminal output for %s',
     async (agent) => {

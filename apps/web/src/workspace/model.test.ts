@@ -42,3 +42,15 @@ describe('2D workspace documents', () => {
     for (const id of new Set(used)) expect(svg).toContain(`id="${id}"`);
   });
 });
+
+it('retains pinned positions during explicit arrangement and removes pins with concepts', async () => {
+  const before = await layoutBoard(EMAIL_DEMO, 'demo');
+  before.positions.sender = { x: -600, y: 300 };
+  before.positions.app = { x: 8000, y: 300 };
+  before.pinnedNodeIds = ['sender'];
+  const after = await layoutBoard(before, 'demo', before, 900, 'pinned');
+  expect(after.positions.sender).toEqual(before.positions.sender);
+  expect(after.positions.app).not.toEqual(before.positions.app);
+  expect(after.pinnedNodeIds).toEqual(['sender']);
+  expect(removeNode(after, 'sender').pinnedNodeIds).toEqual([]);
+});

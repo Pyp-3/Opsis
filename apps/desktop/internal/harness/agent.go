@@ -29,6 +29,9 @@ func valueOr(name, fallback string) string {
 }
 
 func ResolveAgent(agent string) (string, error) {
+	return ResolveAgentPath(agent, "")
+}
+func ResolveAgentPath(agent, configuredPath string) (string, error) {
 	if agent != "claude" && agent != "codex" {
 		return "", Error("harness_config")
 	}
@@ -58,7 +61,11 @@ func ResolveAgent(agent string) (string, error) {
 		}
 		return path, nil
 	}
-	if override := strings.TrimSpace(os.Getenv("OPSIS_" + strings.ToUpper(agent) + "_BIN")); override != "" {
+	override := strings.TrimSpace(configuredPath)
+	if override == "" {
+		override = strings.TrimSpace(os.Getenv("OPSIS_" + strings.ToUpper(agent) + "_BIN"))
+	}
+	if override != "" {
 		if !filepath.IsAbs(override) {
 			return "", Error("harness_config")
 		}
@@ -115,7 +122,10 @@ func ResolveAgent(agent string) (string, error) {
 }
 
 func Probe(ctx context.Context, runner Runner, agent string) (string, string, error) {
-	executable, err := ResolveAgent(agent)
+	return ProbePath(ctx, runner, agent, "")
+}
+func ProbePath(ctx context.Context, runner Runner, agent, configuredPath string) (string, string, error) {
+	executable, err := ResolveAgentPath(agent, configuredPath)
 	if err != nil {
 		return "", "", err
 	}

@@ -681,3 +681,54 @@
   background: var(--bp-deep);
   border-color: var(--line-strong);
 }
+
+.detail-section > button {
+  display: block;
+  padding: 0.5rem 0;
+  text-align: left;
+}
+.detail-section > label {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.8rem 0;
+}
+.detail-section textarea {
+  min-height: 64px;
+  width: 100%;
+}
+.review-changes li {
+  padding: 0.35rem 0;
+}
+.review-changes label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.decision-label {
+  position: absolute;
+  /* Keep the top connection corridor clear of the decision marker. */
+  top: 4px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #f2cc79;
+  text-transform: uppercase;
+}
+.blueprint-node.is-decision .node-icon {
+  color: #f2cc79;
+}
+
+.detail-panel input[type='checkbox'] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+.detail-panel select {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}

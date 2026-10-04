@@ -25,7 +25,7 @@ export function ModelControls({
   const noEffort = agent === 'claude' && value.model.includes('haiku');
   const isAlias = agent === 'claude' && ['haiku', 'sonnet', 'opus', 'fable'].includes(value.model);
   const efforts = choices.find((choice) => choice.id === value.model)?.efforts ?? EFFORTS;
-  const effort = efforts.includes(value.effort) ? value.effort : efforts[efforts.length - 1]!;
+  const effort = efforts.includes(value.effort) ? value.effort : efforts[0]!;
   const groups = [...new Set(choices.map((choice) => choice.group))];
   return (
     <div className="model-controls">
@@ -39,8 +39,9 @@ export function ModelControls({
             const model = event.target.value === 'custom' ? '' : event.target.value;
             const allowed = choices.find((choice) => choice.id === model)?.efforts ?? EFFORTS;
             onChange({
+              ...value,
               model,
-              effort: allowed.includes(value.effort) ? value.effort : allowed[allowed.length - 1]!,
+              effort: allowed.includes(value.effort) ? value.effort : allowed[0]!,
             });
           }}
         >
@@ -92,6 +93,13 @@ export function ModelControls({
           )}
         </select>
       </label>
+      {((!value.model.includes('haiku') && !value.model.includes('luna')) ||
+        ['high', 'xhigh', 'max'].includes(value.effort)) && (
+        <p className="model-cost-warning">
+          This model or effort may use substantially more tokens or cost more than the economical
+          default. Check your provider’s current pricing and account allowance before generating.
+        </p>
+      )}
       <p className="model-identity">
         <span>Model ID</span> <code>{value.model || 'Enter a model ID'}</code>
         {isAlias && (

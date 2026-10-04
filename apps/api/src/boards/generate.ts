@@ -1,3 +1,4 @@
+import { modelSettingsProblem } from '@opsis/schema';
 import {
   BoardGraphSchema,
   BoardRequestSchema,
@@ -30,6 +31,11 @@ export async function generateBoard(
   if (!parsed.success)
     return outcome(400, { message: 'The prompt or current diagram is invalid.' });
   const input = parsed.data;
+  if (input.agent !== 'demo' && input.settings) {
+    const problem = modelSettingsProblem(input.agent, input.settings);
+    if (problem) return outcome(400, { message: problem });
+  }
+
   if (input.settings?.model === 'default')
     return outcome(400, { message: 'Choose an explicit model so your usage is predictable.' });
   if (input.selectedId && !input.board?.nodes.some((node) => node.id === input.selectedId))
@@ -153,6 +159,11 @@ export async function generateBoard(
       message: 'The agent did not return a diagram. Your board is unchanged.',
     });
   } catch (error) {
+    if (error instanceof HarnessError && error.code === 'harness_request_limit')
+      return outcome(400, {
+        message:
+          'Request exceeds your character limit, including instructions, diagram, documents and any repair. Increase it in model settings or use a smaller board/request.',
+      });
     const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
     return outcome(502, {
       message: timeout

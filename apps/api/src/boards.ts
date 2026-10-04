@@ -1,3 +1,4 @@
+import { checkAgent } from './boards/check-agent.js';
 import type { FastifyInstance } from 'fastify';
 import { localBoardClient, type BoardClientFactory } from './boards/client.js';
 import { generateBoard } from './boards/generate.js';
@@ -21,7 +22,7 @@ export function registerBoardRoutes(
         (['claude', 'codex'] as const).map(async (id) => {
           try {
             await factory(id);
-            return { id, available: true, detail: 'CLI ready · uses your local login' };
+            return { id, available: true, detail: 'CLI ready · account access unverified' };
           } catch {
             return {
               id,
@@ -43,6 +44,11 @@ export function registerBoardRoutes(
     } finally {
       pendingAgents = undefined;
     }
+  });
+
+  app.post('/v1/boards/check-agent', { bodyLimit: 8192 }, async (request, reply) => {
+    const result = await checkAgent(request.body, factory);
+    return reply.code(result.status).send(result.body);
   });
 
   app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, (request, reply) =>

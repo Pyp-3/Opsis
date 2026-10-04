@@ -1,32 +1,45 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ZoomIn, ZoomOut, Expand } from 'lucide-react';
-import type { BoardDocument } from '@opsis/schema';
+import { boardReviewChanges, selectBoardChanges, type BoardDocument } from '@opsis/schema';
 import { boardSvg } from './export';
 
 export function GenerationReview({
   before,
   candidate,
-  changes,
   apply,
   discard,
 }: {
   before: BoardDocument;
   candidate: BoardDocument;
   changes: string[];
-  apply: () => void;
+  apply: (board: BoardDocument) => void;
   discard: () => void;
 }) {
+  const options = useMemo(() => boardReviewChanges(before, candidate), [before, candidate]);
+  const [selected, setSelected] = useState(() => options.map((change) => change.key));
+  const selection = useMemo(() => {
+    try {
+      return { board: selectBoardChanges(before, candidate, selected), error: '' };
+    } catch (error) {
+      return {
+        board: before,
+        error: error instanceof Error ? error.message : 'These changes cannot be combined.',
+      };
+    }
+  }, [before, candidate, selected]);
+  const changes = options;
+  const proposed = selection.board;
   const [view, setView] = useState<'current' | 'proposed'>('proposed');
   const [zoom, setZoom] = useState(1);
   const previews = useMemo(
     () => ({
       current: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(boardSvg(before))}`,
-      proposed: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(boardSvg(candidate))}`,
+      proposed: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(boardSvg(proposed))}`,
     }),
-    [before, candidate],
+    [before, proposed],
   );
-  const shown = view === 'proposed' ? candidate : before;
+  const shown = view === 'proposed' ? proposed : before;
   return createPortal(
     <section className="generation-review" aria-label="Review proposed changes">
       <div className="review-header">
@@ -36,7 +49,11 @@ export function GenerationReview({
         </div>
         <div className="review-actions">
           <button onClick={discard}>Keep current board</button>
-          <button className="review-apply" onClick={apply}>
+          <button
+            className="review-apply"
+            disabled={!!selection.error || !selected.length}
+            onClick={() => apply(proposed)}
+          >
             Apply reviewed changes
           </button>
         </div>
@@ -96,13 +113,34 @@ export function GenerationReview({
           style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
         />
       </div>
-      <details className="review-changes">
+      {selection.error && <p role="alert">{selection.error}</p>}
+      <details className="review-changes" open>
         <summary>
           {changes.length ? `${changes.length} proposed changes` : 'Updated presentation'}
         </summary>
+        <button onClick={() => setSelected(options.map((change) => change.key))}>
+          Select all changes
+        </button>
+        <button onClick={() => setSelected([])}>Clear selection</button>
+
         <ul>
-          {changes.map((change, index) => (
-            <li key={`${index}-${change}`}>{change}</li>
+          {changes.map((change) => (
+            <li key={change.key}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(change.key)}
+                  onChange={(event) =>
+                    setSelected(
+                      event.target.checked
+                        ? [...selected, change.key]
+                        : selected.filter((key) => key !== change.key),
+                    )
+                  }
+                />
+                {change.label}
+              </label>
+            </li>
           ))}
         </ul>
       </details>

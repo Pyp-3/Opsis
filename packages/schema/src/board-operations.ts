@@ -41,6 +41,20 @@ export function removeBoardNode(board: BoardDocument, id: string): BoardDocument
     nodes: withoutBrokenProcesses(board.nodes.filter((node) => node.id !== id)),
     edges: board.edges.filter((edge) => edge.source !== id && edge.target !== id),
     positions,
+    ...(board.pinnedNodeIds
+      ? { pinnedNodeIds: board.pinnedNodeIds.filter((item) => item !== id) }
+      : {}),
+    ...(board.edgePorts
+      ? {
+          edgePorts: Object.fromEntries(
+            Object.entries(board.edgePorts).filter(([edgeId]) =>
+              board.edges.some(
+                (edge) => edge.id === edgeId && edge.source !== id && edge.target !== id,
+              ),
+            ),
+          ),
+        }
+      : {}),
   };
 }
 

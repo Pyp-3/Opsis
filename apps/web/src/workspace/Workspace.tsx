@@ -1,3 +1,4 @@
+import { readingViewport, NODE_HEIGHT } from './geometry';
 import { BoardHeader } from './BoardHeader';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
 import { BoardComposer } from './BoardComposer';
@@ -48,7 +49,7 @@ import {
 import { useProcessEngine } from './useProcessEngine';
 import { useIllustrator } from './useIllustrator';
 import { AgentActivity } from './AgentActivityView';
-import { layoutBoard, NODE_HEIGHT, NODE_WIDTH, removeNode } from './model';
+import { layoutBoard, NODE_WIDTH, removeNode } from './model';
 import { connectBoard } from './connections';
 import { readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
@@ -240,13 +241,11 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
     if (!current) return;
     const positions = current.nodes.map((node) => current.positions[node.id]).filter((p) => !!p);
     if (!positions.length) return;
-    const top = Math.min(...positions.map((p) => p.y));
-    const firstRow = positions.filter((p) => p.y < top + NODE_HEIGHT);
-    const center =
-      (Math.min(...firstRow.map((p) => p.x)) + Math.max(...firstRow.map((p) => p.x)) + NODE_WIDTH) /
-      2;
-    const width = document.querySelector('.blueprint')?.clientWidth ?? 900;
-    void flow.setViewport({ x: width / 2 - center, y: 210 - top, zoom: 1 }, { duration: 250 });
+    const canvas = document.querySelector('.blueprint');
+    void flow.setViewport(
+      readingViewport(positions, canvas?.clientWidth ?? 900, canvas?.clientHeight ?? 700),
+      { duration: 250 },
+    );
   }, [flow, boardRef]);
   const hasBoard = !!board;
   const onCanvas = page === 'canvas';
@@ -262,7 +261,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
     try {
       const width = document.querySelector('.blueprint')?.clientWidth ?? 900;
       // Explicit arrangement is undoable; normal follow-ups still preserve hand-placed nodes.
-      commit(await layoutBoard(board, board.agent, undefined, width));
+      commit(await layoutBoard(board, board.agent, board, width, 'pinned'));
       readingView();
     } catch {
       setError('Could not arrange this board. Your current layout is unchanged.');
@@ -453,7 +452,11 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       const positions = { ...current.positions };
       let changed = false;
       for (const change of changes)
-        if (change.type === 'position' && change.position) {
+        if (
+          change.type === 'position' &&
+          change.position &&
+          !current.pinnedNodeIds?.includes(change.id)
+        ) {
           positions[change.id] = change.position;
           changed = true;
         }
@@ -522,7 +525,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
         <div className="page-scroll">
           <div className="page-toolbar">{railToggle}</div>
           {page === 'appearance' ? (
-            <SettingsPage />
+            <SettingsPage preferences={modelPreferences} onChange={setModelPreferences} />
           ) : page === 'account' && user ? (
             <AccountPage user={user} onSignOut={onSignOut} />
           ) : page === 'boards' ? (
@@ -888,8 +891,8 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
               {generation.review && (
                 <GenerationReview
                   {...generation.review}
-                  apply={() => {
-                    generation.apply();
+                  apply={(accepted) => {
+                    generation.apply(accepted);
                     setSelected(null);
                     setSelectedEdge(null);
                   }}
@@ -929,7 +932,10 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
                           elapsed: illustrator.elapsed,
                           activity: illustrator.activity,
                           message: illustrator.message,
-                          available: agent === 'demo' || status?.available !== false,
+                          available:
+                            agent === 'demo' ||
+                            !!modelPreferences[agent].executablePath ||
+                            status?.available !== false,
                           redraw: board.nodes.every((node) => node.illustration),
                           onIllustrate: () => void illustrator.illustrate(agent, modelPreferences),
                         },
@@ -1013,6 +1019,10 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
           </section>
           {activeNode && board && (
             <ConceptDetails
+              selectEdge={(id) => {
+                setSelectedEdge(id);
+                setSelected(null);
+              }}
               key={activeNode.id}
               board={board}
               boardRef={boardRef}

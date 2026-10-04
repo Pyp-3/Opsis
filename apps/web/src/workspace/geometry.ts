@@ -40,3 +40,23 @@ export function wrapLabel(text: string, columns = 28): string[] {
   if (line) lines.push(line);
   return lines;
 }
+
+/** Frame the first row at readable scale; wide hand-arranged boards start at the first concept. */
+export function readingViewport(
+  positions: { x: number; y: number }[],
+  width: number,
+  height: number,
+) {
+  if (!positions.length) return { x: 0, y: 0, zoom: 1 };
+  const top = Math.min(...positions.map((point) => point.y));
+  const row = positions.filter((point) => point.y < top + NODE_HEIGHT);
+  const left = Math.min(...row.map((point) => point.x));
+  const right = Math.max(...row.map((point) => point.x)) + NODE_WIDTH;
+  const zoom = Math.min(1, Math.max(0.8, (width - 48) / (right - left)));
+  const center = (right - left) * zoom <= width - 24 ? (left + right) / 2 : left + NODE_WIDTH / 2;
+  return {
+    x: width / 2 - center * zoom,
+    y: Math.min(160, Math.max(48, height * 0.2)) - top * zoom,
+    zoom,
+  };
+}

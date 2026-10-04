@@ -1,5 +1,6 @@
 /** Stable failure codes safe to expose to pipeline diagnostics. */
 export type HarnessErrorCode =
+  | 'harness_request_limit'
   | 'harness_config'
   | 'harness_missing'
   | 'harness_timeout'
@@ -10,6 +11,7 @@ export type HarnessErrorCode =
   | 'harness_schema';
 
 const SAFE_MESSAGES: Record<HarnessErrorCode, string> = {
+  harness_request_limit: 'Request exceeds the configured character limit.',
   harness_config: 'Harness configuration is invalid.',
   harness_missing: 'Harness executable is unavailable.',
   harness_timeout: 'Harness request timed out.',

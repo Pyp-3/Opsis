@@ -122,6 +122,27 @@
     );
     const boards = await (await fetch('/v1/boards')).json();
     assert(boards.length >= 2, 'React canvas persisted to native SQLite');
+    history.pushState({}, '', '/settings');
+    window.dispatchEvent(new Event('popstate'));
+    await until(() => document.querySelector('.agent-settings'), 'Model settings did not render');
+    assert(true, 'native WebView model settings rendered');
+    fill('.agent-settings input[maxlength="60"]', 'Desktop smoke profile');
+    [...document.querySelectorAll('.agent-settings button')]
+      .find((button) => button.textContent.trim() === 'Add profile')
+      .click();
+    await until(
+      () => localStorage.getItem('opsis:model-profiles:v1')?.includes('Desktop smoke profile'),
+      'Named profile did not persist',
+    );
+    assert(true, 'native WebView named profile persisted');
+    [...document.querySelectorAll('.settings-sections button')]
+      .find((button) => button.textContent.trim() === 'Appearance')
+      .click();
+    await until(
+      () => document.querySelector('.theme-preview'),
+      'Appearance settings did not render',
+    );
+    assert(true, 'appearance controls retained beside model settings');
     await fetch('/v1/auth/logout', { method: 'POST' });
     assert((await fetch('/v1/auth/me')).status === 401, 'session revocation');
     window.go.main.Desktop.ReportSmoke(JSON.stringify({ ok: true, checks }));

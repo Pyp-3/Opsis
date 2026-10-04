@@ -14,7 +14,16 @@ up to 40 past/future states. A drag is one undoable action.
 
 Agent proposals for an existing board are reviewed before application. Compare
 **Proposed** and **Current**, then choose **Apply reviewed changes** or
-**Keep current board**. Reading existing explanations does not make a model call.
+**Keep current board**. Use the change checkboxes to accept only part of a proposal.
+A selection with broken dependencies cannot be applied. Reading existing explanations
+does not make a model call.
+
+Pin a concept's position in its details panel to retain it during rearrangement.
+Use **Connect to** and **Edit connection** for keyboard connection creation,
+reconnection and port editing. Add branch conditions and descriptions in connection
+details. **Settings → Agents and models** contains named profiles, CLI diagnostics,
+limits and reported usage; **Appearance** keeps the theme controls.
+See [model and canvas controls](P1-CONTROLS.md) for details and limitations.
 
 ## Save and organize projects
 

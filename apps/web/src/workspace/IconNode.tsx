@@ -86,6 +86,7 @@ export function IconNode({ data, selected }: NodeProps<DiagramNode>) {
             }}
           />
         ))}
+        {data.kind === 'decision' && <span className="decision-label">Decision</span>}
         {data.outgoing > 1 && (
           <span className="branch-count" title={`${data.outgoing} outgoing connections`}>
             <GitBranch size={10} />

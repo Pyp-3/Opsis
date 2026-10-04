@@ -1,3 +1,5 @@
+import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
+import { recordReportedUsage } from './reported-usage';
 import { useEffect, useRef, useState } from 'react';
 import {
   BoardGraphSchema,
@@ -44,6 +46,8 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     attachments: BoardAttachment[] = [],
   ) {
     if (request.current || review) return false;
+    const usages: ReportedUsage[] = [];
+    let called = false;
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -64,6 +68,7 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         commit(candidate);
         return true;
       }
+      called = true;
       const response = await fetch('/v1/boards/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: STREAM_ACCEPT },
@@ -82,6 +87,10 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         status,
         body: payload,
       } = await agentResponse(response, (progress) => {
+        if (progress.type === 'usage') {
+          const parsed = ReportedUsageSchema.safeParse(progress.usage);
+          if (parsed.success) usages.push(parsed.data);
+        }
         if (!controller.signal.aborted) setActivity((current) => applyProgress(current, progress));
       });
       const needsReview = status === 409 && previous && payload.candidate;
@@ -114,6 +123,8 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
         setError(e instanceof Error ? e.message : 'Could not connect to the agent.');
       return false;
     } finally {
+      if (called && agent !== 'demo')
+        recordReportedUsage(agent, preferences[agent], usages, 'diagram');
       if (request.current === controller) {
         request.current = null;
         setBusy(false);
@@ -136,9 +147,9 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
     generate,
     cancel,
     discard: () => setReview(null),
-    apply: () => {
+    apply: (accepted: BoardDocument) => {
       if (review) {
-        commit(review.candidate);
+        commit(accepted);
         setReview(null);
       }
     },

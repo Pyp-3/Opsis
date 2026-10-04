@@ -17,9 +17,11 @@ export const PORT_OFFSETS = {
 export const isReturnEdge = (edge: BoardDocument['edges'][number]) =>
   ['response', 'feedback', 'retry'].includes(edge.kind ?? 'flow');
 export const connectionLabel = (edge: BoardDocument['edges'][number]) =>
-  edge.kind && edge.kind !== 'flow'
-    ? `${edge.kind[0]!.toUpperCase()}${edge.kind.slice(1)}: ${edge.label}`
-    : edge.label;
+  edge.condition
+    ? `If ${edge.condition}${edge.label ? ': ' + edge.label : ''}`
+    : edge.kind && edge.kind !== 'flow'
+      ? `${edge.kind[0]!.toUpperCase()}${edge.kind.slice(1)}: ${edge.label}`
+      : edge.label;
 
 // High-contrast on the blueprint background; type labels/patterns also encode meaning.
 export const CONNECTION_STYLES = {

@@ -27,6 +27,7 @@ export function useBoardDiagram(
       board?.nodes.map((node, index) => ({
         id: node.id,
         type: 'concept',
+        draggable: !board.pinnedNodeIds?.includes(node.id),
         position: board.positions[node.id] ?? { x: 0, y: index * 200 },
         selected: selected === node.id,
         ...(playback

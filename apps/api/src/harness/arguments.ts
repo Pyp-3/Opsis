@@ -22,6 +22,9 @@ export function harnessArguments(
       schema,
       ...(config.model === 'default' ? [] : ['--model', config.model]),
       ...(config.effort && !config.model.includes('haiku') ? ['--effort', config.effort] : []),
+      ...(config.maxBudgetUSD !== undefined
+        ? ['--max-budget-usd', String(config.maxBudgetUSD)]
+        : []),
       '--safe-mode',
       '--restricted',
       ...tools,

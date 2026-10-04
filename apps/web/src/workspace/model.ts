@@ -17,6 +17,7 @@ export async function layoutBoard(
   agent: BoardAgent,
   previous?: BoardDocument,
   availableWidth = 900,
+  preservePositions: 'all' | 'pinned' = 'all',
 ): Promise<BoardDocument> {
   graph = await populateProcess(graph);
   const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
@@ -102,7 +103,8 @@ export async function layoutBoard(
   const positions: BoardDocument['positions'] = {};
   for (const node of graph.nodes) {
     const prior = previous?.positions[node.id];
-    if (prior) positions[node.id] = prior;
+    if (prior && (preservePositions === 'all' || previous?.pinnedNodeIds?.includes(node.id)))
+      positions[node.id] = prior;
   }
   for (const node of result.children ?? []) {
     if (positions[node.id]) continue;
@@ -158,6 +160,13 @@ export async function layoutBoard(
     agent,
     positions,
     edgePorts,
+    ...(previous?.pinnedNodeIds
+      ? {
+          pinnedNodeIds: previous.pinnedNodeIds.filter((id) =>
+            nodes.some((node) => node.id === id),
+          ),
+        }
+      : {}),
     // Agents never see the canvas colours; a follow-up keeps the ones the reader chose.
     ...(previous?.look ? { look: previous.look } : {}),
   });

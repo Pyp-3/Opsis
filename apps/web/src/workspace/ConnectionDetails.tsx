@@ -1,11 +1,12 @@
 import { ArrowRight, X, Trash2 } from 'lucide-react';
 import {
   BoardEdgeKindSchema,
+  BoardPortSchema,
   EDGE_COLORS,
   withoutNarration,
   type BoardDocument,
 } from '@opsis/schema';
-import { EDGE_COLOR_VALUES, connectionStyle } from './connections';
+import { EDGE_COLOR_VALUES, connectionStyle, connectBoard, edgePorts } from './connections';
 
 type ConnectionDetailsProps = {
   board: BoardDocument;
@@ -39,6 +40,91 @@ export function ConnectionDetails({
           {board.nodes.find((node) => node.id === activeEdge.target)?.label ?? 'End'}
         </p>
         <section className="detail-section">
+          <p className="detail-note">
+            Change endpoints here using the keyboard, or drag either end of the selected arrow.
+          </p>
+          {(['source', 'target'] as const).map((endpoint) => (
+            <label key={endpoint}>
+              {endpoint === 'source' ? 'From concept' : 'To concept'}
+              <select
+                disabled={busy}
+                value={activeEdge[endpoint]}
+                onChange={(event) =>
+                  commit(
+                    connectBoard(
+                      board,
+                      {
+                        source: activeEdge.source,
+                        target: activeEdge.target,
+                        [endpoint]: event.target.value,
+                      },
+                      activeEdge.id,
+                    ),
+                  )
+                }
+              >
+                {board.nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          {(['source', 'target'] as const).map((endpoint) => (
+            <label key={endpoint}>
+              {endpoint === 'source' ? 'From port' : 'To port'}
+              <select
+                disabled={busy}
+                value={edgePorts(board, activeEdge)[endpoint]}
+                onChange={(event) =>
+                  commit({
+                    ...board,
+                    edgePorts: {
+                      ...board.edgePorts,
+                      [activeEdge.id]: {
+                        ...edgePorts(board, activeEdge),
+                        [endpoint]: BoardPortSchema.parse(event.target.value),
+                      },
+                    },
+                  })
+                }
+              >
+                {BoardPortSchema.options.map((port) => (
+                  <option key={port} value={port}>
+                    {port}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          {(['condition', 'description'] as const).map((field) => (
+            <label key={field}>
+              {field === 'condition' ? 'Branch condition' : 'Connection description'}
+              <textarea
+                key={activeEdge.id + field + (activeEdge[field] ?? '')}
+                defaultValue={activeEdge[field] ?? ''}
+                disabled={busy}
+                maxLength={field === 'condition' ? 100 : 1000}
+                placeholder={
+                  field === 'condition'
+                    ? 'e.g. payment accepted'
+                    : 'Optional explanation of this connection'
+                }
+                onBlur={(event) => {
+                  if (event.target.value !== (activeEdge[field] ?? ''))
+                    commit({
+                      ...board,
+                      edges: board.edges.map((edge) =>
+                        edge.id === activeEdge.id
+                          ? withoutNarration({ ...edge, [field]: event.target.value })
+                          : edge,
+                      ),
+                    });
+                }}
+              />
+            </label>
+          ))}
           <label>
             Connection type
             <select
@@ -122,6 +208,13 @@ export function ConnectionDetails({
             commit({
               ...board,
               edges: board.edges.filter((edge) => edge.id !== activeEdge.id),
+              ...(board.edgePorts
+                ? {
+                    edgePorts: Object.fromEntries(
+                      Object.entries(board.edgePorts).filter(([id]) => id !== activeEdge.id),
+                    ),
+                  }
+                : {}),
             });
             onClose();
           }}

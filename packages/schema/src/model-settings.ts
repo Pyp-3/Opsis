@@ -10,6 +10,17 @@ export const BoardModelSettingsSchema = z
       .max(80)
       .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/),
     effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
+    executablePath: z
+      .string()
+      .trim()
+      .max(1024)
+      .refine(
+        (value) => !value || /^(?:\/|[A-Za-z]:[\\/])/.test(value),
+        'Use an absolute executable path.',
+      )
+      .optional(),
+    maxRequestCharacters: z.number().int().min(1000).max(768000).optional(),
+    maxBudgetUSD: z.number().finite().min(0.01).max(100).optional(),
   })
   .strict();
 export type BoardModelSettings = z.infer<typeof BoardModelSettingsSchema>;
@@ -65,3 +76,19 @@ export const BOARD_MODEL_CHOICES: Record<
     { id: 'gpt-daybreak-blue-latest', label: 'Daybreak Blue · rolling', group: 'Previews' },
   ],
 };
+
+/** Known incompatible effort choices fail before any provider request. Custom IDs remain explicit. */
+export function modelSettingsProblem(
+  agent: 'claude' | 'codex',
+  settings: BoardModelSettings,
+): string | null {
+  if (settings.model === 'default') return 'Choose an explicit model.';
+  const allowed = BOARD_MODEL_CHOICES[agent].find(
+    (choice) => choice.id === settings.model,
+  )?.efforts;
+  if (allowed && !allowed.includes(settings.effort))
+    return 'This model does not support the selected effort.';
+  if (agent !== 'claude' && settings.maxBudgetUSD !== undefined)
+    return 'This CLI does not support a dollar budget. Remove the budget before continuing.';
+  return null;
+}

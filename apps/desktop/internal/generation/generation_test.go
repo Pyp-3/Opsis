@@ -59,6 +59,7 @@ func (f *fakeRunner) Run(_ context.Context, request harness.Request, onLine func
 	}
 	if onLine != nil {
 		onLine(`{"type":"turn.started"}`)
+		onLine(`{"type":"turn.completed","usage":{"input_tokens":0,"output_tokens":8,"cached_input_tokens":0}}`)
 	}
 	graph := f.graph
 	if f.invalidFirst && f.attempts == 1 {
@@ -164,5 +165,37 @@ func TestNativeAttachmentsCrossPDFAndImageBoundariesAndAreRemoved(t *testing.T) 
 	}
 	if _, err := os.Stat(fake.stagedImage); !os.IsNotExist(err) {
 		t.Fatal("staged image survived completion")
+	}
+}
+
+func TestConfiguredPathRequestLimitAndUsage(t *testing.T) {
+	fake := &fakeRunner{t: t}
+	engine := engineFor(t, fake)
+	demo := request(t, engine, map[string]any{"prompt": "email", "agent": "demo"})
+	fake.graph = string(demo.Body)
+	file := filepath.Join(t.TempDir(), "selected-codex")
+	if err := os.WriteFile(file, []byte("fake"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	settings := map[string]any{"model": "gpt-6-luna", "effort": "low", "executablePath": file, "maxRequestCharacters": 1000}
+	raw, _ := json.Marshal(map[string]any{"agent": "codex", "settings": settings})
+	checked, err := engine.Run(context.Background(), "check-agent", raw, nil)
+	if err != nil || checked.Status != 200 || fake.attempts != 0 {
+		t.Fatalf("no-call check: %v %s", err, checked.Body)
+	}
+	limited := request(t, engine, map[string]any{"agent": "codex", "prompt": "Explain email", "settings": settings})
+	if limited.Status != 400 || !strings.Contains(string(limited.Body), "character limit") || fake.attempts != 0 {
+		t.Fatalf("request limit failed: %d %s attempts=%d", limited.Status, limited.Body, fake.attempts)
+	}
+	delete(settings, "maxRequestCharacters")
+	raw, _ = json.Marshal(map[string]any{"agent": "codex", "prompt": "Explain email", "settings": settings})
+	var measurements []json.RawMessage
+	generated, err := engine.Run(context.Background(), "generate", raw, func(event json.RawMessage) {
+		if strings.Contains(string(event), "\"type\":\"usage\"") {
+			measurements = append(measurements, event)
+		}
+	})
+	if err != nil || generated.Status != 200 || len(measurements) != 1 || !strings.Contains(string(measurements[0]), "\"inputTokens\":0") {
+		t.Fatalf("reported usage: %v %s %s", err, generated.Body, measurements)
 	}
 }

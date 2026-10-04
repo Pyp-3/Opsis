@@ -108,7 +108,8 @@ export function boardMarkdown(board: BoardDocument): string {
           .filter((edge) => edge.source === node.id)
           .map(
             (edge) =>
-              `- ${safe(connectionLabel(edge) || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}`,
+              `- ${safe(connectionLabel(edge) || 'Next')} → ${safe(board.nodes.find((n) => n.id === edge.target)?.label ?? edge.target)}` +
+              (edge.description ? ' — ' + safe(edge.description) : ''),
           )
           .join('\n');
         const terminal = node.terminal

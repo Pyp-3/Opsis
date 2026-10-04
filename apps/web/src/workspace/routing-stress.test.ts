@@ -116,3 +116,52 @@ describe('routing under small drags', () => {
     }
   }
 });
+
+it('routes dense irregular positions and overlapping concepts deterministically', () => {
+  const nodes = Array.from({ length: 50 }, (_, i) => ({
+    ...EMAIL_DEMO.nodes[0]!,
+    id: 'dense' + i,
+    label: 'Concept ' + i,
+  }));
+  const edges = Array.from({ length: 100 }, (_, i) => ({
+    id: 'edge' + i,
+    source: 'dense' + (i % 50),
+    target: 'dense' + ((i * 13 + 7) % 50),
+    label: 'Branch ' + i,
+  }));
+  const board = {
+    ...EMAIL_DEMO,
+    version: 2 as const,
+    agent: 'demo' as const,
+    nodes,
+    edges,
+    positions: Object.fromEntries(
+      nodes.map((node, i) => [
+        node.id,
+        { x: (i % 7) * 270 + (i % 3) * 17, y: Math.floor(i / 7) * 180 + (i % 4) * 11 },
+      ]),
+    ),
+  };
+  const routes = routeBoard(board);
+  expect(Object.keys(routes)).toHaveLength(100);
+  for (const route of Object.values(routes)) {
+    expect(route.path).not.toMatch(/NaN|Infinity/);
+    expect(route.label).not.toBeNull();
+  }
+  expect(routeBoard({ ...board, description: 'Changed prose' })).toBe(routes);
+  const overlapping = {
+    ...board,
+    nodes: nodes.slice(0, 10),
+    edges: edges.filter(
+      (edge) =>
+        nodes.slice(0, 10).some((node) => node.id === edge.source) &&
+        nodes.slice(0, 10).some((node) => node.id === edge.target),
+    ),
+    positions: Object.fromEntries(
+      nodes.slice(0, 10).map((node, i) => [node.id, { x: (i % 3) * 20, y: (i % 4) * 15 }]),
+    ),
+  };
+  const overlapRoutes = routeBoard(overlapping);
+  expect(Object.keys(overlapRoutes)).toHaveLength(overlapping.edges.length);
+  for (const route of Object.values(overlapRoutes)) expect(route.path).not.toMatch(/NaN|Infinity/);
+}, 30000);

@@ -1676,3 +1676,80 @@
     display: none;
   }
 }
+
+.agent-settings {
+  margin-bottom: 3rem;
+  display: grid;
+  gap: 1.25rem;
+}
+.agent-settings h2,
+.agent-settings h3 {
+  margin: 0 0 0.5rem;
+}
+.agent-settings .settings-card {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.agent-settings label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.agent-settings input,
+.agent-settings select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+}
+.agent-settings small {
+  display: block;
+  opacity: 0.8;
+}
+.agent-settings button {
+  padding: 0.65rem 0.85rem;
+}
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.profile-row > span {
+  flex: 1;
+  min-width: 150px;
+  overflow-wrap: anywhere;
+}
+.usage-history {
+  max-height: 420px;
+  overflow: auto;
+}
+.usage-history article {
+  padding: 1rem 0;
+  border-top: 1px solid #8884;
+  overflow-wrap: anywhere;
+}
+
+.agent-settings select {
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.settings-sections {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+.settings-sections button {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.settings-sections button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}

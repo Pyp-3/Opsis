@@ -11,3 +11,7 @@ export * from './terminal-example';
 export * from './process';
 
 export const PACKAGE_NAME = '@opsis/schema';
+
+export * from './board-review';
+
+export * from './provider-usage';

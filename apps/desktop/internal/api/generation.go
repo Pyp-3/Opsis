@@ -23,7 +23,7 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 		writeJSON(w, 200, result)
 		return nil
 	})
-	for _, operation := range []string{"generate", "illustrate"} {
+	for _, operation := range []string{"generate", "illustrate", "check-agent"} {
 		s.handle("POST /v1/boards/"+operation, func(w http.ResponseWriter, r *http.Request) error {
 			if _, err := requireUser(r); err != nil {
 				return err
@@ -32,6 +32,9 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 				return failure(415, "Expected application/json.")
 			}
 			limit := int64(40_000_000)
+			if operation == "check-agent" {
+				limit = 8192
+			}
 			if operation == "illustrate" {
 				limit = 4_000_000
 			}
