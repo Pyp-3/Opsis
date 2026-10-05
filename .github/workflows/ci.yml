@@ -143,9 +143,96 @@ jobs:
             playwright-report/
           retention-days: 7
 
+  windows-desktop:
+    name: Windows desktop
+    runs-on: windows-2025
+    env:
+      CGO_ENABLED: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.89.0'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine
+      # cgo (SQLite and the race detector) needs a MinGW-w64 gcc.
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Add MinGW gcc to PATH
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
+      - name: Ensure WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          if (Test-Path $key) { "WebView2 $((Get-ItemProperty $key).pv)"; exit 0 }
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile webview2.exe
+          Start-Process .\webview2.exe -ArgumentList '/silent','/install' -Wait
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check native code
+        run: pnpm desktop:check
+      - name: Native race and contract tests
+        run: pnpm desktop:test
+      - name: Build packaged executable
+        run: pnpm desktop:build
+      - name: Install browser
+        run: pnpm exec playwright install chromium
+      - name: Existing database and packaged MCP integration
+        env:
+          OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis.exe
+        run: pnpm desktop:integration
+      - name: Browser feature parity against Go API
+        env:
+          OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis.exe
+        run: pnpm test:browser
+      - name: Hidden WebView2, React and WASM smoke
+        run: |
+          profile=$(mktemp -d)
+          trap 'rm -rf "$profile"' EXIT
+          OPSIS_DATA_DIR="$(cygpath -w "$profile")" OPSIS_SPEECH=off ./output/desktop/opsis.exe --smoke-test
+      - name: Package desktop release
+        if: github.event_name == 'push'
+        run: pnpm desktop:package
+      - name: Upload desktop release
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-release
+          path: output/desktop-release/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-browser-failures
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
   release:
     name: Publish desktop and developer prerelease
-    needs: [check, desktop]
+    needs: [check, desktop, windows-desktop]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -158,6 +245,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: desktop-release
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-desktop-release
           path: release
       - name: Publish release for this commit
         env:

@@ -20,7 +20,10 @@ test('saves profiles, edits and removes them, checks invalid paths without a mod
   await panel.getByLabel('Profile name').fill('Short diagrams');
   await panel.getByRole('button', { name: 'Save profile changes' }).click();
   await expect(panel.getByText('Short diagrams', { exact: true })).toBeVisible();
-  await panel.getByLabel('Executable path').fill('/opsis-missing/cli');
+  // The path must be absolute on the host platform to reach the existence check.
+  await panel
+    .getByLabel('Executable path')
+    .fill(process.platform === 'win32' ? 'C:\\opsis-missing\\cli.exe' : '/opsis-missing/cli');
   await panel.getByRole('button', { name: 'Check configuration (no model call)' }).click();
   await expect(panel.getByRole('status')).toContainText('Executable not found');
   await panel.getByRole('button', { name: 'Remove', exact: true }).click();

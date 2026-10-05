@@ -29,17 +29,27 @@ export default defineConfig({
     timezoneId: 'Africa/Nairobi',
     ...devices['Desktop Chrome'],
   },
+  // Variables go through `env` rather than `NAME=value cmd`, which cmd.exe cannot run.
   webServer: [
     {
       command: process.env.OPSIS_QA_DESKTOP_BINARY
-        ? `PORT=${apiPort} node scripts/run-desktop-qa.mjs`
-        : `PORT=${apiPort} OPSIS_DB_PATH=:memory: OPSIS_RATE_LIMIT=10000 OPSIS_SPEECH=off pnpm --filter api exec node --import tsx src/main.ts`,
+        ? 'node scripts/run-desktop-qa.mjs'
+        : 'pnpm --filter api exec node --import tsx src/main.ts',
+      env: process.env.OPSIS_QA_DESKTOP_BINARY
+        ? { PORT: String(apiPort) }
+        : {
+            PORT: String(apiPort),
+            OPSIS_DB_PATH: ':memory:',
+            OPSIS_RATE_LIMIT: '10000',
+            OPSIS_SPEECH: 'off',
+          },
       url: `http://127.0.0.1:${apiPort}/v1/health`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
-      command: `OPSIS_API_URL=http://127.0.0.1:${apiPort} pnpm --filter web dev --port ${webPort}`,
+      command: `pnpm --filter web dev --port ${webPort}`,
+      env: { OPSIS_API_URL: `http://127.0.0.1:${apiPort}` },
       url: `http://127.0.0.1:${webPort}`,
       reuseExistingServer: false,
       timeout: 120_000,

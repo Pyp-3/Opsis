@@ -1,15 +1,15 @@
 # Opsis desktop
 
-Opsis runs as a Linux desktop executable using Wails, Go, and the existing React
+Opsis runs as a Linux or Windows desktop executable using Wails, Go, and the existing React
 canvas. The executable includes the frontend, Rust/WASM engine, shared rules,
 and a private Node runtime for Kokoro speech. Running it does not require Node,
 pnpm, Go, Rust, a checkout, or a separately started API.
 
 This is a Linux native build, not a fully static executable. GTK 3 and WebKitGTK
 4.1 must be installed. Linux x64 is validated; Linux arm64 can be built natively
-but has not been verified. A Windows x64 executable can be built natively (see
-[Windows](#windows)); release packaging for it and macOS desktop support are not
-implemented. The browser development target remains available on every platform.
+but has not been verified. Windows x64 is built, tested and released by CI (see
+[Windows](#windows)). macOS desktop support is not implemented. The browser
+development target remains available on every platform.
 
 ## Run
 
@@ -149,12 +149,23 @@ are occupied. No test should stop an unrelated local server or make paid calls.
 
 ## Windows
 
-On Windows 11 x64, `pnpm desktop:build` produces `output\desktop\opsis.exe`. It
+Download `opsis-…-windows-x64.zip` from the same release, extract it (right-click →
+**Extract All**), and run `opsis.exe`. It needs the Microsoft Edge WebView2
+runtime, which Windows 11 includes. The executable is not code-signed, so
+SmartScreen may warn on first launch (**More info → Run anyway**); compare the
+download with its `.sha256` file first. `opsis.exe --mcp` works as the MCP command.
+
+To build it, on Windows 11 x64 `pnpm desktop:build` produces `output\desktop\opsis.exe`. It
 uses the system WebView2 runtime (preinstalled on Windows 11) instead of
 GTK/WebKitGTK and bundles the official `node.exe`. Build prerequisites: Node 22+,
 pnpm 10.34.5, Go 1.25+ (an older Go with `GOTOOLCHAIN=auto` downloads it), Rust/rustup,
 a MinGW-w64 `gcc` on `PATH` for cgo/SQLite (for example MSYS2 UCRT64), and Visual
 Studio C++ build tools for the `better-sqlite3` native addon. Set `CGO_ENABLED=1`.
+Use a current Node 22 release: the `better-sqlite3` 13 Windows prebuild crashes on
+Node 22.3, and the build bundles whichever Node version runs it. `go-winres` embeds
+the icon (rendered from `apps/web/public/favicon.svg`), a per-monitor-DPI manifest,
+and version information from `VERSION`. `pnpm desktop:package` writes a zip and
+SHA-256 checksum to `output\desktop-release`.
 The build uses Windows' own `tar.exe` and a flat, link-free `node_modules` for the
 speech runtime, because extracting symlinks needs elevated rights on Windows.
 
@@ -167,9 +178,11 @@ Claude/Codex discovery runs only `.exe` files or Node entry points directly; npm
 installs resolve to the package's `claude.exe` or `codex.js`. `.cmd` shims are not
 run because the harness never starts `cmd.exe`.
 
-Verified locally: `go test -race ./internal/...`, `--diagnose` with speech enabled,
-and the hidden WebView2 `--smoke-test` (PowerShell: set `OPSIS_DATA_DIR` to a new
-directory and `OPSIS_SPEECH=off`). `pnpm desktop:package`, CI and installers are Linux-only.
+The `Windows desktop` CI job (windows-2025) runs native race tests, packaged
+database/MCP integration, the browser suite against `opsis.exe`, and the hidden
+WebView2 smoke test, then attaches the zip to the same prerelease as the Linux
+tarball. The pixel-baseline browser test runs only on Linux, where its baseline
+fonts live. No installer, code signing or auto-update is provided yet.
 
 ## Feature ownership and migration coverage
 
@@ -196,5 +209,5 @@ single contract implementation and avoids a second independent schema in Go.
 The speech adapter is an explicit retained dependency, not a Go reimplementation
 of Kokoro. Native save dialogs and clipboard still need an interactive desktop
 check; automated smoke tests do not open dialogs or overwrite the user's clipboard.
-No paid-provider entitlement, Windows release packaging, macOS desktop, or Linux
-arm64 validation is claimed by this migration.
+No paid-provider entitlement, Windows code signing, macOS desktop, or Linux arm64
+validation is claimed by this migration.

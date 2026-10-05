@@ -27,21 +27,26 @@ const version = releaseVersion(
   process.env.GITHUB_RUN_ATTEMPT ?? '1',
   commit,
 );
-const name = `opsis-${version}-linux-${process.arch}`;
+const windows = process.platform === 'win32';
+const platform = windows ? 'windows' : 'linux';
+const executable = windows ? 'opsis.exe' : 'opsis';
+const name = `opsis-${version}-${platform}-${process.arch}`;
 const output = join(root, 'output/desktop-release');
 mkdirSync(output, { recursive: true });
-const archive = join(output, `${name}.tar.gz`);
+// Windows users expect a zip, which Explorer extracts without extra tools.
+const archiveName = `${name}.${windows ? 'zip' : 'tar.gz'}`;
+const archive = join(output, archiveName);
 if (existsSync(archive)) throw new Error(`Release already exists: ${archive}`);
 const temporary = mkdtempSync(join(tmpdir(), 'opsis-desktop-release-'));
 try {
   const stage = join(temporary, name);
   mkdirSync(stage);
-  cpSync(join(root, 'output/desktop/opsis'), join(stage, 'opsis'));
+  cpSync(join(root, 'output/desktop', executable), join(stage, executable));
   cpSync(join(root, 'docs/DESKTOP.md'), join(stage, 'README.md'));
   const metadata = {
     version,
     commit,
-    platform: 'linux',
+    platform,
     architecture: process.arch,
     workspaceDirty: dirty,
   };
@@ -69,9 +74,16 @@ try {
   if (!goLicense) throw new Error('The installed Go runtime license could not be found.');
   notices += `\n\n===== Go runtime =====\n${readFileSync(goLicense, 'utf8')}`;
   writeFileSync(join(stage, 'THIRD-PARTY-NOTICES.txt'), notices);
-  execFileSync('tar', ['-czf', archive, '-C', temporary, name], { stdio: 'inherit' });
+  if (windows)
+    // Windows' bsdtar (not an MSYS/Git GNU tar) writes the zip format selected by `-a`.
+    execFileSync(
+      join(process.env.SystemRoot ?? 'C:/Windows', 'System32/tar.exe'),
+      ['-a', '-cf', archive, '-C', temporary, name],
+      { stdio: 'inherit' },
+    );
+  else execFileSync('tar', ['-czf', archive, '-C', temporary, name], { stdio: 'inherit' });
   const checksum = createHash('sha256').update(readFileSync(archive)).digest('hex');
-  writeFileSync(`${archive}.sha256`, `${checksum}  ${name}.tar.gz\n`);
+  writeFileSync(`${archive}.sha256`, `${checksum}  ${archiveName}\n`);
   console.log(`Desktop release: ${archive}`);
 } finally {
   rmSync(temporary, { recursive: true, force: true });

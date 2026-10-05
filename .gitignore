@@ -28,4 +28,5 @@ target/
 apps/desktop/assets/
 apps/desktop/bundle/
 apps/desktop/build/
+apps/desktop/*.syso
 apps/web/wailsjs/

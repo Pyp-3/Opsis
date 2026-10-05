@@ -28,15 +28,20 @@ settings, pricing-based cost projections/graphs, and complete Windows/macOS pack
 Appearance settings and initial native platform plumbing have shipped; they do not
 complete those goals. The Linux desktop and browser application remain supported.
 
-Windows x64 desktop build (partial, 2026-10-05): `pnpm desktop:build` now produces
+Windows x64 desktop (2026-10-05): `pnpm desktop:build` now produces
 `output/desktop/opsis.exe` natively on Windows (WebView2, bundled `node.exe`, flat
 link-free speech runtime). Fixed Windows SQLite file URIs and Claude/Codex discovery
 (`.exe` or Node entry only; POSIX mode checks skipped). Verified on Windows 11:
 `go test -race ./internal/...`, `--diagnose` with speech on and off, all 24 hidden
 WebView2 smoke checks, and real `--version` probes of npm-installed Claude/Codex.
-Remaining: `desktop:package`/release artifacts, Windows CI job, icon/manifest/installer,
-browser suite against the exe, interactive save-dialog/clipboard check, and
-`.cmd` override parity with the Fastify host. macOS packaging remains pending.
+Release packaging: `desktop:package` writes `opsis-…-windows-x64.zip` + SHA-256; the
+exe embeds an icon, per-monitor-DPI manifest and version info; a `Windows desktop`
+CI job (windows-2025) tests and attaches the zip to each prerelease. Locally on
+Windows 11 with Node 22.23.3: packaged database/MCP integration passed, the browser
+suite against `opsis.exe` passed (Linux-only pixel baseline skipped) and 344/345
+unit tests passed (one cold-ESLint timeout). Remaining: code signing, an installer
+and auto-update, interactive save-dialog/clipboard check, and `.cmd` override
+parity with the Fastify host. macOS packaging remains pending.
 
 ## Product goal
 

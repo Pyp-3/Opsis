@@ -287,6 +287,7 @@ test('imports a reviewed legacy batch as independent private boards', async ({ p
 });
 
 test('branching canvas has a stable visual baseline', async ({ page }) => {
+  test.skip(process.platform !== 'linux', 'The pixel baseline is rendered with Linux CI fonts.');
   await signUp(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');

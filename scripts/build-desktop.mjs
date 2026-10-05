@@ -150,6 +150,29 @@ if (!process.argv.includes('--reuse-runtime')) {
 }
 if (!existsSync(join(desktop, 'bundle/runtime.tar.gz')))
   throw new Error('Build the runtime before using --reuse-runtime.');
+if (windows) {
+  // Embed the icon, manifest (per-monitor DPI, long paths) and version information.
+  const version = readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  run(
+    'go',
+    [
+      'run',
+      'github.com/tc-hib/go-winres@v0.3.3',
+      'make',
+      '--in',
+      'winres/winres.json',
+      '--out',
+      'rsrc',
+      '--arch',
+      'amd64',
+      '--product-version',
+      version,
+      '--file-version',
+      version,
+    ],
+    desktop,
+  );
+}
 run(
   'go',
   [
