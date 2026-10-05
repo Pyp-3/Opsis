@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -23,6 +24,9 @@ type fakeRunner struct {
 	expectedImage []byte
 	stagedImage   string
 }
+
+// Windows discovery only runs .exe files directly.
+var executableSuffix = map[bool]string{true: ".exe"}[runtime.GOOS == "windows"]
 
 func (f *fakeRunner) Run(_ context.Context, request harness.Request, onLine func(string)) (string, error) {
 	if len(request.Args) == 1 && request.Args[0] == "--version" {
@@ -41,7 +45,7 @@ func (f *fakeRunner) Run(_ context.Context, request harness.Request, onLine func
 				f.t.Error("image bytes changed during staging", err)
 			}
 			info, err := os.Stat(path)
-			if err != nil || info.Mode().Perm() != 0600 {
+			if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 				f.t.Error("attachment is not private")
 			}
 			f.stagedImage = path
@@ -114,7 +118,7 @@ func TestNativeWorkflowRepairsOnceAndPreservesAttachmentAndReviewPolicy(t *testi
 	engine := engineFor(t, fake)
 	demo := request(t, engine, map[string]any{"prompt": "email", "agent": "demo"})
 	fake.graph = string(demo.Body)
-	file := filepath.Join(t.TempDir(), "codex")
+	file := filepath.Join(t.TempDir(), "codex"+executableSuffix)
 	if err := os.WriteFile(file, []byte("fake"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +142,7 @@ func TestNativeWorkflowRepairsOnceAndPreservesAttachmentAndReviewPolicy(t *testi
 func TestNativeWorkflowDoesNotRetryProcessFailures(t *testing.T) {
 	fake := &fakeRunner{t: t, failure: true}
 	engine := engineFor(t, fake)
-	file := filepath.Join(t.TempDir(), "codex")
+	file := filepath.Join(t.TempDir(), "codex"+executableSuffix)
 	_ = os.WriteFile(file, []byte("fake"), 0700)
 	t.Setenv("OPSIS_CODEX_BIN", file)
 	result := request(t, engine, map[string]any{"prompt": "Explain DNS", "agent": "codex"})
@@ -151,7 +155,7 @@ func TestNativeAttachmentsCrossPDFAndImageBoundariesAndAreRemoved(t *testing.T) 
 	fake := &fakeRunner{t: t, expectedImage: []byte("test image bytes")}
 	engine := engineFor(t, fake)
 	fake.graph = string(request(t, engine, map[string]any{"prompt": "email", "agent": "demo"}).Body)
-	file := filepath.Join(t.TempDir(), "codex")
+	file := filepath.Join(t.TempDir(), "codex"+executableSuffix)
 	if err := os.WriteFile(file, []byte("fake"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +177,7 @@ func TestConfiguredPathRequestLimitAndUsage(t *testing.T) {
 	engine := engineFor(t, fake)
 	demo := request(t, engine, map[string]any{"prompt": "email", "agent": "demo"})
 	fake.graph = string(demo.Body)
-	file := filepath.Join(t.TempDir(), "selected-codex")
+	file := filepath.Join(t.TempDir(), "selected-codex"+executableSuffix)
 	if err := os.WriteFile(file, []byte("fake"), 0700); err != nil {
 		t.Fatal(err)
 	}

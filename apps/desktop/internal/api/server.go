@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -65,7 +64,7 @@ func New(database string, fallback http.Handler) (*Server, error) {
 	}
 	dsn := database
 	if database != ":memory:" {
-		dsn = (&url.URL{Scheme: "file", Path: database}).String()
+		dsn = fileURI(database, "")
 	}
 	dsn += "?_busy_timeout=5000&_foreign_keys=on&_journal_mode=WAL&_txlock=immediate"
 	db, err := sql.Open("sqlite3", dsn)

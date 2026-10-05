@@ -7,8 +7,9 @@ pnpm, Go, Rust, a checkout, or a separately started API.
 
 This is a Linux native build, not a fully static executable. GTK 3 and WebKitGTK
 4.1 must be installed. Linux x64 is validated; Linux arm64 can be built natively
-but has not been verified. Windows and macOS desktop packaging are not implemented.
-The existing browser development target remains available on those platforms.
+but has not been verified. A Windows x64 executable can be built natively (see
+[Windows](#windows)); release packaging for it and macOS desktop support are not
+implemented. The browser development target remains available on every platform.
 
 ## Run
 
@@ -146,6 +147,30 @@ Browser tests use isolated servers, a temporary database and fake/demo providers
 Override `OPSIS_QA_API_PORT` and `OPSIS_QA_WEB_PORT` when default ports 8100/3100
 are occupied. No test should stop an unrelated local server or make paid calls.
 
+## Windows
+
+On Windows 11 x64, `pnpm desktop:build` produces `output\desktop\opsis.exe`. It
+uses the system WebView2 runtime (preinstalled on Windows 11) instead of
+GTK/WebKitGTK and bundles the official `node.exe`. Build prerequisites: Node 22+,
+pnpm 10.34.5, Go 1.25+ (an older Go with `GOTOOLCHAIN=auto` downloads it), Rust/rustup,
+a MinGW-w64 `gcc` on `PATH` for cgo/SQLite (for example MSYS2 UCRT64), and Visual
+Studio C++ build tools for the `better-sqlite3` native addon. Set `CGO_ENABLED=1`.
+The build uses Windows' own `tar.exe` and a flat, link-free `node_modules` for the
+speech runtime, because extracting symlinks needs elevated rights on Windows.
+
+The executable is a GUI-subsystem program: it opens no console window, so
+`--diagnose`/`--smoke-test` output is only visible when stdout is redirected
+(MCP's piped stdio is unaffected). The database, extracted
+runtime and downloaded models all live under `%LOCALAPPDATA%\opsis`.
+Windows has no POSIX mode bits, so file privacy relies on the per-user profile ACL.
+Claude/Codex discovery runs only `.exe` files or Node entry points directly; npm
+installs resolve to the package's `claude.exe` or `codex.js`. `.cmd` shims are not
+run because the harness never starts `cmd.exe`.
+
+Verified locally: `go test -race ./internal/...`, `--diagnose` with speech enabled,
+and the hidden WebView2 `--smoke-test` (PowerShell: set `OPSIS_DATA_DIR` to a new
+directory and `OPSIS_SPEECH=off`). `pnpm desktop:package`, CI and installers are Linux-only.
+
 ## Feature ownership and migration coverage
 
 | Feature                                                        | Desktop owner                                        | Verification                                        |
@@ -171,5 +196,5 @@ single contract implementation and avoids a second independent schema in Go.
 The speech adapter is an explicit retained dependency, not a Go reimplementation
 of Kokoro. Native save dialogs and clipboard still need an interactive desktop
 check; automated smoke tests do not open dialogs or overwrite the user's clipboard.
-No paid-provider entitlement, Windows/macOS desktop, or Linux arm64 validation is
-claimed by this migration.
+No paid-provider entitlement, Windows release packaging, macOS desktop, or Linux
+arm64 validation is claimed by this migration.

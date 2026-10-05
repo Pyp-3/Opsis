@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +58,8 @@ func TestGatewayKeepsNativeSessionsPrivateAndPersistent(t *testing.T) {
 		t.Fatal("session lost")
 	}
 	info, err := os.Stat(filepath.Join(directory, "desktop-session.json"))
-	if err != nil || info.Mode().Perm() != 0600 {
+	// Windows has no POSIX mode bits; the profile directory ACL provides privacy there.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("session must be private")
 	}
 	restarted := NewGateway(target, directory)

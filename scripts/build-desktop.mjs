@@ -18,9 +18,18 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktop = join(root, 'apps/desktop');
 const output = join(root, 'output/desktop');
-const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, stdio: 'inherit' });
-if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
-  throw new Error('The desktop target currently supports Linux x64/arm64 native builds.');
+const windows = process.platform === 'win32';
+// pnpm is a .cmd shim on Windows, which execFile can only start through a shell.
+const run = (command, args, cwd = root) =>
+  execFileSync(command, args, { cwd, stdio: 'inherit', shell: windows && command === 'pnpm' });
+if (
+  !(process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch)) &&
+  !(windows && process.arch === 'x64')
+)
+  throw new Error('The desktop target supports Linux x64/arm64 and Windows x64 native builds.');
+const executable = join(output, windows ? 'opsis.exe' : 'opsis');
+// GNU tar from MSYS/Git would read `C:\...` as a remote host; use Windows' bsdtar.
+const tar = windows ? join(process.env.SystemRoot ?? 'C:/Windows', 'System32/tar.exe') : 'tar';
 mkdirSync(output, { recursive: true });
 run('node', ['scripts/build-desktop-code.mjs']);
 run('pnpm', ['engine:build']);
@@ -44,7 +53,17 @@ if (!process.argv.includes('--reuse-runtime')) {
       ],
     ]) {
       const destination = join(runtime, name);
-      run('pnpm', ['--filter', filter, 'deploy', '--prod', '--legacy', destination]);
+      // Windows cannot recreate pnpm's symlinked layout without elevated rights,
+      // so the runtime uses a flat, link-free node_modules there.
+      run('pnpm', [
+        '--filter',
+        filter,
+        'deploy',
+        '--prod',
+        '--legacy',
+        ...(windows ? ['--config.node-linker=hoisted'] : []),
+        destination,
+      ]);
       // pnpm's legacy deploy includes a self-reference back to the source checkout.
       // The bundled entry does not need it, and a shipped runtime must be relocatable.
       rmSync(join(destination, 'node_modules/.pnpm/node_modules', filter), { force: true });
@@ -64,28 +83,33 @@ if (!process.argv.includes('--reuse-runtime')) {
       });
       // Narration explicitly uses CPU inference. Other operating systems, CPU
       // architectures and CUDA/TensorRT providers are not part of this target.
+      const platform = windows ? 'win32' : 'linux';
       const store = join(destination, 'node_modules/.pnpm');
-      for (const packageName of readdirSync(store)) {
-        if (!packageName.startsWith('onnxruntime-node@')) continue;
-        const native = join(store, packageName, 'node_modules/onnxruntime-node/bin/napi-v3');
-        for (const platform of readdirSync(native)) {
-          if (platform !== 'linux')
-            rmSync(join(native, platform), { recursive: true, force: true });
+      const packages = existsSync(store)
+        ? readdirSync(store)
+            .filter((name) => name.startsWith('onnxruntime-node@'))
+            .map((name) => join(store, name, 'node_modules/onnxruntime-node'))
+        : [join(destination, 'node_modules/onnxruntime-node')].filter((path) => existsSync(path));
+      for (const onnx of packages) {
+        const native = join(onnx, 'bin/napi-v3');
+        for (const item of readdirSync(native)) {
+          if (item !== platform) rmSync(join(native, item), { recursive: true, force: true });
         }
-        for (const architecture of readdirSync(join(native, 'linux'))) {
+        for (const architecture of readdirSync(join(native, platform))) {
           if (architecture !== process.arch)
-            rmSync(join(native, 'linux', architecture), { recursive: true, force: true });
+            rmSync(join(native, platform, architecture), { recursive: true, force: true });
         }
-        for (const library of [
-          'libonnxruntime_providers_cuda.so',
-          'libonnxruntime_providers_tensorrt.so',
-        ])
-          rmSync(join(native, 'linux', process.arch, library), { force: true });
+        for (const library of windows
+          ? ['onnxruntime_providers_cuda.dll', 'onnxruntime_providers_tensorrt.dll']
+          : ['libonnxruntime_providers_cuda.so', 'libonnxruntime_providers_tensorrt.so'])
+          rmSync(join(native, platform, process.arch, library), { force: true });
       }
     }
     // Bundle an official Node build, not the distro binary (which may depend on
     // distro-specific ICU/Abseil versions). Its version matches native addons.
-    const archiveName = `node-${process.version}-linux-${process.arch}.tar.xz`;
+    const archiveName = windows
+      ? `node-${process.version}-win-${process.arch}.zip`
+      : `node-${process.version}-linux-${process.arch}.tar.xz`;
     const base = `https://nodejs.org/dist/${process.version}/`;
     const archive = join(output, archiveName);
     const checksums = await fetch(`${base}SHASUMS256.txt`);
@@ -104,12 +128,14 @@ if (!process.argv.includes('--reuse-runtime')) {
       throw new Error('Node runtime checksum mismatch; remove the cached archive and retry.');
     const unpack = join(stage, 'node');
     mkdirSync(unpack);
-    run('tar', ['-xJf', archive, '--strip-components=1', '-C', unpack]);
-    cpSync(join(unpack, 'bin/node'), join(runtime, 'node'));
+    // Windows' bundled bsdtar also extracts the official zip archive.
+    run(tar, [windows ? '-xf' : '-xJf', archive, '--strip-components=1', '-C', unpack]);
+    const node = join(runtime, windows ? 'node.exe' : 'node');
+    cpSync(join(unpack, windows ? 'node.exe' : 'bin/node'), node);
     cpSync(join(unpack, 'LICENSE'), join(runtime, 'NODE-LICENSE'));
-    chmodSync(join(runtime, 'node'), 0o755);
+    chmodSync(node, 0o755);
     run(
-      join(runtime, 'node'),
+      node,
       [
         '--input-type=module',
         '-e',
@@ -117,7 +143,7 @@ if (!process.argv.includes('--reuse-runtime')) {
       ],
       join(runtime, 'api'),
     );
-    run('tar', ['-czf', join(desktop, 'bundle/runtime.tar.gz'), '-C', runtime, '.']);
+    run(tar, ['-czf', join(desktop, 'bundle/runtime.tar.gz'), '-C', runtime, '.']);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
@@ -130,13 +156,14 @@ run(
     'build',
     '-trimpath',
     '-tags',
-    'desktop,production,webkit2_41',
+    windows ? 'desktop,production' : 'desktop,production,webkit2_41',
     '-ldflags',
-    '-s -w',
+    // A GUI-subsystem binary opens no console window; piped stdio (MCP) still works.
+    windows ? '-s -w -H windowsgui' : '-s -w',
     '-o',
-    join(output, 'opsis'),
+    executable,
     '.',
   ],
   desktop,
 );
-console.log(`Desktop executable: ${resolve(output, 'opsis')}`);
+console.log(`Desktop executable: ${resolve(executable)}`);

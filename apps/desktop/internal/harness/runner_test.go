@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,9 @@ func TestRunnerCancelsAndTimesOutRealChildProcesses(t *testing.T) {
 }
 
 func TestDiscoveryDoesNotSkipAnUnsafeFirstInstallation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not available on Windows")
+	}
 	first, second := t.TempDir(), t.TempDir()
 	for _, directory := range []string{first, second} {
 		if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("fixture"), 0700); err != nil {

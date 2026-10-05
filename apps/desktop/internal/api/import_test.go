@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -35,7 +36,8 @@ func TestImportsLiveWALWithoutReplacingData(t *testing.T) {
 		t.Fatal("existing destination replaced")
 	}
 	info, err := os.Stat(destination)
-	if err != nil || info.Mode().Perm() != 0600 {
+	// Windows has no POSIX mode bits; the profile directory ACL provides privacy there.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("database not private")
 	}
 }

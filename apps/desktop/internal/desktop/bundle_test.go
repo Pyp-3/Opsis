@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -25,7 +26,8 @@ func TestRuntimeExtractionIsReusableAndPreservesExecutableMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(first, "node"))
-	if err != nil || info.Mode().Perm() != 0700 {
+	// Windows has no POSIX mode bits; the per-user cache ACL provides privacy there.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0700) {
 		t.Fatal("executable not private/executable")
 	}
 	second, err := ExtractRuntime(buffer.Bytes(), cache)
@@ -56,6 +58,7 @@ func TestUserDataSurvivesRuntimeChanges(t *testing.T) {
 	directory := t.TempDir()
 	t.Setenv("OPSIS_DATA_DIR", filepath.Join(directory, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(directory, "cache"))
+	t.Setenv("LocalAppData", filepath.Join(directory, "cache")) // os.UserCacheDir on Windows
 	t.Setenv("OPSIS_DB_PATH", "")
 	t.Setenv("OPSIS_MODEL_DIR", "")
 	paths, err := UserPaths()

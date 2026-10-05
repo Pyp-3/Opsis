@@ -6,7 +6,17 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// SQLite file URIs need forward slashes and a leading slash before a Windows drive.
+func fileURI(path, query string) string {
+	path = filepath.ToSlash(path)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path, RawQuery: query}).String()
+}
 
 // ImportDatabase takes a consistent SQLite snapshot, including committed WAL
 // content. It never replaces an existing destination or modifies the source.
@@ -30,7 +40,7 @@ func ImportDatabase(source, destination string) error {
 	if info, err := os.Stat(absolute); err != nil || !info.Mode().IsRegular() {
 		return errors.New("source database is not a regular file")
 	}
-	dsn := (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=ro&_busy_timeout=5000"}).String()
+	dsn := fileURI(absolute, "mode=ro&_busy_timeout=5000")
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return err

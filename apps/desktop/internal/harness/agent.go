@@ -35,6 +35,10 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 	if agent != "claude" && agent != "codex" {
 		return "", Error("harness_config")
 	}
+	// Windows has no POSIX mode bits (Go reports 0666), and extensionless npm
+	// shims there are sh scripts. Only .exe files and Node entrypoints run
+	// directly; .cmd/.bat shims would need cmd.exe, which the harness never uses.
+	windows := runtime.GOOS == "windows"
 	usable := func(path string) (string, bool) {
 		resolved, err := filepath.EvalSymlinks(path)
 		if err != nil {
@@ -46,7 +50,7 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		}
 		ext := strings.ToLower(filepath.Ext(resolved))
 		script := ext == ".js" || ext == ".mjs" || ext == ".cjs"
-		if !script && info.Mode().Perm()&0111 == 0 {
+		if !script && (windows && ext != ".exe" || !windows && info.Mode().Perm()&0111 == 0) {
 			return "", false
 		}
 		return resolved, true
@@ -56,7 +60,7 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		if err != nil {
 			return "", Error("harness_missing")
 		}
-		if info.Mode().Perm()&0022 != 0 {
+		if !windows && info.Mode().Perm()&0022 != 0 {
 			return "", Error("harness_config")
 		}
 		return path, nil
@@ -84,7 +88,11 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		if !filepath.IsAbs(directory) {
 			continue
 		}
-		if path, ok := usable(filepath.Join(directory, agent)); ok {
+		name := agent
+		if windows {
+			name += ".exe"
+		}
+		if path, ok := usable(filepath.Join(directory, name)); ok {
 			return validate(path)
 		}
 		root := filepath.Join(directory, "node_modules", packageName)
