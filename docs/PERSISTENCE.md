@@ -23,6 +23,27 @@ In **Manage boards**, each board has **Duplicate**, **Archive/Unarchive**, and
   open the original layout. The source board is unchanged. Historical revisions
   are owner-only, even for public boards.
 
+### Collections
+
+Collections are private folders that group your own boards in **Manage boards →
+My boards**. Use **New collection**, then the folder action on a board card
+(**Move … to a collection**) to file it; the chips above the list filter by
+**All boards**, **Unfiled**, or one collection. While a collection is selected,
+new boards are created inside it. A board belongs to at most one collection.
+
+- Filing is organization, not an edit: it does not advance the board's revision,
+  change its update time or add an undo step, so it cannot conflict with an open
+  canvas or another tab.
+- Collections are per account. Names are unique per account ignoring case, 1–60
+  characters, with up to 100 collections. Other accounts, editors and public
+  viewers never see your collections; shared or public boards appear unfiled to them.
+- A duplicate is filed beside its source. Archived boards keep their collection
+  and return to it when unarchived.
+- Deleting a collection never deletes boards: its boards return to **Unfiled**.
+- Collections are stored in SQLite (`board_collections` and
+  `boards_v2.collection_id`, migration 3), so they are included in full-database
+  backups. Per-board JSON exports do not record a collection.
+
 The revision archive starts with the saved state present when the migration is
 installed and records subsequent successful content saves and archive changes.
 It cannot reconstruct older saves that were never retained. Undo/redo stays
@@ -91,3 +112,7 @@ contain accounts, credentials or the long-term revision archive.
   independent copies, revision restoration and live database snapshots.
 - Browser coverage exercises duplication, archive across reload, revision preview,
   restore-as-copy and unarchive against both API hosts.
+- Both hosts test collection privacy, case-insensitive names, filing at creation,
+  unchanged revisions when filing, copies filed beside their source and deletion
+  that ungroups boards. Browser coverage files boards, filters across reload and
+  deletes a collection while keeping its boards.

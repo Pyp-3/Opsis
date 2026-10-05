@@ -32,4 +32,18 @@ export const PERSISTENCE_MIGRATIONS = [
     CREATE INDEX board_editors_user ON board_editors(user_id);
   `,
   },
+  {
+    version: 3,
+    name: 'board-collections',
+    sql: `
+    CREATE TABLE board_collections (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX board_collections_owner_name ON board_collections(owner_id, name COLLATE NOCASE);
+    ALTER TABLE boards_v2 ADD COLUMN collection_id TEXT REFERENCES board_collections(id) ON DELETE SET NULL;
+    CREATE INDEX boards_v2_collection ON boards_v2(collection_id);
+  `,
+  },
 ] as const;

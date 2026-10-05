@@ -19,7 +19,9 @@ export type BoardListing = {
   updatedAt: number;
   visibility: Visibility;
   archived: boolean;
+  collectionId: string | null;
 };
+export type BoardCollection = { id: string; name: string; createdAt: number };
 
 function databasePath(path: string): string {
   if (path === ':memory:') return path;
@@ -133,7 +135,8 @@ export class ApiStore {
   listBoards(ownerId: string, includeArchived = false) {
     const rows = this.sqlite
       .prepare(
-        `SELECT id, title, revision, updated_at AS updatedAt, visibility, archived FROM boards_v2
+        `SELECT id, title, revision, updated_at AS updatedAt, visibility, archived,
+                collection_id AS collectionId FROM boards_v2
          WHERE owner_id = ? AND (? OR archived=0) ORDER BY updated_at DESC`,
       )
       .all(ownerId, Number(includeArchived)) as (Omit<BoardListing, 'archived'> & {
@@ -152,13 +155,16 @@ export class ApiStore {
          WHERE b.visibility = 'public' AND b.archived=0 AND b.owner_id != ?
          ORDER BY b.updated_at DESC LIMIT ?`,
       )
-      .all(exceptOwnerId, limit) as (Omit<BoardListing, 'archived'> & { ownerName: string })[];
+      .all(exceptOwnerId, limit) as (Omit<BoardListing, 'archived' | 'collectionId'> & {
+      ownerName: string;
+    })[];
   }
 
   getBoard(id: string) {
     const row = this.sqlite
       .prepare(
-        `SELECT b.snapshot, b.revision, b.owner_id AS ownerId, b.visibility, b.archived, u.name AS ownerName
+        `SELECT b.snapshot, b.revision, b.owner_id AS ownerId, b.visibility, b.archived, u.name AS ownerName,
+                b.collection_id AS collectionId
          FROM boards_v2 b LEFT JOIN users u ON u.id = b.owner_id WHERE b.id = ?`,
       )
       .get(id) as
@@ -169,6 +175,7 @@ export class ApiStore {
           visibility: Visibility;
           archived: number;
           ownerName: string | null;
+          collectionId: string | null;
         }
       | undefined;
     return row
@@ -180,6 +187,7 @@ export class ApiStore {
           ownerName: row.ownerName,
           visibility: row.visibility,
           archived: Boolean(row.archived),
+          collectionId: row.collectionId,
         }
       : undefined;
   }
@@ -295,7 +303,77 @@ export class ApiStore {
       if (board === undefined) return 'missing' as const;
       const snapshot = copyBoardSnapshot(board, title);
       this.saveBoard(newId, snapshot, 0, ownerId);
+      // A copy is filed beside its source.
+      this.sqlite
+        .prepare('UPDATE boards_v2 SET collection_id=? WHERE id=?')
+        .run(source.collectionId, newId);
       return 'created' as const;
+    })();
+  }
+
+  listCollections(ownerId: string) {
+    return this.sqlite
+      .prepare(
+        'SELECT id, name, created_at AS createdAt FROM board_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE',
+      )
+      .all(ownerId) as BoardCollection[];
+  }
+
+  private collectionNamed(ownerId: string, name: string) {
+    return this.sqlite
+      .prepare('SELECT id FROM board_collections WHERE owner_id=? AND name=? COLLATE NOCASE')
+      .get(ownerId, name) as { id: string } | undefined;
+  }
+
+  ownsCollection(id: string, ownerId: string) {
+    return !!this.sqlite
+      .prepare('SELECT 1 FROM board_collections WHERE id=? AND owner_id=?')
+      .get(id, ownerId);
+  }
+
+  createCollection(id: string, ownerId: string, name: string, limit: number) {
+    return this.sqlite.transaction(() => {
+      if (this.collectionNamed(ownerId, name)) return 'duplicate' as const;
+      const { count } = this.sqlite
+        .prepare('SELECT count(*) AS count FROM board_collections WHERE owner_id=?')
+        .get(ownerId) as { count: number };
+      if (count >= limit) return 'limit' as const;
+      this.sqlite
+        .prepare('INSERT INTO board_collections (id, owner_id, name, created_at) VALUES (?,?,?,?)')
+        .run(id, ownerId, name, Date.now());
+      return 'created' as const;
+    })();
+  }
+
+  renameCollection(id: string, ownerId: string, name: string) {
+    return this.sqlite.transaction(() => {
+      if (!this.ownsCollection(id, ownerId)) return 'missing' as const;
+      const existing = this.collectionNamed(ownerId, name);
+      if (existing && existing.id !== id) return 'duplicate' as const;
+      this.sqlite.prepare('UPDATE board_collections SET name=? WHERE id=?').run(name, id);
+      return 'renamed' as const;
+    })();
+  }
+
+  /** Removes the folder only: its boards stay, ungrouped. */
+  deleteCollection(id: string, ownerId: string) {
+    return this.sqlite.transaction(() => {
+      if (!this.ownsCollection(id, ownerId)) return false;
+      this.sqlite.prepare('UPDATE boards_v2 SET collection_id=NULL WHERE collection_id=?').run(id);
+      this.sqlite.prepare('DELETE FROM board_collections WHERE id=?').run(id);
+      return true;
+    })();
+  }
+
+  /** Files an owned board; neither its revision nor its update time changes. */
+  setBoardCollection(boardId: string, ownerId: string, collectionId: string | null) {
+    return this.sqlite.transaction(() => {
+      if (this.getBoard(boardId)?.ownerId !== ownerId) return 'missing' as const;
+      if (collectionId && !this.ownsCollection(collectionId, ownerId)) return 'collection' as const;
+      this.sqlite
+        .prepare('UPDATE boards_v2 SET collection_id=? WHERE id=?')
+        .run(collectionId, boardId);
+      return 'saved' as const;
     })();
   }
 

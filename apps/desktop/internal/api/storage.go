@@ -61,6 +61,8 @@ type Board struct {
 	OwnerName  sql.NullString
 	Visibility string
 	Archived   bool
+	// The owner's private collection; never part of the board document or its revisions.
+	CollectionID sql.NullString
 }
 
 type boardReader interface{ QueryRow(string, ...any) *sql.Row }
@@ -68,7 +70,7 @@ type boardReader interface{ QueryRow(string, ...any) *sql.Row }
 func (s *Server) readBoard(reader boardReader, id string) (*Board, error) {
 	board := &Board{ID: id}
 	var snapshot string
-	err := reader.QueryRow(`SELECT b.snapshot,b.revision,b.owner_id,b.visibility,u.name,b.archived FROM boards_v2 b LEFT JOIN users u ON u.id=b.owner_id WHERE b.id=?`, id).Scan(&snapshot, &board.Revision, &board.OwnerID, &board.Visibility, &board.OwnerName, &board.Archived)
+	err := reader.QueryRow(`SELECT b.snapshot,b.revision,b.owner_id,b.visibility,u.name,b.archived,b.collection_id FROM boards_v2 b LEFT JOIN users u ON u.id=b.owner_id WHERE b.id=?`, id).Scan(&snapshot, &board.Revision, &board.OwnerID, &board.Visibility, &board.OwnerName, &board.Archived, &board.CollectionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -156,9 +158,9 @@ func (s *Server) saveBoard(id string, snapshot json.RawMessage, revision int64, 
 }
 
 func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]map[string]any, error) {
-	query := `SELECT id,title,revision,updated_at,visibility,NULL,archived FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
+	query := `SELECT id,title,revision,updated_at,visibility,NULL,archived,collection_id FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
 	if public {
-		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name,b.archived FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.archived=0 AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
+		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name,b.archived,NULL FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.archived=0 AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
 	}
 	rows, err := s.db.Query(query, user)
 	if err != nil {
@@ -169,9 +171,9 @@ func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]m
 	for rows.Next() {
 		var id, title, visibility string
 		var revision, updated int64
-		var owner sql.NullString
+		var owner, collection sql.NullString
 		var archived bool
-		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner, &archived); err != nil {
+		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner, &archived, &collection); err != nil {
 			return nil, err
 		}
 		if archived && !includeArchived {
@@ -180,6 +182,11 @@ func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]m
 		board := map[string]any{"archived": archived, "id": id, "title": title, "revision": revision, "updatedAt": updated, "visibility": visibility}
 		if public {
 			board["ownerName"] = owner.String
+		} else {
+			board["collectionId"] = nil
+			if collection.Valid {
+				board["collectionId"] = collection.String
+			}
 		}
 		boards = append(boards, board)
 	}

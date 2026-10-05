@@ -10,7 +10,7 @@
 - Dedicated agent/model settings, named profiles, executable-path diagnostics, request limits, provider-reported usage, economical defaults, and model suggestions that require consent.
 - Follow-up prompts that include the current graph and selected concept; existing node positions are retained.
 - Concept explanations, editable labels and icons, searchable navigation, and incoming/outgoing relationship navigation.
-- Named SQLite-backed boards, private duplicates, archives, browsable saved revisions, reusable templates, persistent undo/redo, and browser recovery copies.
+- Named SQLite-backed boards, private collections, private duplicates, archives, browsable saved revisions, reusable templates, persistent undo/redo, and browser recovery copies.
 - Selective review of proposed concept/connection changes, persistent position pins, keyboard connection editing, branch conditions and descriptions; one bounded invalid-output repair attempt.
 - Topic-specific next steps in a small menu above the composer (hidden until opened), per-concept uncertainty annotations, and a guided walkthrough.
 - A canvas-first workspace: sharing and groups drop down from the header, and the sidebar, big-picture card, canvas toolbar and composer can each be tucked away (toolbar and composer choices are remembered per device).

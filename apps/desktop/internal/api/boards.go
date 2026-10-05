@@ -79,11 +79,21 @@ func (s *Server) boardRoutes() {
 			return err
 		}
 		var body struct {
-			Title      string `json:"title"`
-			TemplateID string `json:"templateId"`
+			Title        string `json:"title"`
+			TemplateID   string `json:"templateId"`
+			CollectionID string `json:"collectionId"`
 		}
 		if err := s.body(w, r, "create", &body); err != nil {
 			return invalidBody(err, "Enter a board name (1–100 characters).")
+		}
+		if body.CollectionID != "" {
+			owned, err := ownsCollection(s.db, body.CollectionID, user.ID)
+			if err != nil {
+				return err
+			}
+			if !owned {
+				return collectionMissing()
+			}
 		}
 		var snapshot json.RawMessage
 		if body.TemplateID != "" {
@@ -108,6 +118,11 @@ func (s *Server) boardRoutes() {
 		id := uuid.NewString()
 		if _, err := s.saveBoard(id, snapshot, 0, user.ID); err != nil {
 			return err
+		}
+		if body.CollectionID != "" {
+			if _, err := s.db.Exec(`UPDATE boards_v2 SET collection_id=? WHERE id=? AND owner_id=?`, body.CollectionID, id, user.ID); err != nil {
+				return err
+			}
 		}
 		board, err := s.readBoard(s.db, id)
 		if err != nil {
@@ -262,6 +277,7 @@ func (s *Server) boardRoutes() {
 	})
 	s.templateRoutes()
 	s.boardHistoryRoutes()
+	s.collectionRoutes()
 }
 
 func (s *Server) templateRoutes() {

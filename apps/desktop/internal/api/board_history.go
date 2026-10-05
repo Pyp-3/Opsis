@@ -151,7 +151,8 @@ func (s *Server) boardHistoryRoutes() {
 			return err
 		}
 		newID := uuid.NewString()
-		if _, err := tx.Exec(`INSERT INTO boards_v2(id,title,snapshot,revision,updated_at,owner_id) VALUES(?,?,?,1,?,?)`, newID, title, string(snapshot), time.Now().UnixMilli(), user.ID); err != nil {
+		// A copy is filed beside its source.
+		if _, err := tx.Exec(`INSERT INTO boards_v2(id,title,snapshot,revision,updated_at,owner_id,collection_id) VALUES(?,?,?,1,?,?,?)`, newID, title, string(snapshot), time.Now().UnixMilli(), user.ID, source.CollectionID); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {

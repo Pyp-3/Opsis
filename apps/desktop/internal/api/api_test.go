@@ -20,6 +20,13 @@ type testClient struct {
 
 func (c *testClient) request(method, path string, body any, status int) map[string]any {
 	c.t.Helper()
+	result, _ := c.raw(method, path, body, status).(map[string]any)
+	return result
+}
+
+// raw decodes any JSON response, such as a list.
+func (c *testClient) raw(method, path string, body any, status int) any {
+	c.t.Helper()
 	data, _ := json.Marshal(body)
 	r := httptest.NewRequest(method, path, bytes.NewReader(data))
 	r.RemoteAddr = "127.0.0.1:12345"
@@ -40,7 +47,7 @@ func (c *testClient) request(method, path string, body any, status int) map[stri
 			c.cookie = cookie
 		}
 	}
-	var result map[string]any
+	var result any
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	return result
 }

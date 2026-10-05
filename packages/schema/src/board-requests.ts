@@ -7,7 +7,20 @@ export const BoardCreateRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(100),
     templateId: z.string().uuid().optional(),
+    collectionId: z.string().uuid().optional(),
   })
+  .strict();
+
+/**
+ * Collections are an account's private folders for its own boards. A board belongs to at
+ * most one; filing it is organization, not an edit, so it never changes revisions or undo.
+ */
+export const MAX_BOARD_COLLECTIONS = 100;
+export const BoardCollectionRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(60) })
+  .strict();
+export const BoardCollectionAssignmentSchema = z
+  .object({ collectionId: z.string().uuid().nullable() })
   .strict();
 export const BoardUpdateRequestSchema = z
   .object({

@@ -347,6 +347,7 @@ export function useBoardLibrary(
     visibility?: 'private' | 'public',
     templateId?: string,
     fromRevision?: number,
+    collectionId?: string,
   ) => {
     if (managing.current) return false;
     managing.current = true;
@@ -356,6 +357,7 @@ export function useBoardLibrary(
       const isActive = entry?.id === active.current.id;
       const response = await boardLibraryApi.manage(action, entry?.id, {
         ...(action === 'create' && templateId ? { templateId } : {}),
+        ...(action === 'create' && collectionId ? { collectionId } : {}),
         ...(action === 'delete'
           ? {}
           : action === 'share'

@@ -73,3 +73,62 @@ test('duplicates, archives and restores a historical private copy without changi
     page.getByRole('button', { name: 'Archive An email’s journey', exact: true }),
   ).toBeVisible();
 });
+
+test('files boards into private collections that survive reload, and keeps boards when a collection is deleted', async ({
+  page,
+}) => {
+  await signUp(page, 'Collector');
+  for (const title of ['Routing notes', 'Garden plan'])
+    expect((await page.request.post('/v1/boards', { data: { title } })).status()).toBe(201);
+  await page.goto('/boards');
+  const chips = page.getByRole('group', { name: 'Show collection' });
+  await page.getByRole('button', { name: 'New collection' }).click();
+  await page.getByLabel('Collection name').fill('Networking');
+  await page.getByRole('button', { name: 'Create collection' }).click();
+  await expect(chips.getByRole('button', { name: /^Networking/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByText('No boards in this collection yet.', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('New board in Networking')).toBeVisible();
+
+  await chips.getByRole('button', { name: /^All boards/ }).click();
+  await page
+    .getByRole('button', { name: 'Move Routing notes to a collection', exact: true })
+    .click();
+  await page.getByLabel('Collection for Routing notes').selectOption({ label: 'Networking' });
+  await page.getByRole('button', { name: 'Move board' }).click();
+  await expect(page.getByText('Moved “Routing notes” to Networking.')).toBeVisible();
+
+  await page.reload();
+  await chips.getByRole('button', { name: /^Networking/ }).click();
+  await expect(
+    page.getByRole('button', { name: 'Rename Routing notes', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rename Garden plan', exact: true })).toHaveCount(
+    0,
+  );
+  await chips.getByRole('button', { name: /^Unfiled/ }).click();
+  await expect(page.getByRole('button', { name: 'Rename Garden plan', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rename Routing notes', exact: true })).toHaveCount(
+    0,
+  );
+
+  // Filing is organization only: the board's saved revision is unchanged.
+  const routing = await page.evaluate(async () =>
+    ((await (await fetch('/v1/boards')).json()) as { title: string; revision: number }[]).find(
+      (board) => board.title === 'Routing notes',
+    ),
+  );
+  expect(routing?.revision).toBe(1);
+
+  await chips.getByRole('button', { name: /^Networking/ }).click();
+  await page.getByRole('button', { name: 'Delete collection' }).click();
+  await page
+    .getByRole('group', { name: 'Confirm collection deletion' })
+    .getByRole('button', { name: 'Delete collection' })
+    .click();
+  await expect(chips.getByRole('button', { name: /^Networking/ })).toHaveCount(0);
+  for (const title of ['Routing notes', 'Garden plan'])
+    await expect(page.getByRole('button', { name: `Rename ${title}`, exact: true })).toBeVisible();
+});

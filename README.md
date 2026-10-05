@@ -24,7 +24,7 @@ _Follow the connections, then select a concept for its explanation._
 
 - Generate and refine diagrams with your local Claude or Codex CLI; review proposed changes before applying them.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
-- Save locally with SQLite, undo history, revisions and recovery; invite named accounts on the same server to edit.
+- Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
 - Let your own agents work on canvases through [MCP](apps/mcp/README.md).
 

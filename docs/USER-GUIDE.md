@@ -56,6 +56,18 @@ Each use creates an independent private board with fresh history. Editing or
 deleting the source does not change its templates. Deleting a template leaves
 existing project boards intact.
 
+## Group boards into collections
+
+In **Manage boards → My boards**, choose **New collection** and name it (for
+example, “Networking”). Use the folder button on a board card to move it into a
+collection, or select a collection before **Create board** to start the board
+there. The chips above the list show **All boards**, **Unfiled** boards, or one
+collection, with a count for each. Rename or delete the selected collection from
+the actions below the chips; deleting a collection keeps its boards.
+
+Collections are private to your account and do not change a board's content,
+history or sharing. See [collections](PERSISTENCE.md#collections).
+
 ## Share with another local account
 
 A board is private by default. Make it public from the board library or its

@@ -61,6 +61,31 @@ Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.
 
+## In progress: board collections (requested 2026-10-05)
+
+Let an account group its own boards ("canvases") into named collections for faster access.
+
+- [x] Private per-account collections: create, rename (case-insensitive unique, 1–60
+      characters, up to 100) and delete; deleting ungroups boards and never deletes them.
+- [x] File a board into at most one collection, create a board directly inside the
+      selected collection, and filter My boards by All / Unfiled / collection with counts.
+- [x] Filing is organization, not an edit: no revision, update-time or undo change.
+      Copies are filed beside their source; archived boards keep their collection.
+- [x] Shared migration 3 (`board_collections`, `boards_v2.collection_id`) on both the
+      Fastify and Go hosts; included in full-database backups.
+- [ ] Verify the race-enabled Go suite in CI (locally blocked: ThreadSanitizer could not
+      allocate memory on the Windows machine; the same tests pass without `-race`).
+- [ ] Not yet in scope: MCP tools to list/file collections, collection-aware home/sidebar
+      recents, multi-select bulk moves, and per-board JSON export of the collection.
+
+Verified 2026-10-05 on Windows 11 (Node 22.23.3): Fastify collection tests (privacy,
+duplicate names, filing at creation, unchanged revision/update time, copy filing,
+delete ungroups, restart persistence); Go API tests with the same cases (non-race);
+browser scenario filing, filtering across reload and deleting a collection while
+keeping its boards. Full gates: lint, typecheck, Rust check/24 tests, 351 unit tests,
+43 browser scenarios against Fastify and against the built `opsis.exe` (Linux-only
+pixel baseline skipped). See [collections](docs/PERSISTENCE.md#collections).
+
 ## Product goal
 
 Make agents useful as visual hands: convert a question or explanation into an understandable, editable 2D graph, with richer information available on selection. Preserve the user's spatial arrangement as the conversation and process branch.

@@ -16,11 +16,19 @@ import {
   ArchiveRestore,
   History,
   CopyPlus,
+  FolderInput,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
 import { HomeBackdrop } from './HomeBackdrop';
 import { BoardRevisionPanel } from './BoardRevisionPanel';
+import { useBoardCollections } from './useBoardCollections';
+import {
+  CollectionBar,
+  MoveToCollection,
+  inCollection,
+  type CollectionFilter,
+} from './BoardCollections';
 
 export type PublicBoard = {
   id: string;
@@ -74,6 +82,18 @@ export function BoardsPage({
   const [shared, setShared] = useState<PublicBoard[] | null>(null);
   const [sharedError, setSharedError] = useState('');
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
+  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
+  const collections = useBoardCollections(refresh);
+  const collectionName = (id: string | null | undefined) =>
+    collections.collections.find((collection) => collection.id === id)?.name;
+  // A filter for a collection that no longer exists (deleted elsewhere) shows everything.
+  const activeFilter =
+    collectionFilter === 'all' || collectionFilter === 'unfiled' || collectionName(collectionFilter)
+      ? collectionFilter
+      : 'all';
+  const filingInto =
+    activeFilter === 'all' || activeFilter === 'unfiled' ? undefined : activeFilter;
   useEffect(() => {
     void refresh().catch(() => undefined);
   }, [refresh]);
@@ -97,9 +117,14 @@ export function BoardsPage({
       document.title = 'Opsis';
     };
   }, []);
-  const visibleEntries = library.entries.filter(
+  const tabEntries = library.entries.filter(
     (entry) => Boolean(entry.archived) === (tab === 'archive'),
   );
+  // Collections organize the active library; the archive lists everything archived.
+  const visibleEntries =
+    tab === 'archive'
+      ? tabEntries
+      : tabEntries.filter((entry) => inCollection(entry.collectionId, activeFilter));
   const historyEntry = library.entries.find((entry) => entry.id === historyId);
   const entries = visibleEntries
     .filter((entry) => entry.title.toLowerCase().includes(query.trim().toLowerCase()))
@@ -198,18 +223,40 @@ export function BoardsPage({
         </section>
       ) : (
         <>
+          {tab === 'mine' && (
+            <CollectionBar
+              collections={collections}
+              boards={tabEntries}
+              filter={activeFilter}
+              onFilter={setCollectionFilter}
+              disabled={library.switching}
+            />
+          )}
           <form
             className="boards-create"
             onSubmit={async (event) => {
               event.preventDefault();
-              if (title.trim() && (await library.manage('create', undefined, title.trim()))) {
+              if (
+                title.trim() &&
+                (await library.manage(
+                  'create',
+                  undefined,
+                  title.trim(),
+                  undefined,
+                  undefined,
+                  undefined,
+                  tab === 'mine' ? filingInto : undefined,
+                ))
+              ) {
                 setTitle('');
                 onCreated();
               }
             }}
           >
             <label>
-              New board name
+              {tab === 'mine' && filingInto
+                ? `New board in ${collectionName(filingInto)}`
+                : 'New board name'}
               <input
                 value={title}
                 maxLength={100}
@@ -257,7 +304,24 @@ export function BoardsPage({
               const current = entry.id === library.activeId;
               return (
                 <li key={entry.id} className={current ? 'is-current' : ''}>
-                  {editing === entry.id ? (
+                  {moving === entry.id ? (
+                    <MoveToCollection
+                      title={entry.title}
+                      current={entry.collectionId}
+                      collections={collections.collections}
+                      disabled={library.switching || collections.busy}
+                      onCancel={() => setMoving(null)}
+                      onMove={async (collectionId) => {
+                        if (!(await collections.file(entry.id, collectionId))) return;
+                        setMoving(null);
+                        setNotice(
+                          collectionId
+                            ? `Moved “${entry.title}” to ${collectionName(collectionId)}.`
+                            : `“${entry.title}” is no longer in a collection.`,
+                        );
+                      }}
+                    />
+                  ) : editing === entry.id ? (
                     <form
                       className="board-rename"
                       onSubmit={async (event) => {
@@ -308,6 +372,9 @@ export function BoardsPage({
                           {current ? 'Open now · ' : ''}
                           {entry.archived ? 'Archived · ' : ''}
                           {entry.visibility === 'public' ? 'Public · ' : ''}
+                          {activeFilter === 'all' && collectionName(entry.collectionId)
+                            ? `${collectionName(entry.collectionId)} · `
+                            : ''}
                           {updatedLabel(entry.updatedAt)}
                         </small>
                         <span className="board-card-go">
@@ -346,6 +413,18 @@ export function BoardsPage({
                           }}
                         >
                           {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                        </button>
+                        <button
+                          aria-label={`Move ${entry.title} to a collection`}
+                          title="Move to collection"
+                          disabled={library.switching}
+                          onClick={() => {
+                            setMoving(entry.id);
+                            setEditing(null);
+                            setDeleting(null);
+                          }}
+                        >
+                          <FolderInput size={15} />
                         </button>
                         <button
                           aria-label={`Revision history for ${entry.title}`}
@@ -401,6 +480,7 @@ export function BoardsPage({
                             setEditAction('rename');
                             setName(entry.title);
                             setDeleting(null);
+                            setMoving(null);
                           }}
                         >
                           <Pencil size={15} />
@@ -452,7 +532,11 @@ export function BoardsPage({
             <p className="boards-empty">
               {tab === 'archive'
                 ? 'No archived boards.'
-                : 'No saved boards yet. Create your first board above.'}
+                : activeFilter === 'unfiled'
+                  ? 'Every board is in a collection.'
+                  : filingInto
+                    ? 'No boards in this collection yet. Create one above, or move a board here.'
+                    : 'No saved boards yet. Create your first board above.'}
             </p>
           ) : (
             !entries.length && <p className="boards-empty">No boards match “{query}”.</p>

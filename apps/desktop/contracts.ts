@@ -1,5 +1,8 @@
 import {
   BoardCollaboratorRequestSchema,
+  BoardCollectionAssignmentSchema,
+  BoardCollectionRequestSchema,
+  MAX_BOARD_COLLECTIONS,
   BoardIdSchema,
   BoardCreateRequestSchema,
   BoardUpdateRequestSchema,
@@ -20,6 +23,8 @@ import { PERSISTENCE_MIGRATIONS } from '../api/src/persistence/migrations';
 
 const parsers = {
   editor: BoardCollaboratorRequestSchema,
+  collection: BoardCollectionRequestSchema,
+  collectionAssignment: BoardCollectionAssignmentSchema,
   id: BoardIdSchema,
   create: BoardCreateRequestSchema,
   update: BoardUpdateRequestSchema,
@@ -43,6 +48,8 @@ export function apply(operation: string, json: string): string {
     let value: unknown;
     if (operation === 'migrations') {
       value = PERSISTENCE_MIGRATIONS;
+    } else if (operation === 'collectionLimit') {
+      value = MAX_BOARD_COLLECTIONS;
     } else if (operation === 'empty') {
       value = BoardSnapshotSchema.parse({
         board: createEmptyBoard(z.string().parse(input)),

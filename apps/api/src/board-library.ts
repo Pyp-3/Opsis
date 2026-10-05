@@ -178,12 +178,16 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
       : undefined;
     if (body.data.templateId && !template)
       return reply.code(404).send({ message: 'Template not found.' });
+    const { collectionId } = body.data;
+    if (collectionId && !store.ownsCollection(collectionId, user.id))
+      return reply.code(404).send({ message: 'Collection not found.' });
     const snapshot = BoardSnapshotSchema.parse({
       board: template ? { ...template, title: body.data.title } : createEmptyBoard(body.data.title),
       past: [],
       future: [],
     });
     store.saveBoard(id, snapshot, 0, user.id);
+    if (collectionId) store.setBoardCollection(id, user.id, collectionId);
     return reply.code(201).send(view(store.getBoard(id)!, user));
   });
   app.patch('/v1/boards/:id', async (request, reply) => {

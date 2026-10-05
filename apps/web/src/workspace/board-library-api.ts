@@ -22,6 +22,8 @@ export const BoardListSchema = z.array(
     updatedAt: z.number(),
     visibility: z.enum(['private', 'public']).optional(),
     archived: z.boolean().optional(),
+    /** The owner's private collection; `null` when unfiled. */
+    collectionId: z.string().uuid().nullable().optional(),
   }),
 );
 
@@ -46,6 +48,7 @@ export const boardLibraryApi = {
       templateId?: string;
       archived?: boolean;
       fromRevision?: number;
+      collectionId?: string;
     },
   ) =>
     fetch(
