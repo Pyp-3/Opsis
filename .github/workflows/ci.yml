@@ -186,6 +186,12 @@ jobs:
           if (Test-Path $key) { "WebView2 $((Get-ItemProperty $key).pv)"; exit 0 }
           Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile webview2.exe
           Start-Process .\webview2.exe -ArgumentList '/silent','/install' -Wait
+      # pnpm's bundled node-gyp predates the runner's Visual Studio 2026 (v18).
+      - name: Use a node-gyp that supports the runner's Visual Studio
+        shell: pwsh
+        run: |
+          npm install --global node-gyp@13.1.0
+          Add-Content $env:GITHUB_ENV "npm_config_node_gyp=$(npm root --global)\node-gyp\bin\node-gyp.js"
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Check native code
