@@ -116,7 +116,7 @@ func (d *Desktop) startPendingInstaller() error {
 	if update == nil || !updater.Installed() {
 		return errors.New("no installable update is available")
 	}
-	path, err := d.updates.Download(d.ctx, update, filepath.Join(os.TempDir(), "opsis-update"))
+	path, err := d.updates.Download(d.ctx, update, updater.Downloads())
 	if err != nil {
 		return err
 	}
@@ -380,8 +380,11 @@ func run() error {
 				})
 			},
 		},
-		Linux:     &linux.Options{ProgramName: "opsis", WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand},
-		OnStartup: func(ctx context.Context) { app.ctx = ctx },
+		Linux: &linux.Options{ProgramName: "opsis", WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand},
+		OnStartup: func(ctx context.Context) {
+			app.ctx = ctx
+			go updater.CleanDownloads()
+		},
 		OnDomReady: func(ctx context.Context) {
 			if !app.smoke {
 				return

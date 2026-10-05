@@ -53,7 +53,10 @@ certificate is configured yet, so releases remain unsigned. Verified locally:
 updater unit tests (valid, tampered, foreign-key, older-build, bad-name cases),
 notice component tests, and a silent install → smoke → uninstall round trip. CI build 56
 published the installer with a valid signed manifest (checked independently against
-the embedded public key); its installed copy reports its version and finds no newer build.
+the embedded public key); its installed copy reports its version and finds no newer build. After build 57
+published, that installed build 56 found it, verified the manifest and installer,
+installed silently and relaunched as build 57 (marker and `release.json` confirmed).
+Downloaded installers are now removed before each download and at startup.
 Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.

@@ -185,7 +185,14 @@ func (c *Client) verifiedManifest(ctx context.Context, manifestURL, signatureURL
 	return manifest, nil
 }
 
-// Download saves the installer into directory and verifies its size and digest.
+// Downloads holds the verified installer for an update in progress.
+func Downloads() string { return filepath.Join(os.TempDir(), "opsis-update") }
+
+// CleanDownloads removes installers left by earlier updates. A running
+// installer cannot be deleted; a later launch removes it.
+func CleanDownloads() { _ = os.RemoveAll(Downloads()) }
+
+// Download replaces directory's contents with the installer and verifies its size and digest.
 func (c *Client) Download(ctx context.Context, update *Update, directory string) (string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, update.installerURL, nil)
 	if err != nil {
@@ -200,6 +207,7 @@ func (c *Client) Download(ctx context.Context, update *Update, directory string)
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("update download returned %d", response.StatusCode)
 	}
+	_ = os.RemoveAll(directory)
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return "", err
 	}
