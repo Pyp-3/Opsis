@@ -772,3 +772,41 @@ body.is-resizing-rail {
 .export-menu-group:first-child {
   margin-top: 2px;
 }
+
+/* ── Desktop update notice ──────────────────────────────────────────── */
+.update-notice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.update-notice p {
+  margin: 0;
+  line-height: 1.4;
+}
+.update-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.update-notice-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+}
+.update-notice-actions .update-notice-primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.update-notice-actions .update-notice-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}

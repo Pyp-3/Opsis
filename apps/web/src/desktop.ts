@@ -4,7 +4,38 @@ type DesktopBridge = {
   CancelRequest(id: string): Promise<void>;
   SaveFile(name: string, base64: string): Promise<boolean>;
   CopyText(text: string): Promise<void>;
+  // Windows desktop builds only; older or Linux hosts may not provide them.
+  CheckForUpdate?(): Promise<UpdateStatus>;
+  InstallUpdate?(): Promise<void>;
+  OpenUpdatePage?(): Promise<void>;
 };
+
+export type UpdateStatus = {
+  supported: boolean;
+  available: boolean;
+  current: string;
+  version: string;
+  /** False for portable copies, which can only open the release page. */
+  canInstall: boolean;
+};
+
+export type DesktopUpdates = {
+  check(): Promise<UpdateStatus>;
+  install(): Promise<void>;
+  openPage(): Promise<void>;
+};
+
+/** The native updater, when this window is a desktop build that has one. */
+export function desktopUpdates(): DesktopUpdates | undefined {
+  const native = bridge();
+  const { CheckForUpdate, InstallUpdate, OpenUpdatePage } = native ?? {};
+  if (!native || !CheckForUpdate || !InstallUpdate || !OpenUpdatePage) return undefined;
+  return {
+    check: () => CheckForUpdate.call(native),
+    install: () => InstallUpdate.call(native),
+    openPage: () => OpenUpdatePage.call(native),
+  };
+}
 
 function bridge(): DesktopBridge | undefined {
   if (typeof window === 'undefined') return undefined;

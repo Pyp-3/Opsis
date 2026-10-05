@@ -215,8 +215,21 @@ jobs:
           profile=$(mktemp -d)
           trap 'rm -rf "$profile"' EXIT
           OPSIS_DATA_DIR="$(cygpath -w "$profile")" OPSIS_SPEECH=off ./output/desktop/opsis.exe --smoke-test
-      - name: Package desktop release
+      - name: Install Inno Setup
         if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+      # Signing switches on when WINDOWS_CERTIFICATE secrets exist. Only main builds get
+      # a signed update manifest, so installed apps update to main and nothing else.
+      - name: Package desktop release and installer
+        if: github.event_name == 'push'
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          OPSIS_UPDATE_SIGNING_KEY: ${{ github.ref == 'refs/heads/main' && secrets.OPSIS_UPDATE_SIGNING_KEY || '' }}
         run: pnpm desktop:package
       - name: Upload desktop release
         if: github.event_name == 'push'

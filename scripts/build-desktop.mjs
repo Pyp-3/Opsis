@@ -14,6 +14,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { releaseVersion } from './package-release.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktop = join(root, 'apps/desktop');
@@ -148,6 +149,18 @@ if (!process.argv.includes('--reuse-runtime')) {
     rmSync(stage, { recursive: true, force: true });
   }
 }
+// CI builds carry their release version and build number, which the Windows updater
+// compares; local builds stay "development" and never offer updates.
+const stamp = [];
+if (process.env.GITHUB_ACTIONS === 'true') {
+  const { GITHUB_RUN_NUMBER: number, GITHUB_RUN_ATTEMPT: attempt, GITHUB_SHA: sha } = process.env;
+  const base = readFileSync(join(root, 'VERSION'), 'utf8').trim();
+  stamp.push(
+    `-X main.version=${releaseVersion(base, number, attempt, sha)}`,
+    `-X main.buildNumber=${number}`,
+    `-X main.buildAttempt=${attempt}`,
+  );
+}
 if (!existsSync(join(desktop, 'bundle/runtime.tar.gz')))
   throw new Error('Build the runtime before using --reuse-runtime.');
 if (windows) {
@@ -182,7 +195,7 @@ run(
     windows ? 'desktop,production' : 'desktop,production,webkit2_41',
     '-ldflags',
     // A GUI-subsystem binary opens no console window; piped stdio (MCP) still works.
-    windows ? '-s -w -H windowsgui' : '-s -w',
+    [windows ? '-s -w -H windowsgui' : '-s -w', ...stamp].join(' '),
     '-o',
     executable,
     '.',

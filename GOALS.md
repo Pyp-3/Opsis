@@ -39,9 +39,22 @@ exe embeds an icon, per-monitor-DPI manifest and version info; a `Windows deskto
 CI job (windows-2025) tests and attaches the zip to each prerelease. Locally on
 Windows 11 with Node 22.23.3: packaged database/MCP integration passed, the browser
 suite against `opsis.exe` passed (Linux-only pixel baseline skipped) and 344/345
-unit tests passed (one cold-ESLint timeout). Remaining: code signing, an installer
-and auto-update, interactive save-dialog/clipboard check, and `.cmd` override
-parity with the Fastify host. macOS packaging remains pending.
+unit tests passed (one cold-ESLint timeout).
+
+Installer and updates (2026-10-05): a per-user Inno Setup installer
+(`…-windows-x64-setup.exe`, no admin rights, Start menu, uninstaller) ships beside
+the zip. Installed copies offer one-click updates to newer `main` builds: CI signs an
+update manifest with Ed25519 (`OPSIS_UPDATE_SIGNING_KEY` secret, public key in
+`internal/updater`), and the app verifies the signature and installer SHA-256 before
+running it silently and relaunching. `--check-update`/`--install-update` expose the
+same path. Authenticode signing is wired (`scripts/sign-windows.mjs`) and switches
+on when `WINDOWS_CERTIFICATE`/`WINDOWS_CERTIFICATE_PASSWORD` secrets exist; no
+certificate is configured yet, so releases remain unsigned. Verified locally:
+updater unit tests (valid, tampered, foreign-key, older-build, bad-name cases),
+notice component tests, and a silent install → smoke → uninstall round trip.
+Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
+provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
+override parity with the Fastify host. macOS packaging remains pending.
 
 ## Product goal
 

@@ -15,7 +15,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	goruntime "runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -24,6 +27,7 @@ import (
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/generation"
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/harness"
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/mcpbridge"
+	"github.com/Pyp-3/Opsis/apps/desktop/internal/updater"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -40,11 +44,117 @@ var bundle []byte
 //go:embed smoke.js
 var smokeScript string
 
+// CI sets these with -ldflags -X; local builds stay "development" and never update.
+var (
+	version      = "development"
+	buildNumber  = "0"
+	buildAttempt = "0"
+)
+
 type Desktop struct {
 	ctx     context.Context
 	gateway *desktop.Gateway
 	smoke   bool
 	result  chan string
+	updates *updater.Client
+	mu      sync.Mutex
+	pending *updater.Update
+}
+
+type UpdateStatus struct {
+	Supported  bool   `json:"supported"`
+	Available  bool   `json:"available"`
+	Current    string `json:"current"`
+	Version    string `json:"version"`
+	CanInstall bool   `json:"canInstall"`
+}
+
+func currentBuild() updater.Build {
+	number, _ := strconv.Atoi(buildNumber)
+	attempt, _ := strconv.Atoi(buildAttempt)
+	return updater.Build{Version: version, Number: number, Attempt: attempt}
+}
+
+// CheckForUpdate asks GitHub Releases for a newer signed Windows build.
+// OPSIS_UPDATES=off, development builds and smoke tests never contact the network.
+func (d *Desktop) CheckForUpdate() (UpdateStatus, error) {
+	status := UpdateStatus{Current: version}
+	build := currentBuild()
+	if goruntime.GOOS != "windows" || d.updates == nil || d.smoke || build.Number == 0 || os.Getenv("OPSIS_UPDATES") == "off" {
+		return status, nil
+	}
+	status.Supported = true
+	ctx, cancel := context.WithTimeout(d.ctx, 30*time.Second)
+	defer cancel()
+	update, err := d.updates.Latest(ctx, build)
+	if err != nil {
+		return status, errors.New("could not check for updates")
+	}
+	d.mu.Lock()
+	d.pending = update
+	d.mu.Unlock()
+	if update != nil {
+		status.Available, status.Version, status.CanInstall = true, update.Version, updater.Installed()
+	}
+	return status, nil
+}
+
+// InstallUpdate downloads and verifies the pending installer, starts it, and
+// quits so it can replace this executable. The installer reopens Opsis.
+func (d *Desktop) InstallUpdate() error {
+	if err := d.startPendingInstaller(); err != nil {
+		return err
+	}
+	runtime.Quit(d.ctx)
+	return nil
+}
+
+func (d *Desktop) startPendingInstaller() error {
+	d.mu.Lock()
+	update := d.pending
+	d.mu.Unlock()
+	if update == nil || !updater.Installed() {
+		return errors.New("no installable update is available")
+	}
+	path, err := d.updates.Download(d.ctx, update, filepath.Join(os.TempDir(), "opsis-update"))
+	if err != nil {
+		return err
+	}
+	return updater.Launch(path)
+}
+
+// runUpdateCommand backs --check-update and --install-update with the same
+// verification as the in-app notice, printing the status as JSON.
+func runUpdateCommand(install bool) error {
+	client, err := updater.New()
+	if err != nil {
+		return err
+	}
+	app := &Desktop{ctx: context.Background(), updates: client}
+	status, err := app.CheckForUpdate()
+	if err != nil {
+		return err
+	}
+	encoded, _ := json.Marshal(status)
+	fmt.Println(string(encoded))
+	if !install || !status.Available {
+		return nil
+	}
+	if err := app.startPendingInstaller(); err != nil {
+		return err
+	}
+	fmt.Println("Update installer started; Opsis will reopen when it finishes.")
+	return nil
+}
+
+// OpenUpdatePage opens the pending update's GitHub release in the browser.
+func (d *Desktop) OpenUpdatePage() {
+	d.mu.Lock()
+	update := d.pending
+	d.mu.Unlock()
+	if update != nil && strings.HasPrefix(update.Page, "https://github.com/") {
+		runtime.BrowserOpenURL(d.ctx, update.Page)
+	}
 }
 
 func (d *Desktop) CancelRequest(id string) { d.gateway.Cancel(id) }
@@ -97,8 +207,11 @@ func run() error {
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
 	}
-	if mode != "" && mode != "--mcp" && mode != "--diagnose" && mode != "--smoke-test" && mode != "--serve" && mode != "--import-database" && mode != "--backup-database" {
-		return errors.New("usage: opsis [--mcp | --diagnose | --smoke-test | --serve | --import-database PATH | --backup-database NEW_PATH]")
+	if mode != "" && mode != "--mcp" && mode != "--diagnose" && mode != "--smoke-test" && mode != "--serve" && mode != "--import-database" && mode != "--backup-database" && mode != "--check-update" && mode != "--install-update" {
+		return errors.New("usage: opsis [--mcp | --diagnose | --smoke-test | --serve | --import-database PATH | --backup-database NEW_PATH | --check-update | --install-update]")
+	}
+	if mode == "--check-update" || mode == "--install-update" {
+		return runUpdateCommand(mode == "--install-update")
 	}
 	paths, err := desktop.UserPaths()
 	if err != nil {
@@ -247,6 +360,9 @@ func run() error {
 	gateway := desktop.NewGateway(apiURL, paths.Data)
 	defer gateway.Close()
 	app := &Desktop{gateway: gateway, smoke: mode == "--smoke-test", result: make(chan string, 1)}
+	if updates, err := updater.New(); err == nil {
+		app.updates = updates
+	}
 	smokeCompleted := make(chan string, 1)
 	err = wails.Run(&options.App{
 		Title: "Opsis", Width: 1100, Height: 680, MinWidth: 640, MinHeight: 480,

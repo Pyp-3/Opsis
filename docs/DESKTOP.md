@@ -149,40 +149,85 @@ are occupied. No test should stop an unrelated local server or make paid calls.
 
 ## Windows
 
-Download `opsis-…-windows-x64.zip` from the same release, extract it (right-click →
-**Extract All**), and run `opsis.exe`. It needs the Microsoft Edge WebView2
-runtime, which Windows 11 includes. The executable is not code-signed, so
-SmartScreen may warn on first launch (**More info → Run anyway**); compare the
-download with its `.sha256` file first. `opsis.exe --mcp` works as the MCP command.
+### Install and update
 
-To build it, on Windows 11 x64 `pnpm desktop:build` produces `output\desktop\opsis.exe`. It
-uses the system WebView2 runtime (preinstalled on Windows 11) instead of
-GTK/WebKitGTK and bundles the official `node.exe`. Build prerequisites: Node 22+,
-pnpm 10.34.5, Go 1.25+ (an older Go with `GOTOOLCHAIN=auto` downloads it), Rust/rustup,
-a MinGW-w64 `gcc` on `PATH` for cgo/SQLite (for example MSYS2 UCRT64), and Visual
-Studio C++ build tools for the `better-sqlite3` native addon. Set `CGO_ENABLED=1`.
-Use a current Node 22 release: the `better-sqlite3` 13 Windows prebuild crashes on
-Node 22.3, and the build bundles whichever Node version runs it. `go-winres` embeds
-the icon (rendered from `apps/web/public/favicon.svg`), a per-monitor-DPI manifest,
-and version information from `VERSION`. `pnpm desktop:package` writes a zip and
-SHA-256 checksum to `output\desktop-release`.
-The build uses Windows' own `tar.exe` and a flat, link-free `node_modules` for the
-speech runtime, because extracting symlinks needs elevated rights on Windows.
+Download `opsis-…-windows-x64-setup.exe` from a release and run it. It installs for
+the current user only, to `%LOCALAPPDATA%\Programs\Opsis`, with no administrator
+prompt. It adds a Start-menu entry, an optional desktop shortcut, and an uninstaller
+under **Settings → Apps**. Opsis needs the Microsoft Edge WebView2 runtime, which
+Windows 11 includes. `opsis-…-windows-x64.zip` is a portable alternative: extract it
+and run `opsis.exe`. Until releases are code-signed, SmartScreen may warn on first
+launch (**More info → Run anyway**); compare the download with its `.sha256` file.
+
+Installed copies check GitHub Releases at startup and every six hours for a newer
+build from `main`. When one exists, a notice offers **Install and restart**. Nothing
+downloads until you choose it. Opsis then downloads the installer, checks that it
+matches the release's update manifest (size and SHA-256), checks that the manifest
+carries a valid Ed25519 signature from the CI release key, installs silently, and
+reopens. Your data in `%LOCALAPPDATA%\opsis` is not touched. Portable copies get a
+**Download** button that opens the release page instead. Local development builds
+never check. Set `OPSIS_UPDATES=off` to stop checks; the check sends only an
+anonymous request to `api.github.com`. `opsis.exe --check-update` prints the update
+status as JSON, and `opsis.exe --install-update` installs an available update.
+
+`opsis.exe --mcp` works as the MCP command; use the installed path, for example
+`%LOCALAPPDATA%\Programs\Opsis\opsis.exe`.
+
+### Release signing
+
+Two separate signatures protect releases:
+
+- **Update manifest (active).** CI signs `opsis-update-windows-x64.json` with the
+  Ed25519 key in the `OPSIS_UPDATE_SIGNING_KEY` Actions secret, for `main` builds
+  only. The public key is compiled into `internal/updater`. If the secret is lost or
+  replaced, put the new public key in `updater.PublicKey`; copies built with the old
+  key must then be updated once by hand.
+- **Authenticode (switches on with a certificate).** `scripts/sign-windows.mjs` signs
+  `opsis.exe` before both the zip and installer are made, then signs the installer,
+  with an RFC 3161 timestamp. Add a code-signing certificate as Actions secrets:
+  `WINDOWS_CERTIFICATE` (a base64-encoded PFX, for example from
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx'))`) and
+  `WINDOWS_CERTIFICATE_PASSWORD`. Optionally set `WINDOWS_TIMESTAMP_URL`. Without
+  them, packaging logs that signing was skipped. Certificates whose keys must stay
+  in a cloud HSM (most new OV certificates, Azure Artifact Signing, SignPath) need
+  their provider's signing call in place of the PFX `signtool` call in that script.
+
+### Build
+
+On Windows 11 x64, `pnpm desktop:build` produces `output\desktop\opsis.exe`. It
+uses the system WebView2 runtime instead of GTK/WebKitGTK and bundles the official
+`node.exe`. Build prerequisites: Node 22+, pnpm 10.34.5, Go 1.25+ (an older Go with
+`GOTOOLCHAIN=auto` downloads it), Rust/rustup, a MinGW-w64 `gcc` on `PATH` for
+cgo/SQLite (for example MSYS2 UCRT64), and Visual Studio C++ build tools for the
+`better-sqlite3` native addon. Set `CGO_ENABLED=1`. Use a current Node 22 release:
+the `better-sqlite3` 13 Windows prebuild crashes on Node 22.3, and the build bundles
+whichever Node version runs it. `go-winres` embeds the icon (rendered from
+`apps/web/public/favicon.svg`), a per-monitor-DPI manifest, and version information
+from `VERSION`. In CI the executable also records its release version and build
+number, which the updater compares. The build uses Windows' own `tar.exe` and a
+flat, link-free `node_modules` for the speech runtime, because extracting symlinks
+needs elevated rights on Windows.
+
+`pnpm desktop:package` also needs Inno Setup 6 (`ISCC.exe`, or set `ISCC`). It
+writes the zip, the installer (`apps/desktop/installer/opsis.iss`) and their
+SHA-256 checksums to `output\desktop-release`. With `OPSIS_UPDATE_SIGNING_KEY` set,
+it also writes the signed update manifest.
 
 The executable is a GUI-subsystem program: it opens no console window, so
-`--diagnose`/`--smoke-test` output is only visible when stdout is redirected
-(MCP's piped stdio is unaffected). The database, extracted
-runtime and downloaded models all live under `%LOCALAPPDATA%\opsis`.
-Windows has no POSIX mode bits, so file privacy relies on the per-user profile ACL.
-Claude/Codex discovery runs only `.exe` files or Node entry points directly; npm
-installs resolve to the package's `claude.exe` or `codex.js`. `.cmd` shims are not
-run because the harness never starts `cmd.exe`.
+`--diagnose`/`--smoke-test`/`--check-update` output is only visible when stdout is
+redirected (MCP's piped stdio is unaffected). The database, extracted runtime and
+downloaded models all live under `%LOCALAPPDATA%\opsis`. Windows has no POSIX mode
+bits, so file privacy relies on the per-user profile ACL. Claude/Codex discovery
+runs only `.exe` files or Node entry points directly; npm installs resolve to the
+package's `claude.exe` or `codex.js`. `.cmd` shims are not run because the harness
+never starts `cmd.exe`.
 
 The `Windows desktop` CI job (windows-2025) runs native race tests, packaged
 database/MCP integration, the browser suite against `opsis.exe`, and the hidden
-WebView2 smoke test, then attaches the zip to the same prerelease as the Linux
-tarball. The pixel-baseline browser test runs only on Linux, where its baseline
-fonts live. No installer, code signing or auto-update is provided yet.
+WebView2 smoke test. It then packages and (when configured) signs the zip,
+installer and update manifest, and attaches them to the same prerelease as the
+Linux tarball. The pixel-baseline browser test runs only on Linux, where its
+baseline fonts live.
 
 ## Feature ownership and migration coverage
 
@@ -209,5 +254,5 @@ single contract implementation and avoids a second independent schema in Go.
 The speech adapter is an explicit retained dependency, not a Go reimplementation
 of Kokoro. Native save dialogs and clipboard still need an interactive desktop
 check; automated smoke tests do not open dialogs or overwrite the user's clipboard.
-No paid-provider entitlement, Windows code signing, macOS desktop, or Linux arm64
-validation is claimed by this migration.
+No paid-provider entitlement, Authenticode-signed Windows releases, macOS desktop,
+or Linux arm64 validation is claimed by this migration.

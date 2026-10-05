@@ -8,6 +8,7 @@ import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
 import { AuthPage } from './auth/AuthPage';
 import { currentUser, logOut, type User } from './auth/session';
 import { navigate, usePath } from './router';
+import { UpdateNotice } from './workspace/UpdateNotice';
 
 type Session = { status: 'loading' } | { status: 'out' } | { status: 'in'; user: User };
 const AUTH_PATHS = new Set(['/login', '/signup']);
@@ -19,6 +20,15 @@ function returnPath() {
 }
 
 export function App() {
+  return (
+    <>
+      <Shell />
+      <UpdateNotice />
+    </>
+  );
+}
+
+function Shell() {
   const [session, setSession] = useState<Session>({ status: 'loading' });
   const path = usePath();
 
