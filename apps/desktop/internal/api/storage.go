@@ -205,10 +205,8 @@ func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]m
 		return nil, err
 	}
 	for _, board := range boards {
-		board["tags"] = tags[board["id"].(string)]
-		if board["tags"] == nil {
-			board["tags"] = []string{}
-		}
+		// A nil slice would encode as null; untagged boards list an empty array.
+		board["tags"] = append([]string{}, tags[board["id"].(string)]...)
 	}
 	return boards, nil
 }

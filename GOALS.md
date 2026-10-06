@@ -92,32 +92,43 @@ only after both hosts (Fastify and Go) and the browser path are verified.
 
 ### Account-scoped settings (#8)
 
-- [ ] Model preferences, named profiles, provider limits and usage records live in SQLite per
+- [x] Model preferences, named profiles, provider limits and usage records live in SQLite per
       account (shared migration), not per-browser localStorage; they follow the account across
       browsers and are included in full-database backups.
-- [ ] Existing localStorage values are imported once into an account that has none; the local
+- [x] Existing localStorage values are imported once into an account that has none; the local
       copies are left in place. Unavailable server storage reports an error, never silently resets.
 
 ### Usage and cost per collection (#9)
 
-- [ ] Usage records carry the generating board; Settings shows reported usage grouped by
+- [x] Usage records carry the generating board; Settings shows reported usage grouped by
       collection (current membership), keeping missing measurements distinct from zero.
-- [ ] Costs are only CLI-reported estimates and are labeled so; pricing-based projections stay
+- [x] Costs are only CLI-reported estimates and are labeled so; pricing-based projections stay
       in the separate pending provider/pricing goal.
 
 ### Tags and smart collections (#5)
 
-- [ ] Owner-private tags (several per board, case-insensitive), edited without a revision or
+- [x] Owner-private tags (several per board, case-insensitive), edited without a revision or
       undo step; filter My boards by tag.
-- [ ] Smart collections: saved rules (tags, visibility, collection, recency, agent, title text)
+- [x] Smart collections: saved rules (tags, visibility, collection, recency, agent, title text)
       evaluated by one shared pure function; they never move or modify boards.
 
 ### Search across boards (#2)
 
-- [ ] One search over titles, concepts, summaries, explanations, notes, sources and connection
+- [x] One search over titles, concepts, summaries, explanations, notes, sources and connection
       labels of boards the account owns or edits; results open the board with the concept selected.
-- [ ] Shared pure ranking used by both hosts and an MCP `opsis_search_boards` tool.
+- [x] Shared pure ranking used by both hosts and an MCP `opsis_search_boards` tool.
 - [ ] Not in this delivery: semantic (embedding) search with a local index.
+
+Progress 2026-10-06: #8, #9, #5 and #2 shipped (commits ecf81a5, b93cbd3, d2fa37b) with
+migrations 4 and 5. Verified locally on Windows 11 (Node 22.23.3): API tests on both hosts
+(settings/usage isolation and bounds, tags/smart rules, search scope), 366 unit tests, browser
+scenarios for account-wide profiles in a second browser context, tags/smart collections and
+search-to-concept on Fastify and on the built `opsis.exe` (a few full-suite runs hit 30 s
+timeouts on this low-memory machine and passed when rerun), packaged database/MCP integration
+and the hidden WebView2 smoke. CI for those commits failed on three issues fixed in the
+follow-up commit: untagged boards listed `tags: null` on the Go host (breaking saves there),
+the desktop smoke still read profiles from localStorage, and accessibility scans ran during
+page fade-ins. Confirm the next CI run before relying on these items.
 
 ### Links between boards (#3)
 

@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { signUp } from './session';
+import { signUp, accessibilityScan } from './session';
 
 test('saves a named template, reuses it after reload, and deletes it without deleting projects', async ({
   page,
@@ -31,9 +30,7 @@ test('saves a named template, reuses it after reload, and deletes it without del
     'opacity',
     '1',
   );
-  expect(
-    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
-  ).toEqual([]);
+  expect((await accessibilityScan(page)).violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

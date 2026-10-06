@@ -160,11 +160,18 @@
     [...document.querySelectorAll('.agent-settings button')]
       .find((button) => button.textContent.trim() === 'Add profile')
       .click();
-    await until(
-      () => localStorage.getItem('opsis:model-profiles:v1')?.includes('Desktop smoke profile'),
-      'Named profile did not persist',
+    // Profiles are account settings now: poll the native host's SQLite copy.
+    let profiles = [];
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const settings = await (await fetch('/v1/account/settings')).json();
+      profiles = settings.values?.['model-profiles'] ?? [];
+      if (profiles.some((profile) => profile.name === 'Desktop smoke profile')) break;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    assert(
+      profiles.some((profile) => profile.name === 'Desktop smoke profile'),
+      'native WebView named profile persisted to the account',
     );
-    assert(true, 'native WebView named profile persisted');
     [...document.querySelectorAll('.settings-sections button')]
       .find((button) => button.textContent.trim() === 'Appearance')
       .click();

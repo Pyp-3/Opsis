@@ -1,6 +1,5 @@
-import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '@playwright/test';
-import { signUp } from './session';
+import { signUp, accessibilityScan } from './session';
 
 test('saves profiles, edits and removes them, checks invalid paths without a model call', async ({
   page,
@@ -256,7 +255,7 @@ test('model suggestions require consent and settings fit a narrow screen', async
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
   expect(overflow).toBe(false);
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.screenshot({ path: '/tmp/opsis-p1-settings-mobile.png', fullPage: true });
 });

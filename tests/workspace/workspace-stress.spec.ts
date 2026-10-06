@@ -1,8 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
-import { signUp } from './session';
+import { signUp, accessibilityScan } from './session';
 
 const snapshot = (page: Page) =>
   page.evaluate(
@@ -112,7 +111,7 @@ test('manager creates, renames, cancels deletion, deletes and never resurrects a
   await expect(
     page.getByRole('button', { name: `Delete ${name} renamed`, exact: true }),
   ).toBeVisible();
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.getByRole('button', { name: `Delete ${name} renamed`, exact: true }).click();
   await page.getByRole('button', { name: 'Keep board' }).click();

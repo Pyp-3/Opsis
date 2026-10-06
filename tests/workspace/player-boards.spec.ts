@@ -1,8 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
 import { DNS_DEMO } from '../../packages/schema/src/dns-demo';
-import { signUp } from './session';
+import { signUp, accessibilityScan } from './session';
 
 const snapshot = (page: Page) =>
   page.evaluate(
@@ -109,7 +108,7 @@ test('plays the DNS process with a British narrator, in message order, to the en
   expect(spoken[0]!.text).toBe(DNS_DEMO.narration);
   // Everything has been reached, so nothing stays dimmed at the end.
   await expect(page.locator('.react-flow__node.is-dimmed')).toHaveCount(0);
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
 });
 
@@ -288,7 +287,7 @@ test('the boards page is a real page with history, search and an accessible layo
   // Loading /boards directly works too.
   await page.goto('/boards');
   await expect(page.getByRole('heading', { name: 'Your boards', level: 1 })).toBeVisible();
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -305,7 +304,7 @@ test('the landing page offers questions and examples, and an empty canvas offers
   const ask = page.getByLabel('Start a new canvas with a question');
   await expect(ask).toHaveValue('How does the water cycle work?');
   await expect(ask).toBeFocused();
-  let scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  let scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
   await expect(page).toHaveURL(/\/canvas$/);
@@ -315,6 +314,6 @@ test('the landing page offers questions and examples, and an empty canvas offers
     'How does the water cycle work?',
   );
   await expect(page.getByLabel('What would you like to understand?')).toBeFocused();
-  scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
 });

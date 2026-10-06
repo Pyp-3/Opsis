@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 /**
@@ -11,4 +12,22 @@ export async function signUp(page: Page, name = 'Test reader') {
   });
   if (response.status() !== 201) throw new Error(`Sign-up failed: ${await response.text()}`);
   return { name, email, password: 'correct horse' };
+}
+
+/**
+ * Runs the WCAG A/AA scan once entrance transitions have finished. Pages fade in, and a
+ * scan taken mid-fade measures blended, not real, text colours. Endless decorative loops
+ * are not waited for.
+ */
+export async function accessibilityScan(page: Page) {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          animation.playState !== 'running' ||
+          animation.effect?.getComputedTiming().iterations === Infinity,
+      ),
+  );
+  return new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
 }

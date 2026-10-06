@@ -10,6 +10,14 @@ func TestTagsAndSmartCollectionsArePrivateOrganization(t *testing.T) {
 	s := newTestServer(t)
 	owner := signup(t, s, "tagger@example.test")
 	stranger := signup(t, s, "tag-stranger@example.test")
+	untagged := owner.request("POST", "/v1/boards", map[string]any{"title": "Untagged"}, 201)
+	for _, entry := range owner.raw("GET", "/v1/boards", nil, 200).([]any) {
+		listing := entry.(map[string]any)
+		if tags, ok := listing["tags"].([]any); listing["id"] == untagged["id"] && (!ok || len(tags) != 0) {
+			t.Fatalf("untagged board must list an empty tag array, got %v", listing["tags"])
+		}
+	}
+	owner.request("DELETE", "/v1/boards/"+untagged["id"].(string), map[string]any{"revision": untagged["revision"]}, 204)
 	board := owner.request("POST", "/v1/boards", map[string]any{"title": "Tagged"}, 201)
 	path := "/v1/boards/" + board["id"].(string)
 	tagged := owner.request("PUT", path+"/tags", map[string]any{"tags": []string{" Networking ", "networking", "Exam"}}, 200)

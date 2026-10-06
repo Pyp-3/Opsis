@@ -1,6 +1,5 @@
 import { test, expect, type Browser } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { signUp } from './session';
+import { signUp, accessibilityScan } from './session';
 
 async function agentsOnline(page: import('@playwright/test').Page) {
   await page.route('**/v1/agents', (route) =>
@@ -28,7 +27,7 @@ test('signs up, logs out and logs back in through the page', async ({ page }) =>
   await expect(page.getByRole('alert')).toHaveText('Use at least 8 characters.');
   await page.getByLabel('Password', { exact: true }).fill('Correct-horse-9');
   await expect(page.getByText('Strong')).toBeVisible();
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.getByRole('button', { name: /^Create account/ }).click();
   // Back where the visitor was heading.
