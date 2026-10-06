@@ -1,6 +1,6 @@
 # Opsis goals
 
-Last reviewed: 2026-10-05.
+Last reviewed: 2026-10-06.
 
 ## Current delivery
 
@@ -73,8 +73,7 @@ Let an account group its own boards ("canvases") into named collections for fast
       Copies are filed beside their source; archived boards keep their collection.
 - [x] Shared migration 3 (`board_collections`, `boards_v2.collection_id`) on both the
       Fastify and Go hosts; included in full-database backups.
-- [ ] Verify the race-enabled Go suite in CI (locally blocked: ThreadSanitizer could not
-      allocate memory on the Windows machine; the same tests pass without `-race`).
+- [x] Race-enabled Go suite verified in CI run 37343651152 (Linux and Windows desktop jobs).
 - [ ] Not yet in scope: MCP tools to list/file collections, collection-aware home/sidebar
       recents, multi-select bulk moves, and per-board JSON export of the collection.
 
@@ -85,6 +84,66 @@ browser scenario filing, filtering across reload and deleting a collection while
 keeping its boards. Full gates: lint, typecheck, Rust check/24 tests, 351 unit tests,
 43 browser scenarios against Fastify and against the built `opsis.exe` (Linux-only
 pixel baseline skipped). See [collections](docs/PERSISTENCE.md#collections).
+
+## In progress: scaling the library (requested 2026-10-06)
+
+Requested together after collections. Each item lists its acceptance criteria; check an item
+only after both hosts (Fastify and Go) and the browser path are verified.
+
+### Account-scoped settings (#8)
+
+- [ ] Model preferences, named profiles, provider limits and usage records live in SQLite per
+      account (shared migration), not per-browser localStorage; they follow the account across
+      browsers and are included in full-database backups.
+- [ ] Existing localStorage values are imported once into an account that has none; the local
+      copies are left in place. Unavailable server storage reports an error, never silently resets.
+
+### Usage and cost per collection (#9)
+
+- [ ] Usage records carry the generating board; Settings shows reported usage grouped by
+      collection (current membership), keeping missing measurements distinct from zero.
+- [ ] Costs are only CLI-reported estimates and are labeled so; pricing-based projections stay
+      in the separate pending provider/pricing goal.
+
+### Tags and smart collections (#5)
+
+- [ ] Owner-private tags (several per board, case-insensitive), edited without a revision or
+      undo step; filter My boards by tag.
+- [ ] Smart collections: saved rules (tags, visibility, collection, recency, agent, title text)
+      evaluated by one shared pure function; they never move or modify boards.
+
+### Search across boards (#2)
+
+- [ ] One search over titles, concepts, summaries, explanations, notes, sources and connection
+      labels of boards the account owns or edits; results open the board with the concept selected.
+- [ ] Shared pure ranking used by both hosts and an MCP `opsis_search_boards` tool.
+- [ ] Not in this delivery: semantic (embedding) search with a local index.
+
+### Links between boards (#3)
+
+- [ ] A concept may link to another board (optional saved field, never requested from agents and
+      kept through regenerations). The canvas marks linked concepts; opening follows the link with
+      a way back; boards show which boards link to them (backlinks).
+
+### Collection sharing and export (#6)
+
+- [ ] Owners can make every board in a collection public/private and invite/revoke an editor for
+      all of its boards in one action.
+- [ ] Export a collection as a bundle and import it as new private boards in a new collection,
+      remapping links between its boards; export a self-contained read-only static site; print a
+      collection walkthrough (save as PDF from the print dialog).
+
+### Remote Opsis server and device sync (#4)
+
+- [ ] Opt-in server mode for the Fastify host: non-loopback binding only with an HTTPS public
+      origin (direct TLS or an explicitly trusted proxy), strict origin checks, Secure cookies,
+      CSP/HSTS, invite-only enrollment and operator-issued password resets, local CLI generation
+      disabled, serving the built web app, and an audit log with retention. Loopback mode unchanged.
+- [ ] Per-device sync tokens (shown once, revocable, limited to sync routes).
+- [ ] Local hosts (Fastify and Go desktop) connect to a server and sync owned boards with a shared
+      pure planner: pushes, pulls, three-way merges; true conflicts and edit-vs-delete keep a
+      separate copy. Collections and tags travel by name. Tokens are never returned or logged.
+- [ ] Not in this delivery: live presence/cursors, multi-server scaling, hosted backups.
 
 ## Product goal
 
