@@ -34,8 +34,18 @@ func TestWindowsNPMLauncherOverridesResolveWithoutAShell(t *testing.T) {
 					t.Fatal(err)
 				}
 				resolved, err := ResolveAgentPath(agent, launcher)
-				if err != nil || resolved != expected {
+				if err != nil {
 					t.Fatalf("%s: %q %v", extension, resolved, err)
+				}
+				// Windows runners may expose TEMP through an 8.3 path. Resolution
+				// expands it, so compare file identity rather than path spelling.
+				actualInfo, err := os.Stat(resolved)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedInfo, err := os.Stat(expected)
+				if err != nil || !os.SameFile(actualInfo, expectedInfo) {
+					t.Fatalf("%s resolved %q instead of %q", extension, resolved, expected)
 				}
 			}
 			custom := filepath.Join(directory, "custom.cmd")
