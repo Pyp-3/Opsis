@@ -1,11 +1,14 @@
 // Executed only with --smoke-test against an explicitly isolated profile.
 (async () => {
   const checks = [];
+  const progress = (step) => window.go.main.Desktop.ReportSmokeProgress(step);
   const assert = (condition, message) => {
     if (!condition) throw new Error(message);
     checks.push(message);
+    void progress(message);
   };
   const until = async (test, message) => {
+    await progress(`Waiting: ${message}`);
     const deadline = Date.now() + 15000;
     while (!test()) {
       if (Date.now() > deadline) throw new Error(message);

@@ -186,6 +186,13 @@ func (d *Desktop) CopyText(text string) error {
 }
 
 // The smoke reporter is inert during ordinary use and cannot access files.
+func (d *Desktop) ReportSmokeProgress(step string) {
+	if d.smoke && len(step) <= 200 {
+		data, _ := json.Marshal(map[string]string{"smokeStep": step})
+		fmt.Fprintln(os.Stderr, string(data))
+	}
+}
+
 func (d *Desktop) ReportSmoke(result string) {
 	if d.smoke && len(result) < 64*1024 {
 		select {

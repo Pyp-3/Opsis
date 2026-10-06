@@ -4,6 +4,12 @@ Last reviewed: 2026-10-06.
 
 ## Current delivery
 
+CI follow-up: provider run 37454454247 passed web, Linux and Windows. Both Mac
+architectures passed native tests, builds, integration and browser coverage but
+timed out in the hidden WebView smoke. The preceding Apple Silicon rerun also
+timed out. Adding bounded smoke-step diagnostics to identify the stalled operation;
+checks and timeouts remain unchanged while investigating.
+
 Provider delivery (2026-10-06): Kimi, Grok and managed Antigravity API connections
 and official CLI adapters are implemented on both hosts. API keys belong to the
 running server instance, shared by all its accounts. Settings offers write-only
