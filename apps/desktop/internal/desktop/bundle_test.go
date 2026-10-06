@@ -59,6 +59,7 @@ func TestUserDataSurvivesRuntimeChanges(t *testing.T) {
 	t.Setenv("OPSIS_DATA_DIR", filepath.Join(directory, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(directory, "cache"))
 	t.Setenv("LocalAppData", filepath.Join(directory, "cache")) // os.UserCacheDir on Windows
+	t.Setenv("HOME", directory) // os.UserCacheDir on macOS uses ~/Library/Caches
 	t.Setenv("OPSIS_DB_PATH", "")
 	t.Setenv("OPSIS_MODEL_DIR", "")
 	paths, err := UserPaths()
@@ -68,7 +69,11 @@ func TestUserDataSurvivesRuntimeChanges(t *testing.T) {
 	if paths.Database != filepath.Join(directory, "data", "opsis.sqlite") {
 		t.Fatal(paths.Database)
 	}
-	if paths.Models != filepath.Join(directory, "cache", "opsis", "models") {
+	cache := filepath.Join(directory, "cache")
+	if runtime.GOOS == "darwin" {
+		cache = filepath.Join(directory, "Library", "Caches")
+	}
+	if paths.Models != filepath.Join(cache, "opsis", "models") {
 		t.Fatal(paths.Models)
 	}
 }
