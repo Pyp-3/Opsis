@@ -120,22 +120,31 @@ func (s *Server) handle(pattern string, handler func(http.ResponseWriter, *http.
 	})
 }
 
-func (s *Server) body(w http.ResponseWriter, r *http.Request, operation string, out any) error {
+// rawBody reads a bounded JSON request body without validating its shape.
+func rawBody(w http.ResponseWriter, r *http.Request, limit int64) (json.RawMessage, error) {
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		return failure(415, "Expected application/json.")
+		return nil, failure(415, "Expected application/json.")
 	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		return nil, failure(413, "Request body is too large.")
+	}
+	if !json.Valid(data) {
+		return nil, failure(400, "Invalid JSON.")
+	}
+	return json.RawMessage(data), nil
+}
+
+func (s *Server) body(w http.ResponseWriter, r *http.Request, operation string, out any) error {
 	limit := int64(1_048_576)
 	if operation == "save" {
 		limit = 20_000_000
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	data, err := rawBody(w, r, limit)
 	if err != nil {
-		return failure(413, "Request body is too large.")
+		return err
 	}
-	if !json.Valid(data) {
-		return failure(400, "Invalid JSON.")
-	}
-	parsed, err := s.contracts.Apply(operation, json.RawMessage(data))
+	parsed, err := s.contracts.Apply(operation, data)
 	if err != nil {
 		return err
 	}
@@ -219,6 +228,7 @@ func (s *Server) routes() {
 	})
 	s.authRoutes()
 	s.boardRoutes()
+	s.accountSettingsRoutes()
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Kokoro inference is the only remaining Node service.
 		if s.fallback != nil && (r.URL.Path == "/v1/speech" || strings.HasPrefix(r.URL.Path, "/v1/speech/")) {

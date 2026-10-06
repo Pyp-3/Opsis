@@ -15,7 +15,7 @@ import type { BoardAgent, BoardAttachment, BoardDocument } from '@opsis/schema';
 import { ModelControls } from './ModelControls';
 import { AgentLogo } from './AgentLogo';
 import { AttachButton, AttachmentChips } from './Attachments';
-import { MODEL_SETTINGS_KEY, type ModelPreferences } from './model-settings';
+import { saveModelPreferences, type ModelPreferences } from './model-settings';
 import { untilLabel, type AgentCaps, type AgentStatus } from './provider-usage';
 
 type ProviderControls = {
@@ -94,11 +94,9 @@ export function BoardComposer({
         : DEFAULT_BOARD_MODELS[agent];
   const applySettings = (value: ModelPreferences) => {
     setModelPreferences(value);
-    try {
-      localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(value));
-    } catch {
-      setError('Settings apply now but could not be saved on this device.');
-    }
+    saveModelPreferences(value).catch(() =>
+      setError('Settings apply now but could not be saved to your account.'),
+    );
   };
   const providerBlocked = agent !== 'demo' && provider.enabled && !!provider.status?.blocked;
   const providerTracked = agent !== 'demo' && provider.enabled && !!provider.status?.tracked;
@@ -259,13 +257,11 @@ export function BoardComposer({
             onChange={(value) => {
               const next = { ...modelPreferences, [agent]: value };
               setModelPreferences(next);
-              try {
-                localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify(next));
-              } catch {
+              saveModelPreferences(next).catch(() =>
                 setError(
-                  'Model settings apply to this session, but could not be saved on this device.',
-                );
-              }
+                  'Model settings apply to this session, but could not be saved to your account.',
+                ),
+              );
             }}
           />
           <fieldset className="provider-mode">

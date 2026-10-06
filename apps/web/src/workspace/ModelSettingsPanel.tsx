@@ -5,9 +5,10 @@ import {
   type BoardModelSettings,
 } from '@opsis/schema';
 import { ModelControls } from './ModelControls';
-import { type ModelPreferences, MODEL_SETTINGS_KEY } from './model-settings';
+import { type ModelPreferences, saveModelPreferences } from './model-settings';
 import { readModelProfiles, writeModelProfiles, type ModelProfile } from './model-profiles';
 import { readReportedUsage, clearReportedUsage } from './reported-usage';
+import { UsageByCollection } from './UsageByCollection';
 
 export function ModelSettingsPanel({
   preferences,
@@ -31,17 +32,15 @@ export function ModelSettingsPanel({
       setNotice('Complete valid settings before saving.');
       return;
     }
-    try {
-      localStorage.setItem(MODEL_SETTINGS_KEY, JSON.stringify({ ...preferences, [agent]: next }));
-    } catch {
-      setNotice('Settings apply now but could not be saved on this device.');
-    }
+    saveModelPreferences({ ...preferences, [agent]: next }).catch(() =>
+      setNotice('Settings apply now but could not be saved to your account.'),
+    );
   }
-  function saveProfiles(next: ModelProfile[]) {
+  async function saveProfiles(next: ModelProfile[]) {
     try {
-      writeModelProfiles(next);
+      await writeModelProfiles(next);
       setProfiles(next);
-      setNotice('Profiles saved on this device.');
+      setNotice('Profiles saved to your account.');
     } catch {
       setNotice('Could not save profiles. Use a name and valid settings; maximum 30 profiles.');
     }
@@ -206,23 +205,24 @@ export function ModelSettingsPanel({
       <div className="settings-card">
         <h3>Provider-reported usage</h3>
         <p>
-          Last 100 requests on this device, including reported repair attempts. Missing usage means
-          unavailable, not zero. Dollar figures are CLI estimates, not billed cost; subscription
-          allowances and other applications are not measured here.
+          Your account’s most recent 1,000 requests, including reported repair attempts. Missing
+          usage means unavailable, not zero. Dollar figures are CLI estimates, not billed cost;
+          subscription allowances and other applications are not measured here.
         </p>
         <button
-          onClick={() => {
+          onClick={async () => {
             try {
-              clearReportedUsage();
+              await clearReportedUsage();
               setUsage([]);
             } catch {
-              setNotice('Could not clear local usage history on this device.');
+              setNotice('Could not clear usage history.');
             }
           }}
         >
-          Clear local usage history
+          Clear usage history
         </button>
         {!usage.length && <p>No usage reported yet.</p>}
+        <UsageByCollection usage={usage} />
         <div className="usage-history">
           {usage
             .slice()

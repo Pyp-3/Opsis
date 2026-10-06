@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -101,7 +102,15 @@ func TestMigratesAndRestoresArchivedDataWithHistory(t *testing.T) {
 	}
 	defer reopened.Close()
 	var count int
-	if err := reopened.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != 3 {
+	raw, err := reopened.contracts.Apply("migrations", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var migrations []json.RawMessage
+	if err := json.Unmarshal(raw, &migrations); err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&count); err != nil || count != len(migrations) {
 		t.Fatal("migration ledger incorrect", err)
 	}
 }

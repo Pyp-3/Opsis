@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { accountSetting, saveAccountSetting } from './account-settings';
 
 /**
  * Provider mode: each board-generating agent tracks its own usage against a rolling
  * 5-hour window and a rolling 7-day (weekly) window. When an agent reaches a cap it is
  * disabled in the composer until the oldest counted generation rolls off its window.
  *
- * Everything here is local to this device: the API and board schema are untouched, which
- * matches "each agent handles their own" without a server round-trip. A cap of 0 means
- * "no limit", so enabling provider mode never blocks an agent until a real cap is set.
+ * Caps and counted generations are account settings, so they follow the account across
+ * browsers; the board schema is untouched. A cap of 0 means "no limit", so enabling
+ * provider mode never blocks an agent until a real cap is set.
  */
 export type ProviderAgent = 'claude' | 'codex';
 export const PROVIDER_AGENTS: ProviderAgent[] = ['claude', 'codex'];
@@ -22,9 +23,6 @@ export type ProviderSettings = {
 };
 type UsageEvents = Record<ProviderAgent, number[]>;
 
-const SETTINGS_KEY = 'opsis:provider:v1';
-const USAGE_KEY = 'opsis:provider-usage:v1';
-
 const DEFAULT_SETTINGS: ProviderSettings = {
   enabled: false,
   caps: { claude: { fiveHour: 0, weekly: 0 }, codex: { fiveHour: 0, weekly: 0 } },
@@ -37,7 +35,7 @@ function cap(value: unknown): number {
 
 function readSettings(): ProviderSettings {
   try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<ProviderSettings>;
+    const raw: Partial<ProviderSettings> = accountSetting('provider-limits') ?? {};
     const caps = (agent: ProviderAgent): AgentCaps => ({
       fiveHour: cap(raw.caps?.[agent]?.fiveHour),
       weekly: cap(raw.caps?.[agent]?.weekly),
@@ -54,7 +52,7 @@ function readSettings(): ProviderSettings {
 function readUsage(): UsageEvents {
   const empty: UsageEvents = { claude: [], codex: [] };
   try {
-    const raw = JSON.parse(localStorage.getItem(USAGE_KEY) ?? '{}') as Partial<UsageEvents>;
+    const raw: Partial<UsageEvents> = accountSetting('provider-events') ?? {};
     const list = (agent: ProviderAgent) =>
       (raw[agent] ?? []).filter((t): t is number => typeof t === 'number' && Number.isFinite(t));
     return { claude: list('claude'), codex: list('codex') };
@@ -132,11 +130,9 @@ export function useProviderUsage() {
 
   const persistSettings = (next: ProviderSettings) => {
     setSettingsState(next);
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-    } catch {
-      // Remembering provider settings is a convenience only.
-    }
+    saveAccountSetting('provider-limits', next).catch(() => {
+      // The caps still apply for this session.
+    });
   };
   const setEnabled = useCallback(
     (enabled: boolean) => persistSettings({ ...readSettings(), enabled }),
@@ -154,11 +150,13 @@ export function useProviderUsage() {
     const at = Date.now();
     const kept = [...events.current[agent].filter((t) => at - t < ONE_WEEK), at];
     events.current = { ...events.current, [agent]: kept };
-    try {
-      localStorage.setItem(USAGE_KEY, JSON.stringify(events.current));
-    } catch {
-      // Counting is best-effort if storage is unavailable.
-    }
+    const bounded = {
+      claude: events.current.claude.slice(-1000),
+      codex: events.current.codex.slice(-1000),
+    };
+    saveAccountSetting('provider-events', bounded).catch(() => {
+      // Counting is best-effort if the account cannot be reached.
+    });
     setNow(at);
   }, []);
 

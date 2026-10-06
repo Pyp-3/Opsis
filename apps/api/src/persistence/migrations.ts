@@ -46,4 +46,21 @@ export const PERSISTENCE_MIGRATIONS = [
     CREATE INDEX boards_v2_collection ON boards_v2(collection_id);
   `,
   },
+  {
+    version: 4,
+    name: 'account-settings-and-usage',
+    sql: `
+    CREATE TABLE account_settings (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key TEXT NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY(user_id, key)
+    );
+    CREATE TABLE usage_records (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL, board_id TEXT, record TEXT NOT NULL
+    );
+    CREATE INDEX usage_records_user_at ON usage_records(user_id, at);
+  `,
+  },
 ] as const;

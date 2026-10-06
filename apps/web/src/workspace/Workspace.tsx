@@ -106,16 +106,25 @@ const EXPLAIN_KEY = 'opsis:explain';
 const nodeTypes = { concept: IconNode };
 const edgeTypes = { routed: RoutedConnection };
 
-function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => void }) {
+type WorkspaceProps = {
+  user?: User;
+  onSignOut?: () => void;
+  /** Why this account's settings could not load; defaults apply meanwhile. */
+  settingsError?: string;
+};
+
+function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const [initial] = useState(restoreLibrary);
   const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
     useBoardHistory(initial.snapshot);
-  const generation = useBoardGeneration(commit);
+  // Usage is recorded against the board open when a generation starts.
+  const usageBoardRef = useRef<string | undefined>(undefined);
+  const generation = useBoardGeneration(commit, usageBoardRef);
   const provider = useProviderUsage();
   const process = useProcessEngine(board);
   const [arranging, setArranging] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
-  const illustrator = useIllustrator(boardRef, setBoard);
+  const illustrator = useIllustrator(boardRef, setBoard, usageBoardRef);
   const library = useBoardLibrary(
     initial,
     snapshot,
@@ -127,7 +136,13 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
       arranging ||
       playerOpen,
   );
+  useEffect(() => {
+    usageBoardRef.current = library.activeId;
+  }, [library.activeId]);
   const { error, setError, setBusy } = generation;
+  useEffect(() => {
+    if (settingsError) setError(`${settingsError} Default model settings apply for now.`);
+  }, [settingsError, setError]);
   const { cancel: cancelIllustration } = illustrator;
   // `working`: something is in flight. `busy` also covers viewing someone else's public board,
   // which can be explored and played but not changed.
@@ -1287,7 +1302,7 @@ function BoardWorkspace({ user, onSignOut }: { user?: User; onSignOut?: () => vo
   );
 }
 
-export function Workspace(props: { user?: User; onSignOut?: () => void }) {
+export function Workspace(props: WorkspaceProps) {
   return (
     <ReactFlowProvider>
       <BoardWorkspace {...props} />

@@ -57,7 +57,7 @@ export function SettingsPage({
           <Paintbrush size={13} /> Settings
         </span>
         <h1>Make Opsis yours</h1>
-        <p>Agents, models, usage and appearance. Saved on this device.</p>
+        <p>Agents, models, usage and appearance. Model choices and usage follow your account.</p>
       </header>
 
       <div className="settings-sections" role="group" aria-label="Settings sections">

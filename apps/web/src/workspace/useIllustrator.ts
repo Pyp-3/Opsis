@@ -21,6 +21,8 @@ export function useIllustrator(
   boardRef: RefObject<BoardDocument | null>,
   /** Applied through the board's setter, so a drawing arriving mid-drag joins that drag's edit. */
   update: (change: (board: BoardDocument | null) => BoardDocument | null) => void,
+  /** The board usage is recorded against. */
+  boardIdRef?: RefObject<string | undefined>,
 ) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -96,14 +98,20 @@ export function useIllustrator(
           setMessage(e instanceof Error ? e.message : 'Could not connect to the agent.');
       } finally {
         if (called && agent !== 'demo')
-          recordReportedUsage(agent, preferences[agent], usages, 'illustration');
+          recordReportedUsage(
+            agent,
+            preferences[agent],
+            usages,
+            'illustration',
+            boardIdRef?.current ?? undefined,
+          );
         if (request.current === controller) {
           request.current = null;
           setBusy(false);
         }
       }
     },
-    [boardRef, update],
+    [boardRef, update, boardIdRef],
   );
   const cancel = useCallback(() => {
     request.current?.abort();

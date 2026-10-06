@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelControls } from './ModelControls';
-import { MODEL_SETTINGS_KEY, readModelPreferences } from './model-settings';
+import { readModelPreferences, saveModelPreferences } from './model-settings';
 
 afterEach(() => {
   cleanup();
@@ -15,14 +15,11 @@ describe('model configuration', () => {
       codex: { model: 'gpt-6-luna', effort: 'low' },
     });
   });
-  it('restores separate settings for each provider', () => {
-    localStorage.setItem(
-      MODEL_SETTINGS_KEY,
-      JSON.stringify({
-        claude: { model: 'sonnet', effort: 'medium' },
-        codex: { model: 'gpt-6-luna', effort: 'high' },
-      }),
-    );
+  it('restores separate settings for each provider', async () => {
+    await saveModelPreferences({
+      claude: { model: 'sonnet', effort: 'medium' },
+      codex: { model: 'gpt-6-luna', effort: 'high' },
+    });
     expect(readModelPreferences().claude).toEqual({ model: 'sonnet', effort: 'medium' });
     expect(readModelPreferences().codex.effort).toBe('high');
   });

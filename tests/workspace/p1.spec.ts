@@ -13,6 +13,7 @@ test('saves profiles, edits and removes them, checks invalid paths without a mod
   await panel.getByLabel('Request character limit').fill('12000');
   await panel.getByLabel('Profile name').fill('Economical diagrams');
   await panel.getByRole('button', { name: 'Add profile', exact: true }).click();
+  await expect(panel.getByText('Profiles saved to your account.')).toBeVisible();
   await page.reload();
   await expect(panel.getByText('Economical diagrams', { exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -27,8 +28,39 @@ test('saves profiles, edits and removes them, checks invalid paths without a mod
   await panel.getByRole('button', { name: 'Check configuration (no model call)' }).click();
   await expect(panel.getByRole('status')).toContainText('Executable not found');
   await panel.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(panel.getByText('Short diagrams', { exact: true })).toHaveCount(0);
   await page.reload();
   await expect(panel.getByText('Short diagrams', { exact: true })).toHaveCount(0);
+});
+
+test('model profiles follow the account into another browser profile', async ({
+  page,
+  browser,
+}) => {
+  const account = await signUp(page, 'Travelling settings');
+  await page.goto('/settings');
+  const panel = page.getByRole('region', { name: 'Agents and models' });
+  await panel.getByLabel('Profile name').fill('Account-wide profile');
+  await panel.getByRole('button', { name: 'Add profile', exact: true }).click();
+  await expect(panel.getByText('Profiles saved to your account.')).toBeVisible();
+
+  // A separate context has its own empty browser storage, like another browser or device.
+  const other = await browser.newContext();
+  try {
+    const second = await other.newPage();
+    const login = await second.request.post('/v1/auth/login', {
+      data: { email: account.email, password: account.password },
+    });
+    expect(login.status()).toBe(200);
+    await second.goto('/settings');
+    await expect(
+      second
+        .getByRole('region', { name: 'Agents and models' })
+        .getByText('Account-wide profile', { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await other.close();
+  }
 });
 
 test('pins, connects and reconnects with keyboard controls and saves branch metadata', async ({

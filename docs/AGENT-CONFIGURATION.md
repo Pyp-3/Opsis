@@ -17,7 +17,7 @@ Claude presets include Haiku 4.5, Sonnet 5.5, Opus 5.5, Fable 5.1, and earlier S
 
 CLI readiness checks installation/version, not subscription entitlement. An actual generation is needed to verify model access. Effort is **not** a token or spending cap; usage remains subject to your provider's subscription and limits. Open **Settings → Agents and models** for executable paths, named profiles, request character limits, optional Claude budgets per attempt and provider-reported usage history. Missing usage remains unavailable rather than zero; reported costs are not invoices. Output-token caps are not supported by these CLI integrations. See [model and canvas controls](P1-CONTROLS.md) for persistence, limits and consent-based suggestions.
 
-Profiles and usage history are stored on this device, alongside per-agent preferences; they are not included in database backups. New provider integrations and Windows/macOS desktop packaging remain separate roadmap work.
+Per-agent preferences, profiles, provider caps and usage history belong to your account: they are stored in the Opsis database, follow you to other browsers using the same Opsis server, and are included in full-database backups. New provider integrations and Windows/macOS desktop packaging remain separate roadmap work.
 
 ### Configuration
 

@@ -9,8 +9,10 @@ import { AuthPage } from './auth/AuthPage';
 import { currentUser, logOut, type User } from './auth/session';
 import { navigate, usePath } from './router';
 import { UpdateNotice } from './workspace/UpdateNotice';
+import { loadAccountSettings, resetAccountSettings } from './workspace/account-settings';
 
-type Session = { status: 'loading' } | { status: 'out' } | { status: 'in'; user: User };
+type Session =
+  { status: 'loading' } | { status: 'out' } | { status: 'in'; user: User; settingsError?: string };
 const AUTH_PATHS = new Set(['/login', '/signup']);
 
 /** Where to go after signing in: the `next` the sign-in page was opened with, if it is ours. */
@@ -32,21 +34,31 @@ function Shell() {
   const [session, setSession] = useState<Session>({ status: 'loading' });
   const path = usePath();
 
-  const signedIn = useCallback((user: User) => {
+  const signedIn = useCallback(async (user: User) => {
     // Before the workspace mounts, so it restores this account's own recovery copy.
     setRecoveryScope(user.id);
-    setSession({ status: 'in', user });
+    // Account settings load first so the workspace starts with this account's models.
+    let settingsError: string | undefined;
+    try {
+      await loadAccountSettings();
+    } catch (e) {
+      settingsError = e instanceof Error ? e.message : 'Could not load your account settings.';
+    }
+    setSession({ status: 'in', user, ...(settingsError ? { settingsError } : {}) });
   }, []);
   useEffect(() => {
     let live = true;
     currentUser()
       .then((user) => {
         if (!live) return;
-        if (user) signedIn(user);
+        if (user) void signedIn(user);
         else setSession({ status: 'out' });
       })
       .catch(() => live && setSession({ status: 'out' }));
-    const expired = () => setSession({ status: 'out' });
+    const expired = () => {
+      resetAccountSettings();
+      setSession({ status: 'out' });
+    };
     window.addEventListener(AUTH_EXPIRED, expired);
     return () => {
       live = false;
@@ -75,9 +87,9 @@ function Shell() {
     return (
       <AuthPage
         mode={path === '/signup' ? 'signup' : 'login'}
-        onSignedIn={(user) => {
+        onSignedIn={async (user) => {
           const next = returnPath();
-          signedIn(user);
+          await signedIn(user);
           navigate(next, true);
         }}
       />
@@ -94,8 +106,10 @@ function Shell() {
         // A different account starts from a clean workspace.
         key={session.user.id}
         user={session.user}
+        {...(session.settingsError ? { settingsError: session.settingsError } : {})}
         onSignOut={async () => {
           await logOut();
+          resetAccountSettings();
           setSession({ status: 'out' });
           navigate('/login', true);
         }}

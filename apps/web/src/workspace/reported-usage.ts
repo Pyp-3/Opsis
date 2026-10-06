@@ -1,35 +1,18 @@
-import { z } from 'zod';
-import { ReportedUsageSchema, type BoardModelSettings, type ReportedUsage } from '@opsis/schema';
+import type { BoardModelSettings, ReportedUsage, UsageRecord } from '@opsis/schema';
+import { accountUsage, addAccountUsage, clearAccountUsage } from './account-settings';
 
-const KEY = 'opsis:reported-usage:v1';
-const EntrySchema = z.object({
-  id: z.string(),
-  at: z.number(),
-  agent: z.enum(['claude', 'codex']),
-  model: z.string(),
-  effort: z.string(),
-  purpose: z.enum(['diagram', 'illustration']),
-  attempts: z.array(ReportedUsageSchema).max(10),
-});
-export type UsageEntry = z.infer<typeof EntrySchema>;
+export type UsageEntry = UsageRecord;
 export function readReportedUsage(): UsageEntry[] {
-  try {
-    const parsed = z
-      .array(EntrySchema)
-      .max(100)
-      .safeParse(JSON.parse(localStorage.getItem(KEY) ?? '[]'));
-    return parsed.success ? parsed.data : [];
-  } catch {
-    return [];
-  }
+  return accountUsage();
 }
 export function recordReportedUsage(
   agent: 'claude' | 'codex',
   settings: BoardModelSettings,
   attempts: ReportedUsage[],
   purpose: UsageEntry['purpose'],
+  boardId?: string,
 ) {
-  const entry = {
+  void addAccountUsage({
     id: crypto.randomUUID(),
     at: Date.now(),
     agent,
@@ -37,13 +20,11 @@ export function recordReportedUsage(
     effort: settings.effort,
     attempts: attempts.slice(0, 10),
     purpose,
-  };
-  try {
-    localStorage.setItem(KEY, JSON.stringify([...readReportedUsage().slice(-99), entry]));
-  } catch {
-    /* Usage history is optional when browser storage is unavailable. */
-  }
+    ...(boardId ? { boardId } : {}),
+  }).catch(() => {
+    /* Usage history is optional; a failed save never interrupts generation. */
+  });
 }
 export function clearReportedUsage() {
-  localStorage.removeItem(KEY);
+  return clearAccountUsage();
 }

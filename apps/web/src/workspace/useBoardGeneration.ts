@@ -1,6 +1,6 @@
 import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
 import { recordReportedUsage } from './reported-usage';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   BoardGraphSchema,
   boardChanges,
@@ -19,7 +19,11 @@ import {
   type AgentActivity,
 } from './agentActivity';
 
-export function useBoardGeneration(commit: (board: BoardDocument) => void) {
+export function useBoardGeneration(
+  commit: (board: BoardDocument) => void,
+  /** The board usage is recorded against. */
+  boardIdRef?: RefObject<string | undefined>,
+) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -124,7 +128,13 @@ export function useBoardGeneration(commit: (board: BoardDocument) => void) {
       return false;
     } finally {
       if (called && agent !== 'demo')
-        recordReportedUsage(agent, preferences[agent], usages, 'diagram');
+        recordReportedUsage(
+          agent,
+          preferences[agent],
+          usages,
+          'diagram',
+          boardIdRef?.current ?? undefined,
+        );
       if (request.current === controller) {
         request.current = null;
         setBusy(false);

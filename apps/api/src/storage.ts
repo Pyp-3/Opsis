@@ -377,6 +377,56 @@ export class ApiStore {
     })();
   }
 
+  /** Validated JSON per key; see ACCOUNT_SETTING_SCHEMAS. */
+  listAccountSettings(userId: string) {
+    const rows = this.sqlite
+      .prepare('SELECT key, value FROM account_settings WHERE user_id=?')
+      .all(userId) as { key: string; value: string }[];
+    return Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value) as unknown]));
+  }
+
+  saveAccountSetting(userId: string, key: string, value: unknown) {
+    this.sqlite
+      .prepare(
+        `INSERT INTO account_settings (user_id, key, value, updated_at) VALUES (?,?,?,?)
+         ON CONFLICT(user_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+      )
+      .run(userId, key, JSON.stringify(value), Date.now());
+  }
+
+  /** The account's usage records, oldest first. */
+  listUsageRecords(userId: string) {
+    const rows = this.sqlite
+      .prepare('SELECT record FROM usage_records WHERE user_id=? ORDER BY at, rowid')
+      .all(userId) as { record: string }[];
+    return rows.map((row) => JSON.parse(row.record) as unknown);
+  }
+
+  /** Adds a record, keeping only the newest `limit`. A repeated id is ignored. */
+  addUsageRecord(
+    userId: string,
+    record: { id: string; at: number; boardId?: string | undefined },
+    limit: number,
+  ) {
+    this.sqlite.transaction(() => {
+      this.sqlite
+        .prepare(
+          'INSERT OR IGNORE INTO usage_records (id, user_id, at, board_id, record) VALUES (?,?,?,?,?)',
+        )
+        .run(record.id, userId, record.at, record.boardId ?? null, JSON.stringify(record));
+      this.sqlite
+        .prepare(
+          `DELETE FROM usage_records WHERE user_id=? AND id NOT IN (
+             SELECT id FROM usage_records WHERE user_id=? ORDER BY at DESC, rowid DESC LIMIT ?)`,
+        )
+        .run(userId, userId, limit);
+    })();
+  }
+
+  clearUsageRecords(userId: string) {
+    this.sqlite.prepare('DELETE FROM usage_records WHERE user_id=?').run(userId);
+  }
+
   setVisibility(id: string, visibility: Visibility) {
     this.sqlite.prepare('UPDATE boards_v2 SET visibility = ? WHERE id = ?').run(visibility, id);
   }

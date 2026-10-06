@@ -63,13 +63,25 @@ No pricing table is guessed and no estimate is presented as
 actual billing. These measurements do not cover other apps, subscription allowance,
 or requests whose CLI emitted no usable usage record.
 
-Preferences, profiles and usage history use localStorage keys
-`opsis:model-settings:v1`, `opsis:model-profiles:v1` and
-`opsis:reported-usage:v1`. They are device/origin preferences, shared between
-accounts using that browser profile; they are not account secrets, SQLite records
-or part of a database backup. Clear local usage history in Settings. Clearing
-browser/WebView storage removes these preferences. Existing appearance settings
-remain intact.
+Preferences, profiles, provider caps and the most recent 1,000 usage records are
+account settings stored in SQLite (`account_settings` and `usage_records`,
+migration 4). They follow the account to other browsers on the same Opsis server
+and are included in full-database backups. Each key is validated by a shared
+schema on both hosts. **Clear usage history** in Settings removes the account's
+records. Appearance and canvas layout choices remain device preferences.
+
+The first account to sign in on a browser that has earlier localStorage values
+(`opsis:model-settings:v1`, `opsis:model-profiles:v1`, `opsis:provider:v1`,
+`opsis:provider-usage:v1`, `opsis:reported-usage:v1`) receives a copy of any
+setting it does not already have; the local copies are left in place and later
+accounts in that browser do not inherit them. If account settings cannot load,
+the workspace reports it and uses the economical defaults.
+
+Settings → Agents and models also shows **Usage by collection**: reported usage
+grouped by each board's current collection, with Unfiled and Other or deleted
+boards. Generations record the board open when they started. Totals keep
+unreported measurements visible (“Unavailable”, or “N unreported”) instead of
+counting them as zero, and dollar figures remain CLI estimates, not billing.
 
 ## Canvas control
 
