@@ -7,8 +7,13 @@ Last reviewed: 2026-10-06.
 CI follow-up: provider run 37454454247 passed web, Linux and Windows. Both Mac
 architectures passed native tests, builds, integration and browser coverage but
 timed out in the hidden WebView smoke. The preceding Apple Silicon rerun also
-timed out. Adding bounded smoke-step diagnostics to identify the stalled operation;
-checks and timeouts remain unchanged while investigating.
+timed out. Commit 1b304dc adds bounded smoke-step diagnostics and an awaited native
+round trip before each condition wait, without changing checks or deadlines.
+Local Windows smoke passes all 24 checks. Follow-up run 37456419571 passes every
+job, including both Mac smoke tests, packaging and release publication. Apple
+Silicon's smoke completes all 24 checks in about four seconds. The native round
+trip changes scheduling; the earlier stall's exact root cause is not proven.
+Retain these diagnostics if it recurs rather than treating a timeout as harmless.
 
 Provider delivery (2026-10-06): Kimi, Grok and managed Antigravity API connections
 and official CLI adapters are implemented on both hosts. API keys belong to the
