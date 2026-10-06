@@ -1,0 +1,163 @@
+/* Canvas drawings: painted between the grid and the diagram, so icons and arrows stay on top. */
+.drawing-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+/* Inside React Flow's viewport, above the diagram; a zero-size origin that draws outside. */
+.drawing-labels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+.drawing-draft {
+  opacity: 0.75;
+}
+/* While a drawing tool is active this surface takes pointer input instead of the diagram. Above
+   the diagram, below the composer, heading and canvas tools. */
+.drawing-capture {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+  cursor: crosshair;
+}
+.drawing-capture.is-select {
+  cursor: default;
+}
+.drawing-capture.is-text {
+  cursor: text;
+}
+.drawing-capture.is-erase {
+  cursor: cell;
+}
+.drawing-tools,
+.drawing-panel {
+  position: absolute;
+  z-index: 6;
+  background: var(--bp-panel);
+  border: 1px solid var(--bp-line);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--bp-ink);
+  box-shadow: 0 6px 20px rgb(var(--bp-shade) / 0.3);
+}
+.drawing-tools {
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(--radius-lg);
+}
+.drawing-tools.is-collapsed {
+  padding: 2px;
+}
+.drawing-tools button {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+}
+.drawing-tools button:hover:not(:disabled) {
+  background: var(--bp-panel-hover);
+}
+.drawing-tools button[aria-pressed='true'] {
+  background: var(--bp-gold);
+  color: var(--bp-deep);
+}
+.drawing-tools > span {
+  width: 20px;
+  height: 1px;
+  margin: 4px auto;
+  background: var(--bp-line);
+}
+/* Level with the top of the tool column, leaving the middle of the canvas clear. */
+.drawing-panel {
+  top: max(16px, calc(50% - 200px));
+  left: 64px;
+  display: grid;
+  gap: 10px;
+  width: 216px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  font-size: 12px;
+}
+.drawing-panel label {
+  display: grid;
+  gap: 4px;
+}
+.drawing-panel select,
+.drawing-panel textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--bp-line);
+  border-radius: var(--radius);
+  background: var(--bp-deep);
+  color: var(--bp-ink);
+  font: inherit;
+}
+.drawing-panel textarea {
+  resize: vertical;
+}
+.drawing-inks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.drawing-inks button {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+.drawing-inks button[aria-checked='true'] {
+  border-color: var(--bp-deep);
+  box-shadow: 0 0 0 2px var(--bp-ink);
+}
+.drawing-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.drawing-panel .drawing-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drawing-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--bp-line);
+  border-radius: var(--radius);
+}
+.drawing-delete:hover {
+  background: var(--bp-panel-hover);
+}
+@media (max-width: 760px) {
+  .drawing-tools {
+    left: 8px;
+  }
+  .drawing-panel {
+    left: 52px;
+    width: min(216px, calc(100% - 64px));
+  }
+}

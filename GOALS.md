@@ -196,6 +196,39 @@ Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.
 
+## In progress: canvas drawings (requested 2026-10-06)
+
+Add normal/illustrative drawing on the canvas beside icon diagrams, so a board can hold
+blueprints and hybrid flows (engineering and architecture) instead of only process flows.
+
+- [x] Board document v2 gains an optional, bounded `drawings` list (shared schema,
+      `board-drawings.ts`): stroke, line, arrow, box, ellipse, text and dimension shapes in
+      named inks with solid/dashed/centre-line styles. Shapes are validated declarative data,
+      never markup; at most 200 per board and 400 points per stroke.
+- [x] A drawing may move with a concept (`anchorId`, coordinates relative to it). Removing that
+      concept by hand, review, MCP rewrite or regeneration keeps the drawing where it was drawn.
+- [x] Canvas tools: diagram/select/pen/line/arrow/box/ellipse/text/dimension/eraser, keyboard
+      shortcuts, grid snapping with Shift constraints, restyling, attach/detach and delete. Each
+      shape, move, restyle or erase sweep is one undoable edit; viewers only see drawings.
+- [x] Shapes paint beneath icons and arrows; text and dimension labels paint above them.
+      SVG/PNG exports draw them the same way. Agents never receive drawings, and follow-ups
+      keep them.
+- [ ] Not yet: MCP/agent drawing tools, a board-level scale for dimension units, resize handles
+      and multi-select, drawing layers/locking, and copy/paste.
+
+Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
+uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,
+dimension labels), web geometry/export tests and two browser scenarios on Fastify (drawing,
+persistence across reload, undo/redo, attach-and-drag, erasing, accessibility scan; and a
+board with drawings but no concepts). Lint, typecheck and all 393 unit tests pass (six
+API/lint-rule tests timed out under full-suite load and pass when rerun alone). The full
+Fastify browser suite passes 51 of 52 scenarios; the Linux-only pixel baseline is skipped.
+The Go desktop host validates the same embedded contracts: Go vet and the full race suite
+pass with the rebuilt contract bundle, and Rust check plus its 24 tests pass. Not yet run:
+the built desktop executable's browser suite and hidden WebView smoke. The always-visible drawing-tools button
+changes the Linux canvas baseline (`approval-canvas.png`), so CI needs a reviewed update.
+See the [user guide](docs/USER-GUIDE.md#draw-on-the-canvas).
+
 ## In progress: board collections (requested 2026-10-05)
 
 Let an account group its own boards ("canvases") into named collections for faster access.

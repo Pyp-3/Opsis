@@ -1,4 +1,5 @@
 import { BoardDocumentSchema, type BoardDocument } from './board';
+import { detachDrawings } from './board-drawings';
 
 export type BoardReviewChange = { key: string; label: string };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -93,6 +94,9 @@ export function selectBoardChanges(
     ),
     ...(before.pinnedNodeIds
       ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => ids.has(id)) }
+      : {}),
+    ...(before.drawings
+      ? { drawings: detachDrawings(before.drawings, ids, before.positions) }
       : {}),
   });
 }

@@ -10,6 +10,7 @@ import { BoardComposer } from './BoardComposer';
 import { IconNode, type DiagramNode } from './IconNode';
 import { ConceptDetails } from './ConceptDetails';
 import { ConnectionDetails } from './ConnectionDetails';
+import { DrawingControls, DrawingLayer, useCanvasDrawing } from './CanvasDrawing';
 import {
   lazy,
   Suspense,
@@ -173,6 +174,23 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     [board, readOnly, viewGroups],
   );
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const clearDiagramSelection = useCallback(() => {
+    setSelected(null);
+    setSelectedEdge(null);
+  }, []);
+  const drawing = useCanvasDrawing({
+    board,
+    boardRef,
+    setBoard,
+    commit,
+    begin,
+    end,
+    editable: !busy && !playerOpen,
+    onSelect: clearDiagramSelection,
+  });
+  // A board with only drawings is a sketch in progress, not an empty canvas.
+  const showWelcome =
+    (!board || (board.nodes.length === 0 && !board.drawings?.length)) && !drawing.active;
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   // Whether clicking a concept icon opens its explanation. Off = drawing only.
@@ -928,8 +946,10 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 color="var(--bp-grid-major)"
                 lineWidth={1}
               />
+              <DrawingLayer drawing={drawing} />
               {presentation && <GroupBoundaries board={presentation} />}
             </ReactFlow>
+            <DrawingControls drawing={drawing} />
             {board && (
               <div className={`canvas-heading ${headingOpen ? 'is-open' : 'is-collapsed'}`}>
                 <button
@@ -1095,7 +1115,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 </button>
               )}
             </div>
-            {(!board || board.nodes.length === 0) && (
+            {showWelcome && (
               <section className="canvas-welcome" aria-label="Welcome to Opsis">
                 <div className="welcome-identity">
                   <span className="welcome-mark">

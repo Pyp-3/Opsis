@@ -25,6 +25,7 @@ _Follow the connections, then select a concept for its explanation._
 - Generate and refine diagrams with Claude/Codex CLIs or Kimi, Grok and Antigravity APIs/CLIs; review proposed changes before applying them. See [provider setup and limits](docs/PROVIDERS.md).
 - Save model profiles and fallback choices to your account; switch to a fallback explicitly without automatic retries.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
+- Sketch on the canvas beside the icons, for example floor plans, outlines, arrows, labels and dimension lines, to combine process flows with engineering and architecture drawings.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
 - Plan API token costs in Settings with dated pricing presets or custom rates, explicit token assumptions and a cumulative cost chart. Assumptions follow your account; projections make no model calls.

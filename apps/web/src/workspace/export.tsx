@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { saveBlob } from '../desktop';
-import type { BoardDocument } from '@opsis/schema';
+import { absoluteDrawing, drawingBounds, type BoardDocument } from '@opsis/schema';
+import { DrawingShape } from './DrawingShape';
 import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
@@ -29,6 +30,13 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
     ...board.nodes.flatMap((node) => {
       const p = board.positions[node.id] ?? { x: 0, y: 0 };
       return [p, { x: p.x + NODE_WIDTH, y: p.y + nodeHeight(node) }];
+    }),
+    ...(board.drawings ?? []).flatMap((drawing) => {
+      const bounds = drawingBounds(drawing, board.positions);
+      return [
+        { x: bounds.minX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.maxY },
+      ];
     }),
     ...Object.values(routes).flatMap((route) => [
       ...route.points,
@@ -85,13 +93,26 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
       return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="${iconColorOf(look)}">${renderToStaticMarkup(<NodeIcon node={node} size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
+  // As on the canvas: shapes beneath arrows and icons, their words above them.
+  const drawingPart = (part: 'shape' | 'label') =>
+    (board.drawings ?? [])
+      .map((drawing) =>
+        renderToStaticMarkup(
+          <DrawingShape
+            drawing={absoluteDrawing(drawing, board.positions)}
+            halo={palette.deep}
+            part={part}
+          />,
+        ),
+      )
+      .join('');
   const markers = [...new Set(board.edges.map((edge) => connectionStyle(edge).color))]
     .map(
       (color) =>
         `<marker id="arrow-${color.slice(1)}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10" fill="${color}"/></marker>`,
     )
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${palette.deep}"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="${palette.ink}" font-size="18">${escape(board.title)} · Opsis</text>${edges}${nodes}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" font-family="Arial,sans-serif"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ffffff" stroke-opacity=".1"/></pattern>${markers}</defs><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${palette.deep}"/><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="url(#grid)"/><text x="${minX + 30}" y="${minY + 35}" fill="${palette.ink}" font-size="18">${escape(board.title)} · Opsis</text>${drawingPart('shape')}${edges}${nodes}${drawingPart('label')}</svg>`;
 }
 
 export function download(content: string, name: string, type: string) {

@@ -5,6 +5,7 @@ import {
   type BoardSnapshot,
 } from './board';
 import { withoutBrokenProcesses } from './process';
+import { detachDrawings } from './board-drawings';
 
 export type BoardNode = BoardDocument['nodes'][number];
 
@@ -51,6 +52,15 @@ export function removeBoardNode(board: BoardDocument, id: string): BoardDocument
       : {}),
     ...(board.pinnedNodeIds
       ? { pinnedNodeIds: board.pinnedNodeIds.filter((item) => item !== id) }
+      : {}),
+    ...(board.drawings
+      ? {
+          drawings: detachDrawings(
+            board.drawings,
+            new Set(board.nodes.filter((node) => node.id !== id).map((node) => node.id)),
+            board.positions,
+          ),
+        }
       : {}),
     ...(board.edgePorts
       ? {
