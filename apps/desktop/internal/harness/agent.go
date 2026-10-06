@@ -65,12 +65,61 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		}
 		return path, nil
 	}
+	packageName := "@openai/codex"
+	if agent == "claude" {
+		packageName = "@anthropic-ai/claude-code"
+	}
+	npmEntry := func(directory string) (string, bool) {
+		root := filepath.Join(directory, "node_modules", packageName)
+		content, err := os.ReadFile(filepath.Join(root, "package.json"))
+		if err != nil {
+			return "", false
+		}
+		var manifest struct {
+			Bin json.RawMessage `json:"bin"`
+		}
+		if json.Unmarshal(content, &manifest) != nil {
+			return "", false
+		}
+		var entry string
+		if json.Unmarshal(manifest.Bin, &entry) != nil {
+			var bins map[string]string
+			if json.Unmarshal(manifest.Bin, &bins) != nil {
+				return "", false
+			}
+			entry = bins[agent]
+		}
+		if entry == "" || filepath.IsAbs(entry) {
+			return "", false
+		}
+		candidate := filepath.Join(root, entry)
+		relative, err := filepath.Rel(root, candidate)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			return "", false
+		}
+		return usable(candidate)
+	}
 	override := strings.TrimSpace(configuredPath)
 	if override == "" {
 		override = strings.TrimSpace(os.Getenv("OPSIS_" + strings.ToUpper(agent) + "_BIN"))
 	}
 	if override != "" {
 		if !filepath.IsAbs(override) {
+			return "", Error("harness_config")
+		}
+		ext := strings.ToLower(filepath.Ext(override))
+		if windows && (ext == ".cmd" || ext == ".bat" || ext == ".ps1") {
+			info, err := os.Stat(override)
+			if err != nil || !info.Mode().IsRegular() {
+				return "", Error("harness_missing")
+			}
+			// Recognize the installed npm launcher by name, then read its package
+			// manifest. Never interpret or execute the shell launcher's contents.
+			if strings.EqualFold(filepath.Base(override), agent+ext) {
+				if path, ok := npmEntry(filepath.Dir(override)); ok {
+					return validate(path)
+				}
+			}
 			return "", Error("harness_config")
 		}
 		if path, ok := usable(override); ok {
@@ -80,9 +129,8 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 	}
 	home, _ := os.UserHomeDir()
 	directories := append(filepath.SplitList(os.Getenv("PATH")), filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", filepath.Join(home, ".npm-global/bin"))
-	packageName := "@openai/codex"
-	if agent == "claude" {
-		packageName = "@anthropic-ai/claude-code"
+	if windows && os.Getenv("APPDATA") != "" {
+		directories = append(directories, filepath.Join(os.Getenv("APPDATA"), "npm"))
 	}
 	for _, directory := range directories {
 		if !filepath.IsAbs(directory) {
@@ -95,34 +143,7 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		if path, ok := usable(filepath.Join(directory, name)); ok {
 			return validate(path)
 		}
-		root := filepath.Join(directory, "node_modules", packageName)
-		content, err := os.ReadFile(filepath.Join(root, "package.json"))
-		if err != nil {
-			continue
-		}
-		var manifest struct {
-			Bin json.RawMessage `json:"bin"`
-		}
-		if json.Unmarshal(content, &manifest) != nil {
-			continue
-		}
-		var entry string
-		if json.Unmarshal(manifest.Bin, &entry) != nil {
-			var bins map[string]string
-			if json.Unmarshal(manifest.Bin, &bins) != nil {
-				continue
-			}
-			entry = bins[agent]
-		}
-		if entry == "" {
-			continue
-		}
-		candidate := filepath.Join(root, entry)
-		relative, err := filepath.Rel(root, candidate)
-		if err != nil || strings.HasPrefix(relative, "..") || filepath.IsAbs(relative) {
-			continue
-		}
-		if path, ok := usable(candidate); ok {
+		if path, ok := npmEntry(directory); ok {
 			return validate(path)
 		}
 	}

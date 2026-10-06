@@ -220,8 +220,10 @@ redirected (MCP's piped stdio is unaffected). The database, extracted runtime an
 downloaded models all live under `%LOCALAPPDATA%\opsis`. Windows has no POSIX mode
 bits, so file privacy relies on the per-user profile ACL. Claude/Codex discovery
 runs only `.exe` files or Node entry points directly; npm installs resolve to the
-package's `claude.exe` or `codex.js`. `.cmd` shims are not run because the harness
-never starts `cmd.exe`.
+package's `claude.exe` or `codex.js`. An explicit npm `claude.cmd`/`codex.cmd`
+(also `.bat` or `.ps1`) path resolves through that package's manifest, matching
+the browser-development host. Arbitrary shell launchers are rejected; the harness
+never interprets shim contents or starts `cmd.exe`.
 
 The `Windows desktop` CI job (windows-2025) runs native race tests, packaged
 database/MCP integration, the browser suite against `opsis.exe`, and the hidden

@@ -27,6 +27,15 @@ which is absent on this Windows machine. Lint, typecheck, Rust check/tests and G
 vet/race tests pass. Initial JS QA crashed under the shell's Node 22.3.0; rerunning
 with the previously verified bundled Node 22.23.3.
 
+Windows npm launcher parity: configured Claude/Codex `.cmd`, `.bat` and `.ps1`
+paths now resolve their adjacent package manifest to a native executable or Node
+entrypoint. Arbitrary shell launchers remain rejected. Regression coverage checks
+both agents, paths containing spaces and invalid package entries; the Windows
+harness race tests pass. Rebuilt executable: full native race suite, packaged
+database/MCP integration, 46 browser scenarios (one Linux-only skip), and all 24
+hidden WebView2 smoke checks pass. Full JS QA: 366 unit tests and 46 browser
+scenarios pass on Node 22.23.3. No paid provider requests were made.
+
 P2 and the quality/release-readiness checklist are complete for the web and Linux
 Go/Wails application as of 2026-10-04. Shared editing is opt-in for named accounts
 on one server, with owner invitations/revocation and revision-based recovery.
