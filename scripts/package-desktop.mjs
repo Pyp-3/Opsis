@@ -28,20 +28,23 @@ const run = process.env.GITHUB_RUN_NUMBER ?? '1';
 const attempt = process.env.GITHUB_RUN_ATTEMPT ?? '1';
 const version = releaseVersion(base, run, attempt, commit);
 const windows = process.platform === 'win32';
-const platform = windows ? 'windows' : 'linux';
+const macos = process.platform === 'darwin';
+const platform = windows ? 'windows' : macos ? 'macos' : 'linux';
 const executable = windows ? 'opsis.exe' : 'opsis';
 const name = `opsis-${version}-${platform}-${process.arch}`;
 const output = join(root, 'output/desktop-release');
 mkdirSync(output, { recursive: true });
 // Windows users expect a zip, which Explorer extracts without extra tools.
-const archiveName = `${name}.${windows ? 'zip' : 'tar.gz'}`;
+const archiveName = `${name}.${windows || macos ? 'zip' : 'tar.gz'}`;
 const archive = join(output, archiveName);
 if (existsSync(archive)) throw new Error(`Release already exists: ${archive}`);
 const temporary = mkdtempSync(join(tmpdir(), 'opsis-desktop-release-'));
 try {
   const stage = join(temporary, name);
   mkdirSync(stage);
-  cpSync(join(root, 'output/desktop', executable), join(stage, executable));
+  if (macos)
+    cpSync(join(root, 'output/desktop/Opsis.app'), join(stage, 'Opsis.app'), { recursive: true });
+  else cpSync(join(root, 'output/desktop', executable), join(stage, executable));
   // Sign before the zip and installer copy it, so both carry the signed executable.
   if (windows) signWindows([join(stage, executable)]);
   cpSync(join(root, 'docs/DESKTOP.md'), join(stage, 'README.md'));
@@ -83,6 +86,10 @@ try {
       ['-a', '-cf', archive, '-C', temporary, name],
       { stdio: 'inherit' },
     );
+  else if (macos)
+    execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', stage, archive], {
+      stdio: 'inherit',
+    });
   else execFileSync('tar', ['-czf', archive, '-C', temporary, name], { stdio: 'inherit' });
   writeChecksum(archive);
   console.log(`Desktop release: ${archive}`);

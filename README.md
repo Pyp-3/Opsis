@@ -30,7 +30,7 @@ _Follow the connections, then select a concept for its explanation._
 
 ## Run Opsis
 
-**Linux desktop:** download the desktop tarball from [Releases](https://github.com/Pyp-3/Opsis/releases), extract it, and run `opsis`. GTK 3 and WebKitGTK 4.1 are required. See the [desktop guide](docs/DESKTOP.md) for builds and Hyprland setup. **Windows desktop:** run the `windows-x64-setup.exe` from the same release (per-user, no admin rights; it offers one-click updates), or use the portable `windows-x64.zip`. It uses the WebView2 runtime included with Windows 11. macOS desktop packages are still planned.
+**Linux desktop:** download the desktop tarball from [Releases](https://github.com/Pyp-3/Opsis/releases), extract it, and run `opsis`. GTK 3 and WebKitGTK 4.1 are required. See the [desktop guide](docs/DESKTOP.md) for builds and Hyprland setup. **Windows desktop:** run the `windows-x64-setup.exe` from the same release (per-user, no admin rights; it offers one-click updates), or use the portable `windows-x64.zip`. It uses the WebView2 runtime included with Windows 11. **macOS:** Intel and Apple Silicon app bundles are being added; native CI validation is pending and packages are not Developer ID signed or notarized. See the [macOS guide](docs/DESKTOP.md#macos).
 
 **Browser development:** install Node.js 20.19+, pnpm 10.34.5, Rust via rustup and a native compiler, then:
 

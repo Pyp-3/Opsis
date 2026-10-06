@@ -249,9 +249,91 @@ jobs:
             playwright-report/
           retention-days: 7
 
+  macos-desktop:
+    name: macOS desktop (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      OPSIS_QA_DESKTOP_BINARY: output/desktop/Opsis.app/Contents/MacOS/opsis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.89.0'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check native code
+        run: pnpm desktop:check
+      - name: Native race and contract tests
+        run: pnpm desktop:test
+      - name: Build application bundle
+        run: pnpm desktop:build
+      - name: Install browser
+        run: pnpm exec playwright install chromium
+      - name: Existing database and packaged MCP integration
+        run: pnpm desktop:integration
+      - name: Browser feature parity against Go API
+        run: pnpm test:browser
+      - name: Hidden WKWebView, React and WASM smoke
+        run: |
+          profile=$(mktemp -d)
+          trap 'rm -rf "$profile"' EXIT
+          OPSIS_DATA_DIR="$profile" OPSIS_SPEECH=off "$OPSIS_QA_DESKTOP_BINARY" --smoke-test
+      - name: Package desktop release
+        if: github.event_name == 'push'
+        run: pnpm desktop:package
+      - name: Verify packaged application
+        if: github.event_name == 'push'
+        run: |
+          stage=$(mktemp -d)
+          trap 'rm -rf "$stage"' EXIT
+          ditto -x -k output/desktop-release/*.zip "$stage"
+          app=$(find "$stage" -name Opsis.app -type d -maxdepth 2)
+          codesign --verify --strict "$app"
+          OPSIS_DATA_DIR="$stage/profile" OPSIS_SPEECH=off "$app/Contents/MacOS/opsis" --diagnose
+      - name: Upload desktop release
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-desktop-release
+          path: output/desktop-release/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-browser-failures
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
   release:
     name: Publish desktop and developer prerelease
-    needs: [check, desktop, windows-desktop]
+    needs: [check, desktop, windows-desktop, macos-desktop]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -268,6 +350,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: windows-desktop-release
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*-desktop-release
+          merge-multiple: true
           path: release
       - name: Publish release for this commit
         env:

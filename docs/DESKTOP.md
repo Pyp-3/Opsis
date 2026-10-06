@@ -8,7 +8,8 @@ pnpm, Go, Rust, a checkout, or a separately started API.
 This is a Linux native build, not a fully static executable. GTK 3 and WebKitGTK
 4.1 must be installed. Linux x64 is validated; Linux arm64 can be built natively
 but has not been verified. Windows x64 is built, tested and released by CI (see
-[Windows](#windows)). macOS desktop support is not implemented. The browser
+[Windows](#windows)). macOS bundles and CI validation are being added (see
+[macOS](#macos)); their first native CI run is pending. The browser
 development target remains available on every platform.
 
 ## Run
@@ -98,7 +99,7 @@ profile. `OPSIS_API_URL` explicitly selects another local Opsis instance;
 URLs in a browser requires a separate browser login. Never commit agent keys.
 Revocation takes effect on the next API request.
 
-All 11 existing tools remain available. Tool edits use the same schemas, ownership
+All 12 canvas tools, including cross-board search, are available. Tool edits use the same schemas, ownership
 checks, revisions and bounded undo history as interactive edits. The original
 TypeScript MCP entrypoint remains available for browser development.
 
@@ -228,6 +229,28 @@ WebView2 smoke test. It then packages and (when configured) signs the zip,
 installer and update manifest, and attaches them to the same prerelease as the
 Linux tarball. The pixel-baseline browser test runs only on Linux, where its
 baseline fonts live.
+
+## macOS
+
+Native builds support Intel (`x64`) and Apple Silicon (`arm64`) separately.
+Run `pnpm desktop:build` on macOS 15 or newer with Xcode command-line tools,
+Node 22, pnpm, Go and Rust installed. It produces `output/desktop/Opsis.app`
+and the CLI binary `output/desktop/opsis`. The bundle includes its own Node
+speech runtime and a macOS icon. `pnpm desktop:package` writes a versioned zip
+containing the app, release metadata, notices and a SHA-256 checksum.
+
+CI uses native macOS 15 runners for each architecture: Go race tests,
+database/MCP integration, browser scenarios against the bundled executable,
+hidden WKWebView smoke and an extracted-package diagnostic. Initial validation
+is pending; do not treat packaging implementation as verified Mac support yet.
+
+The bundle currently has an ad-hoc signature, which verifies its local integrity
+but does not identify a trusted publisher. It is not notarized. Publicly trusted
+distribution requires an Apple Developer account, Developer ID signing and
+notarization; none is configured. No automatic macOS updater is implemented.
+Application data lives in `~/Library/Application Support/opsis`, independently
+of the app bundle; extracted runtime and models use `~/Library/Caches/opsis`.
+Use `Opsis.app/Contents/MacOS/opsis` for MCP and diagnostic commands.
 
 ## Feature ownership and migration coverage
 

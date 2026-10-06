@@ -15,19 +15,23 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersion } from './package-release.mjs';
+import { bundleMacOS } from './bundle-macos.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktop = join(root, 'apps/desktop');
 const output = join(root, 'output/desktop');
 const windows = process.platform === 'win32';
+const macos = process.platform === 'darwin';
 // pnpm is a .cmd shim on Windows, which execFile can only start through a shell.
 const run = (command, args, cwd = root) =>
   execFileSync(command, args, { cwd, stdio: 'inherit', shell: windows && command === 'pnpm' });
 if (
-  !(process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch)) &&
+  !(['linux', 'darwin'].includes(process.platform) && ['x64', 'arm64'].includes(process.arch)) &&
   !(windows && process.arch === 'x64')
 )
-  throw new Error('The desktop target supports Linux x64/arm64 and Windows x64 native builds.');
+  throw new Error(
+    'The desktop target supports Linux/macOS x64/arm64 and Windows x64 native builds.',
+  );
 const executable = join(output, windows ? 'opsis.exe' : 'opsis');
 // GNU tar from MSYS/Git would read `C:\...` as a remote host; use Windows' bsdtar.
 const tar = windows ? join(process.env.SystemRoot ?? 'C:/Windows', 'System32/tar.exe') : 'tar';
@@ -84,7 +88,7 @@ if (!process.argv.includes('--reuse-runtime')) {
       });
       // Narration explicitly uses CPU inference. Other operating systems, CPU
       // architectures and CUDA/TensorRT providers are not part of this target.
-      const platform = windows ? 'win32' : 'linux';
+      const platform = process.platform;
       const store = join(destination, 'node_modules/.pnpm');
       const packages = existsSync(store)
         ? readdirSync(store)
@@ -110,7 +114,7 @@ if (!process.argv.includes('--reuse-runtime')) {
     // distro-specific ICU/Abseil versions). Its version matches native addons.
     const archiveName = windows
       ? `node-${process.version}-win-${process.arch}.zip`
-      : `node-${process.version}-linux-${process.arch}.tar.xz`;
+      : `node-${process.version}-${process.platform}-${process.arch}.tar.${macos ? 'gz' : 'xz'}`;
     const base = `https://nodejs.org/dist/${process.version}/`;
     const archive = join(output, archiveName);
     const checksums = await fetch(`${base}SHASUMS256.txt`);
@@ -130,7 +134,13 @@ if (!process.argv.includes('--reuse-runtime')) {
     const unpack = join(stage, 'node');
     mkdirSync(unpack);
     // Windows' bundled bsdtar also extracts the official zip archive.
-    run(tar, [windows ? '-xf' : '-xJf', archive, '--strip-components=1', '-C', unpack]);
+    run(tar, [
+      windows ? '-xf' : macos ? '-xzf' : '-xJf',
+      archive,
+      '--strip-components=1',
+      '-C',
+      unpack,
+    ]);
     const node = join(runtime, windows ? 'node.exe' : 'node');
     cpSync(join(unpack, windows ? 'node.exe' : 'bin/node'), node);
     cpSync(join(unpack, 'LICENSE'), join(runtime, 'NODE-LICENSE'));
@@ -192,7 +202,7 @@ run(
     'build',
     '-trimpath',
     '-tags',
-    windows ? 'desktop,production' : 'desktop,production,webkit2_41',
+    process.platform === 'linux' ? 'desktop,production,webkit2_41' : 'desktop,production',
     '-ldflags',
     // A GUI-subsystem binary opens no console window; piped stdio (MCP) still works.
     [windows ? '-s -w -H windowsgui' : '-s -w', ...stamp].join(' '),
@@ -202,4 +212,13 @@ run(
   ],
   desktop,
 );
+if (macos) {
+  bundleMacOS({
+    executable,
+    destination: join(output, 'Opsis.app'),
+    icon: join(desktop, 'winres/icon.png'),
+    version: readFileSync(join(root, 'VERSION'), 'utf8').trim(),
+    build: process.env.GITHUB_RUN_NUMBER ?? '1',
+  });
+}
 console.log(`Desktop executable: ${resolve(executable)}`);

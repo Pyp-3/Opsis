@@ -4,6 +4,29 @@ Last reviewed: 2026-10-06.
 
 ## Current delivery
 
+Priority update (2026-10-06): finish the earlier provider/settings/pricing and
+platform backlog before starting #3, #6 or #4. Providers should support both
+official APIs and official CLI interfaces where available. No Windows signing
+certificate/service, Apple Developer account or local Mac is available. Trusted
+release signing remains externally blocked; macOS build/runtime verification can
+use hosted CI. The Windows interactive check was attempted but the computer-use
+native pipe is unavailable, so save-dialog/clipboard verification remains open.
+
+CI run 37434731605 completed with both desktop jobs failing on the obsolete
+11-tool MCP assertion after search added tool 12. The assertion now checks the
+exact catalogue (45b8e41, pushed); the complete Windows native race suite passes
+locally. The web CI job passed. Remaining integration checks and follow-up CI are
+pending.
+
+macOS packaging progress: native Intel/Apple Silicon build paths, application
+bundle metadata/icon/ad-hoc signing, zip distribution and per-architecture CI
+checks are implemented. Native CI must pass before this item can be checked off;
+Developer ID signing/notarization and an interactive Mac check remain unavailable.
+Local bundle-layout test passes. The existing release archive test requires `zip`,
+which is absent on this Windows machine. Lint, typecheck, Rust check/tests and Go
+vet/race tests pass. Initial JS QA crashed under the shell's Node 22.3.0; rerunning
+with the previously verified bundled Node 22.23.3.
+
 P2 and the quality/release-readiness checklist are complete for the web and Linux
 Go/Wails application as of 2026-10-04. Shared editing is opt-in for named accounts
 on one server, with owner invitations/revocation and revision-based recovery.
