@@ -26,6 +26,7 @@ _Follow the connections, then select a concept for its explanation._
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
+- Plan API token costs in Settings with dated pricing presets or custom rates, explicit token assumptions and a cumulative cost chart. Assumptions follow your account; projections make no model calls.
 - Let your own agents work on canvases through [MCP](apps/mcp/README.md).
 
 ## Run Opsis

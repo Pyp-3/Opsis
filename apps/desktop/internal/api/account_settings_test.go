@@ -39,6 +39,17 @@ func TestAccountSettingsAndUsageBelongToTheAccount(t *testing.T) {
 	if len(bob.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)) != 0 {
 		t.Fatal("settings leaked to another account")
 	}
+	projection := map[string]any{"price": "custom", "customRates": map[string]any{"input": 1, "output": 5, "cacheRead": 0.1, "cacheWrite": 1.25}, "requestsPerDay": 10, "inputTokens": 1000, "outputTokens": 1000, "cacheReadTokens": 0, "cacheWriteTokens": 0}
+	ada.request("PUT", "/v1/account/settings/cost-projection", map[string]any{"value": projection}, 204)
+	stored := ada.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)["cost-projection"].(map[string]any)
+	if stored["requestsPerDay"] != float64(10) || stored["price"] != "custom" {
+		t.Fatal("projection not kept", stored)
+	}
+	projection["requestsPerDay"] = -1
+	ada.request("PUT", "/v1/account/settings/cost-projection", map[string]any{"value": projection}, 400)
+	if len(bob.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)) != 0 {
+		t.Fatal("projection leaked to another account")
+	}
 	boardID := uuid.NewString()
 	ada.request("POST", "/v1/account/usage", usageRecord(1, boardID), 204)
 	bad := usageRecord(2, "")

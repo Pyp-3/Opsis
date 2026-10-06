@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { it, expect } from 'vitest';
-import { MAX_USAGE_RECORDS } from '@opsis/schema';
+import { DEFAULT_COST_PROJECTION, MAX_USAGE_RECORDS } from '@opsis/schema';
 import { buildApp } from './app';
 
 const usage = (at: number, boardId?: string) => ({
@@ -59,6 +59,25 @@ it('keeps validated settings and bounded usage per account, not per browser', as
     expect((await call(ada, 'GET', '/v1/account/settings')).json()).toEqual({
       values: { 'model-preferences': preferences },
     });
+    expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
+
+    expect(
+      (
+        await call(ada, 'PUT', '/v1/account/settings/cost-projection', {
+          value: DEFAULT_COST_PROJECTION,
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (await call(ada, 'GET', '/v1/account/settings')).json().values['cost-projection'],
+    ).toEqual(DEFAULT_COST_PROJECTION);
+    expect(
+      (
+        await call(ada, 'PUT', '/v1/account/settings/cost-projection', {
+          value: { ...DEFAULT_COST_PROJECTION, requestsPerDay: -1 },
+        })
+      ).statusCode,
+    ).toBe(400);
     expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
 
     const boardId = randomUUID();

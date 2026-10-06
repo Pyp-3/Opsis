@@ -19,7 +19,27 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 
 Per-agent preferences, profiles, provider caps and usage history belong to your account: they are stored in the Opsis database, follow you to other browsers using the same Opsis server, and are included in full-database backups. New provider integrations and Windows/macOS desktop packaging remain separate roadmap work.
 
-### Configuration
+### Cost projection
+
+Open **Settings → Cost projection** to estimate API token spending without making
+a model call. Choose dated GPT-6 Luna or Claude Haiku 4.5 standard API prices, or
+enter custom USD rates per million tokens. Enter disjoint uncached-input,
+cache-read, cache-write and output token counts per request, plus requests per day.
+Include reasoning in output and count a repair as another request.
+
+The calculator shows per-request, daily and 30-day costs, plus cumulative 7/30/90-day
+bars. Known-model context/output limits are checked; GPT-6 Luna's long-context
+premium applies above 272,000 input tokens. Haiku's cache-write preset is for five
+minutes. Custom prices require you to include any applicable premiums yourself.
+Each preset links to its dated official source. Prices are snapshots, not live quotes.
+
+**Save projection assumptions** stores the inputs in your account and full-database
+backups. They follow you between browsers connected to the same Opsis server.
+These hypothetical totals do not change generation settings, budgets or usage
+history, do not estimate missing reported usage, and are not subscription bills.
+Subscriptions, taxes, tool charges, discounts and regional premiums are excluded.
+
+### Environment configuration
 
 | Variable           | Purpose                                   | Default                      |
 | ------------------ | ----------------------------------------- | ---------------------------- |

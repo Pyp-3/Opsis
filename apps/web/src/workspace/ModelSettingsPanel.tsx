@@ -66,7 +66,7 @@ export function ModelSettingsPanel({
     <section className="agent-settings" aria-label="Agents and models">
       <h2>Agents and models</h2>
       <p>
-        Defaults and named profiles are saved on this device. Credentials stay in your local CLI
+        Defaults and named profiles are saved to your account. Credentials stay in your local CLI
         login.
       </p>
       <div className="settings-card">

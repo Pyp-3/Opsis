@@ -36,6 +36,27 @@ database/MCP integration, 46 browser scenarios (one Linux-only skip), and all 24
 hidden WebView2 smoke checks pass. Full JS QA: 366 unit tests and 46 browser
 scenarios pass on Node 22.23.3. No paid provider requests were made.
 
+Cost projections (2026-10-06): implemented a separate Settings tab with dated
+official GPT-6 Luna/Haiku 4.5 standard API prices, custom rates, disjoint token
+assumptions, long-context pricing and cumulative 7/30/90-day costs. Inputs are
+validated account settings on both hosts; no database migration or generation call
+is required. Account isolation, cross-browser persistence, mobile overflow and
+accessibility pass against both Fastify and the rebuilt Windows executable.
+Lint/typecheck, Go vet/full race suite, packaged integration and all 24 hidden
+WebView2 checks pass. JS QA: 369 unit tests pass; browser assertions pass, with
+one artifact-cleanup error caused by overlapping runs sharing `test-results`.
+All six affected-file scenarios pass with a separate artifact directory. A further
+account-only-settings regression passes. Full native browser run: 47 pass, one
+Linux-only pixel baseline skipped. Desktop and mobile screenshots were inspected.
+The calculator is hypothetical API spending, not subscription billing or an
+estimate of missing usage. Provider integrations, keys and fallback settings remain open.
+
+macOS CI follow-up: isolated platform-specific cache-path expectations and added
+the UniformTypeIdentifiers framework Wails needs for native file dialogs. The
+first linker-fix run exposed a cgo comment formatting error, fixed in 9482537;
+native build/runtime results remain pending. Windows CI also exposed 8.3 temporary
+path spelling in a launcher test; 37c0492 compares actual file identities instead.
+
 P2 and the quality/release-readiness checklist are complete for the web and Linux
 Go/Wails application as of 2026-10-04. Shared editing is opt-in for named accounts
 on one server, with owner invitations/revocation and revision-based recovery.
@@ -56,7 +77,8 @@ Go desktop host are verified. Existing data, ownership, revision guards, deletio
 tombstones, and the 40-entry undo limit are preserved.
 
 The separately requested Kimi/Grok/Antigravity providers, API-key and fallback-model
-settings, pricing-based cost projections/graphs, and complete Windows/macOS packaging remain pending.
+settings, and complete Windows/macOS packaging remain pending. Cost projections
+and graphs are implemented above; current delivery CI remains to be confirmed.
 Appearance settings and initial native platform plumbing have shipped; they do not
 complete those goals. The Linux desktop and browser application remain supported.
 

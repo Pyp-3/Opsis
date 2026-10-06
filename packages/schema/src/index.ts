@@ -25,3 +25,4 @@ export * from './agent-progress';
 export * from './account-settings';
 export * from './board-organization';
 export * from './board-search';
+export * from './cost-projection';

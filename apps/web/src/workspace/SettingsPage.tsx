@@ -1,4 +1,5 @@
 import { ModelSettingsPanel } from './ModelSettingsPanel';
+import { CostProjectionPanel } from './CostProjectionPanel';
 import type { ModelPreferences } from './model-settings';
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, Check, Monitor, Moon, Paintbrush, RotateCcw, Sun, Type } from 'lucide-react';
@@ -30,7 +31,7 @@ export function SettingsPage({
   preferences: ModelPreferences;
   onChange: (value: ModelPreferences) => void;
 }) {
-  const [section, setSection] = useState<'models' | 'appearance'>('models');
+  const [section, setSection] = useState<'models' | 'appearance' | 'cost'>('models');
   const [theme, setThemeState] = useState<AppTheme>(() => readAppTheme());
   useEffect(() => {
     document.title = 'Settings · Opsis';
@@ -67,8 +68,12 @@ export function SettingsPage({
         <button aria-pressed={section === 'appearance'} onClick={() => setSection('appearance')}>
           Appearance
         </button>
+        <button aria-pressed={section === 'cost'} onClick={() => setSection('cost')}>
+          Cost projection
+        </button>
       </div>
       {section === 'models' && <ModelSettingsPanel preferences={preferences} onChange={onChange} />}
+      {section === 'cost' && <CostProjectionPanel />}
       {section === 'appearance' && (
         <div className="settings-layout">
           <div className="settings-forms">

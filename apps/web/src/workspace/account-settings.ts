@@ -12,7 +12,7 @@ import { z } from 'zod';
  * session; readers then stay synchronous. Before loading (and in isolated component tests)
  * the earlier per-browser storage is used, so nothing is lost while the account loads.
  */
-const LEGACY_KEYS: Record<AccountSettingKey, string> = {
+const LEGACY_KEYS: Partial<Record<AccountSettingKey, string>> = {
   'model-preferences': 'opsis:model-settings:v1',
   'model-profiles': 'opsis:model-profiles:v1',
   'provider-limits': 'opsis:provider:v1',
@@ -26,7 +26,8 @@ const values = new Map<AccountSettingKey, unknown>();
 let usage: UsageRecord[] = [];
 let loaded = false;
 
-function legacy(key: string): unknown {
+function legacy(key: string | undefined): unknown {
+  if (key === undefined) return undefined;
   try {
     const raw = localStorage.getItem(key);
     return raw === null ? undefined : (JSON.parse(raw) as unknown);
@@ -124,7 +125,9 @@ export async function saveAccountSetting<K extends AccountSettingKey>(
 ) {
   const parsed = ACCOUNT_SETTING_SCHEMAS[key].parse(value);
   if (!loaded) {
-    localStorage.setItem(LEGACY_KEYS[key], JSON.stringify(parsed));
+    const legacyKey = LEGACY_KEYS[key];
+    if (!legacyKey) throw new Error('Account settings have not loaded. Please try again.');
+    localStorage.setItem(legacyKey, JSON.stringify(parsed));
     return;
   }
   values.set(key, parsed);

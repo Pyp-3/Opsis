@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BoardModelSettingsSchema } from './model-settings';
 import { ReportedUsageSchema } from './provider-usage';
+import { CostProjectionSettingsSchema } from './cost-projection';
 
 /**
  * Preferences that follow an account across browsers and devices. Each key has its own
@@ -21,6 +22,7 @@ export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 export const MAX_MODEL_PROFILES = 30;
 
 export const ACCOUNT_SETTING_SCHEMAS = {
+  'cost-projection': CostProjectionSettingsSchema,
   /** The default model and effort per agent. */
   'model-preferences': z
     .object({

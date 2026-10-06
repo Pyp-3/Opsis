@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_COST_PROJECTION } from '@opsis/schema';
 import {
   accountSetting,
   accountUsage,
@@ -47,6 +48,24 @@ afterEach(() => {
 });
 
 describe('account settings', () => {
+  it('keeps new account-only settings out of legacy browser storage', async () => {
+    await expect(saveAccountSetting('cost-projection', DEFAULT_COST_PROJECTION)).rejects.toThrow(
+      'Account settings have not loaded.',
+    );
+    expect(localStorage.length).toBe(0);
+    expect(accountSetting('cost-projection')).toBeUndefined();
+    const calls = serve({});
+    await loadAccountSettings();
+    await saveAccountSetting('cost-projection', DEFAULT_COST_PROJECTION);
+    expect(calls.at(-1)).toMatchObject({
+      url: '/v1/account/settings/cost-projection',
+      method: 'PUT',
+    });
+    expect(accountSetting('cost-projection')).toEqual(DEFAULT_COST_PROJECTION);
+    resetAccountSettings();
+    expect(accountSetting('cost-projection')).toBeUndefined();
+  });
+
   it('imports this browser’s earlier settings once, only where the account has none', async () => {
     localStorage.setItem(
       'opsis:model-settings:v1',

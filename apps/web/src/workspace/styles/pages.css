@@ -1815,6 +1815,42 @@
   margin: 12px 0;
   overflow-x: auto;
 }
+.projection-fields,
+.projection-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 1rem;
+}
+.projection-totals dd {
+  margin: 0.4rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.cost-projection figure {
+  margin: 0;
+}
+.projection-chart {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.projection-chart > div {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+}
+.projection-chart strong {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+}
+.projection-bar {
+  height: 0.75rem;
+  background: var(--ink-2);
+  border-radius: 4px;
+}
 .usage-by-collection h4 {
   margin: 0 0 8px;
   font-size: 13px;
