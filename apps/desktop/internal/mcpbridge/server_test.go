@@ -8,6 +8,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/api"
@@ -62,8 +63,18 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 11 {
-		t.Fatalf("tool count: %d", len(tools.Tools))
+	var names []string
+	for _, tool := range tools.Tools {
+		names = append(names, tool.Name)
+	}
+	slices.Sort(names)
+	expected := []string{
+		"opsis_add_concept", "opsis_connect", "opsis_create_board", "opsis_disconnect",
+		"opsis_get_board", "opsis_list_boards", "opsis_list_public_boards", "opsis_remove_concept",
+		"opsis_search_boards", "opsis_update_board", "opsis_update_concept", "opsis_write_diagram",
+	}
+	if !slices.Equal(names, expected) {
+		t.Fatalf("tools: got %v, want %v", names, expected)
 	}
 	call := func(name string, args map[string]any) map[string]any {
 		t.Helper()
