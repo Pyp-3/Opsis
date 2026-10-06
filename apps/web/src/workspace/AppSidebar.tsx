@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   SquareDashedMousePointer,
+  TextSearch,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
 import type { User } from '../auth/session';
@@ -25,7 +26,8 @@ import { BrandMark } from './BrandMark';
 import { navigate } from '../router';
 
 /** Which page the sidebar sits beside; each shows only what that page needs. */
-export type SidebarMode = 'home' | 'boards' | 'canvas' | 'settings' | 'appearance' | 'account';
+export type SidebarMode =
+  'home' | 'boards' | 'search' | 'canvas' | 'settings' | 'appearance' | 'account';
 
 /** On phones the sidebar overlays the page, so it gets out of the way once you go somewhere. */
 function go(to: string) {
@@ -144,6 +146,10 @@ export function AppSidebar({
                 <span className="rail-count">
                   {library.entries.filter((entry) => !entry.archived).length}
                 </span>
+              </NavLink>
+              <NavLink to="/search" current={mode === 'search'} disabled={busy}>
+                <TextSearch size={16} /> Search
+                <kbd className="rail-shortcut">Ctrl K</kbd>
               </NavLink>
               {board && (
                 <NavLink to="/canvas" label={`Open canvas: ${board.title}`}>

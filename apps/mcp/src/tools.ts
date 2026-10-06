@@ -28,7 +28,7 @@ Every edit here is saved like an edit made in the app: a canvas the reader has o
 
 Agents act as the account whose agent key they hold: they edit that account's boards and can read boards others have made public.
 
-Work like this: list or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.`;
+Work like this: list, search (opsis_search_boards) or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.`;
 
 const boardId = z
   .string()
@@ -55,7 +55,11 @@ export function registerTools(
   client: OpsisClient,
   webUrl: string,
 ) {
-  const open = (id: string) => new URL(`/canvas?board=${id}`, webUrl).toString();
+  const open = (id: string, concept?: string) =>
+    new URL(
+      `/canvas?board=${id}${concept ? `&concept=${encodeURIComponent(concept)}` : ''}`,
+      webUrl,
+    ).toString();
   const saved = (id: string, revision: number, extra: Record<string, unknown> = {}) => ({
     id,
     revision,
@@ -75,6 +79,23 @@ export function registerTools(
       (await client.list())
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .map((entry) => ({ ...entry, open: open(entry.id) })),
+    ),
+  );
+
+  server.registerTool(
+    'opsis_search_boards',
+    {
+      title: 'Search boards',
+      description:
+        'Finds concepts and boards by words in their titles, labels, summaries, explanations, notes, sources and connection labels, across boards this account owns or edits. Every word must appear in the same concept. Results are best first, with the concept id to read or edit.',
+      inputSchema: { query: z.string().trim().min(2).max(200).describe('Words to find.') },
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async ({ query }: { query: string }) =>
+      (await client.search(query)).map((hit) => ({
+        ...hit,
+        open: open(hit.boardId, hit.conceptId),
+      })),
     ),
   );
 

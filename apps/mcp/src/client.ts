@@ -20,6 +20,19 @@ const List = z.array(
     ownerName: z.string().optional(),
   }),
 );
+const SearchResults = z.object({
+  results: z.array(
+    z.object({
+      boardId: z.string(),
+      boardTitle: z.string(),
+      access: z.enum(['owner', 'editor']),
+      conceptId: z.string().optional(),
+      label: z.string(),
+      field: z.string(),
+      snippet: z.string(),
+    }),
+  ),
+});
 const NO_KEY =
   'No agent key. In Opsis open Account → Agent keys, create one, and set it as OPSIS_AGENT_KEY for this MCP server.';
 const REJECTED_KEY =
@@ -78,6 +91,12 @@ export function opsisClient(
       const response = await call('/v1/boards/public');
       if (!response.ok) throw await failure(response, 'Could not list public boards.');
       return List.parse(await response.json());
+    },
+    /** Keyword search over the boards this account owns or edits, best first. */
+    async search(query: string) {
+      const response = await call(`/v1/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw await failure(response, 'Could not search boards.');
+      return SearchResults.parse(await response.json()).results;
     },
     async create(title: string): Promise<BoardEntry> {
       const response = await call('/v1/boards', {

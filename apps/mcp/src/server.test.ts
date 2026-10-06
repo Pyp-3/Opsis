@@ -15,7 +15,7 @@ const injectFetch: typeof fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : input.toString());
   const response = await app.inject({
     method: (init?.method ?? 'GET') as 'GET',
-    url: url.pathname,
+    url: url.pathname + url.search,
     headers: init?.headers as Record<string, string>,
     ...(init?.body ? { payload: init.body as string } : {}),
   });
@@ -78,6 +78,7 @@ describe('Opsis MCP server', () => {
       'opsis_list_boards',
       'opsis_list_public_boards',
       'opsis_remove_concept',
+      'opsis_search_boards',
       'opsis_update_board',
       'opsis_update_concept',
       'opsis_write_diagram',
@@ -130,6 +131,13 @@ describe('Opsis MCP server', () => {
     expect(stored.snapshot.past.map((past) => past?.nodes.length)).toEqual([0, 0, 1, 2]);
     expect((await call('opsis_list_boards')).json()).toEqual([
       expect.objectContaining({ id: created.id, title: 'Tea', visibility: 'private' }),
+    ]);
+    expect((await call('opsis_search_boards', { query: 'tea' })).json()).toEqual([
+      expect.objectContaining({
+        boardId: created.id,
+        field: 'title',
+        open: `http://localhost:3000/canvas?board=${created.id}`,
+      }),
     ]);
   });
 

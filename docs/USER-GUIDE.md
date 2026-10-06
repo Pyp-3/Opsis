@@ -73,6 +73,17 @@ collection** keeps itself up to date from a rule — for example, every board ta
 “exam” that changed in the last 30 days. See
 [tags and smart collections](PERSISTENCE.md#tags-and-smart-collections).
 
+## Search all boards
+
+Open **Search** in the sidebar, or press **Ctrl K** (**⌘ K** on macOS) anywhere.
+Type at least two words or characters: Opsis finds concepts whose label, summary,
+explanation, notes, sources or outgoing connection labels contain every word
+(ignoring case and accents), plus board titles, descriptions and group names.
+Labels and titles rank first. Select a result to open its board with that concept
+selected. Search covers boards you own or were invited to edit; archived boards and
+other people's public boards are not searched. Agents can use the same search with
+the `opsis_search_boards` MCP tool. Search matches words, not meanings.
+
 ## Share with another local account
 
 A board is private by default. Make it public from the board library or its

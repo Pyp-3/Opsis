@@ -83,6 +83,7 @@ import { applyLook, lookOf } from './canvas-theme';
 import { NextSteps, RETURN_PATHS } from './NextSteps';
 import { BrandMark } from './BrandMark';
 import { BoardsPage } from './BoardsPage';
+import { SearchPage } from './SearchPage';
 import { HomePage } from './HomePage';
 const AccountPage = lazy(() =>
   import('./AccountPage').then((module) => ({ default: module.AccountPage })),
@@ -252,15 +253,17 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const page: SidebarMode =
     path === '/boards'
       ? 'boards'
-      : path === '/account'
-        ? 'account'
-        : path === '/settings'
-          ? 'appearance'
-          : path === '/canvas/settings' && board && !readOnly
-            ? 'settings'
-            : path.startsWith('/canvas')
-              ? 'canvas'
-              : 'home';
+      : path === '/search'
+        ? 'search'
+        : path === '/account'
+          ? 'account'
+          : path === '/settings'
+            ? 'appearance'
+            : path === '/canvas/settings' && board && !readOnly
+              ? 'settings'
+              : path.startsWith('/canvas')
+                ? 'canvas'
+                : 'home';
   const readingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The big picture opens with each canvas, tucks itself away once the reader starts working
   // on the canvas, and stays the way the reader last set it until another canvas opens.
@@ -499,20 +502,42 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   // Links an agent shares through the MCP server open that board: /canvas?board=<id>.
   const { open: openLibraryBoard, activeId: startingId } = library;
   const linkHandled = useRef(false);
+  /** A concept to select and centre once its board is on the canvas (search, links). */
+  const pendingFocus = useRef<string | null>(null);
   useEffect(() => {
-    const linked = new URLSearchParams(location.search).get('board');
+    const params = new URLSearchParams(location.search);
+    const linked = params.get('board');
     if (!linked || linkHandled.current) return;
     linkHandled.current = true;
+    pendingFocus.current = params.get('concept');
     window.history.replaceState(null, '', location.pathname);
     if (linked !== startingId) void openLibraryBoard(linked);
   }, [openLibraryBoard, startingId]);
-  const openBoard = async (id: string) => {
+  const openBoard = async (id: string, conceptId?: string) => {
     if (id !== library.activeId && !(await library.open(id))) return false;
     setSelected(null);
     setSelectedEdge(null);
     setAgent(boardRef.current?.agent ?? agent);
+    pendingFocus.current = conceptId ?? null;
     return true;
   };
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (page !== 'canvas' || !target || !board?.nodes.some((node) => node.id === target)) return;
+    pendingFocus.current = null;
+    selectNode(target);
+  });
+  // Ctrl/⌘ K opens search from anywhere in the workspace.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'k' || !(event.ctrlKey || event.metaKey) || event.altKey)
+        return;
+      event.preventDefault();
+      navigate('/search');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   const closePlayer = useCallback(() => {
     setPlayerOpen(false);
     setPlayback(null);
@@ -626,6 +651,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             <Suspense fallback={<p role="status">Loading account…</p>}>
               <AccountPage user={user} onSignOut={onSignOut} />
             </Suspense>
+          ) : page === 'search' ? (
+            <SearchPage
+              onOpen={async (id, conceptId) => {
+                if (await openBoard(id, conceptId)) navigate('/canvas');
+              }}
+            />
           ) : page === 'boards' ? (
             <BoardsPage
               library={library}

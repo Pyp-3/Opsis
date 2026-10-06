@@ -56,6 +56,7 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 | Tool                   | What it does                                                        |
 | ---------------------- | ------------------------------------------------------------------- |
 | `opsis_list_boards`    | Saved boards, most recent first                                     |
+| `opsis_search_boards`  | Concepts matching words, across boards you own or edit; best first  |
 | `opsis_get_board`      | Title, big-picture summary, colours, concepts (with ids) and arrows |
 | `opsis_create_board`   | A new empty board                                                   |
 | `opsis_update_board`   | Title, summary, background palette and icon tint                    |

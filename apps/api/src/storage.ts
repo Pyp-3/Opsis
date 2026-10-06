@@ -153,6 +153,30 @@ export class ApiStore {
     }));
   }
 
+  /** Active boards the account owns or was invited to edit, for search. */
+  listSearchableBoards(userId: string) {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT b.id, b.title, b.snapshot, CASE WHEN b.owner_id=? THEN 'owner' ELSE 'editor' END AS access
+         FROM boards_v2 b
+         WHERE b.archived=0 AND (b.owner_id=? OR EXISTS (
+           SELECT 1 FROM board_editors e WHERE e.board_id=b.id AND e.user_id=?))
+         ORDER BY b.updated_at DESC`,
+      )
+      .all(userId, userId, userId) as {
+      id: string;
+      title: string;
+      snapshot: string;
+      access: 'owner' | 'editor';
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      access: row.access,
+      board: BoardSnapshotSchema.parse(JSON.parse(row.snapshot)).board,
+    }));
+  }
+
   /** Other people's public boards, newest first. */
   listPublicBoards(exceptOwnerId: string, limit = 100) {
     return this.sqlite

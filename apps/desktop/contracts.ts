@@ -9,6 +9,11 @@ import {
   BoardTagsRequestSchema,
   SmartCollectionRequestSchema,
   MAX_SMART_COLLECTIONS,
+  SearchQuerySchema,
+  searchBoards,
+  rankSearchHits,
+  type SearchableBoard,
+  type SearchHit,
   BoardIdSchema,
   BoardCreateRequestSchema,
   BoardUpdateRequestSchema,
@@ -35,6 +40,7 @@ const parsers = {
   usageRecord: UsageRecordSchema,
   tags: BoardTagsRequestSchema,
   smartCollection: SmartCollectionRequestSchema,
+  searchQuery: SearchQuerySchema,
   id: BoardIdSchema,
   create: BoardCreateRequestSchema,
   update: BoardUpdateRequestSchema,
@@ -64,6 +70,18 @@ export function apply(operation: string, json: string): string {
       value = MAX_USAGE_RECORDS;
     } else if (operation === 'smartCollectionLimit') {
       value = MAX_SMART_COLLECTIONS;
+    } else if (operation === 'search') {
+      // Go reads rows and batches them; documents are validated before they are searched.
+      const { query, boards } = input as { query: string; boards: SearchableBoard[] };
+      value = searchBoards(
+        boards.map((board) => ({
+          ...board,
+          board: BoardSnapshotSchema.shape.board.parse(board.board),
+        })),
+        z.string().parse(query),
+      );
+    } else if (operation === 'searchRank') {
+      value = rankSearchHits((input as { hits: SearchHit[] }).hits);
     } else if (operation === 'empty') {
       value = BoardSnapshotSchema.parse({
         board: createEmptyBoard(z.string().parse(input)),
