@@ -23,6 +23,7 @@ _Follow the connections, then select a concept for its explanation._
 ## What you can do
 
 - Generate and refine diagrams with your local Claude or Codex CLI; review proposed changes before applying them.
+- Save model profiles and fallback choices to your account; switch to a fallback explicitly without automatic retries.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
@@ -31,7 +32,7 @@ _Follow the connections, then select a concept for its explanation._
 
 ## Run Opsis
 
-**Linux desktop:** download the desktop tarball from [Releases](https://github.com/Pyp-3/Opsis/releases), extract it, and run `opsis`. GTK 3 and WebKitGTK 4.1 are required. See the [desktop guide](docs/DESKTOP.md) for builds and Hyprland setup. **Windows desktop:** run the `windows-x64-setup.exe` from the same release (per-user, no admin rights; it offers one-click updates), or use the portable `windows-x64.zip`. It uses the WebView2 runtime included with Windows 11. **macOS:** Intel and Apple Silicon app bundles are being added; native CI validation is pending and packages are not Developer ID signed or notarized. See the [macOS guide](docs/DESKTOP.md#macos).
+**Linux desktop:** download the desktop tarball from [Releases](https://github.com/Pyp-3/Opsis/releases), extract it, and run `opsis`. GTK 3 and WebKitGTK 4.1 are required. See the [desktop guide](docs/DESKTOP.md) for builds and Hyprland setup. **Windows desktop:** run the `windows-x64-setup.exe` from the same release (per-user, no admin rights; it offers one-click updates), or use the portable `windows-x64.zip`. It uses the WebView2 runtime included with Windows 11. **macOS:** Intel and Apple Silicon app bundles for macOS 15+ pass native CI checks; packages are ad-hoc signed, without Developer ID signing or notarization. See the [macOS guide](docs/DESKTOP.md#macos).
 
 **Browser development:** install Node.js 20.19+, pnpm 10.34.5, Rust via rustup and a native compiler, then:
 

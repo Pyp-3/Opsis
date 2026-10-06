@@ -19,6 +19,22 @@ CLI readiness checks installation/version, not subscription entitlement. An actu
 
 Per-agent preferences, profiles, provider caps and usage history belong to your account: they are stored in the Opsis database, follow you to other browsers using the same Opsis server, and are included in full-database backups. New provider integrations and Windows/macOS desktop packaging remain separate roadmap work.
 
+### Saved fallback models
+
+In **Settings → Agents and models**, choose the primary agent, then choose a named
+profile under **Fallback profile**. The saved alternative may use the same agent
+or another one. It is a copy: later edits/removal of the original profile do not
+silently change the fallback. Use **Refresh fallback from profile** to update the
+copy, or **No fallback** to remove it. Each primary agent has its own choice,
+stored with your account and included in database backups.
+
+On the canvas, open **Model settings** and use **Switch to saved fallback**. Opsis
+shows the alternative's agent, exact model and effort before you switch. Switching
+updates that agent's default settings, preserves your prompt and makes no model
+call. Press **Generate** separately when ready. Authentication, process and output
+failures never cause an automatic model switch or a fallback retry; the existing
+single invalid-output repair still uses the originally selected model.
+
 ### Cost projection
 
 Open **Settings → Cost projection** to estimate API token spending without making

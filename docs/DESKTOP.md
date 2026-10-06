@@ -243,8 +243,9 @@ containing the app, release metadata, notices and a SHA-256 checksum.
 
 CI uses native macOS 15 runners for each architecture: Go race tests,
 database/MCP integration, browser scenarios against the bundled executable,
-hidden WKWebView smoke and an extracted-package diagnostic. Initial validation
-is pending; do not treat packaging implementation as verified Mac support yet.
+hidden WKWebView smoke and an extracted-package diagnostic. All these steps
+passed on both architectures in [CI run 37439376513](https://github.com/Pyp-3/Opsis/actions/runs/37439376513)
+on 2026-10-06. An interactive check on a user's Mac remains outstanding.
 
 The bundle currently has an ad-hoc signature, which verifies its local integrity
 but does not identify a trusted publisher. It is not notarized. Publicly trusted

@@ -51,6 +51,14 @@ func TestAccountSettingsAndUsageBelongToTheAccount(t *testing.T) {
 		t.Fatal("projection leaked to another account")
 	}
 	boardID := uuid.NewString()
+	fallback := map[string]any{"claude": map[string]any{"id": "backup", "name": "Backup", "agent": "codex", "settings": map[string]any{"model": "gpt-6-luna", "effort": "low"}}}
+	ada.request("PUT", "/v1/account/settings/model-fallbacks", map[string]any{"value": fallback}, 204)
+	if ada.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)["model-fallbacks"] == nil {
+		t.Fatal("fallback not kept")
+	}
+	if len(bob.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)) != 0 {
+		t.Fatal("fallback leaked to another account")
+	}
 	ada.request("POST", "/v1/account/usage", usageRecord(1, boardID), 204)
 	bad := usageRecord(2, "")
 	bad["attempts"] = "x"

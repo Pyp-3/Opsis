@@ -15,16 +15,17 @@ native pipe is unavailable, so save-dialog/clipboard verification remains open.
 CI run 37434731605 completed with both desktop jobs failing on the obsolete
 11-tool MCP assertion after search added tool 12. The assertion now checks the
 exact catalogue (45b8e41, pushed); the complete Windows native race suite passes
-locally. The web CI job passed. Remaining integration checks and follow-up CI are
-pending.
+locally. The original web CI job passed. Follow-up run 37439376513 passes web,
+Linux, Windows and both Mac architectures' feature/integration checks and release
+publishing. Current feature-delivery CI is tracked separately below.
 
 macOS packaging progress: native Intel/Apple Silicon build paths, application
 bundle metadata/icon/ad-hoc signing, zip distribution and per-architecture CI
-checks are implemented. Native CI must pass before this item can be checked off;
-Developer ID signing/notarization and an interactive Mac check remain unavailable.
+checks are implemented. Both architectures' build, native race, packaged
+integration, browser, hidden WKWebView and extracted-package checks pass in run 37439376513. Developer ID signing/notarization and an interactive Mac check remain unavailable.
 Local bundle-layout test passes. The existing release archive test requires `zip`,
 which is absent on this Windows machine. Lint, typecheck, Rust check/tests and Go
-vet/race tests pass. Initial JS QA crashed under the shell's Node 22.3.0; rerunning
+vet/race tests pass. Initial JS QA crashed under the shell's Node 22.3.0; it passes
 with the previously verified bundled Node 22.23.3.
 
 Windows npm launcher parity: configured Claude/Codex `.cmd`, `.bat` and `.ps1`
@@ -49,13 +50,51 @@ All six affected-file scenarios pass with a separate artifact directory. A furth
 account-only-settings regression passes. Full native browser run: 47 pass, one
 Linux-only pixel baseline skipped. Desktop and mobile screenshots were inspected.
 The calculator is hypothetical API spending, not subscription billing or an
-estimate of missing usage. Provider integrations, keys and fallback settings remain open.
+estimate of missing usage. Pricing commit fcfe6fa is pushed; run 37440511815 has
+passed web, Linux, Windows and Apple Silicon, with Intel Mac still running.
 
 macOS CI follow-up: isolated platform-specific cache-path expectations and added
 the UniformTypeIdentifiers framework Wails needs for native file dialogs. The
 first linker-fix run exposed a cgo comment formatting error, fixed in 9482537;
-native build/runtime results remain pending. Windows CI also exposed 8.3 temporary
+native build/runtime checks now pass on both architectures. Windows CI also exposed 8.3 temporary
 path spelling in a launcher test; 37c0492 compares actual file identities instead.
+
+Fallback settings (2026-10-06): each primary agent can keep an account-saved copy
+of a named profile as its alternative, including another provider. Profile edits
+and deletion do not silently change it; refresh/removal are explicit. The canvas
+shows the exact target and switches only on the user's click, preserving the
+prompt. Switching makes no request, and a failed request never triggers a fallback
+retry. The web scenario verifies an authentication failure, explicit switching,
+separate resubmission, cross-browser persistence and removal on both hosts.
+Lint/typecheck, 370 unit tests, Go vet/full race suite and all 48 applicable web
+browser tests pass. The native browser suite passed 47 scenarios with one
+30-second authentication-test timeout; both authentication scenarios and the
+fallback scenario pass in an isolated rerun against the final rebuilt executable.
+The Linux-only screenshot baseline is skipped locally. Packaged database/MCP
+integration and all 24 hidden WebView2 checks pass. No live provider calls were made.
+Delivery CI remains to be checked after push.
+
+Provider research, not implementation: official interfaces exist for Kimi, Grok
+and Antigravity, including Google's managed Antigravity API. Preserve both API and
+CLI scope. Sources checked 2026-10-06:
+
+- [Kimi API](https://platform.kimi.ai/docs/api/chat): current K3 uses explicit
+  reasoning effort (low/high/max) and `max_completion_tokens`.
+- [Kimi CLI](https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html):
+  current release 1.52.0; print mode auto-approves tools, so an adapter must supply
+  a tool-free custom agent and prevent inherited MCP/tools before enabling it.
+- [Grok CLI](https://docs.x.ai/build/cli/headless-scripting): official headless
+  and ACP interfaces; verify prompt transport and isolation rather than assuming
+  Claude/Codex flags. No local Kimi/Grok/agy executable was discovered.
+- [Antigravity API](https://ai.google.dev/gemini-api/docs/antigravity-agent):
+  managed Interactions API, explicit underlying model, background/cancellation
+  lifecycle. It currently rejects structured outputs and `max_output_tokens`.
+  The existing unused `agy` wrapper is not enough: recheck its envelope, tool
+  permissions, platform null-device path and supported versions before exposing it.
+
+API-key storage and provider adapters are not built. Do not put keys in account
+profiles, board documents, exported settings or logs. Live provider tests still
+require explicit authorization; none have been run.
 
 P2 and the quality/release-readiness checklist are complete for the web and Linux
 Go/Wails application as of 2026-10-04. Shared editing is opt-in for named accounts
@@ -76,9 +115,10 @@ owner-only saved-revision browser with restore-as-copy. Both Fastify and the Lin
 Go desktop host are verified. Existing data, ownership, revision guards, deletion
 tombstones, and the 40-entry undo limit are preserved.
 
-The separately requested Kimi/Grok/Antigravity providers, API-key and fallback-model
-settings, and complete Windows/macOS packaging remain pending. Cost projections
-and graphs are implemented above; current delivery CI remains to be confirmed.
+The separately requested Kimi/Grok/Antigravity providers and API-key settings
+remain pending. Cost projections/graphs and explicit fallback-model settings are
+implemented above. Native Windows and both Mac packages pass CI; trusted signing
+and interactive platform checks remain open. Current delivery CI remains to be confirmed.
 Appearance settings and initial native platform plumbing have shipped; they do not
 complete those goals. The Linux desktop and browser application remain supported.
 

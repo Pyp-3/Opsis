@@ -81,6 +81,22 @@ it('keeps validated settings and bounded usage per account, not per browser', as
     expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
 
     const boardId = randomUUID();
+    const fallbacks = {
+      claude: {
+        id: 'backup',
+        name: 'Backup',
+        agent: 'codex',
+        settings: { model: 'gpt-6-luna', effort: 'low' },
+      },
+    };
+    expect(
+      (await call(ada, 'PUT', '/v1/account/settings/model-fallbacks', { value: fallbacks }))
+        .statusCode,
+    ).toBe(204);
+    expect(
+      (await call(ada, 'GET', '/v1/account/settings')).json().values['model-fallbacks'],
+    ).toEqual(fallbacks);
+    expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
     expect((await call(ada, 'POST', '/v1/account/usage', usage(1, boardId))).statusCode).toBe(204);
     expect(
       (await call(ada, 'POST', '/v1/account/usage', { ...usage(2), attempts: 'x' })).statusCode,

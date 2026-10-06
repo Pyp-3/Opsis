@@ -9,6 +9,7 @@ import { type ModelPreferences, saveModelPreferences } from './model-settings';
 import { readModelProfiles, writeModelProfiles, type ModelProfile } from './model-profiles';
 import { readReportedUsage, clearReportedUsage } from './reported-usage';
 import { UsageByCollection } from './UsageByCollection';
+import { accountSetting, saveAccountSetting } from './account-settings';
 
 export function ModelSettingsPanel({
   preferences,
@@ -24,6 +25,28 @@ export function ModelSettingsPanel({
   const [notice, setNotice] = useState('');
   const [checking, setChecking] = useState(false);
   const [usage, setUsage] = useState(readReportedUsage);
+  const [fallbacks, setFallbacks] = useState(() => accountSetting('model-fallbacks') ?? {});
+  const [savingFallback, setSavingFallback] = useState(false);
+  const fallback = fallbacks[agent];
+  async function saveFallback(profile?: ModelProfile) {
+    const next = { ...fallbacks };
+    if (profile) next[agent] = structuredClone(profile);
+    else delete next[agent];
+    setSavingFallback(true);
+    setFallbacks(next);
+    try {
+      await saveAccountSetting('model-fallbacks', next);
+      setNotice(
+        profile
+          ? 'Fallback saved to your account. Switch explicitly on the canvas.'
+          : 'Fallback removed.',
+      );
+    } catch {
+      setNotice('Fallback applies now but could not be saved to your account.');
+    } finally {
+      setSavingFallback(false);
+    }
+  }
   const value = preferences[agent];
   function set(next: BoardModelSettings) {
     onChange({ ...preferences, [agent]: next });
@@ -201,6 +224,52 @@ export function ModelSettingsPanel({
             </button>
           </div>
         ))}
+      </div>
+      <div className="settings-card">
+        <h3>Fallback for {agent === 'claude' ? 'Claude' : 'Codex'}</h3>
+        <p>
+          Save an alternative from a named profile. The canvas offers an explicit switch; failures
+          never switch models or retry automatically. Switching makes no model call. Submit again
+          yourself after checking the provider and model.
+        </p>
+        <label>
+          Fallback profile
+          <select
+            aria-label="Fallback profile"
+            disabled={savingFallback}
+            value={fallback?.id ?? ''}
+            onChange={(event) =>
+              void saveFallback(profiles.find((entry) => entry.id === event.target.value))
+            }
+          >
+            <option value="">No fallback</option>
+            {fallback && !profiles.some((profile) => profile.id === fallback.id) && (
+              <option value={fallback.id}>{fallback.name} · saved copy</option>
+            )}
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name} · {profile.agent} · {profile.settings.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        {fallback && (
+          <p>
+            Saved alternative: {fallback.agent} · <code>{fallback.settings.model}</code> ·{' '}
+            {fallback.settings.effort} effort. This is a copy of the profile; later profile edits or
+            removal do not change it.
+          </p>
+        )}
+        {fallback && profiles.some((profile) => profile.id === fallback.id) && (
+          <button
+            disabled={savingFallback}
+            onClick={() =>
+              void saveFallback(profiles.find((profile) => profile.id === fallback.id))
+            }
+          >
+            Refresh fallback from profile
+          </button>
+        )}
       </div>
       <div className="settings-card">
         <h3>Provider-reported usage</h3>

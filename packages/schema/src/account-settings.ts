@@ -22,6 +22,13 @@ export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 export const MAX_MODEL_PROFILES = 30;
 
 export const ACCOUNT_SETTING_SCHEMAS = {
+  /** Explicit alternative settings; never an instruction to retry automatically. */
+  'model-fallbacks': z
+    .object({
+      claude: ModelProfileSchema.optional(),
+      codex: ModelProfileSchema.optional(),
+    })
+    .strict(),
   'cost-projection': CostProjectionSettingsSchema,
   /** The default model and effort per agent. */
   'model-preferences': z

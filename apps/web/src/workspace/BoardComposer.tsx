@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { readModelProfiles } from './model-profiles';
+import { accountSetting } from './account-settings';
 import { DEFAULT_BOARD_MODELS } from '@opsis/schema';
 import type { FormEvent, RefObject } from 'react';
 import {
@@ -83,6 +84,7 @@ export function BoardComposer({
   const [suggestions, setSuggestions] = useState(false);
   const [task, setTask] = useState('overview');
   const profiles = readModelProfiles();
+  const fallback = agent === 'demo' ? undefined : accountSetting('model-fallbacks')?.[agent];
   const suggestion =
     agent === 'demo'
       ? null
@@ -183,6 +185,26 @@ export function BoardComposer({
       )}
       {agent !== 'demo' && settingsOpen && (
         <div className="model-settings" id="model-settings">
+          {fallback && (
+            <div className="model-suggestion">
+              <p>
+                Fallback: {fallback.agent} · <code>{fallback.settings.model}</code> ·{' '}
+                {fallback.settings.effort} effort. Switching changes your selected agent and its
+                default settings. Submit separately when ready; no automatic retry.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setAgent(fallback.agent);
+                  setError('');
+                  applySettings({ ...modelPreferences, [fallback.agent]: fallback.settings });
+                }}
+              >
+                Switch to saved fallback
+              </button>
+            </div>
+          )}
           <label>
             Named profile
             <select
