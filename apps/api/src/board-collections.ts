@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   BoardCollectionAssignmentSchema,
+  CollectionBundleSchema,
+  CollectionSharingSchema,
   BoardCollectionRequestSchema,
   BoardIdSchema,
   BoardTagsRequestSchema,
@@ -17,6 +19,56 @@ const DUPLICATE_SMART = 'You already have a smart collection with that name.';
 
 /** Private per-account folders for owned boards. Other accounts' collections answer 404. */
 export function registerBoardCollections(app: FastifyInstance, store: ApiStore) {
+  app.get('/v1/collections/:id/bundle', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = BoardIdSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ message: 'Invalid collection ID.' });
+    if (!store.ownsCollection(params.data.id, user.id))
+      return reply.code(404).send({ message: 'Collection not found.' });
+    if (
+      store.listBoards(user.id, true).filter((board) => board.collectionId === params.data.id)
+        .length > 100
+    )
+      return reply.code(400).send({ message: 'Export up to 100 boards at a time.' });
+    const bundle = store.exportCollection(params.data.id, user.id);
+    if (Buffer.byteLength(JSON.stringify(bundle)) > 16_000_000)
+      return reply.code(400).send({ message: 'This collection exceeds the 16 MB bundle limit.' });
+    return bundle;
+  });
+  app.post('/v1/collections/import', { bodyLimit: 16_000_000 }, async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const bundle = CollectionBundleSchema.safeParse(request.body);
+    if (!bundle.success) return reply.code(400).send({ message: 'Invalid collection bundle.' });
+    if (store.listCollections(user.id).length >= MAX_BOARD_COLLECTIONS)
+      return reply.code(400).send({ message: 'Collection limit reached.' });
+    return reply.code(201).send(
+      store.importCollection(
+        user.id,
+        bundle.data,
+        randomUUID(),
+        bundle.data.boards.map(() => randomUUID()),
+      ),
+    );
+  });
+  app.put('/v1/collections/:id/sharing', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = BoardIdSchema.safeParse(request.params);
+    const body = CollectionSharingSchema.safeParse(request.body);
+    if (!params.success || !body.success)
+      return reply.code(400).send({ message: 'Invalid collection sharing request.' });
+    const result = store.shareCollection(params.data.id, user.id, body.data);
+    if (result === 'missing') return reply.code(404).send({ message: 'Collection not found.' });
+    if (result === 'conflict')
+      return reply
+        .code(409)
+        .send({ message: 'The collection changed. Reload your boards before sharing.' });
+    if (result === 'account')
+      return reply.code(400).send({ message: 'Choose another existing account.' });
+    return reply.code(204).send();
+  });
   app.get('/v1/collections', async (request, reply) => {
     const user = requireUser(request, reply);
     return user ? store.listCollections(user.id) : reply;

@@ -7,6 +7,7 @@ import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 import { registerBoardLibrary } from './board-library.js';
 import { registerBoardCollections } from './board-collections.js';
 import { registerAccountSettings } from './account-settings.js';
+import { registerBoardChat } from './board-chat.js';
 import { registerBoardSearch } from './board-search.js';
 import { registerAuth } from './auth.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
@@ -70,6 +71,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerBoardLibrary(app, store);
   registerBoardCollections(app, store);
   registerAccountSettings(app, store);
+  registerBoardChat(app, store);
   registerBoardSearch(app, store);
   registerSpeech(app, speech);
   const requests = new Map<string, number[]>();

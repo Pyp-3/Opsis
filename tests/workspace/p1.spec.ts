@@ -151,6 +151,7 @@ test('shows measured zero separately from unavailable provider usage and retains
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page
     .getByRole('textbox', { name: 'What would you like to understand?' })
@@ -200,9 +201,11 @@ test('selectively accepts a proposed concept change while keeping rejected chang
     const list = await (await fetch('/v1/boards')).json();
     return await (await fetch('/v1/boards/' + list[0].id)).json();
   });
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.getByLabel('What would you like to understand?').fill('Update these concepts');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
+  await page.getByRole('tab', { name: /Canvas/ }).click();
   const review = page.getByRole('region', { name: 'Review proposed changes' });
   await expect(review).toBeVisible();
   await review.getByRole('button', { name: 'Clear selection' }).click();
@@ -239,6 +242,7 @@ test('model suggestions require consent and settings fit a narrow screen', async
   await signUp(page, 'Suggestion reader');
   await page.goto('/');
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.getByRole('button', { name: /^Model settings:/ }).click();
   await page.getByLabel('Show task-based suggestions').check();

@@ -1,4 +1,8 @@
 import {
+  BoardChatWriteSchema,
+  CollectionBundleSchema,
+  CollectionSharingSchema,
+  prepareCollectionImport,
   BoardCollaboratorRequestSchema,
   BoardCollectionAssignmentSchema,
   BoardCollectionRequestSchema,
@@ -33,6 +37,9 @@ import { z } from 'zod';
 import { PERSISTENCE_MIGRATIONS } from '../api/src/persistence/migrations';
 
 const parsers = {
+  chatWrite: BoardChatWriteSchema,
+  collectionBundle: CollectionBundleSchema,
+  collectionSharing: CollectionSharingSchema,
   editor: BoardCollaboratorRequestSchema,
   collection: BoardCollectionRequestSchema,
   collectionAssignment: BoardCollectionAssignmentSchema,
@@ -64,6 +71,9 @@ export function apply(operation: string, json: string): string {
     let value: unknown;
     if (operation === 'migrations') {
       value = PERSISTENCE_MIGRATIONS;
+    } else if (operation === 'prepareCollectionImport') {
+      const { bundle, ids } = input as { bundle: unknown; ids: string[] };
+      value = prepareCollectionImport(bundle, ids);
     } else if (operation === 'collectionLimit') {
       value = MAX_BOARD_COLLECTIONS;
     } else if (operation === 'usageLimit') {

@@ -62,109 +62,117 @@ export function useBoardLibrary(
     void refresh().catch((e: Error) => setError(e.message));
   }, [refresh]);
 
-  const save = useCallback(() => {
-    const job = queue.current
-      .catch(() => undefined)
-      .then(async () => {
-        let target = current.current;
-        const identity = active.current;
-        // Someone else's board is only viewed here; there is nothing of ours to save.
-        if (accessRef.current === 'viewer') return;
-        if (lastSaved.current === target) return;
-        if (lastSaved.current && JSON.stringify(lastSaved.current) === JSON.stringify(target)) {
-          lastSaved.current = target;
-          setStatus(identity.revision ? 'Saved' : '');
-          return;
-        }
-        if (!target.board && !target.past.length && !target.future.length) {
-          await refresh();
-          setStatus('');
-          // A no-op autosave must not dismiss a failed board-open message.
-          return;
-        }
-        setStatus('Saving…');
-        let recoveredCopy = false;
-        const preserveCopy = () => {
-          identity.id = crypto.randomUUID();
-          identity.revision = 0;
-          setActiveId(identity.id);
-          lastSaved.current = null;
-          target = current.current;
-          recoveredCopy = true;
-          setAccess('owner');
-        };
-        let response: Response | undefined;
-        for (let attempt = 0; attempt < 4; attempt++) {
-          response = await boardLibraryApi.save(identity.id, target, identity.revision);
+  const save = useCallback(
+    (persistEmpty = false) => {
+      const job = queue.current
+        .catch(() => undefined)
+        .then(async () => {
+          let target = current.current;
+          const identity = active.current;
+          // Someone else's board is only viewed here; there is nothing of ours to save.
+          if (accessRef.current === 'viewer') return;
+          if (lastSaved.current === target && (!persistEmpty || identity.revision)) return;
           if (
-            (response.status === 403 || response.status === 404) &&
-            accessRef.current === 'editor'
+            (!persistEmpty || identity.revision) &&
+            lastSaved.current &&
+            JSON.stringify(lastSaved.current) === JSON.stringify(target)
           ) {
-            preserveCopy();
-            continue;
+            lastSaved.current = target;
+            setStatus(identity.revision ? 'Saved' : '');
+            return;
           }
-          if (response.status !== 409) break;
-          const latest = await boardLibraryApi.read(identity.id);
-          if (latest.status === 404) {
-            preserveCopy();
-            continue;
+          if (!persistEmpty && !target.board && !target.past.length && !target.future.length) {
+            await refresh();
+            setStatus('');
+            // A no-op autosave must not dismiss a failed board-open message.
+            return;
           }
-          if (!latest.ok) throw new Error('Could not sync this board. Local recovery is retained.');
-          const remote = Entry.parse(await latest.json());
+          setStatus('Saving…');
+          let recoveredCopy = false;
+          const preserveCopy = () => {
+            identity.id = crypto.randomUUID();
+            identity.revision = 0;
+            setActiveId(identity.id);
+            lastSaved.current = null;
+            target = current.current;
+            recoveredCopy = true;
+            setAccess('owner');
+          };
+          let response: Response | undefined;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            response = await boardLibraryApi.save(identity.id, target, identity.revision);
+            if (
+              (response.status === 403 || response.status === 404) &&
+              accessRef.current === 'editor'
+            ) {
+              preserveCopy();
+              continue;
+            }
+            if (response.status !== 409) break;
+            const latest = await boardLibraryApi.read(identity.id);
+            if (latest.status === 404) {
+              preserveCopy();
+              continue;
+            }
+            if (!latest.ok)
+              throw new Error('Could not sync this board. Local recovery is retained.');
+            const remote = Entry.parse(await latest.json());
+            try {
+              target = mergeBoardSnapshots(lastSaved.current, current.current, remote.snapshot);
+            } catch {
+              // Preserve all edits if a combined graph exceeds the schema limits.
+              preserveCopy();
+              continue;
+            }
+            identity.revision = remote.revision;
+            lastSaved.current = remote.snapshot;
+            current.current = target;
+            replace(target);
+          }
+          if (response?.status === 409) {
+            preserveCopy();
+            response = await boardLibraryApi.save(identity.id, target, 0);
+          }
+          if (!response) throw new Error('Could not save this board.');
+          if (!response.ok) {
+            const payload = await response.json();
+            throw new Error(
+              payload.message ?? 'Could not save. Your local recovery copy is retained.',
+            );
+          }
+          const saved = (await response.json()) as { revision: number };
+          identity.revision = saved.revision;
+          lastSaved.current = target;
+          // Never replace a newer local edit with this completed request's older snapshot.
           try {
-            target = mergeBoardSnapshots(lastSaved.current, current.current, remote.snapshot);
+            writeRecovery({
+              access: accessRef.current,
+              ...active.current,
+              snapshot: current.current,
+              savedSnapshot: target,
+            });
+            setError('');
           } catch {
-            // Preserve all edits if a combined graph exceeds the schema limits.
-            preserveCopy();
-            continue;
+            setError('Saved, but browser recovery storage is unavailable.');
           }
-          identity.revision = remote.revision;
-          lastSaved.current = remote.snapshot;
-          current.current = target;
-          replace(target);
-        }
-        if (response?.status === 409) {
-          preserveCopy();
-          response = await boardLibraryApi.save(identity.id, target, 0);
-        }
-        if (!response) throw new Error('Could not save this board.');
-        if (!response.ok) {
-          const payload = await response.json();
-          throw new Error(
-            payload.message ?? 'Could not save. Your local recovery copy is retained.',
+          setStatus(
+            recoveredCopy
+              ? 'Saved separate copy · concurrent edits retained'
+              : target === current.current
+                ? 'Saved'
+                : 'Saving…',
           );
-        }
-        const saved = (await response.json()) as { revision: number };
-        identity.revision = saved.revision;
-        lastSaved.current = target;
-        // Never replace a newer local edit with this completed request's older snapshot.
-        try {
-          writeRecovery({
-            access: accessRef.current,
-            ...active.current,
-            snapshot: current.current,
-            savedSnapshot: target,
-          });
-          setError('');
-        } catch {
-          setError('Saved, but browser recovery storage is unavailable.');
-        }
-        setStatus(
-          recoveredCopy
-            ? 'Saved separate copy · concurrent edits retained'
-            : target === current.current
-              ? 'Saved'
-              : 'Saving…',
-        );
-        await refresh();
+          await refresh();
+        });
+      queue.current = job;
+      return job.catch((e: Error) => {
+        setError(e.message);
+        setStatus('Could not save · retry or export');
+        throw e;
       });
-    queue.current = job;
-    return job.catch((e: Error) => {
-      setError(e.message);
-      setStatus('Could not save · retry or export');
-      throw e;
-    });
-  }, [refresh, replace, setAccess]);
+    },
+    [refresh, replace, setAccess],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -417,6 +425,10 @@ export function useBoardLibrary(
     owner,
     open,
     save,
+    async ensureSaved() {
+      await save(true);
+      return active.current.id;
+    },
     saveCopy,
     refresh,
     manage,

@@ -148,6 +148,7 @@ export async function layoutBoard(
     if (!before) return node;
     const kept = {
       ...node,
+      ...(before.linkedBoardId ? { linkedBoardId: before.linkedBoardId } : {}),
       ...(before.notes !== undefined && node.notes === undefined ? { notes: before.notes } : {}),
       ...(before.references && !node.references ? { references: before.references } : {}),
     };

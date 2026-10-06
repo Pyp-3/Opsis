@@ -246,6 +246,7 @@ test('invalid imports and generation errors preserve the board; cancellation ign
     buffer: Buffer.alloc(1_000_001, 32),
   });
   expect((await snapshot(page)).board).toEqual(before);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.route('**/v1/boards/generate', (route) =>
     route.fulfill({ status: 502, json: { message: 'Fixture timeout' } }),
@@ -300,11 +301,13 @@ test('connection editing, keyboard undo/redo, arrangement and model settings are
   await endpoints(page);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).board).toEqual(before);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.getByRole('button', { name: /Model settings:/ }).click();
   await page.getByLabel('Model', { exact: true }).selectOption('opus');
   await page.getByLabel('Reasoning effort').selectOption('medium');
   await page.reload();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.getByRole('button', { name: /Model settings: Opus/ }).click();
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('opus');

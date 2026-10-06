@@ -51,6 +51,7 @@ export function useBoardDiagram(
           label: node.label,
           icon: node.icon,
           customIcon: node.customIcon,
+          linkedBoardId: node.linkedBoardId,
           kind: node.kind,
           number: index + 1,
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,

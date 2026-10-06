@@ -52,6 +52,13 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
     const user = requireUser(request, reply);
     return user ? store.listBoards(user.id, true) : reply;
   });
+  app.get('/v1/boards/:id/backlinks', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = idSchema.safeParse(request.params);
+    if (!params.success || !readable(params.data.id, user)) return notFound(reply);
+    return store.listBacklinks(user.id, params.data.id);
+  });
   app.get('/v1/boards/shared', async (request, reply) => {
     const user = requireUser(request, reply);
     return user ? store.listSharedBoards(user.id) : reply;

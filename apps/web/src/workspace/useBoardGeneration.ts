@@ -34,6 +34,7 @@ export function useBoardGeneration(
     changes: string[];
   } | null>(null);
   const request = useRef<AbortController | null>(null);
+  const responseText = useRef('');
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
     if (!busy) return;
@@ -48,6 +49,7 @@ export function useBoardGeneration(
     previous: BoardDocument | null,
     selected: string | null,
     attachments: BoardAttachment[] = [],
+    conversation: { role: 'user' | 'assistant'; text: string }[] = [],
   ) {
     if (request.current || review) return false;
     const usages: ReportedUsage[] = [];
@@ -56,6 +58,7 @@ export function useBoardGeneration(
     request.current = controller;
     setBusy(true);
     setError('');
+    responseText.current = '';
     setElapsed(0);
     setActivity(startActivity());
     try {
@@ -66,10 +69,11 @@ export function useBoardGeneration(
           BoardGraphSchema.parse(example),
           agent,
           previous ?? undefined,
-          document.querySelector('.blueprint')?.clientWidth ?? 900,
+          document.querySelector('.blueprint')?.clientWidth || 900,
         );
         if (controller.signal.aborted) return false;
         commit(candidate);
+        responseText.current = `${candidate.title}\n${candidate.description}`;
         return true;
       }
       called = true;
@@ -79,6 +83,7 @@ export function useBoardGeneration(
         signal: controller.signal,
         body: JSON.stringify({
           prompt: text,
+          ...(conversation.length ? { conversation: conversation.slice(-12) } : {}),
           agent,
           ...(agent !== 'demo' ? { settings: preferences[agent] } : {}),
           ...(previous ? { board: withoutIllustrations(previous) } : {}),
@@ -106,9 +111,10 @@ export function useBoardGeneration(
         graph,
         agent,
         previous ?? undefined,
-        document.querySelector('.blueprint')?.clientWidth ?? 900,
+        document.querySelector('.blueprint')?.clientWidth || 900,
       );
       if (controller.signal.aborted) return false;
+      responseText.current = `${candidate.title}\n${candidate.description}\n${previous?.nodes.length ? 'A proposal is ready for review on Canvas.' : 'The diagram is ready on Canvas.'}`;
       if (previous?.nodes.length) {
         const changes = boardChanges(previous, candidate);
         for (const node of graph.nodes) {
@@ -155,6 +161,7 @@ export function useBoardGeneration(
     activity,
     review,
     generate,
+    responseText,
     cancel,
     discard: () => setReview(null),
     apply: (accepted: BoardDocument) => {

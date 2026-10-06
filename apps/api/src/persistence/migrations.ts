@@ -81,4 +81,17 @@ export const PERSISTENCE_MIGRATIONS = [
     CREATE UNIQUE INDEX smart_collections_owner_name ON smart_collections(owner_id, name COLLATE NOCASE);
   `,
   },
+  {
+    version: 6,
+    name: 'private-board-chat',
+    sql: `
+    CREATE TABLE board_chat_threads (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      board_id TEXT NOT NULL REFERENCES boards_v2(id) ON DELETE CASCADE,
+      id TEXT NOT NULL, document TEXT NOT NULL,
+      revision INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY(user_id,board_id,id)
+    );
+    `,
+  },
 ] as const;

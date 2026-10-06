@@ -1,4 +1,5 @@
 import { SharedBoards } from './BoardSharing';
+import { CollectionActions } from './CollectionActions';
 import { BoardComparison } from './BoardComparison';
 import { useEffect, useState } from 'react';
 import {
@@ -245,6 +246,17 @@ export function BoardsPage({
               filter={activeFilter}
               onFilter={setCollectionFilter}
               disabled={library.switching}
+            />
+          )}
+          {tab === 'mine' && (
+            <CollectionActions
+              collection={collections.collections.find((item) => item.id === filingInto)}
+              boards={library.entries}
+              refresh={async () => {
+                await refresh();
+                await collections.reload();
+              }}
+              imported={setCollectionFilter}
             />
           )}
           <form

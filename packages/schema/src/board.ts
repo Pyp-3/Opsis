@@ -79,6 +79,8 @@ export const BoardNodeSchema = z
     caveat: z.string().max(500).optional(),
     notes: z.string().max(5000).optional(),
     references: z.array(ConceptReferenceSchema).max(10).optional(),
+    /** Explicit navigation metadata; diagram generation must never create or change it. */
+    linkedBoardId: z.string().uuid().optional(),
     terminal: TerminalStepSchema.optional(),
     /** The engine calculates sample data from these operations, independently of narration. */
     process: ProcessStepSchema.optional(),
@@ -236,6 +238,10 @@ export type BoardAttachment = z.infer<typeof BoardAttachmentSchema>;
 export const BoardRequestSchema = z
   .object({
     prompt: z.string().trim().min(1).max(4000),
+    conversation: z
+      .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(4000) }).strict())
+      .max(12)
+      .optional(),
     agent: BoardAgentSchema,
     settings: BoardModelSettingsSchema.optional(),
     board: BoardDocumentSchema.optional(),
@@ -267,7 +273,7 @@ export const boardOutputSchema = JSON.stringify(
       nodes: z
         .array(
           // Illustrations are drawn on request by the illustrate route, not with the diagram.
-          BoardNodeSchema.omit({ illustration: true }).extend({
+          BoardNodeSchema.omit({ illustration: true, linkedBoardId: true }).extend({
             confidence: z.enum(['normal', 'simplified', 'uncertain']),
             caveat: z.string().max(500),
             narration: z.string().min(1).max(400),

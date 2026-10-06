@@ -1,6 +1,8 @@
 export * from './legacy-osg';
 export * from './errors';
 export * from './board';
+export * from './board-links';
+export * from './collection-bundle';
 export * from './board-operations';
 export * from './board-requests';
 export * from './board-copy';
@@ -26,3 +28,4 @@ export * from './account-settings';
 export * from './board-organization';
 export * from './board-search';
 export * from './cost-projection';
+export * from './board-chat';

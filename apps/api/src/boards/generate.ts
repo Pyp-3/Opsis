@@ -1,4 +1,4 @@
-import { modelSettingsProblem } from '@opsis/schema';
+import { modelSettingsProblem, preserveBoardLinks } from '@opsis/schema';
 import {
   BoardGraphSchema,
   BoardRequestSchema,
@@ -111,6 +111,7 @@ export async function generateBoard(
       system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}\nSchema: ${boardOutputSchema}`,
       user: JSON.stringify({
         prompt: input.prompt,
+        ...(input.conversation?.length ? { conversation: input.conversation } : {}),
         selectedId: input.selectedId,
         currentDiagram: input.board,
         ...(prepared.documents.length ? { documents: prepared.documents } : {}),
@@ -137,7 +138,10 @@ export async function generateBoard(
       }
       let graph: BoardGraph;
       try {
-        graph = BoardGraphSchema.parse(withoutInvalidCustomIcons(JSON.parse(output)));
+        graph = preserveBoardLinks(
+          BoardGraphSchema.parse(withoutInvalidCustomIcons(JSON.parse(output))),
+          input.board,
+        );
       } catch (error) {
         if (attempt === 1)
           return outcome(502, {

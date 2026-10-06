@@ -224,11 +224,13 @@ export function registerTools(
     'opsis_update_concept',
     {
       title: 'Update a concept',
-      description: 'Changes a concept’s label, summary, explanation, icon or kind.',
+      description:
+        'Changes a concept’s content or explicit board link. Set linkedBoardId to null to clear the link.',
       inputSchema: {
         boardId,
         conceptId: ConceptIdSchema,
         label: ConceptFieldsSchema.label.optional(),
+        linkedBoardId: z.string().uuid().nullable().optional(),
         summary: ConceptFieldsSchema.summary.optional(),
         explanation: ConceptFieldsSchema.explanation.optional(),
         icon: ConceptFieldsSchema.icon.optional(),

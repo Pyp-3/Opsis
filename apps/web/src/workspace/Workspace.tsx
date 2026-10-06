@@ -5,7 +5,10 @@ import { BoardGroups, GroupBoundaries, GroupsSummary } from './BoardGroups';
 import { useRememberedOpen } from './useRememberedOpen';
 import { readingViewport, NODE_HEIGHT } from './geometry';
 import { BoardHeader } from './BoardHeader';
+import { BoardLinks } from './BoardLinks';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
+import { BoardChat } from './BoardChat';
+import { useBoardChat } from './useBoardChat';
 import { BoardComposer } from './BoardComposer';
 import { IconNode, type DiagramNode } from './IconNode';
 import { ConceptDetails } from './ConceptDetails';
@@ -125,6 +128,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const provider = useProviderUsage();
   const process = useProcessEngine(board);
   const [arranging, setArranging] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const illustrator = useIllustrator(boardRef, setBoard, usageBoardRef);
   const library = useBoardLibrary(
@@ -133,6 +137,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     replace,
     board !== snapshot.board ||
       generation.busy ||
+      chatSending ||
       !!generation.review ||
       illustrator.busy ||
       arranging ||
@@ -148,7 +153,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const { cancel: cancelIllustration } = illustrator;
   // `working`: something is in flight. `busy` also covers viewing someone else's public board,
   // which can be explored and played but not changed.
-  const working = generation.busy || library.switching || !!generation.review || arranging;
+  const working =
+    generation.busy || chatSending || library.switching || !!generation.review || arranging;
   const readOnly = library.access === 'viewer';
   const busy = working || readOnly;
   const saved = library.status;
@@ -173,6 +179,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     [board, readOnly, viewGroups],
   );
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [boardTrail, setBoardTrail] = useState<{ id: string; concept?: string | undefined }[]>([]);
+  const [canvasTab, setCanvasTab] = useState<'canvas' | 'chat'>('canvas');
+  const chat = useBoardChat(library.activeId);
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   // Whether clicking a concept icon opens its explanation. Off = drawing only.
@@ -212,7 +221,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     if (!composerPreference || !focusAfterOpen.current) return;
     focusAfterOpen.current = false;
     promptInput.current?.focus();
-  }, [composerPreference]);
+  }, [composerPreference, canvasTab]);
   const flow = useReactFlow();
   const path = usePath();
   useEffect(() => {
@@ -393,11 +402,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [undo, editing]);
 
-  async function generate(event?: FormEvent, text = prompt) {
+  async function generate(event?: FormEvent, text = prompt, freshCanvas = false) {
     event?.preventDefault();
     if (!text.trim() || busy) return;
     const callsAgent =
-      agent !== 'demo' && !terminalExampleFor(text, boardRef.current, attachments.length > 0);
+      agent !== 'demo' &&
+      !terminalExampleFor(text, boardRef.current, !freshCanvas && attachments.length > 0);
     if (
       callsAgent &&
       (!BoardModelSettingsSchema.safeParse(modelPreferences[agent]).success ||
@@ -414,19 +424,40 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
       );
       return;
     }
-    if (
-      await generation.generate(
+    setChatSending(true);
+    try {
+      const chatBoardId = await library.ensureSaved();
+      const thread = await chat.begin(
+        agent,
+        agent === 'demo' ? 'built-in' : modelPreferences[agent].model,
+        text,
+        chatBoardId,
+      );
+      const success = await generation.generate(
         text,
         agent,
         modelPreferences,
         boardRef.current,
-        selected,
-        agent === 'demo' ? [] : attachments,
-      )
-    ) {
-      if (callsAgent) provider.record(agent as ProviderAgent);
-      setPrompt('');
-      setAttachments([]);
+        freshCanvas ? null : selected,
+        agent === 'demo' || freshCanvas ? [] : attachments,
+        thread.messages.slice(0, -1).slice(-12),
+      );
+      if (success && callsAgent) provider.record(agent as ProviderAgent);
+      await chat.finish(
+        thread,
+        success
+          ? generation.responseText.current || 'A diagram is ready on Canvas.'
+          : 'Generation stopped or failed. No generated proposal was applied.',
+        chatBoardId,
+      );
+      if (success) {
+        setPrompt('');
+        setAttachments([]);
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save this conversation.');
+    } finally {
+      setChatSending(false);
     }
   }
 
@@ -445,6 +476,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         ),
       );
       setAgent('demo');
+      setCanvasTab('canvas');
       setSelected(null);
       setSelectedEdge(null);
       navigate('/canvas');
@@ -516,11 +548,24 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   }, [openLibraryBoard, startingId]);
   const openBoard = async (id: string, conceptId?: string) => {
     if (id !== library.activeId && !(await library.open(id))) return false;
+    setCanvasTab('canvas');
     setSelected(null);
     setSelectedEdge(null);
     setAgent(boardRef.current?.agent ?? agent);
     pendingFocus.current = conceptId ?? null;
     return true;
+  };
+  const followBoardLink = async (id: string, conceptId?: string) => {
+    const previous = { id: library.activeId, concept: selected ?? undefined };
+    if (await openBoard(id, conceptId)) {
+      setBoardTrail((trail) => [...trail, previous].slice(-40));
+      navigate('/canvas');
+    }
+  };
+  const backToBoard = async () => {
+    const previous = boardTrail.at(-1);
+    if (previous && (await openBoard(previous.id, previous.concept)))
+      setBoardTrail((trail) => trail.slice(0, -1));
   };
   useEffect(() => {
     const target = pendingFocus.current;
@@ -594,6 +639,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     setSelectedEdge(null);
     setPrompt('');
     setError('');
+    setAttachments([]);
+    setCanvasTab('canvas');
     return true;
   };
   const sidebar = (
@@ -621,12 +668,68 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   // and the only place to cancel.
   const composerOpen = composerPreference || generation.busy || !board || board.nodes.length === 0;
   const focusPrompt = () => {
-    if (promptInput.current) promptInput.current.focus();
+    setCanvasTab('chat');
+    focusAfterOpen.current = true;
+    if (canvasTab === 'chat' && promptInput.current) promptInput.current.focus();
     else {
       focusAfterOpen.current = true;
       setComposerPreference(true);
     }
   };
+  const chatComposer = (
+    <>
+      {board && !busy && (
+        <NextSteps
+          suggestions={[
+            ...(agent !== 'demo' ? [RETURN_PATHS] : []),
+            ...(board.suggestions ?? []).map((text) => ({ label: text, prompt: text })),
+          ]}
+          onPick={(suggestion) => {
+            setPrompt(suggestion.prompt);
+            focusPrompt();
+          }}
+        />
+      )}
+      <BoardComposer
+        board={board}
+        agent={agent}
+        busy={busy}
+        attachments={attachments}
+        prompt={prompt}
+        promptInput={promptInput}
+        selected={selected}
+        settingsOpen={settingsOpen}
+        modelPreferences={modelPreferences}
+        modelLabel={modelLabel}
+        localTerminalExample={localTerminalExample}
+        connectionError={connectionError}
+        status={status}
+        provider={{
+          enabled: provider.settings.enabled,
+          status: providerStatus,
+          caps: agent === 'demo' ? { fiveHour: 0, weekly: 0 } : provider.settings.caps[agent],
+          setEnabled: provider.setEnabled,
+          setCaps: (caps) => {
+            if (agent !== 'demo') provider.setCaps(agent, caps);
+          },
+        }}
+        generation={generation}
+        generate={generate}
+        setAttachments={setAttachments}
+        setPrompt={setPrompt}
+        setError={setError}
+        setModelPreferences={setModelPreferences}
+        setAgent={setAgent}
+        setSettingsOpen={setSettingsOpen}
+        setSelected={setSelected}
+      />
+      {!busy && (
+        <p className="composer-hint">
+          <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
+        </p>
+      )}
+    </>
+  );
   const railToggle = (
     <button
       className="rail-toggle"
@@ -695,7 +798,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 navigate('/canvas');
                 // Kept in the composer if the agent cannot run yet, so the question is not lost.
                 setPrompt(question);
-                void generate(undefined, question);
+                void generate(undefined, question, true);
               }}
               onOpen={async (id) => {
                 if (await openBoard(id)) navigate('/canvas');
@@ -719,6 +822,16 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
           railToggle={railToggle}
           menus={
             <>
+              {board &&
+                (library.access !== 'owner' ||
+                  library.entries.some((entry) => entry.id === library.activeId)) && (
+                  <BoardLinks
+                    key={`links:${library.activeId}`}
+                    id={library.activeId}
+                    onOpen={(id, concept) => void followBoardLink(id, concept)}
+                    onBack={boardTrail.length ? () => void backToBoard() : undefined}
+                  />
+                )}
               {board &&
                 library.access !== 'viewer' &&
                 (library.access === 'editor' ||
@@ -849,7 +962,99 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             </div>
           </section>
         )}
-        <div className="canvas-and-detail">
+        <div
+          className="workspace-tabs"
+          role="tablist"
+          aria-label="Board workspace tabs"
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next =
+              event.key === 'Home'
+                ? 'canvas'
+                : event.key === 'End'
+                  ? 'chat'
+                  : canvasTab === 'canvas'
+                    ? 'chat'
+                    : 'canvas';
+            setCanvasTab(next);
+            document.getElementById(`${next}-tab`)?.focus();
+          }}
+        >
+          <button
+            id="canvas-tab"
+            role="tab"
+            aria-selected={canvasTab === 'canvas'}
+            tabIndex={canvasTab === 'canvas' ? 0 : -1}
+            aria-controls="canvas-panel"
+            onClick={() => setCanvasTab('canvas')}
+          >
+            Canvas{generation.busy ? ' · Generating' : generation.review ? ' · Review ready' : ''}
+          </button>
+          <button
+            id="chat-tab"
+            role="tab"
+            aria-selected={canvasTab === 'chat'}
+            tabIndex={canvasTab === 'chat' ? 0 : -1}
+            aria-controls="chat-panel"
+            onClick={focusPrompt}
+          >
+            Chat
+          </button>
+          <button role="tab" aria-selected={false} disabled title="Reserved for a future feature">
+            Coming soon
+          </button>
+        </div>
+        <div
+          id="chat-panel"
+          role="tabpanel"
+          aria-labelledby="chat-tab"
+          hidden={canvasTab !== 'chat'}
+        >
+          {canvasTab === 'chat' && (
+            <BoardChat
+              chat={chat}
+              busy={busy}
+              onSelect={(nextAgent, model) => {
+                setAgent(nextAgent);
+                if (nextAgent !== 'demo')
+                  setModelPreferences((before) => ({
+                    ...before,
+                    [nextAgent]: { ...before[nextAgent], model },
+                  }));
+              }}
+            >
+              {readOnly ? (
+                <p>This board is read-only. Save your own copy to generate changes.</p>
+              ) : (
+                chatComposer
+              )}
+            </BoardChat>
+          )}
+          {generation.busy && (
+            <AgentActivity
+              activity={generation.activity}
+              elapsed={generation.elapsed}
+              agent={agent === 'demo' ? 'Demo' : PROVIDER_LABELS[agent]}
+            />
+          )}
+          {generation.review && <p role="status">A proposal is ready for review on Canvas.</p>}
+          {generation.error && (
+            <div role="alert">
+              <p>{generation.error}</p>
+              <button aria-label="Dismiss error" onClick={() => setError('')}>
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+        <div
+          id="canvas-panel"
+          role="tabpanel"
+          aria-labelledby="canvas-tab"
+          hidden={canvasTab !== 'canvas'}
+          className="canvas-and-detail"
+        >
           <section
             className={`blueprint ${playerOpen ? 'is-playing' : ''}`}
             aria-label="Interactive diagram canvas"
@@ -872,6 +1077,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 // Drawing mode: a click on an icon does nothing until explanation is on.
                 if (!explain) return;
                 selectNode(node.id);
+              }}
+              onNodeDoubleClick={(_, node) => {
+                if (node.data.linkedBoardId) void followBoardLink(node.data.linkedBoardId);
               }}
               onEdgeClick={(_, edge) => {
                 retractHeading();
@@ -1150,7 +1358,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   )}
                 </div>
               )}
-              {generation.review && (
+              {generation.review && canvasTab === 'canvas' && (
                 <GenerationReview
                   {...generation.review}
                   apply={(accepted) => {
@@ -1161,7 +1369,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   discard={generation.discard}
                 />
               )}
-              {error && (
+              {error && canvasTab === 'canvas' && (
                 <div className="workspace-error" role="alert">
                   <CircleAlert size={16} aria-hidden />
                   <span>{error}</span>
@@ -1170,12 +1378,15 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   </button>
                 </div>
               )}
-              {generation.busy && (
-                <AgentActivity
-                  activity={generation.activity}
-                  elapsed={generation.elapsed}
-                  agent={agent === 'demo' ? 'Demo' : PROVIDER_LABELS[agent]}
-                />
+              {generation.busy && canvasTab === 'canvas' && (
+                <>
+                  <AgentActivity
+                    activity={generation.activity}
+                    elapsed={generation.elapsed}
+                    agent={agent === 'demo' ? 'Demo' : PROVIDER_LABELS[agent]}
+                  />
+                  <button onClick={generation.cancel}>Stop generation</button>
+                </>
               )}
               {board && playerOpen ? (
                 <Suspense fallback={<p role="status">Loading player…</p>}>
@@ -1223,76 +1434,10 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                     <Copy size={14} /> Save a copy
                   </button>
                 </div>
-              ) : !composerOpen ? (
-                <button
-                  className="composer-pill"
-                  aria-expanded={false}
-                  title="Show the composer"
-                  onClick={focusPrompt}
-                >
-                  <MessageSquarePlus size={15} aria-hidden />
-                  {prompt.trim() ? 'Continue your request' : 'Ask a follow-up'}
-                  <ChevronUp className="chevron" size={14} aria-hidden />
-                </button>
               ) : (
-                <>
-                  {board && !busy && (
-                    <NextSteps
-                      suggestions={[
-                        ...(agent !== 'demo' ? [RETURN_PATHS] : []),
-                        ...(board.suggestions ?? []).map((text) => ({ label: text, prompt: text })),
-                      ]}
-                      onPick={(suggestion) => {
-                        setPrompt(suggestion.prompt);
-                        focusPrompt();
-                      }}
-                    />
-                  )}
-                  <BoardComposer
-                    board={board}
-                    agent={agent}
-                    busy={busy}
-                    attachments={attachments}
-                    prompt={prompt}
-                    promptInput={promptInput}
-                    selected={selected}
-                    settingsOpen={settingsOpen}
-                    modelPreferences={modelPreferences}
-                    modelLabel={modelLabel}
-                    localTerminalExample={localTerminalExample}
-                    connectionError={connectionError}
-                    status={status}
-                    provider={{
-                      enabled: provider.settings.enabled,
-                      status: providerStatus,
-                      caps:
-                        agent === 'demo'
-                          ? { fiveHour: 0, weekly: 0 }
-                          : provider.settings.caps[agent],
-                      setEnabled: provider.setEnabled,
-                      setCaps: (caps) => {
-                        if (agent !== 'demo') provider.setCaps(agent, caps);
-                      },
-                    }}
-                    generation={generation}
-                    generate={generate}
-                    setAttachments={setAttachments}
-                    setPrompt={setPrompt}
-                    setError={setError}
-                    setModelPreferences={setModelPreferences}
-                    setAgent={setAgent}
-                    setSettingsOpen={setSettingsOpen}
-                    setSelected={setSelected}
-                    {...(composerPreference && board?.nodes.length && !generation.busy
-                      ? { onMinimize: () => setComposerPreference(false) }
-                      : {})}
-                  />
-                  {!busy && (
-                    <p className="composer-hint">
-                      <kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
-                    </p>
-                  )}
-                </>
+                <button className="composer-pill" onClick={focusPrompt}>
+                  <MessageSquarePlus size={15} aria-hidden /> Open chat
+                </button>
               )}
             </div>
           </section>
@@ -1306,6 +1451,10 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
               board={board}
               boardRef={boardRef}
               activeNode={activeNode}
+              linkTargets={library.entries.filter(
+                (entry) => entry.id !== library.activeId && !entry.archived,
+              )}
+              followLink={(id) => void followBoardLink(id)}
               process={process}
               busy={busy}
               showIcons={showIcons}

@@ -193,6 +193,7 @@ test('scrubs the timeline with the keyboard and dims what has not happened yet',
   // Captions show what the narrator says: the arrow's line, then the object's.
   await expect(page.locator('.player-caption')).toContainText(EMAIL_DEMO.nodes[1]!.narration!);
   await page.getByRole('button', { name: 'Close player' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByLabel('What would you like to understand?')).toBeVisible();
 });
 

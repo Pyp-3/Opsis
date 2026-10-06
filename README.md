@@ -24,9 +24,12 @@ _Follow the connections, then select a concept for its explanation._
 
 - Generate and refine diagrams with Claude/Codex CLIs or Kimi, Grok and Antigravity APIs/CLIs; review proposed changes before applying them. See [provider setup and limits](docs/PROVIDERS.md).
 - Save model profiles and fallback choices to your account; switch to a fallback explicitly without automatic retries.
+- Use **Canvas** for the diagram and live generation progress, and **Chat** for private per-account threads tied to each board and provider/model. A third tab is reserved for a future feature.
+- Link concepts to other boards, follow them and return; see incoming links from boards you can access.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
+- Share every board in a collection at once; export/import linked collection bundles, download one read-only HTML file, or print a walkthrough to PDF.
 - Plan API token costs in Settings with dated pricing presets or custom rates, explicit token assumptions and a cumulative cost chart. Assumptions follow your account; projections make no model calls.
 - Let your own agents work on canvases through [MCP](apps/mcp/README.md).
 

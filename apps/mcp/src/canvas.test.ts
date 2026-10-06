@@ -25,6 +25,22 @@ const board: BoardDocument = {
 const start: BoardSnapshot = { board, past: [], future: [{ ...board, title: 'Redo me' }] };
 
 describe('agent canvas edits', () => {
+  it('sets and clears explicit board links as undoable edits and preserves them in rewrites', () => {
+    const destination = '00000000-0000-4000-8000-000000000001';
+    const linked = updateConcept(start, 'sender', { linkedBoardId: destination });
+    expect(linked.board!.nodes[0]!.linkedBoardId).toBe(destination);
+    expect(linked.past.at(-1)).toEqual(board);
+    const rewritten = writeDiagram(linked, {
+      title: 'Rewritten',
+      description: 'Same concept, new wording',
+      concepts: [{ id: 'sender', label: 'Sender', summary: 'Writes the message' }],
+      connections: [],
+    });
+    expect(rewritten.board!.nodes[0]!.linkedBoardId).toBe(destination);
+    const cleared = updateConcept(rewritten, 'sender', { linkedBoardId: null });
+    expect(cleared.board!.nodes[0]!.linkedBoardId).toBeUndefined();
+    expect(cleared.past.at(-1)!.nodes[0]!.linkedBoardId).toBe(destination);
+  });
   it('adds a concept below another, with an arrow, as one undoable step', () => {
     const { snapshot, id } = addConcept(start, {
       label: 'Spam filter',

@@ -229,6 +229,7 @@ test('validated streamed concepts appear before completion and cancellation reta
     { ...EMAIL_DEMO.nodes[0]!, label: 'Arriving draft concept' },
   );
   await page.reload();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.getByLabel('What would you like to understand?').fill('Show a draft');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
@@ -350,6 +351,7 @@ test('handles a maximum-sized board and keeps malformed generation from changing
   await page.goto(`/canvas?board=${id}`);
   await expect(page.locator('.react-flow__node')).toHaveCount(50);
   await expect(page.locator('.react-flow__edge')).toHaveCount(100);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   await page.route('**/v1/boards/generate', (route) =>
     route.fulfill({ json: { title: 'Invalid output', nodes: [{ id: 'broken' }] } }),

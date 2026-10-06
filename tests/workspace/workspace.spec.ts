@@ -64,6 +64,7 @@ test('reviews changed content, keeps existing board on discard, and uses generat
   page,
 }) => {
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   const candidate = {
     ...EMAIL_DEMO,
@@ -76,6 +77,7 @@ test('reviews changed content, keeps existing board on discard, and uses generat
   );
   await page.getByLabel('What would you like to understand?').fill('Expand one step');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
+  await page.getByRole('tab', { name: /Canvas/ }).click();
   await expect(page.getByRole('region', { name: 'Review proposed changes' })).toBeVisible();
   await page.getByRole('button', { name: 'Keep current board' }).click();
   await expect(
@@ -83,9 +85,12 @@ test('reviews changed content, keeps existing board on discard, and uses generat
       .getByRole('navigation', { name: 'Diagram steps' })
       .getByRole('button', { name: /You write/ }),
   ).toBeVisible();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('What would you like to understand?').fill('Try again');
   await page.getByRole('button', { name: 'Generate diagram' }).click();
+  await page.getByRole('tab', { name: /Canvas/ }).click();
   await page.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByRole('button', { name: /Next steps/ }).click();
   await expect(page.getByRole('button', { name: 'Explain encryption', exact: true })).toBeVisible();
   await expect(
@@ -136,12 +141,14 @@ for (const [width, height] of [
 
 test('next steps stay tucked away until opened, and remember being opened', async ({ page }) => {
   await page.getByRole('button', { name: 'Open example: DNS lookups' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   const toggle = page.getByRole('button', { name: /Next steps/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
   await toggle.click();
   await expect(page.getByRole('group', { name: 'Next steps' })).toBeVisible();
   await page.reload();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Next steps' })).toBeVisible();
   await page.getByRole('button', { name: 'Hide next steps' }).click();
   await expect(page.getByRole('group', { name: 'Next steps' })).toHaveCount(0);
@@ -155,7 +162,10 @@ test('board menus, canvas tools and composer tuck away to give the canvas room',
   // Sharing and groups drop down from the header instead of taking rows above the canvas.
   const header = page.locator('.workspace-header');
   const canvas = page.getByRole('region', { name: 'Interactive diagram canvas' });
-  expect((await canvas.boundingBox())!.y).toBe((await header.boundingBox())!.height);
+  const tabs = page.getByRole('tablist', { name: 'Board workspace tabs' });
+  expect((await canvas.boundingBox())!.y).toBe(
+    (await header.boundingBox())!.height + (await tabs.boundingBox())!.height,
+  );
   await page.locator('.board-groups summary').click();
   await expect(page.getByLabel('New group name')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -163,10 +173,12 @@ test('board menus, canvas tools and composer tuck away to give the canvas room',
 
   await page.getByRole('button', { name: 'Hide canvas tools' }).click();
   await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Minimize composer' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(page.getByLabel('What would you like to understand?')).toBeVisible();
+  await page.getByRole('tab', { name: /Canvas/ }).click();
   await expect(page.getByLabel('What would you like to understand?')).toHaveCount(0);
   await page.reload();
-  const ask = page.getByRole('button', { name: 'Ask a follow-up' });
+  const ask = page.getByRole('button', { name: 'Open chat' });
   await expect(ask).toBeVisible();
   await expect(page.getByRole('button', { name: 'Show canvas tools' })).toBeVisible();
   // Explore this step reopens the composer, so a suggested prompt is never sent blind.
@@ -174,6 +186,7 @@ test('board menus, canvas tools and composer tuck away to give the canvas room',
   await page.getByRole('button', { name: /Explore this step/ }).click();
   await expect(page.getByLabel('What would you like to understand?')).toBeFocused();
   await expect(page.getByLabel('What would you like to understand?')).toHaveValue(/Expand/);
+  await page.getByRole('tab', { name: /Canvas/ }).click();
   await page.getByRole('button', { name: 'Show canvas tools' }).click();
   await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
 });
@@ -186,6 +199,7 @@ test('mobile canvas remains usable without horizontal page overflow', async ({ p
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.getByLabel('What would you like to understand?')).toBeVisible();
 });
 

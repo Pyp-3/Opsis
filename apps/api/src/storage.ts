@@ -8,6 +8,11 @@ import {
   type BoardDocument,
   type BoardSnapshot,
   copyBoardSnapshot,
+  CollectionBundleSchema,
+  prepareCollectionImport,
+  MAX_BOARD_COLLECTIONS,
+  type CollectionSharing,
+  type BoardChatThread,
 } from '@opsis/schema';
 
 export type User = { id: string; email: string; name: string };
@@ -34,6 +39,41 @@ function databasePath(path: string): string {
 
 /** SQLite persistence for accounts, owned boards and revision history. */
 export class ApiStore {
+  listChatThreads(userId: string, boardId: string) {
+    const rows = this.sqlite
+      .prepare(
+        'SELECT document,revision,updated_at AS updatedAt FROM board_chat_threads WHERE user_id=? AND board_id=? ORDER BY updated_at DESC',
+      )
+      .all(userId, boardId) as { document: string; revision: number; updatedAt: number }[];
+    return rows.map(({ document, ...metadata }) => ({
+      ...(JSON.parse(document) as BoardChatThread),
+      ...metadata,
+    }));
+  }
+
+  saveChatThread(userId: string, boardId: string, thread: BoardChatThread, revision: number) {
+    return this.sqlite.transaction(() => {
+      const threads = this.listChatThreads(userId, boardId);
+      const before = threads.find((item) => item.id === thread.id);
+      if ((before?.revision ?? 0) !== revision) return 'conflict' as const;
+      if (!before && threads.length >= 30) return 'limit' as const;
+      if (before && (before.agent !== thread.agent || before.model !== thread.model))
+        return 'conflict' as const;
+      const updatedAt = Date.now();
+      this.sqlite
+        .prepare(
+          'INSERT INTO board_chat_threads VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,board_id,id) DO UPDATE SET document=excluded.document,revision=excluded.revision,updated_at=excluded.updated_at',
+        )
+        .run(userId, boardId, thread.id, JSON.stringify(thread), revision + 1, updatedAt);
+      return { ...thread, revision: revision + 1, updatedAt };
+    })();
+  }
+
+  deleteChatThread(userId: string, boardId: string, id: string) {
+    this.sqlite
+      .prepare('DELETE FROM board_chat_threads WHERE user_id=? AND board_id=? AND id=?')
+      .run(userId, boardId, id);
+  }
   private readonly sqlite: Database.Database;
 
   constructor(path: string) {
@@ -134,6 +174,20 @@ export class ApiStore {
   }
 
   /** The boards one account owns. */
+  listBacklinks(userId: string, targetId: string) {
+    return this.sqlite
+      .prepare(
+        `SELECT b.id,b.title,json_extract(n.value,'$.id') AS conceptId,
+      json_extract(n.value,'$.label') AS label FROM boards_v2 b, json_each(b.snapshot,'$.board.nodes') n
+      WHERE json_extract(n.value,'$.linkedBoardId')=? AND b.archived=0
+      AND (b.owner_id=? OR b.visibility='public' OR EXISTS
+        (SELECT 1 FROM board_editors e WHERE e.board_id=b.id AND e.user_id=?))
+      ORDER BY b.title,b.id,conceptId`,
+      )
+      .all(targetId, userId, userId);
+  }
+
+  /** The boards one account owns. */
   listBoards(ownerId: string, includeArchived = false) {
     const rows = this.sqlite
       .prepare(
@@ -151,6 +205,95 @@ export class ApiStore {
       archived: Boolean(row.archived),
       tags: tags.get(row.id) ?? [],
     }));
+  }
+
+  exportCollection(id: string, ownerId: string) {
+    const collection = this.listCollections(ownerId).find((item) => item.id === id);
+    if (!collection) return null;
+    return CollectionBundleSchema.parse({
+      format: 'opsis-collection',
+      version: 1,
+      name: collection.name,
+      boards: this.listBoards(ownerId, true)
+        .filter((board) => board.collectionId === id)
+        .map((entry) => ({
+          id: entry.id,
+          title: entry.title,
+          tags: entry.tags,
+          board: this.getBoard(entry.id)!.snapshot.board,
+        })),
+    });
+  }
+
+  shareCollection(id: string, ownerId: string, input: CollectionSharing) {
+    return this.sqlite.transaction(() => {
+      if (!this.listCollections(ownerId).some((item) => item.id === id)) return 'missing';
+      const boards = this.listBoards(ownerId, true).filter((board) => board.collectionId === id);
+      if (
+        boards.length !== input.boards.length ||
+        new Set(input.boards.map((board) => board.id)).size !== boards.length ||
+        boards.some(
+          (board) =>
+            !input.boards.some(
+              (expected) => expected.id === board.id && expected.revision === board.revision,
+            ),
+        )
+      )
+        return 'conflict';
+      const change = input.change;
+      const editor = change.kind === 'editor' ? this.findUserByEmail(change.email) : null;
+      if (change.kind === 'editor' && (!editor || editor.id === ownerId)) return 'account';
+      for (const board of boards) {
+        if (change.kind === 'visibility')
+          this.sqlite
+            .prepare(
+              'UPDATE boards_v2 SET visibility=?,revision=revision+1,updated_at=? WHERE id=?',
+            )
+            .run(change.visibility, Date.now(), board.id);
+        else if (change.enabled)
+          this.sqlite
+            .prepare('INSERT OR IGNORE INTO board_editors VALUES(?,?)')
+            .run(board.id, editor!.id);
+        else
+          this.sqlite
+            .prepare('DELETE FROM board_editors WHERE board_id=? AND user_id=?')
+            .run(board.id, editor!.id);
+      }
+      return 'saved';
+    })();
+  }
+
+  importCollection(ownerId: string, input: unknown, collectionId: string, ids: string[]) {
+    const bundle = CollectionBundleSchema.parse(input);
+    const entries = prepareCollectionImport(bundle, ids);
+    return this.sqlite.transaction(() => {
+      const existing = this.listCollections(ownerId);
+      if (existing.length >= MAX_BOARD_COLLECTIONS) throw new Error('Collection limit reached.');
+      let name = bundle.name;
+      for (let n = 2; existing.some((item) => item.name.toLowerCase() === name.toLowerCase()); n++)
+        name = bundle.name.slice(0, 48) + ` (import ${n})`;
+      this.sqlite
+        .prepare('INSERT INTO board_collections VALUES(?,?,?,?)')
+        .run(collectionId, ownerId, name, Date.now());
+      for (const entry of entries) {
+        this.sqlite
+          .prepare(
+            'INSERT INTO boards_v2(id,title,snapshot,revision,updated_at,owner_id,visibility,collection_id) VALUES(?,?,?,1,?,?,?,?)',
+          )
+          .run(
+            entry.id,
+            entry.title,
+            JSON.stringify(entry.snapshot),
+            Date.now(),
+            ownerId,
+            'private',
+            collectionId,
+          );
+        for (const tag of entry.tags)
+          this.sqlite.prepare('INSERT OR IGNORE INTO board_tags VALUES(?,?)').run(entry.id, tag);
+      }
+      return { id: collectionId, name, boards: entries.map((entry) => entry.id) };
+    })();
   }
 
   /** Active boards the account owns or was invited to edit, for search. */

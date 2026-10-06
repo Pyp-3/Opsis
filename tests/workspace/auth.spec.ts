@@ -98,6 +98,7 @@ test('friends share public canvases read-only and can save their own copy', asyn
     await bob.page.getByRole('button', { name: 'Save a copy' }).click();
     await expect(bob.page.getByLabel('Board name')).toHaveValue('Mail, explained');
     await expect(bob.page.getByText('Ada’s canvas')).toHaveCount(0);
+    await bob.page.getByRole('tab', { name: 'Chat', exact: true }).click();
     await expect(bob.page.getByLabel('What would you like to understand?')).toBeVisible();
     await bob.page.getByLabel('Board name').fill('Bob’s mail notes');
     await bob.page.getByLabel('Board name').press('Tab');

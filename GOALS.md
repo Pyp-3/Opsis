@@ -4,6 +4,34 @@ Last reviewed: 2026-10-06.
 
 ## Current delivery
 
+Scope update: the user has now authorized #3 board links, #6 collection sharing/
+export and #4 remote server/device sync. Implement and validate in that order.
+Remote mode remains opt-in; instance API keys remain server-wide. Signing and
+manual platform checks remain separate. These three goals are not yet complete.
+
+Additional authorized scope: Canvas workspace tabs for Canvas, Chat and a future
+placeholder. Move prompting into provider-specific per-board chat threads; retain
+live generation progress/previews on Canvas. Threads are private to each account,
+including on boards shared with editors (confirmed by the user).
+This supplements rather than replaces #3, #6 and #4.
+
+Implementation in progress on `codex/links-chat-collections` in the isolated
+`Opsis-links-chat` worktree. Claude is concurrently building canvas drawing tools
+in the original worktree; do not include those changes in this delivery.
+Board links, collection sharing/export/import and private per-account/provider/model
+chat are implemented on both hosts. Web browser coverage passed 49 scenarios plus
+five corrected/rerun scenarios (one Linux-only skip); native browser coverage passed
+53 scenarios with the same skip. Three additional native scenarios verify private
+chat, mobile layout and the print invocation. Packaged integration and all 24 hidden
+WebView checks pass. Lint, typecheck, Rust check/24 tests, Go vet and native race tests
+pass. JS tests: 387 pass and two five-second timeouts in the full run; the two affected
+files plus Workspace pass all 20 tests with one worker. No paid model calls were made.
+The system print dialog itself remains a manual platform check.
+
+The user also requested merging Claude's `canvas-drawing` branch (642196a).
+Merge and combined validation, commit/push and remote server/sync implementation
+remain outstanding. Do not mark the integration complete before those checks.
+
 CI follow-up: provider run 37454454247 passed web, Linux and Windows. Both Mac
 architectures passed native tests, builds, integration and browser coverage but
 timed out in the hidden WebView smoke. The preceding Apple Silicon rerun also
@@ -41,7 +69,8 @@ were inspected. Current delivery CI must still be confirmed after push.
 Trusted Windows signing and Apple signing/notarization are explicitly deferred by
 the user. Windows UI automation was retried and again returned "Computer Use
 native pipe is unavailable". Interactive save-dialog/clipboard and manual Mac
-checks remain open; no local Mac is available. Do not start #3, #6 or #4 yet.
+checks remain open; no local Mac is available. The later scope update above now
+authorizes #3, #6 and #4.
 
 Priority update (2026-10-06): finish the earlier provider/settings/pricing and
 platform backlog before starting #3, #6 or #4. Providers should support both

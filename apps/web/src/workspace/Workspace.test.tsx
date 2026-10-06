@@ -66,6 +66,14 @@ const board: BoardDocument = { ...EMAIL_DEMO, version: 2, agent: 'claude', posit
 function setup(candidate?: typeof EMAIL_DEMO, responseStatus = 409) {
   localStorage.setItem('opsis:board:v2', JSON.stringify(board));
   const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith('/chat')) {
+      if (options?.method === 'PUT') {
+        const { thread, revision } = JSON.parse(String(options.body));
+        return Response.json({ ...thread, revision: revision + 1, updatedAt: Date.now() });
+      }
+      return Response.json([]);
+    }
+    if (url.endsWith('/backlinks')) return Response.json([]);
     if (url === '/v1/agents')
       return Response.json([{ id: 'claude', available: true, detail: 'Fixture ready' }]);
     if (url === '/v1/boards') return Response.json([]);
@@ -89,7 +97,7 @@ function setup(candidate?: typeof EMAIL_DEMO, responseStatus = 409) {
 describe('current workspace integration', () => {
   it('updates an open details panel as playback advances and keeps a closed panel closed', async () => {
     setup();
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(screen.getByRole('button', { name: 'Play the process' }));
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
@@ -109,7 +117,7 @@ describe('current workspace integration', () => {
   });
   it('deletes the selected concept with the Delete key, closes the panel, and can undo', async () => {
     setup();
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
     expect(screen.getByRole('complementary', { name: 'Details for You write' })).toBeDefined();
@@ -122,15 +130,24 @@ describe('current workspace integration', () => {
   });
   it('does not delete on Delete while typing in a field', async () => {
     setup();
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(within(steps).getByRole('button', { name: /You write/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     const prompt = screen.getByLabelText('What would you like to understand?');
     fireEvent.keyDown(prompt, { key: 'Delete' });
     expect(within(steps).getByRole('button', { name: /You write/ })).toBeDefined();
   });
   it('recognises the terminal reference without an agent call and exposes troubleshooting', async () => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/chat')) {
+        if (options?.method === 'PUT') {
+          const { thread, revision } = JSON.parse(String(options.body));
+          return Response.json({ ...thread, revision: revision + 1, updatedAt: Date.now() });
+        }
+        return Response.json([]);
+      }
+      if (url.endsWith('/backlinks')) return Response.json([]);
       if (url === '/v1/agents')
         return Response.json([{ id: 'claude', available: false, detail: 'Offline fixture' }]);
       if (url === '/v1/boards') return Response.json([]);
@@ -139,7 +156,10 @@ describe('current workspace integration', () => {
     });
     vi.stubGlobal('fetch', fetch);
     render(<Workspace />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     await screen.findByText('Offline fixture');
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     fireEvent.change(screen.getByLabelText('What would you like to understand?'), {
       target: { value: 'What does `cat users.txt | head -10` do?' },
     });
@@ -149,6 +169,7 @@ describe('current workspace integration', () => {
     ).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
     const steps = await screen.findByRole('navigation', { name: 'Diagram steps' });
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
     await waitFor(() => expect(screen.queryByText('Calculating sample…')).toBeNull());
     fireEvent.click(within(steps).getByRole('button', { name: 'Read the file' }));
     const details = screen.getByRole('region', { name: 'Terminal step expectations' });
@@ -188,6 +209,14 @@ describe('current workspace integration', () => {
     };
     localStorage.setItem('opsis:board:v2', JSON.stringify(terminalBoard));
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/chat')) {
+        if (options?.method === 'PUT') {
+          const { thread, revision } = JSON.parse(String(options.body));
+          return Response.json({ ...thread, revision: revision + 1, updatedAt: Date.now() });
+        }
+        return Response.json([]);
+      }
+      if (url.endsWith('/backlinks')) return Response.json([]);
       if (url === '/v1/agents')
         return Response.json([{ id: 'claude', available: false, detail: 'Offline fixture' }]);
       if (url === '/v1/boards') return Response.json([]);
@@ -197,7 +226,9 @@ describe('current workspace integration', () => {
     });
     vi.stubGlobal('fetch', fetch);
     render(<Workspace />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     await screen.findByText('Offline fixture');
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(within(steps).getByRole('button', { name: 'Text file' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Sample data' }), {
@@ -243,6 +274,7 @@ describe('current workspace integration', () => {
     expect(
       screen.queryByRole('button', { name: 'Show what happens if delivery fails' }),
     ).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     fireEvent.click(screen.getByRole('button', { name: /Next steps/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Show what happens if delivery fails' }));
     expect(screen.queryByRole('group', { name: 'Next steps' })).toBeNull();
@@ -259,10 +291,12 @@ describe('current workspace integration', () => {
       edges: EMAIL_DEMO.edges.slice(1),
     };
     setup(candidate);
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     fireEvent.change(screen.getByLabelText('What would you like to understand?'), {
       target: { value: 'Expand a step' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
     await screen.findByRole('region', { name: 'Review proposed changes' });
     expect(screen.getByRole('img', { name: `Proposed diagram: ${candidate.title}` })).toBeDefined();
     const steps = screen.getByRole('navigation', { name: 'Diagram steps' });
@@ -291,15 +325,19 @@ describe('current workspace integration', () => {
       ],
     };
     const fetch = setup(candidate, 200);
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     await waitFor(() =>
       expect(fetch.mock.calls.some(([, options]) => options?.method === 'PUT')).toBe(true),
     );
-    const savesBefore = fetch.mock.calls.filter(([, options]) => options?.method === 'PUT').length;
+    const savesBefore = fetch.mock.calls.filter(
+      ([url, options]) => options?.method === 'PUT' && !url.endsWith('/chat'),
+    ).length;
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
     fireEvent.change(screen.getByLabelText('What would you like to understand?'), {
       target: { value: 'Add an archive' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate diagram' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Canvas/ }));
     const review = await screen.findByRole('region', { name: 'Review proposed changes' });
     const proposed = within(review).getByRole('img') as HTMLImageElement;
     expect(decodeURIComponent(proposed.src)).toContain('Archive copy');
@@ -318,13 +356,15 @@ describe('current workspace integration', () => {
     expect((within(review).getByRole('img') as HTMLImageElement).style.width).toBe('150%');
     fireEvent.click(within(review).getByRole('button', { name: 'Keep current board' }));
     expect(screen.queryByRole('region', { name: 'Review proposed changes' })).toBeNull();
-    expect(fetch.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(
-      savesBefore,
-    );
+    expect(
+      fetch.mock.calls.filter(
+        ([url, options]) => options?.method === 'PUT' && !url.endsWith('/chat'),
+      ),
+    ).toHaveLength(savesBefore);
   });
   it('tucks the big picture away and brings it back on request', async () => {
     setup();
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     const hide = screen.getByRole('button', { name: 'Hide the big picture' });
     expect(hide.getAttribute('aria-expanded')).toBe('true');
     // Starting playback counts as working on the canvas.
@@ -343,7 +383,7 @@ describe('current workspace integration', () => {
   });
   it('opens each canvas’s own look page and paints the canvas in its colours', async () => {
     setup();
-    await screen.findByText('Fixture ready');
+    await screen.findByRole('navigation', { name: 'Diagram steps' });
     fireEvent.click(screen.getByRole('button', { name: 'Canvas colours' }));
     expect(location.pathname).toBe('/canvas/settings');
     expect(await screen.findByRole('heading', { level: 1, name: board.title })).toBeDefined();

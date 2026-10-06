@@ -69,6 +69,7 @@ export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
   };
 
   return {
+    reload: load,
     collections,
     smartCollections,
     error,

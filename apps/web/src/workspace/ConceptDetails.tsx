@@ -23,6 +23,8 @@ import { removeNode } from './model';
 import { connectBoard } from './connections';
 
 type ConceptDetailsProps = {
+  linkTargets: { id: string; title: string }[];
+  followLink: (id: string) => void;
   board: BoardDocument;
   boardRef: RefObject<BoardDocument | null>;
   activeNode: BoardDocument['nodes'][number];
@@ -42,6 +44,8 @@ type ConceptDetailsProps = {
 };
 
 export function ConceptDetails({
+  linkTargets,
+  followLink,
   board,
   boardRef,
   activeNode,
@@ -97,6 +101,31 @@ export function ConceptDetails({
         </button>
       </nav>
       <div className="detail-body">
+        <label>
+          Linked board
+          <select
+            aria-label="Linked board"
+            disabled={busy}
+            value={activeNode.linkedBoardId ?? ''}
+            onChange={(event) => editNode({ linkedBoardId: event.target.value || undefined })}
+          >
+            <option value="">No board link</option>
+            {activeNode.linkedBoardId &&
+              !linkTargets.some((item) => item.id === activeNode.linkedBoardId) && (
+                <option value={activeNode.linkedBoardId}>
+                  Linked board · {activeNode.linkedBoardId}
+                </option>
+              )}
+            {linkTargets.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {activeNode.linkedBoardId && (
+          <button onClick={() => followLink(activeNode.linkedBoardId!)}>Open linked board</button>
+        )}
         {activeNode.confidence && activeNode.confidence !== 'normal' && (
           <p className="node-caveat">
             <strong>{activeNode.confidence}</strong>:{' '}

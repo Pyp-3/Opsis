@@ -1786,6 +1786,12 @@
   display: grid;
   gap: 0.9rem;
 }
+.board-link-marker {
+  position: absolute;
+  right: 0;
+  top: 0;
+  font-size: 20px;
+}
 .agent-settings label {
   display: grid;
   gap: 0.4rem;
@@ -2049,4 +2055,105 @@
   color: var(--ink-3);
   border: 1px solid var(--line);
   border-radius: 4px;
+}
+.workspace-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.workspace-tabs button {
+  padding: 10px 22px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+  color: var(--ink-2);
+}
+.workspace-tabs button[aria-selected='true'] {
+  background: var(--paper, #fff);
+  color: var(--ink);
+  font-weight: 600;
+}
+.workspace-tabs button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.canvas-and-detail[hidden],
+#chat-panel[hidden] {
+  display: none;
+}
+#chat-panel {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.board-chat {
+  max-width: 960px;
+  margin: auto;
+  padding: 24px;
+}
+.board-chat header p {
+  color: var(--ink-2);
+}
+.chat-thread-controls {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.chat-thread-controls label {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 160px;
+}
+.chat-thread-controls select {
+  width: 100%;
+}
+.chat-messages {
+  min-height: 180px;
+  padding: 16px 0;
+}
+.chat-message {
+  padding: 16px;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.chat-message.user {
+  margin-left: 24px;
+}
+.chat-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-composer {
+  position: sticky;
+  bottom: 0;
+  background: var(--paper, #fff);
+  padding-top: 12px;
+}
+.chat-composer .composer-hint {
+  color: var(--ink-2);
+}
+.collection-actions {
+  padding: 16px 0;
+}
+.collection-actions details {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.collection-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.collection-actions p {
+  max-width: 80ch;
+  color: var(--ink-2);
 }

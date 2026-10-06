@@ -51,6 +51,7 @@ export function describeBoard(id: string, revision: number, board: BoardDocument
       icon: node.icon,
       summary: node.summary,
       explanation: node.explanation,
+      ...(node.linkedBoardId ? { linkedBoardId: node.linkedBoardId } : {}),
       ...(node.confidence ? { confidence: node.confidence } : {}),
       ...(node.terminal ? { command: node.terminal.command } : {}),
     })),
@@ -170,6 +171,7 @@ export function addConcept(snapshot: BoardSnapshot, input: ConceptInput) {
 }
 
 export type ConceptPatch = {
+  linkedBoardId?: string | null | undefined;
   label?: string | undefined;
   summary?: string | undefined;
   explanation?: string | undefined;
@@ -191,6 +193,8 @@ export function updateConcept(snapshot: BoardSnapshot, id: string, patch: Concep
     narration: patch.label !== undefined || patch.summary !== undefined,
     drawing: patch.icon !== undefined && patch.icon !== node.icon,
   });
+  if (patch.linkedBoardId === null) delete updated.linkedBoardId;
+  else if (patch.linkedBoardId !== undefined) updated.linkedBoardId = patch.linkedBoardId;
   return withEdit(snapshot, {
     ...board,
     nodes: board.nodes.map((item) => (item.id === id ? updated : item)),

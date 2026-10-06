@@ -4,7 +4,7 @@
 
 ## Explore and edit a board
 
-Start with an example or ask a question in the composer. Select a concept to read
+Start with an example or ask a question in the **Chat** tab. Select a concept to read
 its explanation. Drag icons to change their positions; use connection ports to
 connect concepts. Select a connection to edit its label, color, or type.
 
@@ -14,11 +14,31 @@ up to 40 past/future states. A drag is one undoable action.
 
 To give the canvas more room, tuck the workspace away: the sidebar button hides the
 sidebar, **The big picture** folds into one line, **Hide canvas tools** shrinks the
-toolbar to a single button, and the composer's minimize arrow turns it into an
-**Ask a follow-up** button. Board menus (**Share**, **Groups**, **Import**, **Export**)
-drop down from the header and close on Escape or a click elsewhere. The toolbar and
-composer choices are remembered on this device. The composer stays open on an empty
-canvas and while an agent is working, and reopens when a suggestion is chosen.
+toolbar to a single button. Prompting lives in **Chat**; **Open chat** and
+**Explore this step** take you there. **Canvas** retains generation activity, draft
+concepts and proposal review. Board menus (**Share**, **Groups**, **Import**, **Export**)
+drop down from the header and close on Escape or a click elsewhere. The toolbar
+choice is remembered on this device. The third workspace tab is reserved for a
+future feature and is disabled.
+
+Chat threads belong to your signed-in account, even on a shared board. They are
+stored with that account on this Opsis instance, separately from board documents
+and exports. Select a saved thread or start a new one. Changing provider or model
+starts a separate thread on the next request; selecting a saved thread restores
+its provider and model. Generation receives the current diagram, your new prompt
+and up to 12 recent messages from that thread. Chat currently creates/refines the
+canvas; it is not a separate general-purpose assistant. A board can hold up to 30
+threads per account, with 80 messages each. Delete older threads or start a new one
+when a limit is reached. Concurrent edits report a conflict instead of overwriting
+another browser's thread; use **Reload threads** to continue.
+
+In a concept's details, choose **Linked board** to connect it to another saved
+board. Linked concepts carry an arrow badge. Double-click one, or choose **Open
+linked board**, to follow it; **Back to previous board** returns to your source.
+The header's **Linked from** menu lists incoming links from boards you may read.
+Private source boards remain hidden from other accounts. Regeneration preserves
+links on concepts whose IDs remain; agents can explicitly set or clear links with
+`opsis_update_concept`.
 
 Agent proposals for an existing board are reviewed before application. Compare
 **Proposed** and **Current**, then choose **Apply reviewed changes** or
@@ -34,6 +54,25 @@ limits and reported usage; **Appearance** keeps the theme controls.
 See [model and canvas controls](P1-CONTROLS.md) for details and limitations.
 
 ## Save and organize projects
+
+Select a regular collection in **Boards**, then open **Share or export**. You can
+make all of its current boards public/private or invite/remove an editor across
+all of them, including archived boards. Adding a board later does not change its
+sharing settings. Making a board private does not revoke existing editor access;
+use the separate removal action. If any board or the collection membership changed
+since your page loaded, the entire sharing action is rejected: refresh and retry.
+
+**Export collection bundle** includes board content, notes, sources and tags, but
+not chat threads, account preferences, credentials or revision history. **Import
+collection bundle** creates a new collection with new private boards and empty
+undo histories. Links between exported boards point to the imported copies; links
+outside the bundle are removed. Bundles support up to 100 boards and 16 MB.
+
+**Export read-only HTML** produces one offline file with diagrams, explanations
+and internal board links. **Print walkthrough / Save PDF** opens the browser's
+print dialog; choose its PDF destination to save a PDF. The HTML file can also be
+opened in a browser and printed. Exports contain the collection's notes and
+sources, so review that content before sharing the resulting file.
 
 Boards autosave. Wait for **Saved** to confirm that the API accepted your changes.
 Use **Manage boards** to create, search, open, rename, or delete boards. Deletion

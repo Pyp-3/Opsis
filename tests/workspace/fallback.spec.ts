@@ -49,6 +49,7 @@ test('saves a fallback copy and switches only with consent without retrying a fa
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   const requests: { agent: string; settings: { model: string } }[] = [];
   await page.route('**/v1/boards/generate', (route) => {

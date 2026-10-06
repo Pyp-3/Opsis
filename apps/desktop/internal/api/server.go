@@ -102,6 +102,7 @@ func New(database string, fallback http.Handler) (*Server, error) {
 	}
 	s.routes()
 	s.providerKeyRoutes()
+	s.linkRoutes()
 	return s, nil
 }
 
@@ -237,6 +238,8 @@ func (s *Server) routes() {
 	s.authRoutes()
 	s.boardRoutes()
 	s.accountSettingsRoutes()
+	s.chatRoutes()
+	s.collectionBundleRoutes()
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Kokoro inference is the only remaining Node service.
 		if s.fallback != nil && (r.URL.Path == "/v1/speech" || strings.HasPrefix(r.URL.Path, "/v1/speech/")) {

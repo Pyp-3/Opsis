@@ -9,6 +9,7 @@ import { NODE_WIDTH } from './model';
 import { wrapLabel } from './geometry';
 
 export type DiagramNode = Node<{
+  linkedBoardId?: string | undefined;
   label: string;
   icon: keyof typeof boardIcons;
   customIcon: CustomIcon | undefined;
@@ -45,6 +46,15 @@ export function IconNode({ data, selected }: NodeProps<DiagramNode>) {
         }
       >
         <NodeIcon node={data} className="node-icon" size={48} strokeWidth={1.35} />
+        {data.linkedBoardId && (
+          <span
+            className="board-link-marker"
+            title="Linked board · double-click to open"
+            aria-label="Links to another board"
+          >
+            ↗
+          </span>
+        )}
         {data.stage && data.sample && (
           <span
             className="process-row-count"
