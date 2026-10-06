@@ -1,4 +1,6 @@
 import { checkAgent } from '../api/src/boards/check-agent';
+import { providerApiClient } from '../api/src/providers/api-client';
+import { providerWorkspaceFiles, providerEnvironment } from '../api/src/harness/provider-workspace';
 import { generateBoard } from '../api/src/boards/generate';
 import { illustrateBoard } from '../api/src/boards/illustrate';
 import { prepareAttachments } from '../api/src/attachments';
@@ -8,7 +10,7 @@ import { extractHarnessResult } from '../api/src/harness/envelope';
 import { progressReader } from '../api/src/harness/progress';
 import { parseVersion } from '../api/src/harness/version';
 import type { BoardClientFactory } from '../api/src/boards/client';
-import type { HarnessFile, LLMRequest } from '../api/src/harness/types';
+import type { HarnessFile, LLMRequest, HarnessConfig } from '../api/src/harness/types';
 import type { HarnessProgress } from '../api/src/harness/progress';
 import {
   DEFAULT_BOARD_MODELS,
@@ -17,6 +19,9 @@ import {
 } from '../../packages/schema/src/index';
 
 declare function nativePrepareClient(agent: string, executablePath: string): string;
+declare function nativeProviderKey(agent: string): string;
+declare function nativeProviderHttp(request: string): string;
+declare function nativeProviderPause(): void;
 declare function nativeComplete(
   request: string,
   argumentsFor: (schemaPath: string, paths: string) => string,
@@ -41,7 +46,11 @@ function result<T>(value: string): T {
       text: string;
       length: number;
     };
-    return { length: decoded.length, toString: () => decoded.text, toJSON: () => decoded.data };
+    return {
+      length: decoded.length,
+      toString: (encoding?: string) => (encoding === 'base64' ? decoded.data : decoded.text),
+      toJSON: () => decoded.data,
+    };
   },
 };
 
@@ -52,10 +61,20 @@ const factory: BoardClientFactory = async (
 ) => {
   const problem = modelSettingsProblem(agent, settings);
   if (problem) throw new Error(problem);
+  if (settings.connection === 'api')
+    return providerApiClient(
+      agent,
+      settings,
+      schema,
+      nativeProviderKey(agent),
+      async (request) => result(nativeProviderHttp(JSON.stringify(request))),
+      async () => nativeProviderPause(),
+    );
+  const provider = agent === 'antigravity' ? 'agy' : agent;
   const prepared = result<{ executable: string; version: string }>(
     nativePrepareClient(agent, settings.executablePath ?? ''),
   );
-  parseVersion(agent, prepared.version);
+  parseVersion(provider, prepared.version);
   return {
     model: settings.model,
     async complete(
@@ -66,9 +85,9 @@ const factory: BoardClientFactory = async (
     ) {
       if (request.system.length + request.user.length > (settings.maxRequestCharacters ?? 768000))
         throw new HarnessError('harness_request_limit');
-      const read = progressReader(agent);
-      const config = {
-        provider: agent,
+      const read = progressReader(provider);
+      const config: HarnessConfig = {
+        provider,
         model: settings.model,
         ...(settings.effort ? { effort: settings.effort } : {}),
         executable: prepared.executable,
@@ -79,19 +98,28 @@ const factory: BoardClientFactory = async (
         nativeComplete(
           JSON.stringify({
             executable: prepared.executable,
-            provider: agent,
+            provider,
             schema,
             request,
             files,
+            workspaceFiles: providerWorkspaceFiles(provider, schema),
+            environment: providerEnvironment(provider),
           }),
           (schemaPath, paths) =>
             JSON.stringify(
-              harnessArguments(config, schemaPath, schema, files, JSON.parse(paths) as string[]),
+              harnessArguments(
+                config,
+                schemaPath,
+                schema,
+                files,
+                JSON.parse(paths) as string[],
+                `${request.system}\n\n${request.user}`,
+              ),
             ),
           (line) => read(line).forEach((progress) => onProgress?.(progress)),
         ),
       );
-      return extractHarnessResult(agent, response.stdout);
+      return extractHarnessResult(provider, response.stdout);
     },
   };
 };
@@ -129,5 +157,7 @@ export async function agents(): Promise<string> {
     }
   }
   agents.push({ id: 'demo', available: true, detail: 'Built-in examples · no agent calls' });
+  for (const id of ['kimi', 'grok', 'antigravity'])
+    agents.push({ id, available: true, detail: 'API · configure this instance’s key in Settings' });
   return JSON.stringify(agents);
 }

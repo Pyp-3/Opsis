@@ -165,6 +165,8 @@ export async function generateBoard(
         message:
           'Request exceeds your character limit, including instructions, diagram, documents and any repair. Increase it in model settings or use a smaller board/request.',
       });
+    if (error instanceof HarnessError && error.code.startsWith('provider_'))
+      return outcome(502, { message: error.message });
     const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
     return outcome(502, {
       message: timeout

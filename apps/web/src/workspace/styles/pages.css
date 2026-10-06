@@ -1782,6 +1782,10 @@
   gap: 0.9rem;
   min-width: 0;
 }
+.instance-key-form {
+  display: grid;
+  gap: 0.9rem;
+}
 .agent-settings label {
   display: grid;
   gap: 0.4rem;

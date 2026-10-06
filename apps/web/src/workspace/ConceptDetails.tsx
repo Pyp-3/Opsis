@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { BoardDocumentSchema, type BoardDocument } from '@opsis/schema';
+import { BoardDocumentSchema, PROVIDER_LABELS, type BoardDocument } from '@opsis/schema';
 import { applyProcessResults } from '@opsis/engine';
 import { TerminalDetails } from './TerminalDetails';
 import { ProcessSampleEditor } from './ProcessSampleEditor';
@@ -365,7 +365,7 @@ export function ConceptDetails({
           <p className="detail-note">
             {board.agent === 'demo'
               ? 'Curated example.'
-              : `Generated with ${board.agent === 'claude' ? 'Claude' : 'Codex'}.`}{' '}
+              : `Generated with ${PROVIDER_LABELS[board.agent]}.`}{' '}
             A simplified explanation — ask your agent to check anything uncertain.
           </p>
         )}

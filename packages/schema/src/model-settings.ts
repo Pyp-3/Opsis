@@ -1,9 +1,27 @@
 import { z } from 'zod';
 
-export const BoardAgentSchema = z.enum(['claude', 'codex', 'demo']);
+export const BOARD_PROVIDERS = ['claude', 'codex', 'kimi', 'grok', 'antigravity'] as const;
+export const ProviderAgentSchema = z.enum(BOARD_PROVIDERS);
+export type ProviderAgent = z.infer<typeof ProviderAgentSchema>;
+export const PROVIDER_LABELS: Record<ProviderAgent, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  kimi: 'Kimi',
+  grok: 'Grok',
+  antigravity: 'Antigravity',
+};
+export const BoardAgentSchema = z.enum([...BOARD_PROVIDERS, 'demo']);
+/** Instance secret. Never put this in account preferences or saved board data. */
+export const ProviderApiKeySchema = z
+  .string()
+  .min(1)
+  .max(4096)
+  .regex(/^[\x21-\x7e]+$/);
 export type BoardAgent = z.infer<typeof BoardAgentSchema>;
 export const BoardModelSettingsSchema = z
   .object({
+    connection: z.enum(['cli', 'api']).optional(),
+    maxOutputTokens: z.number().int().min(256).max(64000).optional(),
     model: z
       .string()
       .min(1)
@@ -24,9 +42,12 @@ export const BoardModelSettingsSchema = z
   })
   .strict();
 export type BoardModelSettings = z.infer<typeof BoardModelSettingsSchema>;
-export const DEFAULT_BOARD_MODELS: Record<'claude' | 'codex', BoardModelSettings> = {
+export const DEFAULT_BOARD_MODELS: Record<ProviderAgent, BoardModelSettings> = {
   claude: { model: 'haiku', effort: 'low' },
   codex: { model: 'gpt-6-luna', effort: 'low' },
+  kimi: { model: 'kimi-k3', effort: 'low', connection: 'api' },
+  grok: { model: 'grok-4.7', effort: 'low', connection: 'api' },
+  antigravity: { model: 'gemini-3.8-flash', effort: 'low', connection: 'api' },
 };
 /**
  * Model picker choices, newest first. Checked against the catalogues shipped with
@@ -34,7 +55,7 @@ export const DEFAULT_BOARD_MODELS: Record<'claude' | 'codex', BoardModelSettings
  * levels a model accepts when it is narrower than the full range.
  */
 export const BOARD_MODEL_CHOICES: Record<
-  'claude' | 'codex',
+  ProviderAgent,
   readonly {
     id: string;
     label: string;
@@ -42,6 +63,17 @@ export const BOARD_MODEL_CHOICES: Record<
     efforts?: readonly BoardModelSettings['effort'][];
   }[]
 > = {
+  kimi: [{ id: 'kimi-k3', label: 'Kimi K3', group: 'Kimi', efforts: ['low', 'high', 'max'] }],
+  grok: [{ id: 'grok-4.7', label: 'Grok 4.7', group: 'Grok', efforts: ['low'] }],
+  antigravity: [
+    {
+      id: 'gemini-3.8-flash-medium',
+      label: 'Gemini 3.8 Flash Medium · CLI',
+      group: 'Antigravity CLI',
+      efforts: ['low'],
+    },
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', group: 'Antigravity', efforts: ['low'] },
+  ],
   claude: [
     { id: 'claude-fable-5-1', label: 'Fable 5.1', group: 'Latest' },
     { id: 'claude-opus-5-5', label: 'Opus 5.5', group: 'Latest' },
@@ -79,10 +111,27 @@ export const BOARD_MODEL_CHOICES: Record<
 
 /** Known incompatible effort choices fail before any provider request. Custom IDs remain explicit. */
 export function modelSettingsProblem(
-  agent: 'claude' | 'codex',
+  agent: ProviderAgent,
   settings: BoardModelSettings,
 ): string | null {
   if (settings.model === 'default') return 'Choose an explicit model.';
+  if (settings.connection === 'api' && (agent === 'claude' || agent === 'codex'))
+    return 'This agent currently uses its CLI connection.';
+  if (
+    settings.maxOutputTokens !== undefined &&
+    (settings.connection !== 'api' || agent === 'antigravity')
+  )
+    return 'This connection does not support an output-token cap.';
+  if (['grok', 'antigravity'].includes(agent) && settings.effort !== 'low')
+    return 'This connection uses the model’s built-in reasoning configuration.';
+  if (agent === 'kimi' && settings.connection !== 'api' && settings.effort !== 'low')
+    return 'Kimi CLI uses its built-in reasoning configuration.';
+  if (
+    agent === 'kimi' &&
+    settings.connection === 'api' &&
+    !['low', 'high', 'max'].includes(settings.effort)
+  )
+    return 'Kimi API supports low, high or max reasoning effort.';
   const allowed = BOARD_MODEL_CHOICES[agent].find(
     (choice) => choice.id === settings.model,
   )?.efforts;

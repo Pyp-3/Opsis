@@ -1,5 +1,6 @@
 import { ModelSettingsPanel } from './ModelSettingsPanel';
 import { CostProjectionPanel } from './CostProjectionPanel';
+import { ApiKeysPanel } from './ApiKeysPanel';
 import type { ModelPreferences } from './model-settings';
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, Check, Monitor, Moon, Paintbrush, RotateCcw, Sun, Type } from 'lucide-react';
@@ -31,7 +32,7 @@ export function SettingsPage({
   preferences: ModelPreferences;
   onChange: (value: ModelPreferences) => void;
 }) {
-  const [section, setSection] = useState<'models' | 'appearance' | 'cost'>('models');
+  const [section, setSection] = useState<'models' | 'appearance' | 'cost' | 'keys'>('models');
   const [theme, setThemeState] = useState<AppTheme>(() => readAppTheme());
   useEffect(() => {
     document.title = 'Settings · Opsis';
@@ -62,6 +63,9 @@ export function SettingsPage({
       </header>
 
       <div className="settings-sections" role="group" aria-label="Settings sections">
+        <button aria-pressed={section === 'keys'} onClick={() => setSection('keys')}>
+          API keys
+        </button>
         <button aria-pressed={section === 'models'} onClick={() => setSection('models')}>
           Agents and models
         </button>
@@ -74,6 +78,7 @@ export function SettingsPage({
       </div>
       {section === 'models' && <ModelSettingsPanel preferences={preferences} onChange={onChange} />}
       {section === 'cost' && <CostProjectionPanel />}
+      {section === 'keys' && <ApiKeysPanel />}
       {section === 'appearance' && (
         <div className="settings-layout">
           <div className="settings-forms">

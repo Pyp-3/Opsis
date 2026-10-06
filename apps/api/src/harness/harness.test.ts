@@ -60,7 +60,7 @@ describe('sanitized harness envelopes', () => {
   it.each([
     ['claude', 'claude-2.1.281.json', 'claude fixture'],
     ['codex', 'codex-0.156.0.jsonl', 'codex fixture'],
-    ['agy', 'agy-1.2.9.json', 'agy fixture'],
+    ['agy', 'agy-1.3.0.jsonl', 'agy fixture'],
   ] as const)('extracts %s JSON-only output', async (provider, name, answer) => {
     expect(JSON.parse(extractHarnessResult(provider, await fixture(name)))).toEqual({ answer });
   });
@@ -70,9 +70,12 @@ describe('sanitized harness envelopes', () => {
     expect(() => extractHarnessResult('codex', '{"type":"turn.completed"}')).toThrowError(
       /harness_malformed/u,
     );
-    expect(() => extractHarnessResult('agy', '{"is_error":false,"result":"[1,2]"}')).toThrowError(
-      /harness_schema/u,
-    );
+    expect(() =>
+      extractHarnessResult(
+        'agy',
+        '{"event":"result","result":{"status":"SUCCESS","response":"[1,2]"}}',
+      ),
+    ).toThrowError(/harness_schema/u);
   });
 });
 
@@ -104,7 +107,6 @@ describe('HarnessLLMClient', () => {
   it.each([
     ['claude', 'claude-2.1.281.json'],
     ['codex', 'codex-0.156.0.jsonl'],
-    ['agy', 'agy-1.2.9.json'],
   ] as const)(
     'uses the audited %s argv and keeps prompts only on bounded stdin',
     async (provider, name) => {
@@ -251,7 +253,7 @@ describe('harness configuration', () => {
     ['claude', 'claude 2.1.281', '2.1.281'],
     ['codex', 'codex-cli 0.156.0', '0.156.0'],
     ['codex', 'codex-cli 0.159.3', '0.159.3'],
-    ['agy', 'agy 1.2.9', '1.2.9'],
+    ['agy', 'agy 1.3.0', '1.3.0'],
   ] as const)(
     'accepts only the audited %s version family at startup',
     async (provider, output, version) => {

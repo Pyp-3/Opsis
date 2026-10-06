@@ -1,7 +1,8 @@
-import { chmod, mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, realpath, rm, stat, writeFile, readdir } from 'node:fs/promises';
 import { accessSync, constants } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { tmpdir, homedir } from 'node:os';
+import { providerWorkspaceFiles, providerEnvironment } from './provider-workspace';
+import { join, dirname } from 'node:path';
 import type { LLMClient, LLMRequest } from './types.js';
 import { HarnessError } from './errors.js';
 import { harnessArguments } from './arguments.js';
@@ -127,11 +128,45 @@ export class HarnessLLMClient implements LLMClient {
     files: readonly HarnessFile[] = [],
     onProgress?: (progress: HarnessProgress) => void,
   ): Promise<string> {
+    if (this.config.provider === 'agy' && files.length)
+      throw new HarnessError('provider_attachment');
+    if (this.config.provider === 'grok') {
+      if (files.length) throw new HarnessError('provider_attachment');
+      const entries = await readdir(
+        join(this.env.USERPROFILE || this.env.HOME || homedir(), '.grok'),
+      ).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw new HarnessError('harness_config');
+      });
+      if (
+        entries.some(
+          (name) => !['auth.json', 'sessions', 'logs', 'downloads', 'bin', 'cache'].includes(name),
+        )
+      )
+        throw new HarnessError('harness_config');
+    }
+    if (this.config.provider === 'kimi') {
+      if (files.length) throw new HarnessError('provider_attachment');
+      // Kimi 1.52 loads user plugin tools even with tools:[]; never run with them installed.
+      const plugins = await readdir(
+        join(this.env.USERPROFILE || this.env.HOME || homedir(), '.kimi', 'plugins'),
+      ).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw new HarnessError('harness_config');
+      });
+      if (plugins.length) throw new HarnessError('harness_config');
+    }
     return harnessSlots.use(async () => {
       try {
         const workspace = await (this.workspaceFactory?.() ??
           privateHarnessWorkspace(this.resultSchema));
         try {
+          for (const [name, content] of Object.entries(
+            providerWorkspaceFiles(this.config.provider, this.resultSchema),
+          )) {
+            await mkdir(dirname(join(workspace.directory, name)), { recursive: true, mode: 0o700 });
+            await writeFile(join(workspace.directory, name), content, { mode: 0o600, flag: 'wx' });
+          }
           const paths = await stageFiles(workspace.directory, files);
           const result = await this.runner.run({
             executable: this.config.executable,
@@ -141,10 +176,24 @@ export class HarnessLLMClient implements LLMClient {
               this.resultSchema,
               files,
               paths,
+              prompt(request),
             ),
-            stdin: prompt(request),
+            stdin:
+              this.config.provider === 'grok'
+                ? ''
+                : this.config.provider === 'agy'
+                  ? JSON.stringify({ event: 'user', message: { content: prompt(request) } }) + '\n'
+                  : prompt(request),
             cwd: workspace.directory,
-            env: childEnvironment(this.env),
+            env: {
+              ...childEnvironment(this.env),
+              ...Object.fromEntries(
+                Object.entries(providerEnvironment(this.config.provider)).map(([key, value]) => [
+                  key,
+                  value === '.' ? workspace.directory : value,
+                ]),
+              ),
+            },
             timeoutMs: this.config.timeoutMs,
             maxStdinBytes: MAX_STDIN_BYTES,
             maxStdoutBytes: this.config.provider === 'claude' ? MAX_STREAM_BYTES : MAX_STDOUT_BYTES,

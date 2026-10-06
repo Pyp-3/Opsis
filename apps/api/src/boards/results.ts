@@ -1,5 +1,6 @@
 import {
   CustomIconSchema,
+  PROVIDER_LABELS,
   IllustrationSchema,
   type BoardAgent,
   type Illustration,
@@ -17,8 +18,7 @@ export function envelopeRepairPrompt(error: unknown, attempt: number): string {
   throw error;
 }
 
-export const agentLabel = (agent: Exclude<BoardAgent, 'demo'>) =>
-  agent === 'claude' ? 'Claude' : 'Codex';
+export const agentLabel = (agent: Exclude<BoardAgent, 'demo'>) => PROVIDER_LABELS[agent];
 
 /**
  * A custom icon is presentation with a library icon to fall back on, so a malformed drawing is

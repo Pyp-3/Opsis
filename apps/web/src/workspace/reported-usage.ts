@@ -1,4 +1,4 @@
-import type { BoardModelSettings, ReportedUsage, UsageRecord } from '@opsis/schema';
+import type { BoardModelSettings, ReportedUsage, UsageRecord, ProviderAgent } from '@opsis/schema';
 import { accountUsage, addAccountUsage, clearAccountUsage } from './account-settings';
 
 export type UsageEntry = UsageRecord;
@@ -6,7 +6,7 @@ export function readReportedUsage(): UsageEntry[] {
   return accountUsage();
 }
 export function recordReportedUsage(
-  agent: 'claude' | 'codex',
+  agent: ProviderAgent,
   settings: BoardModelSettings,
   attempts: ReportedUsage[],
   purpose: UsageEntry['purpose'],

@@ -1,7 +1,7 @@
 import type { HarnessProgress } from './progress.js';
 
 /** CLI harnesses audited for use as local LLM providers. */
-export type HarnessProvider = 'claude' | 'codex' | 'agy';
+export type HarnessProvider = 'claude' | 'codex' | 'agy' | 'kimi' | 'grok';
 
 /** Validated, non-secret configuration for one CLI harness. */
 export type HarnessConfig = {

@@ -67,6 +67,21 @@ function extractCodex(stdout: string): string {
 
 /** Extracts and canonicalizes the JSON-only final result from a sanitized CLI envelope. */
 export function extractHarnessResult(provider: HarnessProvider, stdout: string): string {
+  if (provider === 'agy') {
+    const events = stdout
+      .split(/\r?\n/u)
+      .filter((line) => line.trim())
+      .map(jsonObject);
+    const envelope = events.filter((event) => event.event === 'result').at(-1)?.result;
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope))
+      throw new HarnessError('harness_malformed');
+    const result = envelope as Record<string, unknown>;
+    if (result.status !== 'SUCCESS') throw new HarnessError('harness_exit');
+    const text = resultText(result.structured_output) ?? resultText(result.response);
+    if (text === null) throw new HarnessError('harness_malformed');
+    return JSON.stringify(jsonObject(text));
+  }
+  if (provider === 'kimi' || provider === 'grok') return JSON.stringify(jsonObject(stdout));
   const text = provider === 'codex' ? extractCodex(stdout) : extractClaudeLike(stdout);
   return JSON.stringify(jsonObject(text));
 }

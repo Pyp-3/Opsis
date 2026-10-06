@@ -34,6 +34,11 @@ export function registerBoardRoutes(
       );
       const value = [
         ...agents,
+        ...(['kimi', 'grok', 'antigravity'] as const).map((id) => ({
+          id,
+          available: true,
+          detail: 'API · configure this instance’s key in Settings',
+        })),
         { id: 'demo', available: true, detail: 'Built-in examples · no agent calls' },
       ];
       agentCache = { value, expires: Date.now() + 30_000 };

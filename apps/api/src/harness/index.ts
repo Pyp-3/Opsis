@@ -17,6 +17,8 @@ const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
   claude: ['/home/pyp/.local/bin/claude'],
   codex: ['/usr/bin/codex'],
   agy: ['/home/pyp/.local/bin/agy'],
+  kimi: [],
+  grok: [],
 };
 
 export type CreateHarnessOptions = {
@@ -53,9 +55,10 @@ export async function createHarnessLLMClient(
         };
       })();
   try {
-    const result = await runner.run(
-      versionRunRequest(executable, workspace.directory, options.processEnv),
-    );
+    const result = await runner.run({
+      ...versionRunRequest(executable, workspace.directory, options.processEnv),
+      args: config.provider === 'grok' ? ['version'] : ['--version'],
+    });
     if (result.exitCode !== 0) throw new HarnessError('harness_exit');
     const version = parseVersion(config.provider, result.stdout);
     return new HarnessLLMClient(

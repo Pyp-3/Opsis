@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { readModelProfiles } from './model-profiles';
 import { accountSetting } from './account-settings';
-import { DEFAULT_BOARD_MODELS } from '@opsis/schema';
+import { DEFAULT_BOARD_MODELS, BOARD_PROVIDERS, PROVIDER_LABELS } from '@opsis/schema';
 import type { FormEvent, RefObject } from 'react';
 import {
   ArrowUp,
@@ -88,7 +88,7 @@ export function BoardComposer({
   const suggestion =
     agent === 'demo'
       ? null
-      : task === 'branches'
+      : task === 'branches' && (agent === 'claude' || agent === 'codex')
         ? {
             model: agent === 'claude' ? 'sonnet' : DEFAULT_BOARD_MODELS.codex.model,
             effort: 'medium' as const,
@@ -354,8 +354,11 @@ export function BoardComposer({
             disabled={busy}
             onChange={(event) => setAgent(event.target.value as BoardAgent)}
           >
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
+            {BOARD_PROVIDERS.map((id) => (
+              <option key={id} value={id}>
+                {PROVIDER_LABELS[id]}
+              </option>
+            ))}
             <option value="demo">Demo · built-in examples</option>
           </select>
         </label>
@@ -383,7 +386,12 @@ export function BoardComposer({
           ) : localTerminalExample ? (
             'Local terminal example · no agent call'
           ) : (
-            connectionError || status?.detail || 'Checking local agent…'
+            connectionError ||
+            (modelPreferences[agent].connection === 'api'
+              ? 'Official API · uses this instance’s key'
+              : ['kimi', 'grok', 'antigravity'].includes(agent)
+                ? 'Installed CLI · check configuration in Settings'
+                : status?.detail || 'Checking local agent…')
           )}
         </span>
         {providerTracked && provider.status && (

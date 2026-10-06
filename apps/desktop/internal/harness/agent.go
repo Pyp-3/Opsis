@@ -32,7 +32,7 @@ func ResolveAgent(agent string) (string, error) {
 	return ResolveAgentPath(agent, "")
 }
 func ResolveAgentPath(agent, configuredPath string) (string, error) {
-	if agent != "claude" && agent != "codex" {
+	if agent != "claude" && agent != "codex" && agent != "kimi" && agent != "grok" && agent != "antigravity" {
 		return "", Error("harness_config")
 	}
 	// Windows has no POSIX mode bits (Go reports 0666), and extensionless npm
@@ -70,6 +70,9 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 		packageName = "@anthropic-ai/claude-code"
 	}
 	npmEntry := func(directory string) (string, bool) {
+		if agent == "kimi" || agent == "grok" || agent == "antigravity" {
+			return "", false
+		}
 		root := filepath.Join(directory, "node_modules", packageName)
 		content, err := os.ReadFile(filepath.Join(root, "package.json"))
 		if err != nil {
@@ -129,6 +132,10 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 	}
 	home, _ := os.UserHomeDir()
 	directories := append(filepath.SplitList(os.Getenv("PATH")), filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", filepath.Join(home, ".npm-global/bin"))
+	directories = append(directories, filepath.Join(home, ".grok", "bin"))
+	if os.Getenv("LOCALAPPDATA") != "" {
+		directories = append(directories, filepath.Join(os.Getenv("LOCALAPPDATA"), "agy", "bin"))
+	}
 	if windows && os.Getenv("APPDATA") != "" {
 		directories = append(directories, filepath.Join(os.Getenv("APPDATA"), "npm"))
 	}
@@ -137,6 +144,9 @@ func ResolveAgentPath(agent, configuredPath string) (string, error) {
 			continue
 		}
 		name := agent
+		if agent == "antigravity" {
+			name = "agy"
+		}
 		if windows {
 			name += ".exe"
 		}
@@ -163,7 +173,11 @@ func ProbePath(ctx context.Context, runner Runner, agent, configuredPath string)
 		return "", "", Error("harness_missing")
 	}
 	defer os.RemoveAll(directory)
-	output, err := runner.Run(ctx, Request{Executable: executable, Args: []string{"--version"}, Directory: directory, Environment: ChildEnvironment(), Timeout: 5 * time.Second, MaxInput: 768 * 1024, MaxOutput: 4096, MaxError: 4096}, nil)
+	args := []string{"--version"}
+	if agent == "grok" {
+		args = []string{"version"}
+	}
+	output, err := runner.Run(ctx, Request{Executable: executable, Args: args, Directory: directory, Environment: ChildEnvironment(), Timeout: 5 * time.Second, MaxInput: 768 * 1024, MaxOutput: 4096, MaxError: 4096}, nil)
 	return executable, output, err
 }
 
@@ -180,15 +194,58 @@ type Completion struct {
 		System string `json:"system"`
 		User   string `json:"user"`
 	} `json:"request"`
-	Files []File `json:"files"`
+	Files          []File            `json:"files"`
+	WorkspaceFiles map[string]string `json:"workspaceFiles"`
+	Environment    map[string]string `json:"environment"`
 }
 
 func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor func(string, []string) ([]string, error), onLine func(string)) (string, error) {
+	if input.Provider == "agy" && len(input.Files) > 0 {
+		return "", Error("provider_attachment")
+	}
+	if input.Provider == "grok" {
+		if len(input.Files) > 0 {
+			return "", Error("provider_attachment")
+		}
+		home, _ := os.UserHomeDir()
+		entries, err := os.ReadDir(filepath.Join(home, ".grok"))
+		if err != nil && !os.IsNotExist(err) {
+			return "", Error("harness_config")
+		}
+		for _, entry := range entries {
+			switch entry.Name() {
+			case "auth.json", "sessions", "logs", "downloads", "bin", "cache":
+			default:
+				return "", Error("harness_config")
+			}
+		}
+	}
+	if input.Provider == "kimi" {
+		if len(input.Files) > 0 {
+			return "", Error("provider_attachment")
+		}
+		home, _ := os.UserHomeDir()
+		entries, err := os.ReadDir(filepath.Join(home, ".kimi", "plugins"))
+		if (err != nil && !os.IsNotExist(err)) || len(entries) > 0 {
+			return "", Error("harness_config")
+		}
+	}
 	directory, err := os.MkdirTemp("", "opsis-harness-")
 	if err != nil {
 		return "", Error("harness_exit")
 	}
 	defer os.RemoveAll(directory)
+	for name, content := range input.WorkspaceFiles {
+		if (filepath.Base(name) != name && name != ".gemini/antigravity-cli/settings.json") || name == "." || name == ".." || len(content) > 1_000_000 {
+			return "", Error("harness_config")
+		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(directory, name)), 0700); err != nil {
+			return "", Error("harness_exit")
+		}
+		if err := os.WriteFile(filepath.Join(directory, name), []byte(content), 0600); err != nil {
+			return "", Error("harness_exit")
+		}
+	}
 	schemaPath := filepath.Join(directory, "response-schema.json")
 	if err := os.WriteFile(schemaPath, []byte(input.Schema), 0600); err != nil {
 		return "", Error("harness_exit")
@@ -224,7 +281,30 @@ func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor
 	if input.Provider == "claude" {
 		limit = 32 * 1024 * 1024
 	}
-	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: input.Request.System + "\n\n" + input.Request.User, Directory: directory, Environment: ChildEnvironment(), Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
+	environment := ChildEnvironment()
+	for key, value := range input.Environment {
+		if value == "." && input.Provider == "agy" && (key == "HOME" || key == "USERPROFILE" || key == "APPDATA" || key == "LOCALAPPDATA" || key == "XDG_CONFIG_HOME" || key == "XDG_DATA_HOME") {
+			value = directory
+		} else if !strings.HasPrefix(key, "GROK_") || value != "0" {
+			return "", Error("harness_config")
+		}
+		filtered := []string{}
+		for _, entry := range environment {
+			if !strings.HasPrefix(entry, key+"=") {
+				filtered = append(filtered, entry)
+			}
+		}
+		environment = append(filtered, key+"="+value)
+	}
+	stdin := input.Request.System + "\n\n" + input.Request.User
+	if input.Provider == "grok" {
+		stdin = ""
+	}
+	if input.Provider == "agy" {
+		encoded, _ := json.Marshal(map[string]any{"event": "user", "message": map[string]string{"content": stdin}})
+		stdin = string(encoded) + "\n"
+	}
+	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: stdin, Directory: directory, Environment: environment, Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
 }
 
 func NodePath(directory string) string {

@@ -1,4 +1,5 @@
 import { LegacyBatchReview } from './LegacyBatchReview';
+import { PROVIDER_LABELS } from '@opsis/schema';
 import { BoardSharing } from './BoardSharing';
 import { BoardGroups, GroupBoundaries, GroupsSummary } from './BoardGroups';
 import { useRememberedOpen } from './useRememberedOpen';
@@ -409,7 +410,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     // Provider mode: stop before a call the agent has no remaining window for.
     if (callsAgent && providerStatus?.blocked) {
       setError(
-        `${agent === 'claude' ? 'Claude' : 'Codex'} has reached its ${providerStatus.reason.toLowerCase()}. It will be available again when the window resets.`,
+        `${PROVIDER_LABELS[agent]} has reached its ${providerStatus.reason.toLowerCase()}. It will be available again when the window resets.`,
       );
       return;
     }
@@ -1173,7 +1174,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 <AgentActivity
                   activity={generation.activity}
                   elapsed={generation.elapsed}
-                  agent={agent === 'claude' ? 'Claude' : agent === 'codex' ? 'Codex' : 'Demo'}
+                  agent={agent === 'demo' ? 'Demo' : PROVIDER_LABELS[agent]}
                 />
               )}
               {board && playerOpen ? (

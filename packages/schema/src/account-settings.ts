@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BoardModelSettingsSchema } from './model-settings';
+import { BoardModelSettingsSchema, ProviderAgentSchema } from './model-settings';
 import { ReportedUsageSchema } from './provider-usage';
 import { CostProjectionSettingsSchema } from './cost-projection';
 
@@ -7,7 +7,6 @@ import { CostProjectionSettingsSchema } from './cost-projection';
  * Preferences that follow an account across browsers and devices. Each key has its own
  * bounded value schema; hosts store the validated JSON and never interpret it further.
  */
-const ProviderAgentSchema = z.enum(['claude', 'codex']);
 const capSchema = z.number().int().min(0).max(100_000);
 
 export const ModelProfileSchema = z
@@ -27,6 +26,9 @@ export const ACCOUNT_SETTING_SCHEMAS = {
     .object({
       claude: ModelProfileSchema.optional(),
       codex: ModelProfileSchema.optional(),
+      kimi: ModelProfileSchema.optional(),
+      grok: ModelProfileSchema.optional(),
+      antigravity: ModelProfileSchema.optional(),
     })
     .strict(),
   'cost-projection': CostProjectionSettingsSchema,
@@ -35,6 +37,9 @@ export const ACCOUNT_SETTING_SCHEMAS = {
     .object({
       claude: BoardModelSettingsSchema.optional(),
       codex: BoardModelSettingsSchema.optional(),
+      kimi: BoardModelSettingsSchema.optional(),
+      grok: BoardModelSettingsSchema.optional(),
+      antigravity: BoardModelSettingsSchema.optional(),
     })
     .strict(),
   'model-profiles': z.array(ModelProfileSchema).max(MAX_MODEL_PROFILES),
@@ -46,6 +51,9 @@ export const ACCOUNT_SETTING_SCHEMAS = {
         .object({
           claude: z.object({ fiveHour: capSchema, weekly: capSchema }).strict(),
           codex: z.object({ fiveHour: capSchema, weekly: capSchema }).strict(),
+          kimi: z.object({ fiveHour: capSchema, weekly: capSchema }).strict().optional(),
+          grok: z.object({ fiveHour: capSchema, weekly: capSchema }).strict().optional(),
+          antigravity: z.object({ fiveHour: capSchema, weekly: capSchema }).strict().optional(),
         })
         .strict(),
     })
@@ -55,6 +63,9 @@ export const ACCOUNT_SETTING_SCHEMAS = {
     .object({
       claude: z.array(z.number().finite()).max(1000),
       codex: z.array(z.number().finite()).max(1000),
+      kimi: z.array(z.number().finite()).max(1000).optional(),
+      grok: z.array(z.number().finite()).max(1000).optional(),
+      antigravity: z.array(z.number().finite()).max(1000).optional(),
     })
     .strict(),
 } as const;

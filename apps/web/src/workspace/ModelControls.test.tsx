@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelControls } from './ModelControls';
+import { DEFAULT_BOARD_MODELS } from '@opsis/schema';
 import { readModelPreferences, saveModelPreferences } from './model-settings';
 
 afterEach(() => {
@@ -11,12 +12,14 @@ afterEach(() => {
 describe('model configuration', () => {
   it('defaults to economical models rather than account defaults', () => {
     expect(readModelPreferences()).toEqual({
+      ...DEFAULT_BOARD_MODELS,
       claude: { model: 'haiku', effort: 'low' },
       codex: { model: 'gpt-6-luna', effort: 'low' },
     });
   });
   it('restores separate settings for each provider', async () => {
     await saveModelPreferences({
+      ...DEFAULT_BOARD_MODELS,
       claude: { model: 'sonnet', effort: 'medium' },
       codex: { model: 'gpt-6-luna', effort: 'high' },
     });

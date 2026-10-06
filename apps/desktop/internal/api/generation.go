@@ -12,6 +12,7 @@ import (
 )
 
 func (s *Server) EnableGeneration(engine *generation.Engine) {
+	engine.ProviderKeys = s.providerKeys
 	s.handle("GET /v1/agents", func(w http.ResponseWriter, r *http.Request) error {
 		if _, err := requireUser(r); err != nil {
 			return err

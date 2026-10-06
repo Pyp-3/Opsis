@@ -10,7 +10,7 @@ export const HARNESS_ENV = {
 } as const;
 
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/u;
-const PROVIDERS = new Set<HarnessProvider>(['claude', 'codex', 'agy']);
+const PROVIDERS = new Set<HarnessProvider>(['claude', 'codex', 'agy', 'kimi', 'grok']);
 
 /** Reads and validates harness settings, returning null for non-harness providers. */
 export function readHarnessConfig(

@@ -9,10 +9,29 @@ export function reportedUsage(
   provider: HarnessProvider,
   event: Record<string, unknown>,
 ): ReportedUsage | null {
+  if (provider === 'agy') {
+    const result =
+      event.event === 'result' && event.result && typeof event.result === 'object'
+        ? (event.result as Record<string, unknown>)
+        : null;
+    if (!result || result.status !== 'SUCCESS') return null;
+    const usage =
+      result.usage && typeof result.usage === 'object'
+        ? (result.usage as Record<string, unknown>)
+        : {};
+    return {
+      inputTokens: count(usage.input_tokens),
+      outputTokens: count(usage.output_tokens),
+      cachedInputTokens: count(usage.cache_read_tokens),
+      cacheWriteTokens: null,
+      estimatedCostUSD: null,
+    };
+  }
   if (
     (provider === 'codex' && event.type !== 'turn.completed') ||
     (provider === 'claude' && event.type !== 'result') ||
-    provider === 'agy'
+    provider === 'kimi' ||
+    provider === 'grok'
   )
     return null;
   const usage =

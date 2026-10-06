@@ -119,6 +119,8 @@ export async function illustrateBoard(
         'The agent’s drawings were invalid after one repair attempt. Your icons are unchanged.',
     });
   } catch (error) {
+    if (error instanceof HarnessError && error.code.startsWith('provider_'))
+      return outcome(502, { message: error.message });
     if (error instanceof HarnessError && error.code === 'harness_request_limit')
       return outcome(400, {
         message:

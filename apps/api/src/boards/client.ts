@@ -13,6 +13,8 @@ import {
   type HarnessProgress,
 } from '../harness/index.js';
 import { resolveAgentExecutable } from '../cli-executable.js';
+import { providerApiClient } from '../providers/api-client';
+import { providerHttp, providerPause, withProviderSlot } from '../providers/http';
 
 export type BoardClient = LLMClient & {
   complete(
@@ -27,14 +29,35 @@ export type BoardClientFactory = (
   settings?: BoardModelSettings,
   /** The JSON schema the agent's answer must match; diagrams by default. */
   resultSchema?: string,
+  apiKey?: string,
 ) => Promise<BoardClient>;
 export const localBoardClient: BoardClientFactory = async (
   agent,
   settings = DEFAULT_BOARD_MODELS[agent],
   resultSchema = boardOutputSchema,
+  apiKey,
 ) => {
   const problem = modelSettingsProblem(agent, settings);
   if (problem) throw new Error(problem);
+  if (settings.connection === 'api') {
+    const api = providerApiClient(
+      agent,
+      settings,
+      resultSchema,
+      apiKey,
+      providerHttp,
+      providerPause,
+    );
+    return {
+      model: api.model,
+      complete: (
+        request: LLMRequest,
+        signal?: AbortSignal,
+        files?: readonly HarnessFile[],
+        progress?: (value: HarnessProgress) => void,
+      ) => withProviderSlot(() => api.complete(request, signal, files, progress)),
+    };
+  }
   const executable = await resolveAgentExecutable(
     agent,
     settings.executablePath
@@ -43,7 +66,7 @@ export const localBoardClient: BoardClientFactory = async (
   );
   const client = await createHarnessLLMClient(
     {
-      OPSIS_LLM_PROVIDER: `harness:${agent}`,
+      OPSIS_LLM_PROVIDER: `harness:${agent === 'antigravity' ? 'agy' : agent}`,
       OPSIS_LLM_MODEL: settings.model,
       OPSIS_LLM_EFFORT: settings.effort,
       OPSIS_HARNESS_BIN: executable,

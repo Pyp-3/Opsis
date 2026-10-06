@@ -274,11 +274,14 @@ Use `Opsis.app/Contents/MacOS/opsis` for MCP and diagnostic commands.
 
 The embedded JavaScript VMs execute fixed bundled code, not code from boards or
 providers. They have no general filesystem, process or network APIs. Go exposes
-only the operations needed by the shared workflow/tool modules. This preserves a
+only the operations needed by the shared workflow/tool modules, including bounded
+HTTP requests to fixed official provider origins. Instance API keys stay in a
+separate host-owned secret file; see [provider setup](PROVIDERS.md). This preserves a
 single contract implementation and avoids a second independent schema in Go.
 
 The speech adapter is an explicit retained dependency, not a Go reimplementation
 of Kokoro. Native save dialogs and clipboard still need an interactive desktop
 check; automated smoke tests do not open dialogs or overwrite the user's clipboard.
-No paid-provider entitlement, Authenticode-signed Windows releases, macOS desktop,
-or Linux arm64 validation is claimed by this migration.
+No paid-provider entitlement, trusted release signing or Linux arm64 validation
+is claimed. Both macOS architectures have hosted CI coverage, with interactive
+verification still outstanding.

@@ -4,8 +4,11 @@ import { homedir } from 'node:os';
 import { posix, win32 } from 'node:path';
 import { HarnessError } from './harness/errors.js';
 
-type Agent = 'claude' | 'codex';
-const PACKAGES = { claude: '@anthropic-ai/claude-code', codex: '@openai/codex' };
+type Agent = 'claude' | 'codex' | 'kimi' | 'grok' | 'antigravity';
+const PACKAGES: Partial<Record<Agent, string>> = {
+  claude: '@anthropic-ai/claude-code',
+  codex: '@openai/codex',
+};
 
 export type DiscoveryOptions = {
   env?: NodeJS.ProcessEnv;
@@ -22,6 +25,7 @@ export async function resolveAgentExecutable(agent: Agent, options: DiscoveryOpt
   const value = (name: string) =>
     Object.entries(env).find(([key]) => key.toUpperCase() === name.toUpperCase())?.[1];
   const override = value(`OPSIS_${agent.toUpperCase()}_BIN`)?.trim();
+  const command = agent === 'antigravity' ? 'agy' : agent;
 
   const usable = async (file: string) => {
     try {
@@ -36,7 +40,9 @@ export async function resolveAgentExecutable(agent: Agent, options: DiscoveryOpt
     }
   };
   const npmEntry = async (directory: string) => {
-    const root = paths.join(directory, 'node_modules', PACKAGES[agent]);
+    const packageName = PACKAGES[agent];
+    if (!packageName) return;
+    const root = paths.join(directory, 'node_modules', packageName);
     try {
       const manifest = JSON.parse(await readFile(paths.join(root, 'package.json'), 'utf8')) as {
         bin?: string | Record<string, string>;
@@ -72,6 +78,8 @@ export async function resolveAgentExecutable(agent: Agent, options: DiscoveryOpt
   const directories = [
     ...(value('PATH') ?? '').split(platform === 'win32' ? ';' : ':'),
     paths.join(home, '.local', 'bin'),
+    paths.join(home, '.grok', 'bin'),
+    ...(value('LOCALAPPDATA') ? [paths.join(value('LOCALAPPDATA')!, 'agy', 'bin')] : []),
     ...(platform === 'win32'
       ? [value('APPDATA') && paths.join(value('APPDATA')!, 'npm')]
       : [
@@ -82,7 +90,7 @@ export async function resolveAgentExecutable(agent: Agent, options: DiscoveryOpt
         ]),
   ].filter((directory): directory is string => !!directory && paths.isAbsolute(directory));
   for (const directory of new Set(directories)) {
-    const executable = paths.join(directory, platform === 'win32' ? `${agent}.exe` : agent);
+    const executable = paths.join(directory, platform === 'win32' ? `${command}.exe` : command);
     if (await usable(executable)) return executable;
     const entry = await npmEntry(directory);
     if (entry) return entry;

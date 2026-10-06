@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { accountSetting, saveAccountSetting } from './account-settings';
+import { BOARD_PROVIDERS, type ProviderAgent } from '@opsis/schema';
 
 /**
  * Provider mode: each board-generating agent tracks its own usage against a rolling
@@ -10,8 +11,8 @@ import { accountSetting, saveAccountSetting } from './account-settings';
  * browsers; the board schema is untouched. A cap of 0 means "no limit", so enabling
  * provider mode never blocks an agent until a real cap is set.
  */
-export type ProviderAgent = 'claude' | 'codex';
-export const PROVIDER_AGENTS: ProviderAgent[] = ['claude', 'codex'];
+export type { ProviderAgent };
+export const PROVIDER_AGENTS = BOARD_PROVIDERS;
 
 export const FIVE_HOURS = 5 * 60 * 60 * 1000;
 export const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -25,7 +26,9 @@ type UsageEvents = Record<ProviderAgent, number[]>;
 
 const DEFAULT_SETTINGS: ProviderSettings = {
   enabled: false,
-  caps: { claude: { fiveHour: 0, weekly: 0 }, codex: { fiveHour: 0, weekly: 0 } },
+  caps: Object.fromEntries(
+    BOARD_PROVIDERS.map((agent) => [agent, { fiveHour: 0, weekly: 0 }]),
+  ) as Record<ProviderAgent, AgentCaps>,
 };
 
 function cap(value: unknown): number {
@@ -35,14 +38,17 @@ function cap(value: unknown): number {
 
 function readSettings(): ProviderSettings {
   try {
-    const raw: Partial<ProviderSettings> = accountSetting('provider-limits') ?? {};
+    const raw = accountSetting('provider-limits');
     const caps = (agent: ProviderAgent): AgentCaps => ({
-      fiveHour: cap(raw.caps?.[agent]?.fiveHour),
-      weekly: cap(raw.caps?.[agent]?.weekly),
+      fiveHour: cap(raw?.caps?.[agent]?.fiveHour),
+      weekly: cap(raw?.caps?.[agent]?.weekly),
     });
     return {
-      enabled: raw.enabled === true,
-      caps: { claude: caps('claude'), codex: caps('codex') },
+      enabled: raw?.enabled === true,
+      caps: Object.fromEntries(BOARD_PROVIDERS.map((agent) => [agent, caps(agent)])) as Record<
+        ProviderAgent,
+        AgentCaps
+      >,
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);
@@ -50,12 +56,12 @@ function readSettings(): ProviderSettings {
 }
 
 function readUsage(): UsageEvents {
-  const empty: UsageEvents = { claude: [], codex: [] };
+  const empty: UsageEvents = { claude: [], codex: [], kimi: [], grok: [], antigravity: [] };
   try {
-    const raw: Partial<UsageEvents> = accountSetting('provider-events') ?? {};
+    const raw = accountSetting('provider-events');
     const list = (agent: ProviderAgent) =>
-      (raw[agent] ?? []).filter((t): t is number => typeof t === 'number' && Number.isFinite(t));
-    return { claude: list('claude'), codex: list('codex') };
+      (raw?.[agent] ?? []).filter((t): t is number => typeof t === 'number' && Number.isFinite(t));
+    return Object.fromEntries(BOARD_PROVIDERS.map((agent) => [agent, list(agent)])) as UsageEvents;
   } catch {
     return empty;
   }

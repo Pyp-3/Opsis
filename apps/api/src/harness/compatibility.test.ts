@@ -8,7 +8,7 @@ it('keeps supported CLI versions and recorded output contracts explicit without 
   for (const [provider, version, file] of [
     ['claude', '2.1.281', 'claude-2.1.281.json'],
     ['codex', '0.156.0', 'codex-0.156.0.jsonl'],
-    ['agy', '1.2.9', 'agy-1.2.9.json'],
+    ['agy', '1.3.0', 'agy-1.3.0.jsonl'],
   ] as const) {
     expect(parseVersion(provider, version)).toBe(version);
     expect(

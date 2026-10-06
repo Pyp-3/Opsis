@@ -8,6 +8,8 @@ export function AgentLogo({ agent }: { agent: BoardAgent }) {
       <BrandMark size={18} />
     </span>
   ) : (
-    <span className={`agent-logo agent-logo-${agent}`} aria-hidden="true" />
+    <span className={`agent-logo agent-logo-${agent}`} aria-hidden="true">
+      {agent === 'kimi' ? 'K' : agent === 'grok' ? 'G' : agent === 'antigravity' ? 'A' : null}
+    </span>
   );
 }

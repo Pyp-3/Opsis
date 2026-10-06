@@ -30,3 +30,4 @@ apps/desktop/bundle/
 apps/desktop/build/
 apps/desktop/*.syso
 apps/web/wailsjs/
+*.provider-keys.json*

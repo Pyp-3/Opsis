@@ -10,6 +10,8 @@ import { registerAccountSettings } from './account-settings.js';
 import { registerBoardSearch } from './board-search.js';
 import { registerAuth } from './auth.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
+import { ProviderKeys, registerProviderKeys } from './provider-keys';
+import { localBoardClient } from './boards/client';
 
 const defaultDatabasePath = fileURLToPath(new URL('../data/opsis.sqlite', import.meta.url));
 
@@ -47,14 +49,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     )
       return reply.code(403).send({ message: 'Cross-site writes are not allowed.' });
   });
-  registerBoardRoutes(app, boardClientFactory);
+  const providerKeys = new ProviderKeys(databasePath);
+  registerBoardRoutes(
+    app,
+    boardClientFactory ??
+      ((agent, settings, schema) =>
+        localBoardClient(agent, settings, schema, providerKeys.get(agent))),
+  );
   const store = new ApiStore(databasePath);
   registerAuth(app, store);
-  // Agent runs use the local CLIs and their accounts: only signed-in people may start them.
+  registerProviderKeys(app, providerKeys);
+  // Generation spends the instance's API/CLI quota: only signed-in people may start it.
   app.addHook('onRequest', async (request, reply) => {
     if (
       !request.user &&
-      /^\/v1\/(?:agents|boards\/(?:generate|illustrate))(?:[/?]|$)/u.test(request.url)
+      /^\/v1\/(?:agents|boards\/(?:generate|illustrate|check-agent))(?:[/?]|$)/u.test(request.url)
     )
       return reply.code(401).send({ message: 'Sign in to continue.' });
   });

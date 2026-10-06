@@ -1,4 +1,4 @@
-import { BOARD_MODEL_CHOICES, type BoardModelSettings } from '@opsis/schema';
+import { BOARD_MODEL_CHOICES, type BoardModelSettings, type ProviderAgent } from '@opsis/schema';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 const EFFORT_LABELS: Record<BoardModelSettings['effort'], string> = {
@@ -15,16 +15,22 @@ export function ModelControls({
   disabled,
   onChange,
 }: {
-  agent: 'claude' | 'codex';
+  agent: ProviderAgent;
   value: BoardModelSettings;
   disabled: boolean;
   onChange(value: BoardModelSettings): void;
 }) {
   const choices = BOARD_MODEL_CHOICES[agent];
   const isCustom = !choices.some((choice) => choice.id === value.model);
-  const noEffort = agent === 'claude' && value.model.includes('haiku');
+  const noEffort =
+    (agent === 'claude' && value.model.includes('haiku')) ||
+    agent === 'grok' ||
+    agent === 'antigravity' ||
+    (agent === 'kimi' && value.connection !== 'api');
   const isAlias = agent === 'claude' && ['haiku', 'sonnet', 'opus', 'fable'].includes(value.model);
-  const efforts = choices.find((choice) => choice.id === value.model)?.efforts ?? EFFORTS;
+  const efforts =
+    choices.find((choice) => choice.id === value.model)?.efforts ??
+    (agent === 'kimi' ? (['low', 'high', 'max'] as const) : EFFORTS);
   const effort = efforts.includes(value.effort) ? value.effort : efforts[0]!;
   const groups = [...new Set(choices.map((choice) => choice.group))];
   return (
@@ -83,7 +89,9 @@ export function ModelControls({
           }
         >
           {noEffort ? (
-            <option value="unsupported">Not supported by Haiku</option>
+            <option value="unsupported">
+              {agent === 'claude' ? 'Not supported by Haiku' : 'Built-in reasoning'}
+            </option>
           ) : (
             efforts.map((level) => (
               <option key={level} value={level}>
@@ -110,8 +118,10 @@ export function ModelControls({
         )}
       </p>
       <span className="model-usage-note">
-        {noEffort ? 'Haiku uses its built-in reasoning. ' : 'Higher effort can use more tokens. '}No
-        automatic model upgrades.
+        {noEffort
+          ? 'This connection uses built-in reasoning. '
+          : 'Higher effort can use more tokens. '}
+        No automatic model upgrades.
       </span>
       <span className="model-usage-note">Model access depends on your agent account.</span>
     </div>

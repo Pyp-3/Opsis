@@ -22,7 +22,7 @@ _Follow the connections, then select a concept for its explanation._
 
 ## What you can do
 
-- Generate and refine diagrams with your local Claude or Codex CLI; review proposed changes before applying them.
+- Generate and refine diagrams with Claude/Codex CLIs or Kimi, Grok and Antigravity APIs/CLIs; review proposed changes before applying them. See [provider setup and limits](docs/PROVIDERS.md).
 - Save model profiles and fallback choices to your account; switch to a fallback explicitly without automatic retries.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.

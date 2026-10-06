@@ -4,6 +4,34 @@ Last reviewed: 2026-10-06.
 
 ## Current delivery
 
+Provider delivery (2026-10-06): Kimi, Grok and managed Antigravity API connections
+and official CLI adapters are implemented on both hosts. API keys belong to the
+running server instance, shared by all its accounts. Settings offers write-only
+key management; keys persist in a separate local secret file with environment
+overrides, outside account settings, SQLite, board exports and logs. All signed-in
+local accounts can manage this setting; MCP agent keys cannot. The file is not
+encrypted (POSIX 0600 / Windows user-directory ACL). See [provider setup and limits](docs/PROVIDERS.md).
+
+CLI compatibility is pinned to Kimi 1.52.x, Grok 1.0.46 and Antigravity 1.3.0.
+Fake-runner tests exercise all three through the full native generation workflow;
+API tests cover explicit models, usage, redaction and background cancellation.
+Grok's argv bound initially caught duplicate schema text in a real workflow test;
+the duplicate is now avoided. No live provider calls have been made. Full web QA
+passed 381 unit tests and 49 browser scenarios (one Linux-only skip); three added
+HTTP transport tests also pass. Lint, typecheck, Rust check/24 tests, Go vet and
+the full native race suite pass. The final Windows build passes packaged database/
+MCP integration and all 24 hidden WebView checks. Native browser coverage: 46 pass,
+three 30-second timeouts and one Linux-only skip; all three timed-out scenarios
+plus instance-key settings pass in an isolated rerun against the final executable.
+Key settings pass cross-account sharing, no secret reads/exports, no-call checks,
+removal, mobile overflow and accessibility coverage. Desktop/mobile screenshots
+were inspected. Current delivery CI must still be confirmed after push.
+
+Trusted Windows signing and Apple signing/notarization are explicitly deferred by
+the user. Windows UI automation was retried and again returned "Computer Use
+native pipe is unavailable". Interactive save-dialog/clipboard and manual Mac
+checks remain open; no local Mac is available. Do not start #3, #6 or #4 yet.
+
 Priority update (2026-10-06): finish the earlier provider/settings/pricing and
 platform backlog before starting #3, #6 or #4. Providers should support both
 official APIs and official CLI interfaces where available. No Windows signing
@@ -50,8 +78,8 @@ All six affected-file scenarios pass with a separate artifact directory. A furth
 account-only-settings regression passes. Full native browser run: 47 pass, one
 Linux-only pixel baseline skipped. Desktop and mobile screenshots were inspected.
 The calculator is hypothetical API spending, not subscription billing or an
-estimate of missing usage. Pricing commit fcfe6fa is pushed; run 37440511815 has
-passed web, Linux, Windows and Apple Silicon, with Intel Mac still running.
+estimate of missing usage. Pricing commit fcfe6fa is pushed; run 37440511815
+completed successfully on every job.
 
 macOS CI follow-up: isolated platform-specific cache-path expectations and added
 the UniformTypeIdentifiers framework Wails needs for native file dialogs. The
@@ -72,9 +100,11 @@ browser tests pass. The native browser suite passed 47 scenarios with one
 fallback scenario pass in an isolated rerun against the final rebuilt executable.
 The Linux-only screenshot baseline is skipped locally. Packaged database/MCP
 integration and all 24 hidden WebView2 checks pass. No live provider calls were made.
-Delivery CI remains to be checked after push.
+Fallback delivery run 37443046673 passed web, Linux, Windows and Intel Mac;
+Apple Silicon failed only its hidden WKWebView smoke with a 90-second timeout and
+no further diagnostic. Its failed job was rerun on 2026-10-06; result pending.
 
-Provider research, not implementation: official interfaces exist for Kimi, Grok
+Provider implementation references: official interfaces exist for Kimi, Grok
 and Antigravity, including Google's managed Antigravity API. Preserve both API and
 CLI scope. Sources checked 2026-10-06:
 
@@ -89,10 +119,10 @@ CLI scope. Sources checked 2026-10-06:
 - [Antigravity API](https://ai.google.dev/gemini-api/docs/antigravity-agent):
   managed Interactions API, explicit underlying model, background/cancellation
   lifecycle. It currently rejects structured outputs and `max_output_tokens`.
-  The existing unused `agy` wrapper is not enough: recheck its envelope, tool
-  permissions, platform null-device path and supported versions before exposing it.
+  The old unused `agy` wrapper was replaced with the documented 1.3.0 streaming
+  input/result envelope and isolated permission configuration.
 
-API-key storage and provider adapters are not built. Do not put keys in account
+API-key storage and provider adapters are implemented above. Do not put keys in account
 profiles, board documents, exported settings or logs. Live provider tests still
 require explicit authorization; none have been run.
 
@@ -115,8 +145,8 @@ owner-only saved-revision browser with restore-as-copy. Both Fastify and the Lin
 Go desktop host are verified. Existing data, ownership, revision guards, deletion
 tombstones, and the 40-entry undo limit are preserved.
 
-The separately requested Kimi/Grok/Antigravity providers and API-key settings
-remain pending. Cost projections/graphs and explicit fallback-model settings are
+The separately requested Kimi/Grok/Antigravity providers and instance API-key settings
+are implemented above. Cost projections/graphs and explicit fallback-model settings are
 implemented above. Native Windows and both Mac packages pass CI; trusted signing
 and interactive platform checks remain open. Current delivery CI remains to be confirmed.
 Appearance settings and initial native platform plumbing have shipped; they do not

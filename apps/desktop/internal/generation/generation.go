@@ -26,11 +26,12 @@ type Outcome struct {
 	Body   json.RawMessage `json:"body"`
 }
 type Engine struct {
-	Runner   harness.Runner
-	slots    chan struct{}
-	agentsMu sync.Mutex
-	agents   json.RawMessage
-	expires  time.Time
+	ProviderKeys *ProviderKeys
+	Runner       harness.Runner
+	slots        chan struct{}
+	agentsMu     sync.Mutex
+	agents       json.RawMessage
+	expires      time.Time
 }
 
 func New(runner harness.Runner) (*Engine, error) {
@@ -58,6 +59,28 @@ func response(value any, err error) string {
 // the same TS feature modules as the browser API, without a Node process.
 func (e *Engine) execute(ctx context.Context, method string, args []string, progress func(json.RawMessage)) (json.RawMessage, error) {
 	vm := goja.New()
+	providerSession := &providerSession{pending: map[string]string{}}
+	defer providerSession.close()
+	_ = vm.Set("nativeProviderKey", func(provider string) string {
+		if e.ProviderKeys == nil {
+			return ""
+		}
+		return e.ProviderKeys.Get(provider)
+	})
+	_ = vm.Set("nativeProviderHttp", func(raw string) string {
+		var input providerRequest
+		if json.Unmarshal([]byte(raw), &input) != nil {
+			return response(nil, harness.Error("harness_config"))
+		}
+		value, err := providerSession.send(ctx, input)
+		return response(value, err)
+	})
+	_ = vm.Set("nativeProviderPause", func() {
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Second):
+		}
+	})
 	approved := make(map[string]bool)
 	_ = vm.Set("nativeCancelled", func() bool { return ctx.Err() != nil })
 	_ = vm.Set("nativeProgress", func(data string) {

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import {
   BoardModelSettingsSchema,
+  BOARD_PROVIDERS,
+  PROVIDER_LABELS,
+  type ProviderAgent,
   modelSettingsProblem,
   type BoardModelSettings,
 } from '@opsis/schema';
@@ -18,7 +21,7 @@ export function ModelSettingsPanel({
   preferences: ModelPreferences;
   onChange: (value: ModelPreferences) => void;
 }) {
-  const [agent, setAgent] = useState<'claude' | 'codex'>('claude');
+  const [agent, setAgent] = useState<ProviderAgent>('claude');
   const [profiles, setProfiles] = useState(readModelProfiles);
   const [editing, setEditing] = useState('');
   const [name, setName] = useState('');
@@ -89,8 +92,8 @@ export function ModelSettingsPanel({
     <section className="agent-settings" aria-label="Agents and models">
       <h2>Agents and models</h2>
       <p>
-        Defaults and named profiles are saved to your account. Credentials stay in your local CLI
-        login.
+        Defaults and named profiles are saved to your account. API credentials belong to this Opsis
+        instance; CLI connections use its local login.
       </p>
       <div className="settings-card">
         <label>
@@ -105,14 +108,34 @@ export function ModelSettingsPanel({
               setNotice('');
             }}
           >
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
+            {BOARD_PROVIDERS.map((id) => (
+              <option key={id} value={id}>
+                {PROVIDER_LABELS[id]}
+              </option>
+            ))}
           </select>
         </label>
+        {agent !== 'claude' && agent !== 'codex' && (
+          <label>
+            Connection
+            <select
+              value={value.connection ?? 'cli'}
+              onChange={(event) => {
+                const rest = { ...value };
+                delete rest.maxOutputTokens;
+                set({ ...rest, connection: event.target.value as 'cli' | 'api', effort: 'low' });
+              }}
+            >
+              <option value="api">Official API · instance key</option>
+              <option value="cli">Installed CLI · local login</option>
+            </select>
+          </label>
+        )}
         <label>
           Executable path
           <input
             value={value.executablePath ?? ''}
+            disabled={value.connection === 'api'}
             maxLength={1024}
             placeholder="Automatic discovery"
             onChange={(event) => set({ ...value, executablePath: event.target.value })}
@@ -123,6 +146,16 @@ export function ModelSettingsPanel({
           configured override. No shell arguments.
         </small>
         <ModelControls agent={agent} value={value} disabled={checking} onChange={set} />
+        {value.connection !== 'api' && ['kimi', 'grok', 'antigravity'].includes(agent) && (
+          <p>
+            Use a model ID from your installed CLI’s catalogue. Kimi 1.52 requires no installed
+            plugins. Grok 1.0.46 requires its default configuration and accepts at most 24,000
+            characters including Opsis instructions and schema. Antigravity 1.3 uses isolated
+            settings and the operating system’s saved login; choose an explicit CLI slug such as
+            gemini-3.8-flash-medium. These CLI connections accept text and extracted PDF text; use
+            the API for images.
+          </p>
+        )}
         <label>
           Request character limit
           <input
@@ -158,10 +191,29 @@ export function ModelSettingsPanel({
             />
           </label>
         )}
+        {value.connection === 'api' && agent !== 'antigravity' && (
+          <label>
+            Output-token cap per attempt (optional)
+            <input
+              type="number"
+              min={256}
+              max={64000}
+              step={256}
+              value={value.maxOutputTokens ?? ''}
+              onChange={(event) => {
+                const next = { ...value };
+                if (event.target.value) next.maxOutputTokens = Number(event.target.value);
+                else delete next.maxOutputTokens;
+                set(next);
+              }}
+            />
+          </label>
+        )}
         <p>
-          Output-token cap: unavailable in these CLI integrations. Requests stop after three
-          minutes, with at most one invalid-output repair on the same model. A repair is a second
-          attempt; a Claude budget applies separately to each attempt and is enforced by the CLI.
+          CLI connections and the managed Antigravity API do not expose an output-token cap.
+          Requests stop after three minutes, with at most one invalid-output repair on the same
+          model. A repair is a second attempt; a Claude budget applies separately to each attempt
+          and is enforced by the CLI.
         </p>
         <button
           type="button"
@@ -226,7 +278,7 @@ export function ModelSettingsPanel({
         ))}
       </div>
       <div className="settings-card">
-        <h3>Fallback for {agent === 'claude' ? 'Claude' : 'Codex'}</h3>
+        <h3>Fallback for {PROVIDER_LABELS[agent]}</h3>
         <p>
           Save an alternative from a named profile. The canvas offers an explicit switch; failures
           never switch models or retry automatically. Switching makes no model call. Submit again

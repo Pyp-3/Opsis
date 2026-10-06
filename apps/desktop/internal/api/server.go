@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/contracts"
+	"github.com/Pyp-3/Opsis/apps/desktop/internal/generation"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -40,15 +41,16 @@ func failure(status int, message string) error {
 }
 
 type Server struct {
-	db         *sql.DB
-	contracts  *contracts.Contracts
-	mux        *http.ServeMux
-	fallback   http.Handler
-	dummyHash  string
-	rateMu     sync.Mutex
-	requests   map[string][]time.Time
-	rateLimit  int
-	rateWindow time.Duration
+	providerKeys *generation.ProviderKeys
+	db           *sql.DB
+	contracts    *contracts.Contracts
+	mux          *http.ServeMux
+	fallback     http.Handler
+	dummyHash    string
+	rateMu       sync.Mutex
+	requests     map[string][]time.Time
+	rateLimit    int
+	rateWindow   time.Duration
 }
 
 func New(database string, fallback http.Handler) (*Server, error) {
@@ -78,6 +80,11 @@ func New(database string, fallback http.Handler) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{db: db, contracts: c, mux: http.NewServeMux(), fallback: fallback, requests: make(map[string][]time.Time), rateLimit: 60, rateWindow: time.Minute}
+	s.providerKeys, err = generation.NewProviderKeys(database)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	if value, err := strconv.Atoi(os.Getenv("OPSIS_RATE_LIMIT")); err == nil && value > 0 {
 		s.rateLimit = value
 	}
@@ -94,6 +101,7 @@ func New(database string, fallback http.Handler) (*Server, error) {
 		return nil, err
 	}
 	s.routes()
+	s.providerKeyRoutes()
 	return s, nil
 }
 

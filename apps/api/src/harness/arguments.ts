@@ -1,4 +1,5 @@
 import type { HarnessConfig, HarnessFile } from './types.js';
+import { HarnessError } from './errors';
 
 export function harnessArguments(
   config: HarnessConfig,
@@ -6,7 +7,57 @@ export function harnessArguments(
   schema = JSON.stringify({ type: 'object' }),
   files: readonly HarnessFile[] = [],
   paths: readonly string[] = [],
+  prompt = '',
 ): string[] {
+  if (config.provider === 'grok') {
+    // The official headless interface takes argv. Bound it below Windows' command-line ceiling.
+    const input = prompt.includes(schema)
+      ? prompt
+      : `${prompt}\nReturn only JSON matching this schema:\n${schema}`;
+    if (JSON.stringify(input).length > 24000) throw new HarnessError('harness_request_limit');
+    return [
+      '--no-auto-update',
+      '-p',
+      input,
+      '--model',
+      config.model,
+      '--output-format',
+      'plain',
+      '--tools',
+      '',
+      '--disallowed-tools',
+      'Bash,Edit,Read,Grep,MCPTool,WebFetch,WebSearch',
+      '--no-plan',
+      '--no-subagents',
+      '--no-memory',
+      '--disable-web-search',
+      '--max-turns',
+      '1',
+    ];
+  }
+  if (config.provider === 'kimi')
+    return [
+      '--print',
+      '--input-format',
+      'text',
+      '--output-format',
+      'text',
+      '--final-message-only',
+      '--model',
+      config.model,
+      '--agent-file',
+      'opsis-agent.yaml',
+      '--mcp-config-file',
+      'opsis-mcp.json',
+      '--skills-dir',
+      '.',
+      '--max-steps-per-turn',
+      '1',
+      '--max-retries-per-step',
+      '0',
+      '--max-ralph-iterations',
+      '0',
+    ];
   if (config.provider === 'claude') {
     // Tools stay off unless files were uploaded; then only the read-only Read tool is offered,
     // which reads PDFs and images natively from the private workspace.
@@ -64,22 +115,17 @@ export function harnessArguments(
     ];
   }
   return [
-    '--print',
     '--input-format',
-    'text',
+    'stream-json',
     '--output-format',
-    'json',
+    'stream-json',
     '--json-schema',
     schemaPath,
     '--model',
     config.model,
     '--print-timeout',
-    String(Math.max(1, Math.floor(config.timeoutMs / 1000))),
-    '--mode',
-    'plan',
+    `${Math.max(1, Math.floor(config.timeoutMs / 1000))}s`,
     '--sandbox',
     '--disable-slash-commands',
-    '--log-file',
-    '/dev/null',
   ];
 }
