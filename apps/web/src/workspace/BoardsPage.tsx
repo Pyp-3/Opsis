@@ -17,6 +17,7 @@ import {
   History,
   CopyPlus,
   FolderInput,
+  Tag,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
@@ -25,6 +26,8 @@ import { BoardRevisionPanel } from './BoardRevisionPanel';
 import { useBoardCollections } from './useBoardCollections';
 import {
   CollectionBar,
+  EditTags,
+  filingTarget,
   MoveToCollection,
   inCollection,
   type CollectionFilter,
@@ -83,17 +86,21 @@ export function BoardsPage({
   const [sharedError, setSharedError] = useState('');
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [tagging, setTagging] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState('');
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
   const collections = useBoardCollections(refresh);
   const collectionName = (id: string | null | undefined) =>
     collections.collections.find((collection) => collection.id === id)?.name;
   // A filter for a collection that no longer exists (deleted elsewhere) shows everything.
   const activeFilter =
-    collectionFilter === 'all' || collectionFilter === 'unfiled' || collectionName(collectionFilter)
+    collectionFilter === 'all' ||
+    collectionFilter === 'unfiled' ||
+    collectionName(collectionFilter) ||
+    collections.smartCollections.some((smart) => `smart:${smart.id}` === collectionFilter)
       ? collectionFilter
       : 'all';
-  const filingInto =
-    activeFilter === 'all' || activeFilter === 'unfiled' ? undefined : activeFilter;
+  const filingInto = filingTarget(activeFilter);
   useEffect(() => {
     void refresh().catch(() => undefined);
   }, [refresh]);
@@ -121,10 +128,18 @@ export function BoardsPage({
     (entry) => Boolean(entry.archived) === (tab === 'archive'),
   );
   // Collections organize the active library; the archive lists everything archived.
-  const visibleEntries =
-    tab === 'archive'
-      ? tabEntries
-      : tabEntries.filter((entry) => inCollection(entry.collectionId, activeFilter));
+  const allTags = [
+    ...new Map(
+      tabEntries.flatMap((entry) => entry.tags ?? []).map((tag) => [tag.toLowerCase(), tag]),
+    ).values(),
+  ].sort((a, b) => a.localeCompare(b));
+  const activeTag = allTags.find((tag) => tag.toLowerCase() === tagFilter.toLowerCase()) ?? '';
+  const visibleEntries = tabEntries.filter(
+    (entry) =>
+      (tab === 'archive' || inCollection(entry, activeFilter, collections.smartCollections)) &&
+      (!activeTag ||
+        (entry.tags ?? []).some((tag) => tag.toLowerCase() === activeTag.toLowerCase())),
+  );
   const historyEntry = library.entries.find((entry) => entry.id === historyId);
   const entries = visibleEntries
     .filter((entry) => entry.title.toLowerCase().includes(query.trim().toLowerCase()))
@@ -280,6 +295,23 @@ export function BoardsPage({
                 placeholder="Search by name"
               />
             </label>
+            {allTags.length > 0 && (
+              <label className="boards-sort">
+                Tag
+                <select
+                  aria-label="Filter by tag"
+                  value={activeTag}
+                  onChange={(event) => setTagFilter(event.target.value)}
+                >
+                  <option value="">All tags</option>
+                  {allTags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      {tag}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="boards-sort">
               Sort by
               <select
@@ -304,7 +336,19 @@ export function BoardsPage({
               const current = entry.id === library.activeId;
               return (
                 <li key={entry.id} className={current ? 'is-current' : ''}>
-                  {moving === entry.id ? (
+                  {tagging === entry.id ? (
+                    <EditTags
+                      title={entry.title}
+                      current={entry.tags ?? []}
+                      disabled={library.switching || collections.busy}
+                      onCancel={() => setTagging(null)}
+                      onSave={async (tags) => {
+                        if (!(await collections.tag(entry.id, tags))) return;
+                        setTagging(null);
+                        setNotice(`Tags saved for “${entry.title}”.`);
+                      }}
+                    />
+                  ) : moving === entry.id ? (
                     <MoveToCollection
                       title={entry.title}
                       current={entry.collectionId}
@@ -377,6 +421,13 @@ export function BoardsPage({
                             : ''}
                           {updatedLabel(entry.updatedAt)}
                         </small>
+                        {!!entry.tags?.length && (
+                          <span className="board-card-tags" aria-label="Tags">
+                            {entry.tags.map((tag) => (
+                              <span key={tag}>{tag}</span>
+                            ))}
+                          </span>
+                        )}
                         <span className="board-card-go">
                           Open <ArrowRight size={14} />
                         </span>
@@ -420,11 +471,25 @@ export function BoardsPage({
                           disabled={library.switching}
                           onClick={() => {
                             setMoving(entry.id);
+                            setTagging(null);
                             setEditing(null);
                             setDeleting(null);
                           }}
                         >
                           <FolderInput size={15} />
+                        </button>
+                        <button
+                          aria-label={`Edit tags for ${entry.title}`}
+                          title="Edit tags"
+                          disabled={library.switching}
+                          onClick={() => {
+                            setTagging(entry.id);
+                            setMoving(null);
+                            setEditing(null);
+                            setDeleting(null);
+                          }}
+                        >
+                          <Tag size={15} />
                         </button>
                         <button
                           aria-label={`Revision history for ${entry.title}`}
@@ -532,11 +597,15 @@ export function BoardsPage({
             <p className="boards-empty">
               {tab === 'archive'
                 ? 'No archived boards.'
-                : activeFilter === 'unfiled'
-                  ? 'Every board is in a collection.'
-                  : filingInto
-                    ? 'No boards in this collection yet. Create one above, or move a board here.'
-                    : 'No saved boards yet. Create your first board above.'}
+                : activeTag
+                  ? `No boards here are tagged “${activeTag}”.`
+                  : activeFilter.startsWith('smart:')
+                    ? 'No boards match this smart collection yet.'
+                    : activeFilter === 'unfiled'
+                      ? 'Every board is in a collection.'
+                      : filingInto
+                        ? 'No boards in this collection yet. Create one above, or move a board here.'
+                        : 'No saved boards yet. Create your first board above.'}
             </p>
           ) : (
             !entries.length && <p className="boards-empty">No boards match “{query}”.</p>

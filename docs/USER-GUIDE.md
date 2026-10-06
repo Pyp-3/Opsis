@@ -68,6 +68,11 @@ the actions below the chips; deleting a collection keeps its boards.
 Collections are private to your account and do not change a board's content,
 history or sharing. See [collections](PERSISTENCE.md#collections).
 
+Add tags with the tag button on a board card, then **Filter by tag**. A **smart
+collection** keeps itself up to date from a rule — for example, every board tagged
+“exam” that changed in the last 30 days. See
+[tags and smart collections](PERSISTENCE.md#tags-and-smart-collections).
+
 ## Share with another local account
 
 A board is private by default. Make it public from the board library or its

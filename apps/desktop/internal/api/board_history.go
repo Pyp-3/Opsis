@@ -155,6 +155,9 @@ func (s *Server) boardHistoryRoutes() {
 		if _, err := tx.Exec(`INSERT INTO boards_v2(id,title,snapshot,revision,updated_at,owner_id,collection_id) VALUES(?,?,?,1,?,?,?)`, newID, title, string(snapshot), time.Now().UnixMilli(), user.ID, source.CollectionID); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(`INSERT INTO board_tags(board_id,tag) SELECT ?,tag FROM board_tags WHERE board_id=? ORDER BY rowid`, newID, id); err != nil {
+			return err
+		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}

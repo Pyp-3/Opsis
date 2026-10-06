@@ -158,9 +158,9 @@ func (s *Server) saveBoard(id string, snapshot json.RawMessage, revision int64, 
 }
 
 func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]map[string]any, error) {
-	query := `SELECT id,title,revision,updated_at,visibility,NULL,archived,collection_id FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
+	query := `SELECT id,title,revision,updated_at,visibility,NULL,archived,collection_id,json_extract(snapshot,'$.board.agent') FROM boards_v2 WHERE owner_id=? ORDER BY updated_at DESC`
 	if public {
-		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name,b.archived,NULL FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.archived=0 AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
+		query = `SELECT b.id,b.title,b.revision,b.updated_at,b.visibility,u.name,b.archived,NULL,NULL FROM boards_v2 b JOIN users u ON u.id=b.owner_id WHERE b.visibility='public' AND b.archived=0 AND b.owner_id!=? ORDER BY b.updated_at DESC LIMIT 100`
 	}
 	rows, err := s.db.Query(query, user)
 	if err != nil {
@@ -171,9 +171,9 @@ func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]m
 	for rows.Next() {
 		var id, title, visibility string
 		var revision, updated int64
-		var owner, collection sql.NullString
+		var owner, collection, agent sql.NullString
 		var archived bool
-		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner, &archived, &collection); err != nil {
+		if err := rows.Scan(&id, &title, &revision, &updated, &visibility, &owner, &archived, &collection, &agent); err != nil {
 			return nil, err
 		}
 		if archived && !includeArchived {
@@ -187,8 +187,46 @@ func (s *Server) listBoards(user string, public bool, includeArchived bool) ([]m
 			if collection.Valid {
 				board["collectionId"] = collection.String
 			}
+			board["agent"] = nil
+			if agent.Valid {
+				board["agent"] = agent.String
+			}
 		}
 		boards = append(boards, board)
 	}
-	return boards, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if public {
+		return boards, nil
+	}
+	tags, err := s.ownerTags(user)
+	if err != nil {
+		return nil, err
+	}
+	for _, board := range boards {
+		board["tags"] = tags[board["id"].(string)]
+		if board["tags"] == nil {
+			board["tags"] = []string{}
+		}
+	}
+	return boards, nil
+}
+
+// ownerTags maps each owned board to its tags, in the order they were set.
+func (s *Server) ownerTags(user string) (map[string][]string, error) {
+	rows, err := s.db.Query(`SELECT t.board_id,t.tag FROM board_tags t JOIN boards_v2 b ON b.id=t.board_id WHERE b.owner_id=? ORDER BY t.rowid`, user)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tags := map[string][]string{}
+	for rows.Next() {
+		var board, tag string
+		if err := rows.Scan(&board, &tag); err != nil {
+			return nil, err
+		}
+		tags[board] = append(tags[board], tag)
+	}
+	return tags, rows.Err()
 }

@@ -193,6 +193,34 @@
   font-size: 12px;
   border-radius: var(--radius);
 }
+.board-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.board-card-tags span {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--accent-text);
+  background: var(--sunken);
+  border-radius: 999px;
+}
+.board-smart-form {
+  max-width: 720px;
+  padding: 0;
+}
+.board-smart-form .board-smart-conditions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.board-smart-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
 .board-collection-form {
   max-width: 420px;
   padding: 0;

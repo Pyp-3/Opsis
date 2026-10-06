@@ -1,15 +1,19 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   BoardCollectionAssignmentSchema,
   BoardCollectionRequestSchema,
   BoardIdSchema,
+  BoardTagsRequestSchema,
   MAX_BOARD_COLLECTIONS,
+  MAX_SMART_COLLECTIONS,
+  SmartCollectionRequestSchema,
 } from '@opsis/schema';
 import { randomUUID } from 'node:crypto';
 import type { ApiStore } from './storage.js';
 import { requireUser } from './auth.js';
 
 const DUPLICATE_NAME = 'You already have a collection with that name.';
+const DUPLICATE_SMART = 'You already have a smart collection with that name.';
 
 /** Private per-account folders for owned boards. Other accounts' collections answer 404. */
 export function registerBoardCollections(app: FastifyInstance, store: ApiStore) {
@@ -66,5 +70,61 @@ export function registerBoardCollections(app: FastifyInstance, store: ApiStore) 
     if (result === 'missing') return reply.code(404).send({ message: 'Board not found.' });
     if (result === 'collection') return reply.code(404).send({ message: 'Collection not found.' });
     return { id: params.data.id, collectionId: body.data.collectionId };
+  });
+  app.put('/v1/boards/:id/tags', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = BoardIdSchema.safeParse(request.params);
+    const body = BoardTagsRequestSchema.safeParse(request.body);
+    if (!params.success || !body.success)
+      return reply.code(400).send({ message: 'Use up to 10 tags of 1–30 characters.' });
+    if (!store.setBoardTags(params.data.id, user.id, body.data.tags))
+      return reply.code(404).send({ message: 'Board not found.' });
+    return { id: params.data.id, tags: body.data.tags };
+  });
+  app.get('/v1/smart-collections', async (request, reply) => {
+    const user = requireUser(request, reply);
+    return user ? store.listSmartCollections(user.id) : reply;
+  });
+  const saveSmart = (create: boolean) =>
+    async function (request: FastifyRequest, reply: FastifyReply) {
+      const user = requireUser(request, reply);
+      if (!user) return reply;
+      const params = create ? null : BoardIdSchema.safeParse(request.params);
+      const body = SmartCollectionRequestSchema.safeParse(request.body);
+      if ((params && !params.success) || !body.success)
+        return reply
+          .code(400)
+          .send({ message: 'Name the smart collection and choose at least one condition.' });
+      const id = params?.success ? params.data.id : randomUUID();
+      const result = store.saveSmartCollection(
+        id,
+        user.id,
+        body.data.name,
+        body.data.rule,
+        MAX_SMART_COLLECTIONS,
+        create,
+      );
+      if (result === 'missing')
+        return reply.code(404).send({ message: 'Smart collection not found.' });
+      if (result === 'duplicate') return reply.code(409).send({ message: DUPLICATE_SMART });
+      if (result === 'limit')
+        return reply
+          .code(400)
+          .send({ message: `You can have up to ${MAX_SMART_COLLECTIONS} smart collections.` });
+      return reply
+        .code(create ? 201 : 200)
+        .send(store.listSmartCollections(user.id).find((smart) => smart.id === id));
+    };
+  app.post('/v1/smart-collections', saveSmart(true));
+  app.put('/v1/smart-collections/:id', saveSmart(false));
+  app.delete('/v1/smart-collections/:id', async (request, reply) => {
+    const user = requireUser(request, reply);
+    if (!user) return reply;
+    const params = BoardIdSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ message: 'Invalid smart collection ID.' });
+    if (!store.deleteSmartCollection(params.data.id, user.id))
+      return reply.code(404).send({ message: 'Smart collection not found.' });
+    return reply.code(204).send();
   });
 }

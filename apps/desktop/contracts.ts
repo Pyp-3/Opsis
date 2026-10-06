@@ -6,6 +6,9 @@ import {
   AccountSettingSchema,
   UsageRecordSchema,
   MAX_USAGE_RECORDS,
+  BoardTagsRequestSchema,
+  SmartCollectionRequestSchema,
+  MAX_SMART_COLLECTIONS,
   BoardIdSchema,
   BoardCreateRequestSchema,
   BoardUpdateRequestSchema,
@@ -30,6 +33,8 @@ const parsers = {
   collectionAssignment: BoardCollectionAssignmentSchema,
   accountSetting: AccountSettingSchema,
   usageRecord: UsageRecordSchema,
+  tags: BoardTagsRequestSchema,
+  smartCollection: SmartCollectionRequestSchema,
   id: BoardIdSchema,
   create: BoardCreateRequestSchema,
   update: BoardUpdateRequestSchema,
@@ -57,6 +62,8 @@ export function apply(operation: string, json: string): string {
       value = MAX_BOARD_COLLECTIONS;
     } else if (operation === 'usageLimit') {
       value = MAX_USAGE_RECORDS;
+    } else if (operation === 'smartCollectionLimit') {
+      value = MAX_SMART_COLLECTIONS;
     } else if (operation === 'empty') {
       value = BoardSnapshotSchema.parse({
         board: createEmptyBoard(z.string().parse(input)),

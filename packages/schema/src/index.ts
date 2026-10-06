@@ -23,3 +23,4 @@ export * from './legacy-import';
 export * from './legacy-bundle';
 export * from './agent-progress';
 export * from './account-settings';
+export * from './board-organization';

@@ -278,6 +278,7 @@ func (s *Server) boardRoutes() {
 	s.templateRoutes()
 	s.boardHistoryRoutes()
 	s.collectionRoutes()
+	s.organizationRoutes()
 }
 
 func (s *Server) templateRoutes() {

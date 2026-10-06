@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
+import { SmartCollectionRuleSchema, type SmartCollectionRule } from '@opsis/schema';
 import { AUTH_EXPIRED } from './board-library-api';
 
 const CollectionSchema = z.object({
@@ -8,6 +9,8 @@ const CollectionSchema = z.object({
   createdAt: z.number(),
 });
 export type BoardCollection = z.infer<typeof CollectionSchema>;
+const SmartCollectionSchema = CollectionSchema.extend({ rule: SmartCollectionRuleSchema });
+export type SmartCollection = z.infer<typeof SmartCollectionSchema>;
 
 const json = (method: string, body: unknown) => ({
   method,
@@ -22,14 +25,19 @@ const json = (method: string, body: unknown) => ({
  */
 export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
   const [collections, setCollections] = useState<BoardCollection[]>([]);
+  const [smartCollections, setSmartCollections] = useState<SmartCollection[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const response = await fetch('/v1/collections');
+    const [response, smart] = await Promise.all([
+      fetch('/v1/collections'),
+      fetch('/v1/smart-collections'),
+    ]);
     if (response.status === 401) window.dispatchEvent(new Event(AUTH_EXPIRED));
-    if (!response.ok) throw new Error('Could not load collections.');
+    if (!response.ok || !smart.ok) throw new Error('Could not load collections.');
     setCollections(z.array(CollectionSchema).parse(await response.json()));
+    setSmartCollections(z.array(SmartCollectionSchema).parse(await smart.json()));
   }, []);
   useEffect(() => {
     // Async network completion synchronizes collections with their external store.
@@ -62,6 +70,7 @@ export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
 
   return {
     collections,
+    smartCollections,
     error,
     busy,
     async create(name: string) {
@@ -82,6 +91,27 @@ export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
           true,
         )
       ).ok;
+    },
+    /** Replaces a board's tags; like filing, this is not an edit to the board. */
+    async tag(boardId: string, tags: string[]) {
+      return (await run(() => fetch(`/v1/boards/${boardId}/tags`, json('PUT', { tags })), true)).ok;
+    },
+    /** Creates a smart collection, or replaces one's name and rule when `id` is given. */
+    async saveSmart(name: string, rule: SmartCollectionRule, id?: string) {
+      const result = await run(
+        () =>
+          fetch(
+            id ? `/v1/smart-collections/${id}` : '/v1/smart-collections',
+            json(id ? 'PUT' : 'POST', { name, rule }),
+          ),
+        false,
+      );
+      return result.ok ? SmartCollectionSchema.parse(result.body) : null;
+    },
+    /** Smart collections only filter; deleting one never touches boards. */
+    async removeSmart(id: string) {
+      return (await run(() => fetch(`/v1/smart-collections/${id}`, { method: 'DELETE' }), false))
+        .ok;
     },
   };
 }

@@ -169,4 +169,80 @@ describe('board collections', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('tags owned boards privately and keeps smart collection rules per account', async () => {
+    const app = buildApp({ databasePath: ':memory:', speech: null });
+    try {
+      const { owner, stranger, request } = await accounts(app);
+      const board = (await request(owner, 'POST', '/v1/boards', { title: 'Tagged' })).json();
+      const tagged = await request(owner, 'PUT', `/v1/boards/${board.id}/tags`, {
+        tags: [' Networking ', 'networking', 'Exam'],
+      });
+      expect(tagged.json()).toEqual({ id: board.id, tags: ['Networking', 'Exam'] });
+      for (const tags of [Array.from({ length: 11 }, (_, i) => `t${i}`), ['x'.repeat(31)]])
+        expect(
+          (await request(owner, 'PUT', `/v1/boards/${board.id}/tags`, { tags })).statusCode,
+        ).toBe(400);
+      expect(
+        (await request(stranger, 'PUT', `/v1/boards/${board.id}/tags`, { tags: ['mine'] }))
+          .statusCode,
+      ).toBe(404);
+      const listed = (await request(owner, 'GET', '/v1/boards')).json()[0];
+      // Tagging is organization only: the revision is unchanged.
+      expect(listed).toMatchObject({ tags: ['Networking', 'Exam'], revision: board.revision });
+      expect(listed.agent).toBe(board.snapshot.board.agent);
+      const copy = (
+        await request(owner, 'POST', `/v1/boards/${board.id}/duplicate`, {
+          revision: board.revision,
+        })
+      ).json();
+      expect(
+        (await request(owner, 'GET', '/v1/boards'))
+          .json()
+          .find((entry: { id: string }) => entry.id === copy.id).tags,
+      ).toEqual(['Networking', 'Exam']);
+
+      for (const payload of [
+        { name: 'Empty', rule: {} },
+        { name: '', rule: { tagsAll: ['exam'] } },
+        { name: 'Bad', rule: { visibility: 'secret' } },
+      ])
+        expect((await request(owner, 'POST', '/v1/smart-collections', payload)).statusCode).toBe(
+          400,
+        );
+      const smart = await request(owner, 'POST', '/v1/smart-collections', {
+        name: 'Exam prep',
+        rule: { tagsAll: ['exam'], updatedWithinDays: 30 },
+      });
+      expect(smart.statusCode).toBe(201);
+      expect(
+        (
+          await request(owner, 'POST', '/v1/smart-collections', {
+            name: 'exam PREP',
+            rule: { agent: 'demo' },
+          })
+        ).statusCode,
+      ).toBe(409);
+      const updated = await request(owner, 'PUT', `/v1/smart-collections/${smart.json().id}`, {
+        name: 'Exam prep',
+        rule: { tagsAny: ['exam', 'quiz'] },
+      });
+      expect(updated.json()).toMatchObject({ rule: { tagsAny: ['exam', 'quiz'] } });
+      expect((await request(stranger, 'GET', '/v1/smart-collections')).json()).toEqual([]);
+      expect(
+        (await request(stranger, 'DELETE', `/v1/smart-collections/${smart.json().id}`)).statusCode,
+      ).toBe(404);
+      expect(
+        (await request(owner, 'DELETE', `/v1/smart-collections/${smart.json().id}`)).statusCode,
+      ).toBe(204);
+      // Deleting a board removes its tags with it.
+      expect(
+        (await request(owner, 'DELETE', `/v1/boards/${board.id}`, { revision: board.revision }))
+          .statusCode,
+      ).toBe(204);
+      expect((await request(owner, 'GET', '/v1/boards')).json()).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
 });

@@ -44,6 +44,19 @@ new boards are created inside it. A board belongs to at most one collection.
   `boards_v2.collection_id`, migration 3), so they are included in full-database
   backups. Per-board JSON exports do not record a collection.
 
+### Tags and smart collections
+
+Use **Edit tags** on a board card to give it up to 10 comma-separated tags (1–30
+characters, case-insensitive). **Filter by tag** narrows My boards. Tags are private
+to the owner, are copied with a duplicate and are removed with the board.
+
+**New smart collection** saves a named rule instead of a list: has all/any of some
+tags, sharing, collection (or Unfiled), updated within N days, the agent that made
+it, and title text. Every filled condition must hold. Smart collections appear as
+chips beside collections, never move or change boards, and up to 50 are kept per
+account. Like filing, tagging does not change a board's revision, update time or
+undo history. Tables: `board_tags` and `smart_collections` (migration 5).
+
 The revision archive starts with the saved state present when the migration is
 installed and records subsequent successful content saves and archive changes.
 It cannot reconstruct older saves that were never retained. Undo/redo stays

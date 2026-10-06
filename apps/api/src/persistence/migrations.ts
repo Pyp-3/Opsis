@@ -63,4 +63,22 @@ export const PERSISTENCE_MIGRATIONS = [
     CREATE INDEX usage_records_user_at ON usage_records(user_id, at);
   `,
   },
+  {
+    version: 5,
+    name: 'board-tags-and-smart-collections',
+    sql: `
+    CREATE TABLE board_tags (
+      board_id TEXT NOT NULL REFERENCES boards_v2(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL COLLATE NOCASE,
+      PRIMARY KEY(board_id, tag)
+    );
+    CREATE INDEX board_tags_tag ON board_tags(tag);
+    CREATE TABLE smart_collections (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, rule TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX smart_collections_owner_name ON smart_collections(owner_id, name COLLATE NOCASE);
+  `,
+  },
 ] as const;

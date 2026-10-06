@@ -24,6 +24,10 @@ export const BoardListSchema = z.array(
     archived: z.boolean().optional(),
     /** The owner's private collection; `null` when unfiled. */
     collectionId: z.string().uuid().nullable().optional(),
+    /** The owner's private tags. */
+    tags: z.array(z.string()).optional(),
+    /** Which agent produced the board, when it has content. */
+    agent: z.string().nullable().optional(),
   }),
 );
 

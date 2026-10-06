@@ -20,6 +20,8 @@ export type BoardListing = {
   visibility: Visibility;
   archived: boolean;
   collectionId: string | null;
+  tags: string[];
+  agent: string | null;
 };
 export type BoardCollection = { id: string; name: string; createdAt: number };
 
@@ -136,13 +138,19 @@ export class ApiStore {
     const rows = this.sqlite
       .prepare(
         `SELECT id, title, revision, updated_at AS updatedAt, visibility, archived,
-                collection_id AS collectionId FROM boards_v2
+                collection_id AS collectionId, json_extract(snapshot, '$.board.agent') AS agent
+         FROM boards_v2
          WHERE owner_id = ? AND (? OR archived=0) ORDER BY updated_at DESC`,
       )
-      .all(ownerId, Number(includeArchived)) as (Omit<BoardListing, 'archived'> & {
+      .all(ownerId, Number(includeArchived)) as (Omit<BoardListing, 'archived' | 'tags'> & {
       archived: number;
     })[];
-    return rows.map((row) => ({ ...row, archived: Boolean(row.archived) }));
+    const tags = this.ownerTags(ownerId);
+    return rows.map((row) => ({
+      ...row,
+      archived: Boolean(row.archived),
+      tags: tags.get(row.id) ?? [],
+    }));
   }
 
   /** Other people's public boards, newest first. */
@@ -155,7 +163,10 @@ export class ApiStore {
          WHERE b.visibility = 'public' AND b.archived=0 AND b.owner_id != ?
          ORDER BY b.updated_at DESC LIMIT ?`,
       )
-      .all(exceptOwnerId, limit) as (Omit<BoardListing, 'archived' | 'collectionId'> & {
+      .all(exceptOwnerId, limit) as (Omit<
+      BoardListing,
+      'archived' | 'collectionId' | 'tags' | 'agent'
+    > & {
       ownerName: string;
     })[];
   }
@@ -303,10 +314,15 @@ export class ApiStore {
       if (board === undefined) return 'missing' as const;
       const snapshot = copyBoardSnapshot(board, title);
       this.saveBoard(newId, snapshot, 0, ownerId);
-      // A copy is filed beside its source.
+      // A copy is filed beside its source, with the same tags.
       this.sqlite
         .prepare('UPDATE boards_v2 SET collection_id=? WHERE id=?')
         .run(source.collectionId, newId);
+      this.sqlite
+        .prepare(
+          'INSERT INTO board_tags (board_id, tag) SELECT ?, tag FROM board_tags WHERE board_id=? ORDER BY rowid',
+        )
+        .run(newId, id);
       return 'created' as const;
     })();
   }
@@ -425,6 +441,82 @@ export class ApiStore {
 
   clearUsageRecords(userId: string) {
     this.sqlite.prepare('DELETE FROM usage_records WHERE user_id=?').run(userId);
+  }
+
+  private ownerTags(ownerId: string) {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT t.board_id AS boardId, t.tag FROM board_tags t JOIN boards_v2 b ON b.id=t.board_id
+         WHERE b.owner_id=? ORDER BY t.rowid`,
+      )
+      .all(ownerId) as { boardId: string; tag: string }[];
+    const tags = new Map<string, string[]>();
+    for (const row of rows) tags.set(row.boardId, [...(tags.get(row.boardId) ?? []), row.tag]);
+    return tags;
+  }
+
+  /** Replaces an owned board's tags; neither its revision nor its update time changes. */
+  setBoardTags(boardId: string, ownerId: string, tags: string[]) {
+    return this.sqlite.transaction(() => {
+      if (this.getBoard(boardId)?.ownerId !== ownerId) return false;
+      this.sqlite.prepare('DELETE FROM board_tags WHERE board_id=?').run(boardId);
+      const insert = this.sqlite.prepare('INSERT INTO board_tags (board_id, tag) VALUES (?,?)');
+      for (const tag of tags) insert.run(boardId, tag);
+      return true;
+    })();
+  }
+
+  listSmartCollections(ownerId: string) {
+    const rows = this.sqlite
+      .prepare(
+        'SELECT id, name, rule, created_at AS createdAt FROM smart_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE',
+      )
+      .all(ownerId) as { id: string; name: string; rule: string; createdAt: number }[];
+    return rows.map((row) => ({ ...row, rule: JSON.parse(row.rule) as unknown }));
+  }
+
+  /** Creates (no id match) or replaces an owned smart collection. */
+  saveSmartCollection(
+    id: string,
+    ownerId: string,
+    name: string,
+    rule: unknown,
+    limit: number,
+    create: boolean,
+  ) {
+    return this.sqlite.transaction(() => {
+      const owned = this.sqlite
+        .prepare('SELECT 1 FROM smart_collections WHERE id=? AND owner_id=?')
+        .get(id, ownerId);
+      if (!create && !owned) return 'missing' as const;
+      const named = this.sqlite
+        .prepare('SELECT id FROM smart_collections WHERE owner_id=? AND name=? COLLATE NOCASE')
+        .get(ownerId, name) as { id: string } | undefined;
+      if (named && named.id !== id) return 'duplicate' as const;
+      if (create) {
+        const { count } = this.sqlite
+          .prepare('SELECT count(*) AS count FROM smart_collections WHERE owner_id=?')
+          .get(ownerId) as { count: number };
+        if (count >= limit) return 'limit' as const;
+        this.sqlite
+          .prepare(
+            'INSERT INTO smart_collections (id, owner_id, name, rule, created_at) VALUES (?,?,?,?,?)',
+          )
+          .run(id, ownerId, name, JSON.stringify(rule), Date.now());
+      } else
+        this.sqlite
+          .prepare('UPDATE smart_collections SET name=?, rule=? WHERE id=?')
+          .run(name, JSON.stringify(rule), id);
+      return 'saved' as const;
+    })();
+  }
+
+  deleteSmartCollection(id: string, ownerId: string) {
+    return (
+      this.sqlite
+        .prepare('DELETE FROM smart_collections WHERE id=? AND owner_id=?')
+        .run(id, ownerId).changes > 0
+    );
   }
 
   setVisibility(id: string, visibility: Visibility) {

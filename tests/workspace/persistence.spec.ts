@@ -132,3 +132,54 @@ test('files boards into private collections that survive reload, and keeps board
   for (const title of ['Routing notes', 'Garden plan'])
     await expect(page.getByRole('button', { name: `Rename ${title}`, exact: true })).toBeVisible();
 });
+
+test('tags boards and keeps smart collections that match by rule across reload', async ({
+  page,
+}) => {
+  await signUp(page, 'Tagger');
+  for (const title of ['DNS lookups', 'Photosynthesis', 'TLS handshake'])
+    expect((await page.request.post('/v1/boards', { data: { title } })).status()).toBe(201);
+  await page.goto('/boards');
+  for (const [title, tags] of [
+    ['DNS lookups', 'networking, exam'],
+    ['TLS handshake', 'Networking'],
+  ]) {
+    await page.getByRole('button', { name: `Edit tags for ${title}`, exact: true }).click();
+    await page.getByLabel(`Tags for ${title}`).fill(tags);
+    await page.getByRole('button', { name: 'Save tags' }).click();
+    await expect(page.getByText(`Tags saved for “${title}”.`)).toBeVisible();
+  }
+  await page.getByLabel('Filter by tag').selectOption('exam');
+  await expect(page.getByRole('button', { name: 'Rename DNS lookups', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rename TLS handshake', exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByLabel('Filter by tag').selectOption('');
+
+  await page.getByRole('button', { name: 'New smart collection' }).click();
+  await page.getByLabel('Smart collection name').fill('Networking topics');
+  await page.getByLabel('Has any tag').fill('networking');
+  await page.getByRole('button', { name: 'Create smart collection' }).click();
+  const chips = page.getByRole('group', { name: 'Show collection' });
+  await expect(chips.getByRole('button', { name: /^Networking topics/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.reload();
+  await chips.getByRole('button', { name: /^Networking topics/ }).click();
+  for (const title of ['DNS lookups', 'TLS handshake'])
+    await expect(page.getByRole('button', { name: `Rename ${title}`, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Rename Photosynthesis', exact: true }),
+  ).toHaveCount(0);
+  // Tagging and smart collections are organization only: saved revisions are unchanged.
+  const revisions = await page.evaluate(async () =>
+    ((await (await fetch('/v1/boards')).json()) as { revision: number }[]).map((b) => b.revision),
+  );
+  expect(revisions).toEqual([1, 1, 1]);
+  await page.getByRole('button', { name: 'Delete smart collection' }).click();
+  await expect(chips.getByRole('button', { name: /^Networking topics/ })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Rename Photosynthesis', exact: true }),
+  ).toBeVisible();
+});
