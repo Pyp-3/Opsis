@@ -369,6 +369,7 @@ export function BoardComposer({
             aria-expanded={settingsOpen}
             aria-controls="model-settings"
             aria-label={`Model settings: ${modelLabel}`}
+            title={`Model settings: ${modelLabel}`}
             onClick={() => setSettingsOpen(!settingsOpen)}
           >
             <SlidersHorizontal size={13} />

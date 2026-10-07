@@ -42,7 +42,13 @@ column and only the settings panel scrolls; the prompt and toggle stay visible. 
 browser scenario on a short 1280×640 screen checks every section is reachable, only the
 panel scrolls, and the toggle closes it; it failed before the fix. Verified: lint,
 typecheck, Rust check/24 tests, desktop check/race tests, 399 unit tests and all 58
-Fastify browser scenarios pass. CSS-only; the desktop binary was not rebuilt by hand.
+Fastify browser scenarios pass. CSS-only; the desktop binary was not rebuilt by hand. CI run
+37629889984 passed every job. Follow-up at the user's request: when the composer is
+narrower than 480 px (docked chat, phones), the Model toggle shows only its sliders icon
+as a round button with a tooltip and its full accessible name, instead of truncating to
+"M…". The scenario now checks the icon form, the labelled form in the full-page chat and
+no phone overflow. Lint, typecheck, Rust, desktop checks, 399 unit tests and 58 browser
+scenarios pass; desktop and phone screenshots were reviewed.
 
 Local Linux desktop sync (2026-10-07, user request): `pnpm desktop:sync` rebuilds
 the desktop app from the current checkout when sources changed. It reuses the

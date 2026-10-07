@@ -152,6 +152,11 @@ test('docked chat model settings stay reachable and can be closed on a short scr
   await expect(page.getByRole('region', { name: 'Interactive diagram canvas' })).toBeVisible();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   const toggle = page.getByRole('button', { name: /^Model settings:/ });
+  // Beside the canvas the toggle is a round icon button rather than a truncated name.
+  await expect(toggle.locator('svg').first()).toBeVisible();
+  await expect(toggle.locator('.model-toggle-label')).toBeHidden();
+  await expect(toggle).toHaveAttribute('title', /^Model settings: /);
+  expect((await toggle.boundingBox())!.width).toBeLessThanOrEqual(32);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   // Every optional section makes the panel taller than the chat column.
@@ -184,4 +189,13 @@ test('docked chat model settings stay reachable and can be closed on a short scr
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#model-settings')).toHaveCount(0);
+
+  // With room to spare, the full-page chat names the model beside the icon.
+  await page.getByRole('button', { name: 'Expand chat' }).click();
+  await expect(toggle.locator('.model-toggle-label')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflow).toBe(false);
 });

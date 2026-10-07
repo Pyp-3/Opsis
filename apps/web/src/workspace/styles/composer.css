@@ -354,6 +354,31 @@
   min-width: 0;
   max-width: 280px;
 }
+/* Too narrow for the model name beside the agent picker: the toggle keeps its sliders icon
+   as a round icon button instead of truncating to a letter. Its accessible name and tooltip
+   still give the full model. */
+.composer {
+  container: composer / inline-size;
+}
+.model-toggle svg {
+  flex-shrink: 0;
+}
+@container composer (max-width: 480px) {
+  .composer-footer .model-toggle {
+    flex: 0 0 auto;
+    justify-content: center;
+    width: 30px;
+    padding: 0;
+  }
+  .composer-footer .model-toggle .model-toggle-label,
+  .composer-footer .model-toggle .chevron {
+    display: none;
+  }
+  .model-toggle svg {
+    width: 15px;
+    height: 15px;
+  }
+}
 .model-toggle[aria-expanded='true'] {
   color: var(--ink);
   background: var(--accent-soft);
