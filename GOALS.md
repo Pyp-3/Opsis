@@ -255,9 +255,12 @@ board with drawings but no concepts). Lint, typecheck and all 393 unit tests pas
 API/lint-rule tests timed out under full-suite load and pass when rerun alone). The full
 Fastify browser suite passes 51 of 52 scenarios; the Linux-only pixel baseline is skipped.
 The Go desktop host validates the same embedded contracts: Go vet and the full race suite
-pass with the rebuilt contract bundle, and Rust check plus its 24 tests pass. Not yet run:
-the built desktop executable's browser suite and hidden WebView smoke. The always-visible drawing-tools button
-changes the Linux canvas baseline (`approval-canvas.png`), so CI needs a reviewed update.
+pass with the rebuilt contract bundle, and Rust check plus its 24 tests pass. Branch CI run
+37471183918 (`canvas-drawing`) passed every job: web checks with all 52 browser scenarios,
+including the Linux pixel baseline (the collapsed drawing-tools button stays within its
+tolerance), and the Linux, Windows and both macOS desktop jobs with their packaged-executable
+browser and hidden WebView checks. The combined integration and its updated Linux
+baseline are verified in the current-delivery section above.
 See the [user guide](docs/USER-GUIDE.md#draw-on-the-canvas).
 
 ## In progress: board collections (requested 2026-10-05)
