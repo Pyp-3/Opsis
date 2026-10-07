@@ -27,7 +27,13 @@ is docked to the bottom. The Canvas tab shows working/review status and the Chat
 an unread reply. A proposal review opens beside the docked chat. Header Export/Linked
 from become icons on phones. A new browser scenario covers docking, review placement,
 expansion persistence and accessibility. The reviewed Linux pixel baseline was
-regenerated for the taller canvas.
+regenerated for the taller canvas. Verified: lint, typecheck, Rust check/24 tests,
+desktop check/race tests, packaged integration and 399 unit tests pass. Fastify
+`test:qa` passes 57/57 browser scenarios, and so does the rebuilt Linux binary.
+The hidden WebView smoke test passes. Desktop and mobile screenshots were reviewed;
+no paid model calls were made. While validating, a desktop-sync fingerprint bug was
+found and fixed: only the first file was hashed, so web changes were missed. A
+regression test now covers it (`pnpm release:test`).
 
 Local Linux desktop sync (2026-10-07, user request): `pnpm desktop:sync` rebuilds
 the desktop app from the current checkout when sources changed. It reuses the
