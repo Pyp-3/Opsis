@@ -23,7 +23,7 @@ import {
   readlinkSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -45,13 +45,14 @@ const runtimeInputs = [
   'scripts/build-desktop.mjs',
 ];
 
-const git = (...gitArgs) =>
+const gitIn = (cwd, ...gitArgs) =>
   execFileSync('git', gitArgs, {
-    cwd: root,
+    cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 256 * 1024 * 1024,
   });
+const git = (...gitArgs) => gitIn(root, ...gitArgs);
 
 function unavailableReason() {
   if (process.platform !== 'linux')
@@ -74,29 +75,26 @@ function unavailableReason() {
   return undefined;
 }
 
-const files = (...gitArgs) =>
-  git(...gitArgs, '-z')
-    .split('\0')
-    .filter(Boolean);
-
 // Hashes the working-tree content of every tracked and untracked (non-ignored) file,
 // so committing unchanged content does not trigger a rebuild, while uncommitted
 // edits are never mistaken for the commit they started from.
-function fingerprint(paths) {
+export function fingerprint(paths, cwd = root) {
+  // Options must precede `--`; anything after it is a pathspec.
+  const list = (...options) =>
+    gitIn(cwd, 'ls-files', ...options, '-z', '--', ...paths)
+      .split('\0')
+      .filter(Boolean);
   const blobs = new Map();
-  for (const line of files('ls-files', '--stage', '--', ...paths)) {
+  for (const line of list('--stage')) {
     const [meta, path] = line.split('\t');
     blobs.set(path, meta.split(' ')[1]);
   }
-  const changed = [
-    ...files('ls-files', '--modified', '--', ...paths),
-    ...files('ls-files', '--others', '--exclude-standard', '--', ...paths),
-  ];
+  const changed = [...new Set([...list('--modified'), ...list('--others', '--exclude-standard')])];
   for (const path of changed) blobs.delete(path);
-  const present = [...new Set(changed)].filter((path) => existsSync(join(root, path)));
+  const present = changed.filter((path) => existsSync(join(cwd, path)));
   if (present.length) {
     const hashes = execFileSync('git', ['hash-object', '--stdin-paths'], {
-      cwd: root,
+      cwd,
       encoding: 'utf8',
       input: present.join('\n'),
       maxBuffer: 64 * 1024 * 1024,
@@ -303,18 +301,21 @@ function sync() {
   }
 }
 
-if (args.has('--install-hooks')) installHooks();
-else if (args.has('--background')) {
-  // Hooks return immediately; the detached build writes its output to the log.
-  if (!unavailableReason()) {
-    mkdirSync(output, { recursive: true });
-    const log = openSync(logPath, 'a');
-    const forwarded = process.argv.slice(2).filter((arg) => arg !== '--background');
-    spawn(process.execPath, [fileURLToPath(import.meta.url), ...forwarded, '--notify'], {
-      cwd: root,
-      detached: true,
-      stdio: ['ignore', log, log],
-    }).unref();
-    console.log(`Opsis desktop sync started in the background (log: ${logPath}).`);
-  }
-} else sync();
+// Run only as a command, so tests can import the fingerprint.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (args.has('--install-hooks')) installHooks();
+  else if (args.has('--background')) {
+    // Hooks return immediately; the detached build writes its output to the log.
+    if (!unavailableReason()) {
+      mkdirSync(output, { recursive: true });
+      const log = openSync(logPath, 'a');
+      const forwarded = process.argv.slice(2).filter((arg) => arg !== '--background');
+      spawn(process.execPath, [fileURLToPath(import.meta.url), ...forwarded, '--notify'], {
+        cwd: root,
+        detached: true,
+        stdio: ['ignore', log, log],
+      }).unref();
+      console.log(`Opsis desktop sync started in the background (log: ${logPath}).`);
+    }
+  } else sync();
+}

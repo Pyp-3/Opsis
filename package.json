@@ -14,7 +14,7 @@
     "engine:check": "pnpm --filter @opsis/engine check:rust",
     "build": "pnpm -r build",
     "release:package": "node scripts/package-release.mjs",
-    "release:test": "node --test scripts/package-release.test.mjs scripts/bundle-macos.test.mjs",
+    "release:test": "node --test scripts/package-release.test.mjs scripts/bundle-macos.test.mjs scripts/sync-desktop.test.mjs",
     "docs:wiki": "node scripts/build-wiki.mjs",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
