@@ -17,6 +17,7 @@ import {
   MoveUpRight,
   PenTool,
   Pencil,
+  RotateCw,
   Ruler,
   Slash,
   Square,
@@ -28,7 +29,10 @@ import {
 import {
   absoluteDrawing,
   anchorDrawing,
+  drawingFrame,
   drawingOrigin,
+  normalizeRotation,
+  ROTATABLE_SHAPES,
   isDrawingEditable,
   isDrawingPickable,
   translateDrawing,
@@ -56,6 +60,8 @@ import {
   readDrawingClipboard,
   resizeDrawing,
   resizeHandles,
+  rotateDrawing,
+  rotationCentre,
   round,
   roundDrawing,
   simplifyStroke,
@@ -109,6 +115,11 @@ const SNAP = 12;
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
 /** Pasted and duplicated drawings land one grid square down and right of their source. */
 const PASTE_OFFSET = SNAP * 2;
+/** How far above a shape its rotation handle sits, in screen pixels. */
+const ROTATE_OFFSET = 24;
+/** The angle of `point` about `centre`, in degrees clockwise from the x axis. */
+const angleAbout = (centre: Point, point: Point) =>
+  (Math.atan2(point[1] - centre[1], point[0] - centre[0]) * 180) / Math.PI;
 const LIMIT_NOTICE = `A board holds at most ${MAX_BOARD_DRAWINGS} drawings.`;
 const plural = (count: number) => `${count} drawing${count === 1 ? '' : 's'}`;
 
@@ -121,6 +132,8 @@ type Gesture =
       handle: ResizeHandle;
       original: BoardDrawing;
       origin: { x: number; y: number };
+      /** For the rotation handle: the pointer's starting angle about the centre, in degrees. */
+      startAngle: number;
     }
   | { kind: 'marquee'; from: Point; base: string[] }
   | { kind: 'erase' };
@@ -466,20 +479,33 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
             <SelectionOutline key={item.id} drawing={item} zoom={zoom} />
           ))}
           {resizable &&
-            resizeHandles(resizable).map(({ handle, at }) => (
-              <rect
-                key={handle}
-                className="drawing-handle"
-                data-handle={handle}
-                x={at[0] - 4 / zoom}
-                y={at[1] - 4 / zoom}
-                width={8 / zoom}
-                height={8 / zoom}
-                fill="#ffffff"
-                stroke={halo}
-                strokeWidth={1.5 / zoom}
-              />
-            ))}
+            resizeHandles(resizable, ROTATE_OFFSET / zoom).map(({ handle, at }) =>
+              handle === 'rotate' ? (
+                <g key={handle} className="drawing-handle" data-handle={handle}>
+                  <circle
+                    cx={at[0]}
+                    cy={at[1]}
+                    r={5 / zoom}
+                    fill={halo}
+                    stroke="#ffffff"
+                    strokeWidth={1.5 / zoom}
+                  />
+                </g>
+              ) : (
+                <rect
+                  key={handle}
+                  className="drawing-handle"
+                  data-handle={handle}
+                  x={at[0] - 4 / zoom}
+                  y={at[1] - 4 / zoom}
+                  width={8 / zoom}
+                  height={8 / zoom}
+                  fill="#ffffff"
+                  stroke={halo}
+                  strokeWidth={1.5 / zoom}
+                />
+              ),
+            )}
           {area && (
             <rect
               className="drawing-marquee"
@@ -506,12 +532,17 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
 }
 
 function SelectionOutline({ drawing, zoom }: { drawing: BoardDrawing; zoom: number }) {
-  const box = drawingBox(drawing);
+  // A rotated box, ellipse or text is outlined in its own frame, turned with it.
+  const box = drawing.points ? drawingBox(drawing) : drawingFrame(drawing);
+  const centre = rotationCentre(drawing);
   const pad = 6 + drawing.strokeWidth;
   return (
     <rect
       className="drawing-selection"
       data-locked={drawing.locked ? 'true' : undefined}
+      transform={
+        drawing.rotation ? `rotate(${drawing.rotation} ${centre[0]} ${centre[1]})` : undefined
+      }
       x={box.x - pad}
       y={box.y - pad}
       width={box.width + pad * 2}
@@ -622,7 +653,12 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
   if (!board || !editable) return null;
 
   const at = (event: ReactPointerEvent): Point => {
-    const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    // Drawing does its own snapping (half squares, or none with Alt); the canvas's 24-unit
+    // concept snap would quantise freehand strokes and miss handles.
+    const point = flow.screenToFlowPosition(
+      { x: event.clientX, y: event.clientY },
+      { snapToGrid: false },
+    );
     return [point.x, point.y];
   };
   const tolerance = () => 6 / flow.getZoom();
@@ -651,7 +687,8 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
       // A handle of the one selected drawing resizes it.
       if (selected && isDrawingEditable(selected, current.drawingLayers)) {
         const original = absoluteDrawing(selected, current.positions);
-        const handle = handleAt(original, point, 8 / flow.getZoom());
+        const zoom = flow.getZoom();
+        const handle = handleAt(original, point, 8 / zoom, ROTATE_OFFSET / zoom);
         if (handle) {
           begin();
           gesture.current = {
@@ -660,6 +697,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
             handle,
             original,
             origin: drawingOrigin(selected, current.positions),
+            startAngle: angleAbout(rotationCentre(original), point),
           };
           return;
         }
@@ -722,12 +760,20 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     else if (current.kind === 'marquee') setMarquee({ from: current.from, to: point });
     else if (current.kind === 'resize') {
       const fix = (value: number) => (event.altKey ? round(value) : snap(value));
-      const resized = resizeDrawing(
-        current.original,
-        current.handle,
-        [fix(point[0]), fix(point[1])],
-        event.shiftKey,
-      );
+      let resized: BoardDrawing;
+      if (current.handle === 'rotate') {
+        const turned = angleAbout(rotationCentre(current.original), point) - current.startAngle;
+        // Shift turns in 15° steps: boxes to a multiple of 15°, lines and strokes by one.
+        const before = current.original.rotation ?? 0;
+        const delta = event.shiftKey ? Math.round((before + turned) / 15) * 15 - before : turned;
+        resized = rotateDrawing(current.original, delta);
+      } else
+        resized = resizeDrawing(
+          current.original,
+          current.handle,
+          [fix(point[0]), fix(point[1])],
+          event.shiftKey,
+        );
       setBoard((board) =>
         board
           ? {
@@ -1106,6 +1152,47 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
                 </select>
               </label>
             </>
+          )}
+          {single && ROTATABLE_SHAPES.includes(single.shape) && (
+            <label>
+              Rotation (°)
+              <input
+                aria-label="Rotation in degrees"
+                type="number"
+                min={-180}
+                max={180}
+                step={1}
+                key={`${single.id}:${single.rotation ?? 0}`}
+                defaultValue={single.rotation ?? 0}
+                onBlur={(event) => {
+                  const value = Number(event.target.value);
+                  if (!Number.isFinite(value)) return;
+                  const rotation = normalizeRotation(value);
+                  if (rotation === (single.rotation ?? 0)) return;
+                  changeDrawing(single.id, (item) => {
+                    const next: BoardDrawing = { ...item, rotation };
+                    if (!rotation) delete next.rotation;
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+              />
+            </label>
+          )}
+          {changeable.length > 0 && (
+            <button
+              className="drawing-delete"
+              onClick={() =>
+                changeDrawings(
+                  changeable.map((item) => item.id),
+                  (item) => roundDrawing(rotateDrawing(item, 90)),
+                )
+              }
+            >
+              <RotateCw size={14} /> Rotate 90°
+            </button>
           )}
           {selection.length > 0 && (
             <>

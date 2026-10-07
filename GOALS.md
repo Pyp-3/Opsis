@@ -308,8 +308,23 @@ blueprints and hybrid flows (engineering and architecture) instead of only proce
       base layer) and per-drawing locks. Hidden layers are left out of the canvas and exports.
 - [x] Copy/cut/paste via clipboard events (validated JSON text, works across boards and tabs)
       and Ctrl/⌘ D duplicate; each paste is one undoable step.
-- [ ] Not yet: chat-generation agents drawing (would change the generation output contract and
-      proposal review for every provider), rotation, and resizing text by dragging.
+- [x] Rotation (2026-10-07): an optional `rotation` (degrees about the centre) for boxes,
+      ellipses and text; strokes, lines, arrows and dimensions turn their points. A rotation
+      handle (Shift: 15° steps), a Rotation field and Rotate 90°; rotated shapes are hit-tested,
+      outlined, resized in their own frame and exported as painted. MCP tools accept `rotation`.
+- [x] Text corner handles change its font size (8–96), keeping the opposite corner in place.
+- [x] Chat-generation sketches (2026-10-07): the board output may include up to 60 agent
+      drawings (same validated shapes, anchored to concepts or free-standing; invalid ones get
+      the usual single repair). They go on an "Agent sketch" layer; free-standing sketches on a
+      new diagram are placed right of it. Follow-ups show the agent only its own sketch and the
+      scale; leaving the list out keeps it, and a hidden/locked agent layer is neither sent nor
+      changed. Sketch changes are one reviewable proposal item ("drawings"); the server's
+      change check also requires review. The demo agent sketches the email servers on request.
+- [x] Fixed an existing drawing bug found while testing: pointer positions were snapped to the
+      canvas's 24-unit concept grid, so freehand strokes were quantised, Alt did not place points
+      freely and small handles were missed. Drawing input now does its own snapping only.
+- [ ] Not yet: rotating several drawings about a shared centre (each turns about its own), and
+      streaming an agent's sketch before the full answer arrives.
 
 Verified 2026-10-07 on Arch Linux: schema tests (layer order/visibility/locks, layer removal,
 scale labels and validation), web geometry tests (handles, resize/flip/proportion, stroke
@@ -326,6 +341,17 @@ calls were made. CI run 37636842699 passed web, Linux and Windows. Both Mac jobs
 the new scenario, because the test pressed Control+C/V; on macOS the browser copies and pastes
 with ⌘. The test now uses Playwright's platform modifier; the app is unchanged. Follow-up run
 37639361136 passed every job, including both Mac architectures and release publishing.
+
+Rotation, text handles and chat sketches verified 2026-10-07 on Arch Linux: geometry tests
+(rotation, rotated hit-testing and resizing, text sizing), schema/review tests (sketch as one
+change, rejected concepts, key-order-insensitive comparison), client layout tests (placement,
+clashing ids, locked layer) and API tests (sketch validation and repair, follow-up review, demo).
+A browser scenario covers a demo chat sketch through review, the rotation handle and field, text
+corner sizing and a locked agent layer, with an accessibility scan. It found two bugs, both fixed:
+the grid-snapped pointer and a review that saw a reordered but identical sketch as changed.
+Lint, typecheck, Rust check/24 tests, desktop check/race tests, 418 unit tests and 60 Fastify
+browser scenarios pass. The rebuilt Linux binary passes packaged integration, all 60 browser
+scenarios and all 24 hidden WebView checks. No paid model calls were made.
 
 Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
 uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,

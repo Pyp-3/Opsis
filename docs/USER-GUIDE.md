@@ -87,8 +87,12 @@ canvas to show the drawing tools:
   Dragging any selected drawing moves the whole selection.
 - **Resize handles** appear around one selected box, ellipse or freehand stroke, and at both
   ends of a line, arrow or dimension. Drag one to reshape it; it snaps like drawing does,
-  Shift keeps a corner drag in proportion and Alt places it freely. Text is resized with its
-  size setting.
+  Shift keeps a corner drag in proportion and Alt places it freely. Dragging a corner of a
+  text changes its letter size, keeping the opposite corner in place.
+- **Rotate** with the round handle above a selected shape; hold Shift to turn in 15° steps.
+  A box, ellipse or text also has a **Rotation (°)** field for an exact angle, and
+  **Rotate 90°** turns every selected drawing by a quarter turn. A rotated shape keeps its
+  handles along its own sides.
 - **Copy and paste**: Ctrl/⌘ C, X and V copy, cut and paste selected drawings, also into
   another board or browser tab. Ctrl/⌘ D, or **Duplicate**, copies them in place. Copies land
   one grid square down and right, keep following their concept on the same board, and are
@@ -118,11 +122,21 @@ or deleted. A locked drawing can still be picked, so you can unlock it.
 
 Each finished shape, move, resize, restyle, paste, eraser sweep and layer or scale change is
 one undoable step. Drawings, layers and the scale are saved with the board, included in
-SVG and PNG exports and JSON files, and shown read-only to public viewers. Chat generation
-does not receive or change them, and a drawing attached to a concept that a follow-up
-removes stays where it was drawn. External agents connected over MCP can read and draw
-with `opsis_add_drawings`, `opsis_update_drawing` and `opsis_remove_drawings`, and set the
-scale with `opsis_update_board`. They cannot change anything you have locked, or hidden.
+SVG and PNG exports and JSON files, and shown read-only to public viewers. A drawing
+attached to a concept that a follow-up removes stays where it was drawn.
+
+**Sketches from chat.** For spatial subjects such as floor plans, room and site layouts or
+equipment arrangements, or when you ask it to sketch or lay something out, the chat agent
+may add a sketch beside the diagram. Its drawings go on their own **Agent sketch** layer.
+On a new diagram, a free-standing sketch is placed to the right of the concepts; parts of
+it can follow particular concepts. On a follow-up the agent is shown only its own sketch
+and the board's scale, never your drawings on other layers, and any change to its sketch
+appears as one item in the proposal review. Lock or hide the Agent sketch layer to keep
+the agent from seeing or changing it. Edit or restyle the sketch like any other drawing.
+
+External agents connected over MCP can read and draw with `opsis_add_drawings`,
+`opsis_update_drawing` and `opsis_remove_drawings`, and set the scale with
+`opsis_update_board`. They cannot change anything you have locked, or hidden.
 
 ## Save and organize projects
 

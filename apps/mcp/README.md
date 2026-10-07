@@ -73,7 +73,7 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 Drawings use canvas coordinates, where one grid square is 24 units. `opsis_get_board`
 returns each concept's position, so a sketch can be placed around the diagram. A drawing
 added with `movesWith` follows that concept when it is moved. A `layer` name puts it on that
-layer, creating the layer if needed. Agents cannot change drawings the reader has locked, or
+layer, creating the layer if needed. Boxes, ellipses and text take a `rotation` in degrees. Agents cannot change drawings the reader has locked, or
 drawings on locked or hidden layers, and cannot lock, hide or unlock anything themselves.
 
 New concepts are placed clear of existing ones; **Arrange downward** on the canvas tidies a

@@ -7,6 +7,7 @@ import {
   boardOutputSchema,
   DEFAULT_BOARD_MODELS,
   boardChanges,
+  type BoardDocument,
   type BoardGraph,
 } from '@opsis/schema';
 import type { LLMRequest } from '../harness/types.js';
@@ -20,6 +21,60 @@ import type { BoardClientFactory } from './client.js';
 import { SYSTEM, DIAGRAM_NOTES, progressNotes } from './prompts.js';
 import { envelopeRepairPrompt, agentLabel, withoutInvalidCustomIcons } from './results.js';
 import { outcome, type AgentWork, type Outcome } from './transport.js';
+
+/**
+ * The demo's answer to "sketch the mail servers": the same diagram with a small agent sketch, a
+ * dashed zone around the sending server, its label and a dimension, so drawing from chat can be
+ * tried and tested without an agent.
+ */
+function emailDemoSketch(board: BoardDocument): BoardGraph {
+  return {
+    title: board.title,
+    description: board.description,
+    nodes: [...board.nodes],
+    edges: [...board.edges],
+    suggestions: board.suggestions ?? [],
+    drawings: [
+      {
+        id: 'provider-zone',
+        shape: 'rect',
+        anchorId: 'outgoing',
+        x: -24,
+        y: -24,
+        width: 272,
+        height: 168,
+        ink: 'sky',
+        line: 'dashed',
+        strokeWidth: 2,
+        fill: true,
+      },
+      {
+        id: 'provider-label',
+        shape: 'text',
+        anchorId: 'outgoing',
+        x: -20,
+        y: -48,
+        text: 'Your provider’s data centre',
+        fontSize: 14,
+        ink: 'sky',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+      {
+        id: 'zone-width',
+        shape: 'dimension',
+        anchorId: 'outgoing',
+        points: [
+          [-24, 168],
+          [248, 168],
+        ],
+        ink: 'ink',
+        line: 'solid',
+        strokeWidth: 1,
+      },
+    ],
+  };
+}
 
 export async function generateBoard(
   body: unknown,
@@ -92,9 +147,14 @@ export async function generateBoard(
       }
       return outcome(200, BoardGraphSchema.parse(graph));
     }
+    if (
+      input.board?.nodes.some((node) => node.id === 'outgoing') &&
+      /sketch|draw|plan|layout/i.test(input.prompt)
+    )
+      return outcome(200, BoardGraphSchema.parse(emailDemoSketch(input.board)));
     return outcome(400, {
       message:
-        'Demo supports the email journey, its delivery-failure branch, and DNS requests and responses. Select Claude or Codex for other requests.',
+        'Demo supports the email journey, its delivery-failure branch and a sketch of its mail servers, and DNS requests and responses. Select Claude or Codex for other requests.',
     });
   }
   let prepared;
@@ -107,7 +167,7 @@ export async function generateBoard(
   try {
     const client = await factory(input.agent, input.settings ?? DEFAULT_BOARD_MODELS[input.agent]);
     const modelRequest: LLMRequest = {
-      promptId: 'board/v6',
+      promptId: 'board/v7',
       system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}\nSchema: ${boardOutputSchema}`,
       user: JSON.stringify({
         prompt: input.prompt,

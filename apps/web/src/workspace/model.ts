@@ -2,6 +2,9 @@ import { arrangeGraph } from './layout-engine';
 import {
   BoardDocumentSchema,
   detachDrawings,
+  placeSketch,
+  sketchForAgent,
+  withAgentSketch,
   type BoardDocument,
   type BoardGraph,
   type BoardAgent,
@@ -158,8 +161,10 @@ export async function layoutBoard(
     if (before.illustration && !node.illustration) kept.illustration = before.illustration;
     return kept;
   });
-  return BoardDocumentSchema.parse({
-    ...graph,
+  // An agent's sketch is not reader data: it is placed on the agent's own layer below.
+  const { drawings: proposedSketch, ...content } = graph;
+  const document = BoardDocumentSchema.parse({
+    ...content,
     nodes,
     edges,
     version: 2,
@@ -196,18 +201,43 @@ export async function layoutBoard(
     ...(previous?.drawingLayers ? { drawingLayers: previous.drawingLayers } : {}),
     ...(previous?.drawingScale ? { drawingScale: previous.drawingScale } : {}),
   });
+  if (!proposedSketch) return document;
+  // Without a diagram to look at, the agent could not know where concepts would land, so its
+  // free-standing sketch is placed as a group to the right of the laid-out diagram.
+  const placed = previous?.nodes.length
+    ? proposedSketch
+    : placeSketch(proposedSketch, besideDiagram(document));
+  return BoardDocumentSchema.parse(
+    withAgentSketch(document, placed, new Set(nodes.map((node) => node.id))),
+  );
+}
+
+/** A spot two grid squares to the right of the diagram, level with its top. */
+function besideDiagram(board: BoardDocument) {
+  const placed = board.nodes.flatMap((node) => {
+    const at = board.positions[node.id];
+    return at ? [{ ...at, right: at.x + NODE_WIDTH }] : [];
+  });
+  if (!placed.length) return { x: 24, y: 24 };
+  return {
+    x: Math.max(...placed.map((at) => at.right)) + 96,
+    y: Math.min(...placed.map((at) => at.y)),
+  };
 }
 
 /**
- * Drawings are large and only matter to playback, and colours and canvas sketches only to the
- * reader, so agents are sent the board without them; `layoutBoard` restores them afterwards.
+ * Illustrations are large and only matter to playback, and colours and the reader's canvas
+ * sketches only to the reader, so agents are sent the board without them; `layoutBoard`
+ * restores them afterwards. The agent is shown only its own sketch (unless the reader hid or
+ * locked that layer) and the drawing scale, so its dimension labels use the board's units.
  */
 export function withoutIllustrations(board: BoardDocument): BoardDocument {
   const rest = { ...board };
   delete rest.look;
   delete rest.drawings;
   delete rest.drawingLayers;
-  delete rest.drawingScale;
+  const sketch = sketchForAgent(board);
+  if (sketch?.length) rest.drawings = sketch;
   return {
     ...rest,
     nodes: board.nodes.map((node) => {

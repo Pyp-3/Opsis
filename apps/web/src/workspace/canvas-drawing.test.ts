@@ -12,6 +12,8 @@ import {
   pasteDrawings,
   readDrawingClipboard,
   resizeDrawing,
+  resizeHandles,
+  rotateDrawing,
   simplifyStroke,
   strokePath,
 } from './canvas-drawing';
@@ -31,7 +33,7 @@ describe('canvas drawing geometry', () => {
     expect(next.nodes[0]!.linkedBoardId).toBe(destination);
     expect(next.drawings).toEqual([box]);
   });
-  it('keeps drawing layers and the scale through regeneration, and never sends them', async () => {
+  it('keeps drawing layers and the scale through regeneration, sending only the scale', async () => {
     const previous = await layoutBoard(EMAIL_DEMO, 'demo');
     previous.drawings = [{ ...box, layerId: 'plan' }];
     previous.drawingLayers = [{ id: 'plan', name: 'Plan', locked: true }];
@@ -41,7 +43,57 @@ describe('canvas drawing geometry', () => {
     expect(next.drawingScale).toEqual(previous.drawingScale);
     const sent = withoutIllustrations(previous);
     expect(sent).not.toHaveProperty('drawingLayers');
-    expect(sent).not.toHaveProperty('drawingScale');
+    expect(sent).not.toHaveProperty('drawings');
+    // Dimension labels in an agent's sketch should use the board's units.
+    expect(sent.drawingScale).toEqual({ gridValue: 0.5, unit: 'm' });
+  });
+
+  it('places an agent sketch on its own layer and shows the agent only that sketch', async () => {
+    const free = { ...box, id: 'room', x: 0, y: 0 };
+    const label: BoardDrawing = {
+      id: 'label',
+      shape: 'text',
+      anchorId: 'outgoing',
+      x: 0,
+      y: -24,
+      text: 'Servers',
+      ...ink,
+    };
+    // A new diagram: the free-standing part is placed beside it as a group.
+    const fresh = await layoutBoard({ ...EMAIL_DEMO, drawings: [free, label] }, 'claude');
+    const right = Math.max(...Object.values(fresh.positions).map((at) => at.x)) + 224;
+    const room = fresh.drawings!.find((item) => item.id === 'room')!;
+    expect(room).toMatchObject({ layerId: 'agent-sketch' });
+    expect(room.x).toBe(right + 96);
+    expect(fresh.drawingLayers).toEqual([{ id: 'agent-sketch', name: 'Agent sketch' }]);
+    expect(fresh.drawings!.find((item) => item.id === 'label')!.anchorId).toBe('outgoing');
+
+    // A follow-up keeps the reader's drawings, renames a clashing id and sends only the sketch.
+    const previous = { ...fresh, drawings: [box, ...fresh.drawings!] };
+    expect(withoutIllustrations(previous).drawings!.map((item) => item.id)).toEqual([
+      'room',
+      'label',
+    ]);
+    expect(withoutIllustrations(previous).drawings![0]).not.toHaveProperty('layerId');
+    const next = await layoutBoard(
+      { ...EMAIL_DEMO, drawings: [{ ...label, id: 'box', text: 'Mail servers' }] },
+      'claude',
+      previous,
+    );
+    expect(next.drawings!.map((item) => [item.id, item.layerId])).toEqual([
+      ['box', undefined],
+      ['box-agent', 'agent-sketch'],
+    ]);
+    // Leaving the sketch out keeps it; a locked agent layer is neither shown nor changed.
+    const unchanged = await layoutBoard(EMAIL_DEMO, 'claude', previous);
+    expect(unchanged.drawings).toEqual(previous.drawings);
+    const locked = {
+      ...previous,
+      drawingLayers: [{ id: 'agent-sketch', name: 'Agent sketch', locked: true }],
+    };
+    expect(withoutIllustrations(locked)).not.toHaveProperty('drawings');
+    const ignored = await layoutBoard({ ...EMAIL_DEMO, drawings: [] }, 'claude', locked);
+    expect(ignored.drawings).toEqual(previous.drawings);
   });
   it('hits outlines, filled interiors and lines within a tolerance', () => {
     expect(drawingContains(box, [50, 1], 4)).toBe(true);
@@ -204,5 +256,73 @@ describe('canvas drawing geometry', () => {
     expect(boardSvg({ ...board, drawingLayers: [{ id: 'draft', name: 'Draft' }] })).toContain(
       'width="137"',
     );
+  });
+
+  it('rotates boxes about their centre and turns the points of lines and strokes', () => {
+    const turned = rotateDrawing(box, 90);
+    expect(turned.rotation).toBe(90);
+    expect(rotateDrawing(turned, 270)).not.toHaveProperty('rotation');
+    expect(rotateDrawing(box, -200).rotation).toBe(160);
+    // The turned box is hit where it is painted, not where it stood.
+    expect(drawingContains(turned, [50, 1], 2)).toBe(false);
+    expect(drawingContains(turned, [20, 30], 2)).toBe(true);
+    const line: BoardDrawing = {
+      id: 'l',
+      shape: 'line',
+      points: [
+        [0, 0],
+        [40, 0],
+      ],
+      ...ink,
+    };
+    expect(rotateDrawing(line, 90).points).toEqual([
+      [20, -20],
+      [20, 20],
+    ]);
+    expect(rotateDrawing(line, 90)).not.toHaveProperty('rotation');
+    // The rotation handle sits above the top edge and turns with the shape.
+    const handle = resizeHandles(turned, 24).find((item) => item.handle === 'rotate')!;
+    expect(handle.at[0]).toBeCloseTo(104);
+    expect(handle.at[1]).toBeCloseTo(30);
+  });
+
+  it('resizes a rotated box in its own frame, keeping the opposite corner in place', () => {
+    const turned = { ...box, rotation: 90 };
+    const corner = (drawing: BoardDrawing, which: string) =>
+      resizeHandles(drawing).find((item) => item.handle === which)!.at;
+    const fixed = corner(turned, 'nw');
+    const dragged = corner(turned, 'se');
+    const resized = resizeDrawing(turned, 'se', [dragged[0], dragged[1] + 40]);
+    expect(resized).toMatchObject({ width: 140, height: 60, rotation: 90 });
+    const after = corner(resized, 'nw');
+    expect(after[0]).toBeCloseTo(fixed[0]);
+    expect(after[1]).toBeCloseTo(fixed[1]);
+  });
+
+  it('sizes text letters from its corner handles', () => {
+    const text: BoardDrawing = {
+      id: 't',
+      shape: 'text',
+      x: 0,
+      y: 0,
+      text: 'Pump',
+      fontSize: 16,
+      ...ink,
+    };
+    expect(resizeHandles(text).map((item) => item.handle)).toEqual([
+      'nw',
+      'ne',
+      'se',
+      'sw',
+      'rotate',
+    ]);
+    const bigger = resizeDrawing(text, 'se', [76.8, 40]);
+    expect(bigger).toMatchObject({ x: 0, y: 0, fontSize: 32 });
+    expect(resizeDrawing(text, 'se', [1, 1]).fontSize).toBe(8);
+    // Dragging the top-left corner keeps the bottom-right corner where it was.
+    const fromTop = resizeDrawing(text, 'nw', [-38.4, -20]);
+    expect(fromTop.fontSize).toBe(32);
+    expect(fromTop.x).toBeCloseTo(-38.4);
+    expect(fromTop.y).toBeCloseTo(-20);
   });
 });

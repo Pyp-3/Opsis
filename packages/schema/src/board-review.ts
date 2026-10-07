@@ -1,8 +1,25 @@
 import { BoardDocumentSchema, type BoardDocument } from './board';
-import { detachDrawings } from './board-drawings';
+import {
+  AGENT_SKETCH_LAYER,
+  agentSketchOf,
+  detachDrawings,
+  type BoardDrawing,
+} from './board-drawings';
 
 export type BoardReviewChange = { key: string; label: string };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Key order differs between edited and validated objects; it never makes drawings differ. */
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([, item]) => item !== undefined)
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([key, item]) => [key, canonical(item)]),
+        )
+      : value;
 const metadata = (board: BoardDocument) => ({
   title: board.title,
   description: board.description,
@@ -30,6 +47,14 @@ export function boardReviewChanges(
   }
   if (!same(metadata(before), metadata(candidate)))
     changes.push({ key: 'metadata', label: 'Update title, description and suggestions' });
+  const [oldSketch, newSketch] = [agentSketchOf(before), agentSketchOf(candidate)];
+  if (!same(canonical(oldSketch), canonical(newSketch)))
+    changes.push({
+      key: 'drawings',
+      label: !newSketch.length
+        ? 'Remove agent sketch'
+        : `${oldSketch.length ? 'Update' : 'Add'} agent sketch: ${newSketch.length} drawing${newSketch.length === 1 ? '' : 's'}`,
+    });
   return changes;
 }
 
@@ -95,8 +120,40 @@ export function selectBoardChanges(
     ...(before.pinnedNodeIds
       ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => ids.has(id)) }
       : {}),
-    ...(before.drawings
-      ? { drawings: detachDrawings(before.drawings, ids, before.positions) }
-      : {}),
+    ...reviewedDrawings(before, candidate, keys.has('drawings'), ids),
   });
+}
+
+/**
+ * The reader's drawings always stay; the agent's sketch is the proposed one only when its change
+ * is accepted. A drawing attached to a concept that is not kept stays where it was drawn.
+ */
+function reviewedDrawings(
+  before: BoardDocument,
+  candidate: BoardDocument,
+  acceptSketch: boolean,
+  ids: ReadonlySet<string>,
+): Pick<BoardDocument, 'drawings' | 'drawingLayers'> {
+  if (!acceptSketch)
+    return before.drawings
+      ? { drawings: detachDrawings(before.drawings, ids, before.positions) }
+      : {};
+  const others = (before.drawings ?? []).filter(
+    (drawing) => drawing.layerId !== AGENT_SKETCH_LAYER.id,
+  );
+  const drawings: BoardDrawing[] = [
+    ...(detachDrawings(others, ids, before.positions) ?? []),
+    ...(detachDrawings(agentSketchOf(candidate), ids, candidate.positions) ?? []),
+  ];
+  const layers = before.drawingLayers ?? [];
+  const drawingLayers =
+    drawings.some((drawing) => drawing.layerId === AGENT_SKETCH_LAYER.id) &&
+    !layers.some((layer) => layer.id === AGENT_SKETCH_LAYER.id)
+      ? [...layers, AGENT_SKETCH_LAYER]
+      : layers;
+  // Set even when empty, so an accepted removal replaces what the board had.
+  return {
+    drawings: drawings.length ? drawings : undefined,
+    drawingLayers: drawingLayers.length ? drawingLayers : undefined,
+  };
 }

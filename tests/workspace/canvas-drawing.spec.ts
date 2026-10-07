@@ -284,3 +284,103 @@ test('selects several drawings, copies, resizes, locks, layers and scales them',
     .toEqual([expect.objectContaining({ name: 'Walls', hidden: true })]);
   expect(saved.drawingScale).toEqual({ gridValue: 0.5, unit: 'm' });
 });
+
+test('chat sketches beside the diagram after review, and sketches rotate and resize', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByLabel('Agent', { exact: true }).selectOption('demo');
+  await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  const review = page.getByRole('region', { name: 'Review proposed changes' });
+  await expect(review).toContainText('Add agent sketch: 3 drawings');
+  await review.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  type Layered = Board & { drawingLayers?: { id: string; name: string }[] };
+  await expect
+    .poll(async () =>
+      (await drawings(page)).map((item) => [item.id, (item as { layerId?: string }).layerId]),
+    )
+    .toEqual([
+      ['provider-zone', 'agent-sketch'],
+      ['provider-label', 'agent-sketch'],
+      ['zone-width', 'agent-sketch'],
+    ]);
+  expect(((await savedBoard(page)) as Layered).drawingLayers).toEqual([
+    { id: 'agent-sketch', name: 'Agent sketch' },
+  ]);
+  await expect(
+    page.locator('.drawing-labels text').filter({ hasText: 'Your provider’s data centre' }),
+  ).toBeVisible();
+
+  // Turn the zone with its rotation handle, then set an exact angle from the panel.
+  await page.getByRole('button', { name: 'Close chat' }).click();
+  await page.getByRole('button', { name: 'Hide the big picture' }).click();
+  await page.getByRole('button', { name: 'Show drawing tools' }).click();
+  const tools = page.getByRole('toolbar', { name: 'Drawing tools' });
+  await tools.getByRole('button', { name: 'Select drawings' }).click();
+  const zone = (await page
+    .locator('.drawing-layer [data-drawing="provider-zone"] rect')
+    .boundingBox())!;
+  await page.mouse.click(zone.x + 12, zone.y + 40);
+  const panel = page.getByRole('region', { name: 'Selected drawing' });
+  await expect(panel).toBeVisible();
+  const turn = (await page.locator('.drawing-handle[data-handle="rotate"] circle').boundingBox())!;
+  await page.mouse.move(turn.x + turn.width / 2, turn.y + turn.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(zone.x + zone.width + 120, zone.y + zone.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => ((await drawings(page))[0] as { rotation?: number }).rotation ?? 0)
+    .toBeGreaterThan(30);
+  await panel.getByLabel('Rotation in degrees').fill('-30');
+  await panel.getByLabel('Rotation in degrees').press('Enter');
+  await expect
+    .poll(async () => ((await drawings(page))[0] as { rotation?: number }).rotation)
+    .toBe(-30);
+
+  // Text is sized from its corner handles.
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  const label = (await page
+    .locator('.drawing-labels text')
+    .filter({ hasText: 'Your provider’s data centre' })
+    .boundingBox())!;
+  await page.mouse.click(label.x + 10, label.y + label.height / 2);
+  await expect(panel.getByRole('textbox', { name: 'Text' })).toBeVisible();
+  const corner = (await page.locator('.drawing-handle[data-handle="se"]').boundingBox())!;
+  await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(corner.x + 160, corner.y + 30, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => ((await drawings(page))[1] as { fontSize?: number }).fontSize)
+    .toBeGreaterThan(14);
+
+  // With the agent's layer locked, a new chat request cannot change the sketch.
+  await tools.getByRole('button', { name: 'Layers and scale' }).click();
+  await page
+    .getByRole('region', { name: 'Layers and scale' })
+    .getByRole('button', { name: 'Lock Agent sketch' })
+    .click();
+  await expect
+    .poll(async () => ((await savedBoard(page)) as Layered).drawingLayers)
+    .toEqual([{ id: 'agent-sketch', name: 'Agent sketch', locked: true }]);
+  const before = await drawings(page);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByLabel('Agent', { exact: true }).selectOption('demo');
+  await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  await expect(review).toBeVisible();
+  await expect(review).not.toContainText('agent sketch');
+  await review.getByRole('button', { name: 'Keep current board' }).click();
+  expect(await drawings(page)).toEqual(before);
+  expect((await accessibilityScan(page)).violations).toEqual([]);
+});

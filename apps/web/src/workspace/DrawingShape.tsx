@@ -1,4 +1,4 @@
-import { dimensionLabel, type BoardDrawing, type DrawingScale } from '@opsis/schema';
+import { dimensionLabel, drawingFrame, type BoardDrawing, type DrawingScale } from '@opsis/schema';
 import { INK_VALUES } from './Illustration';
 import { arrowHead, dimensionGeometry, LINE_DASHES, strokePath } from './canvas-drawing';
 
@@ -45,6 +45,17 @@ export function DrawingShape({
     fontFamily: 'Inter, Arial, sans-serif',
   };
   if (drawing.shape === 'text' ? !label : drawing.shape !== 'dimension' && !shape) return null;
+  // Boxes, ellipses and text turn about their centre; other shapes store turned points.
+  if (drawing.rotation) {
+    const [cx, cy] = drawingFrame(drawing).centre;
+    const upright = { ...drawing };
+    delete upright.rotation;
+    return (
+      <g transform={`rotate(${drawing.rotation} ${cx} ${cy})`}>
+        <DrawingShape drawing={upright} halo={halo} part={part} scale={scale} />
+      </g>
+    );
+  }
   switch (drawing.shape) {
     case 'stroke':
       return <path d={strokePath(drawing.points!)} {...stroke} />;

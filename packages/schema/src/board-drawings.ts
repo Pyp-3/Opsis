@@ -71,7 +71,10 @@ export const DrawingScaleSchema = z
   .strict();
 export type DrawingScale = z.infer<typeof DrawingScaleSchema>;
 
-export const BoardDrawingSchema = z
+/** Shapes stored with a rotation about their centre; lines and strokes rotate their points. */
+export const ROTATABLE_SHAPES: readonly DrawingShape[] = ['rect', 'ellipse', 'text'];
+
+const BoardDrawingObject = z
   .object({
     id: drawingId,
     shape: z.enum(DRAWING_SHAPES),
@@ -96,15 +99,31 @@ export const BoardDrawingSchema = z
     layerId: drawingId.optional(),
     /** A locked drawing can be picked, to unlock it, but not moved, erased or changed. */
     locked: z.boolean().optional(),
+    /** Degrees clockwise about the centre, for boxes, ellipses and text. */
+    rotation: z.number().finite().min(-360).max(360).optional(),
   })
-  .strict()
-  .superRefine((drawing, context) => {
-    const problem = drawingShapeProblem(drawing);
-    if (problem) context.addIssue({ code: 'custom', message: problem });
-  });
+  .strict();
+const checkShape = (drawing: z.infer<typeof BoardDrawingObject>, context: z.RefinementCtx) => {
+  const problem = drawingShapeProblem(drawing);
+  if (problem) context.addIssue({ code: 'custom', message: problem });
+};
+export const BoardDrawingSchema = BoardDrawingObject.superRefine(checkShape);
 export type BoardDrawing = z.infer<typeof BoardDrawingSchema>;
 
-function drawingShapeProblem(drawing: z.infer<typeof BoardDrawingSchema>): string | null {
+export const MAX_AGENT_DRAWINGS = 60;
+/**
+ * A drawing a chat agent proposes: the same declarative shapes, with fewer stroke samples. Its
+ * layer and lock are the app's to set. `anchorId` names a concept whose top-left corner the
+ * coordinates are measured from.
+ */
+export const AgentDrawingSchema = BoardDrawingObject.omit({ layerId: true, locked: true })
+  .extend({ points: z.array(point).min(2).max(120).optional() })
+  .superRefine(checkShape);
+export type AgentDrawing = z.infer<typeof AgentDrawingSchema>;
+
+function drawingShapeProblem(drawing: z.infer<typeof BoardDrawingObject>): string | null {
+  if (drawing.rotation && !ROTATABLE_SHAPES.includes(drawing.shape))
+    return `A ${drawing.shape} is rotated by moving its points, not with rotation.`;
   switch (drawing.shape) {
     case 'stroke':
       return drawing.points ? null : 'A stroke needs points.';
@@ -276,29 +295,156 @@ export function drawingTextSize(drawing: BoardDrawing) {
   };
 }
 
+/** Turns a point about a centre by `degrees` clockwise (canvas y points down). */
+export function rotatePoint(
+  [x, y]: readonly [number, number],
+  [cx, cy]: readonly [number, number],
+  degrees: number,
+): [number, number] {
+  const angle = (degrees * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos];
+}
+
+/** An angle in (-180, 180], at tenths of a degree; 0 means unrotated. */
+export function normalizeRotation(degrees: number) {
+  const turned = ((((degrees + 180) % 360) + 360) % 360) - 180;
+  const rounded = Math.round((turned === -180 ? 180 : turned) * 10) / 10;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+/**
+ * The unrotated box of a box, ellipse or text (text measured with `drawingTextSize`), with its
+ * centre, in the drawing's own coordinates.
+ */
+export function drawingFrame(drawing: BoardDrawing) {
+  const size =
+    drawing.shape === 'text'
+      ? drawingTextSize(drawing)
+      : { width: drawing.width ?? 0, height: drawing.height ?? 0 };
+  const x = drawing.x ?? 0;
+  const y = drawing.y ?? 0;
+  return {
+    x,
+    y,
+    ...size,
+    centre: [x + size.width / 2, y + size.height / 2] as [number, number],
+  };
+}
+
+/** The points that outline a drawing as painted: its samples, or a box's rotated corners. */
+export function drawingOutlinePoints(drawing: BoardDrawing): [number, number][] {
+  if (drawing.points) return drawing.points.map(([x, y]) => [x, y]);
+  const frame = drawingFrame(drawing);
+  const corners: [number, number][] = [
+    [frame.x, frame.y],
+    [frame.x + frame.width, frame.y],
+    [frame.x + frame.width, frame.y + frame.height],
+    [frame.x, frame.y + frame.height],
+  ];
+  const rotation = drawing.rotation ?? 0;
+  return rotation ? corners.map((corner) => rotatePoint(corner, frame.centre, rotation)) : corners;
+}
+
 /** Canvas-coordinate bounds including stroke width, for framing and export. */
 export function drawingBounds(drawing: BoardDrawing, positions: Positions) {
   const absolute = absoluteDrawing(drawing, positions);
   const pad = absolute.strokeWidth + (absolute.shape === 'dimension' ? 24 : 4);
-  let points: [number, number][];
-  if (absolute.points) points = absolute.points;
-  else if (absolute.shape === 'text') {
-    const size = drawingTextSize(absolute);
-    points = [
-      [absolute.x!, absolute.y!],
-      [absolute.x! + size.width, absolute.y! + size.height],
-    ];
-  } else
-    points = [
-      [absolute.x!, absolute.y!],
-      [absolute.x! + absolute.width!, absolute.y! + absolute.height!],
-    ];
+  const points = drawingOutlinePoints(absolute);
   return {
     minX: Math.min(...points.map(([x]) => x)) - pad,
     minY: Math.min(...points.map(([, y]) => y)) - pad,
     maxX: Math.max(...points.map(([x]) => x)) + pad,
     maxY: Math.max(...points.map(([, y]) => y)) + pad,
   };
+}
+
+/**
+ * Chat agents draw only on their own layer. A follow-up shows the agent that layer's drawings
+ * and may replace them; the reader's drawings on other layers are never sent or changed. When
+ * the reader hides or locks the agent's layer, the agent sees nothing and cannot change it.
+ */
+export const AGENT_SKETCH_LAYER: DrawingLayer = { id: 'agent-sketch', name: 'Agent sketch' };
+
+type SketchBoard = LayeredBoard & { positions: Positions };
+
+/** Whether a chat agent may see and replace its sketch on this board. */
+export function agentMayDraw(board: LayeredBoard | undefined) {
+  const layer = board?.drawingLayers?.find((item) => item.id === AGENT_SKETCH_LAYER.id);
+  return !layer?.hidden && !layer?.locked;
+}
+
+/** The drawings on the agent's layer. */
+export function agentSketchOf(board: LayeredBoard | undefined): BoardDrawing[] {
+  return (board?.drawings ?? []).filter((drawing) => drawing.layerId === AGENT_SKETCH_LAYER.id);
+}
+
+/** The agent's own drawings as it is shown them, or undefined when it may not draw. */
+export function sketchForAgent(board: LayeredBoard | undefined): AgentDrawing[] | undefined {
+  if (!agentMayDraw(board)) return undefined;
+  return agentSketchOf(board).map((drawing) => {
+    const shown = { ...drawing };
+    delete shown.layerId;
+    delete shown.locked;
+    return shown;
+  });
+}
+
+/** Moves free-standing drawings as a group so their top-left corner is at `at`. */
+export function placeSketch(
+  drawings: readonly AgentDrawing[],
+  at: { x: number; y: number },
+): AgentDrawing[] {
+  const free = drawings.filter((drawing) => !drawing.anchorId);
+  if (!free.length) return [...drawings];
+  const corners = free.flatMap((drawing) => drawingOutlinePoints(drawing));
+  const dx = at.x - Math.min(...corners.map(([x]) => x));
+  const dy = at.y - Math.min(...corners.map(([, y]) => y));
+  return drawings.map((drawing) =>
+    drawing.anchorId ? drawing : translateDrawing(drawing, dx, dy),
+  );
+}
+
+/**
+ * Replaces the agent's layer with its proposed drawings, leaving every other drawing alone.
+ * `proposed` undefined (the agent left its sketch out) or a hidden/locked agent layer keeps the
+ * board as it is. IDs that clash with the reader's drawings are renamed, anchors to concepts the
+ * board does not have are dropped (keeping the drawing where it would be), and drawings beyond
+ * the board's limit are left out.
+ */
+export function withAgentSketch<T extends SketchBoard>(
+  board: T,
+  proposed: readonly AgentDrawing[] | undefined,
+  nodeIds: ReadonlySet<string>,
+): T {
+  if (!proposed || !agentMayDraw(board)) return board;
+  const others = (board.drawings ?? []).filter(
+    (drawing) => drawing.layerId !== AGENT_SKETCH_LAYER.id,
+  );
+  const taken = new Set(others.map((drawing) => drawing.id));
+  const room = Math.max(0, MAX_BOARD_DRAWINGS - others.length);
+  const sketch = proposed.slice(0, room).map((drawing): BoardDrawing => {
+    let id = drawing.id;
+    for (let n = 2; taken.has(id); n++) id = `${drawing.id.slice(0, 70)}-agent${n === 2 ? '' : n}`;
+    taken.add(id);
+    const placed: BoardDrawing = { ...drawing, id, layerId: AGENT_SKETCH_LAYER.id };
+    return placed.anchorId && !nodeIds.has(placed.anchorId)
+      ? { ...absoluteDrawing(placed, board.positions), layerId: AGENT_SKETCH_LAYER.id }
+      : placed;
+  });
+  const layers = board.drawingLayers ?? [];
+  const next: SketchBoard = {
+    ...board,
+    drawings: [...others, ...sketch],
+    drawingLayers:
+      sketch.length && !layers.some((layer) => layer.id === AGENT_SKETCH_LAYER.id)
+        ? [...layers, AGENT_SKETCH_LAYER]
+        : layers,
+  };
+  if (!next.drawings!.length) delete next.drawings;
+  if (!next.drawingLayers!.length) delete next.drawingLayers;
+  return next as T;
 }
 
 /**

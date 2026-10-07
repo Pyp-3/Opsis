@@ -92,7 +92,7 @@ describe('2D board API', () => {
       expect(result.json().nodes[2].terminal.exampleInput.split('\n')).toHaveLength(12);
       expect(complete).toHaveBeenCalledWith(
         expect.objectContaining({
-          promptId: 'board/v6',
+          promptId: 'board/v7',
           system: expect.stringContaining('Generate small, plausible synthetic example data'),
         }),
         expect.any(AbortSignal),
@@ -255,12 +255,110 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v6' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v7' }),
       expect.any(AbortSignal),
       [],
       expect.any(Function),
     );
     expect(BoardGraphSchema.safeParse(reply.json()).success).toBe(true);
+  });
+  it('accepts an agent sketch, repairs a broken one once and reviews sketch changes', async () => {
+    const sketch = [
+      {
+        id: 'room',
+        shape: 'rect',
+        x: 0,
+        y: 0,
+        width: 480,
+        height: 240,
+        ink: 'ink',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+      {
+        id: 'label',
+        shape: 'text',
+        anchorId: 'outgoing',
+        x: 0,
+        y: -24,
+        text: 'Server room',
+        rotation: 15,
+        ink: 'sky',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+    ];
+    const { app, complete } = setup(JSON.stringify({ ...EMAIL_DEMO, drawings: sketch }));
+    const fresh = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Lay out the mail servers' },
+    });
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json().drawings).toEqual(sketch);
+    const [request] = complete.mock.calls[0] as unknown as [{ system: string }];
+    expect(request.system).toMatch(/Drawings: for spatial or physical subjects/);
+    expect(JSON.parse(boardOutputSchema).properties.drawings.type).toBe('array');
+
+    // A sketch attached to a concept that does not exist is repaired once like any other error.
+    complete
+      .mockResolvedValueOnce(
+        JSON.stringify({ ...EMAIL_DEMO, drawings: [{ ...sketch[1], anchorId: 'nowhere' }] }),
+      )
+      .mockResolvedValueOnce(JSON.stringify({ ...EMAIL_DEMO, drawings: sketch }));
+    const repaired = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Lay out the mail servers' },
+    });
+    expect(repaired.statusCode).toBe(200);
+    expect(complete).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        user: expect.stringContaining('A drawing can only move with an existing concept'),
+      }),
+      expect.any(AbortSignal),
+      [],
+      expect.any(Function),
+    );
+
+    // On a follow-up the agent sees its own sketch; changing it needs review, leaving it out does not.
+    const withSketch = { ...document, drawings: sketch };
+    complete.mockResolvedValueOnce(JSON.stringify({ ...EMAIL_DEMO, drawings: [sketch[0]] }));
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Drop the label', board: withSketch },
+    });
+    expect(changed.statusCode).toBe(409);
+    expect(changed.json().changes).toContain('Change agent sketch');
+    expect(complete).toHaveBeenLastCalledWith(
+      expect.objectContaining({ user: expect.stringContaining('"Server room"') }),
+      expect.any(AbortSignal),
+      [],
+      expect.any(Function),
+    );
+    complete.mockResolvedValueOnce(JSON.stringify(EMAIL_DEMO));
+    const kept = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain it again', board: withSketch },
+    });
+    expect(kept.statusCode).toBe(200);
+  });
+  it('sketches the demo mail servers without an agent', async () => {
+    const { app, complete } = setup();
+    const reply = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'demo', prompt: 'Sketch the mail servers', board: document },
+    });
+    expect(reply.statusCode).toBe(200);
+    expect(reply.json().drawings.map((item: { id: string }) => item.id)).toEqual([
+      'provider-zone',
+      'provider-label',
+      'zone-width',
+    ]);
+    expect(complete).not.toHaveBeenCalled();
   });
   it('asks the agent to write spoken narration for the process player', async () => {
     const { app, complete } = setup(JSON.stringify(EMAIL_DEMO));

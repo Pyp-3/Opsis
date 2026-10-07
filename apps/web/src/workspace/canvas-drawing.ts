@@ -1,6 +1,10 @@
 import {
   absoluteDrawing,
   anchorDrawing,
+  drawingFrame,
+  drawingOutlinePoints,
+  normalizeRotation,
+  rotatePoint,
   BoardDrawingSchema,
   drawingTextSize,
   isDrawingPickable,
@@ -134,6 +138,8 @@ function segmentDistance([px, py]: Point, [ax, ay]: Point, [bx, by]: Point) {
 
 /** Whether a canvas point touches an (absolute) drawing, within `tolerance`. */
 export function drawingContains(drawing: BoardDrawing, point: Point, tolerance: number): boolean {
+  // A rotated box, ellipse or text is tested in its own, unrotated frame.
+  if (drawing.rotation) point = rotatePoint(point, drawingFrame(drawing).centre, -drawing.rotation);
   const reach = tolerance + drawing.strokeWidth / 2;
   if (drawing.points) {
     for (let i = 1; i < drawing.points.length; i++)
@@ -195,23 +201,17 @@ export function drawingAt(board: BoardDocument, point: Point, tolerance: number)
   return null;
 }
 
-/** The outline of an absolute drawing's own geometry, without stroke padding. */
+/** The axis-aligned box around an absolute drawing as painted, without stroke padding. */
 export function drawingBox(drawing: BoardDrawing) {
-  if (drawing.points) {
-    const xs = drawing.points.map(([x]) => x);
-    const ys = drawing.points.map(([, y]) => y);
-    return {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys),
-    };
-  }
-  const size =
-    drawing.shape === 'text'
-      ? drawingTextSize(drawing)
-      : { width: drawing.width!, height: drawing.height! };
-  return { x: drawing.x!, y: drawing.y!, ...size };
+  const points = drawingOutlinePoints(drawing);
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return {
+    x: Math.min(...xs),
+    y: Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
+  };
 }
 
 /** Pickable drawings whose outline overlaps a dragged selection rectangle. */
@@ -230,50 +230,111 @@ export function drawingsInBox(board: BoardDocument, from: Point, to: Point): Boa
 }
 
 /**
- * Resize handles: both ends of a line, arrow or dimension; the eight compass points around a
- * box, ellipse or freehand stroke. Text is sized with its font size instead.
+ * Handles: both ends of a line, arrow or dimension; the eight compass points around a box,
+ * ellipse or freehand stroke; the four corners of a text, which size its letters. Every shape
+ * but a straight line also has a rotation handle above its top edge.
  */
-export type ResizeHandle = 'start' | 'end' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+export type ResizeHandle =
+  'start' | 'end' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'rotate';
+const COMPASS: Exclude<ResizeHandle, 'start' | 'end' | 'rotate'>[] = [
+  'nw',
+  'n',
+  'ne',
+  'e',
+  'se',
+  's',
+  'sw',
+  'w',
+];
 
-export function resizeHandles(drawing: BoardDrawing): { handle: ResizeHandle; at: Point }[] {
-  if (drawing.shape === 'text') return [];
+/** The unrotated frame a drawing is resized and rotated in, with its rotation. */
+function frameOf(drawing: BoardDrawing) {
+  if (drawing.points) {
+    const box = drawingBox(drawing);
+    return {
+      ...box,
+      centre: [box.x + box.width / 2, box.y + box.height / 2] as [number, number],
+      rotation: 0,
+    };
+  }
+  return { ...drawingFrame(drawing), rotation: drawing.rotation ?? 0 };
+}
+
+function compassPoint(
+  frame: { x: number; y: number; width: number; height: number },
+  handle: string,
+): [number, number] {
+  const x = handle.includes('w')
+    ? frame.x
+    : handle.includes('e')
+      ? frame.x + frame.width
+      : frame.x + frame.width / 2;
+  const y = handle.includes('n')
+    ? frame.y
+    : handle.includes('s')
+      ? frame.y + frame.height
+      : frame.y + frame.height / 2;
+  return [x, y];
+}
+
+/** The handle opposite another, which stays put while that one is dragged. */
+const OPPOSITE: Record<string, string> = {
+  nw: 'se',
+  n: 's',
+  ne: 'sw',
+  e: 'w',
+  se: 'nw',
+  s: 'n',
+  sw: 'ne',
+  w: 'e',
+};
+
+/** `rotateOffset` is how far above the top edge the rotation handle sits, in canvas units. */
+export function resizeHandles(
+  drawing: BoardDrawing,
+  rotateOffset = 24,
+): { handle: ResizeHandle; at: Point }[] {
   if (drawing.shape !== 'stroke' && drawing.points)
     return [
       { handle: 'start', at: drawing.points[0]! },
       { handle: 'end', at: drawing.points[1]! },
     ];
-  const { x, y, width, height } = drawingBox(drawing);
-  const midX = x + width / 2;
-  const midY = y + height / 2;
+  const frame = frameOf(drawing);
+  const turn = (at: [number, number]) =>
+    frame.rotation ? rotatePoint(at, frame.centre, frame.rotation) : at;
+  const handles = (drawing.shape === 'text' ? ['nw', 'ne', 'se', 'sw'] : COMPASS).map((handle) => ({
+    handle: handle as ResizeHandle,
+    at: turn(compassPoint(frame, handle)),
+  }));
   return [
-    { handle: 'nw', at: [x, y] },
-    { handle: 'n', at: [midX, y] },
-    { handle: 'ne', at: [x + width, y] },
-    { handle: 'e', at: [x + width, midY] },
-    { handle: 'se', at: [x + width, y + height] },
-    { handle: 's', at: [midX, y + height] },
-    { handle: 'sw', at: [x, y + height] },
-    { handle: 'w', at: [x, midY] },
+    ...handles,
+    { handle: 'rotate', at: turn([frame.x + frame.width / 2, frame.y - rotateOffset]) },
   ];
 }
 
-/** The resize handle of an absolute drawing under a canvas point, if any. */
-export function handleAt(drawing: BoardDrawing, point: Point, tolerance: number) {
+/** The handle of an absolute drawing under a canvas point, if any. */
+export function handleAt(
+  drawing: BoardDrawing,
+  point: Point,
+  tolerance: number,
+  rotateOffset = 24,
+) {
   return (
-    resizeHandles(drawing).find(
+    resizeHandles(drawing, rotateOffset).find(
       ({ at }) => Math.hypot(point[0] - at[0], point[1] - at[1]) <= tolerance,
     )?.handle ?? null
   );
 }
 
 /**
- * The absolute drawing after dragging one of its handles to `point`. Dragging past the opposite
- * side flips the shape; `keepRatio` (Shift) keeps a corner drag in proportion. Freehand strokes
- * scale every sample within their outline.
+ * The absolute drawing after dragging one of its handles to `point`. A rotated shape is resized
+ * in its own frame, keeping the opposite handle where it was. Dragging past the opposite side
+ * flips the shape; `keepRatio` (Shift) keeps a corner drag in proportion. Freehand strokes scale
+ * every sample within their outline, and a text's corners change its font size.
  */
 export function resizeDrawing(
   drawing: BoardDrawing,
-  handle: ResizeHandle,
+  handle: Exclude<ResizeHandle, 'rotate'>,
   point: Point,
   keepRatio = false,
 ): BoardDrawing {
@@ -282,43 +343,100 @@ export function resizeDrawing(
     const moved: [number, number] = [round(point[0]), round(point[1])];
     return { ...drawing, points: handle === 'start' ? [moved, end] : [start, moved] };
   }
-  const box = drawingBox(drawing);
-  let left = box.x;
-  let top = box.y;
-  let right = box.x + box.width;
-  let bottom = box.y + box.height;
-  if (handle.includes('w')) left = point[0];
-  if (handle.includes('e')) right = point[0];
-  if (handle.includes('n')) top = point[1];
-  if (handle.includes('s')) bottom = point[1];
-  if (keepRatio && handle.length === 2 && box.width > 0 && box.height > 0) {
-    const scale = Math.max(Math.abs(right - left) / box.width, Math.abs(bottom - top) / box.height);
-    const width = box.width * scale * Math.sign(right - left || 1);
-    const height = box.height * scale * Math.sign(bottom - top || 1);
+  const frame = frameOf(drawing);
+  const local = frame.rotation ? rotatePoint(point, frame.centre, -frame.rotation) : point;
+  const fixed = compassPoint(frame, OPPOSITE[handle]!);
+  if (drawing.shape === 'text') {
+    // Letters scale with the distance from the fixed corner.
+    const scale = Math.max(
+      Math.abs(local[0] - fixed[0]) / Math.max(frame.width, 1),
+      Math.abs(local[1] - fixed[1]) / Math.max(frame.height, 1),
+    );
+    const fontSize = Math.min(96, Math.max(8, Math.round((drawing.fontSize ?? 16) * scale)));
+    const size = drawingTextSize({ ...drawing, fontSize });
+    const left = handle.includes('w') ? fixed[0] - size.width : fixed[0];
+    const top = handle.includes('n') ? fixed[1] - size.height : fixed[1];
+    return placeInFrame(drawing, frame, { x: left, y: top, ...size }, { fontSize });
+  }
+  let left = frame.x;
+  let top = frame.y;
+  let right = frame.x + frame.width;
+  let bottom = frame.y + frame.height;
+  if (handle.includes('w')) left = local[0];
+  if (handle.includes('e')) right = local[0];
+  if (handle.includes('n')) top = local[1];
+  if (handle.includes('s')) bottom = local[1];
+  if (keepRatio && handle.length === 2 && frame.width > 0 && frame.height > 0) {
+    const scale = Math.max(
+      Math.abs(right - left) / frame.width,
+      Math.abs(bottom - top) / frame.height,
+    );
+    const width = frame.width * scale * Math.sign(right - left || 1);
+    const height = frame.height * scale * Math.sign(bottom - top || 1);
     if (handle.includes('w')) left = right - width;
     else right = left + width;
     if (handle.includes('n')) top = bottom - height;
     else bottom = top + height;
   }
-  const next = boxBetween([left, top], [right, bottom]);
   if (drawing.shape === 'stroke') {
     // Each sample keeps its relative place; a flipped drag mirrors the stroke.
     const mapX = (x: number) =>
-      box.width ? left + ((x - box.x) / box.width) * (right - left) : left;
+      frame.width ? left + ((x - frame.x) / frame.width) * (right - left) : left;
     const mapY = (y: number) =>
-      box.height ? top + ((y - box.y) / box.height) * (bottom - top) : top;
+      frame.height ? top + ((y - frame.y) / frame.height) * (bottom - top) : top;
     return {
       ...drawing,
       points: drawing.points!.map(([x, y]) => [round(mapX(x)), round(mapY(y))]),
     };
   }
+  return placeInFrame(drawing, frame, boxBetween([left, top], [right, bottom]));
+}
+
+/**
+ * Stores a box resized within a rotated frame: its centre is turned about the old centre, so
+ * every point that stayed put in the frame stays put on the canvas.
+ */
+function placeInFrame(
+  drawing: BoardDrawing,
+  frame: ReturnType<typeof frameOf>,
+  box: { x: number; y: number; width: number; height: number },
+  extra: Partial<BoardDrawing> = {},
+): BoardDrawing {
+  const centre: [number, number] = [box.x + box.width / 2, box.y + box.height / 2];
+  const [cx, cy] = frame.rotation ? rotatePoint(centre, frame.centre, frame.rotation) : centre;
   return {
     ...drawing,
-    x: round(next.x),
-    y: round(next.y),
-    width: round(next.width),
-    height: round(next.height),
+    ...extra,
+    x: round(cx - box.width / 2),
+    y: round(cy - box.height / 2),
+    ...(drawing.shape === 'text' ? {} : { width: round(box.width), height: round(box.height) }),
   };
+}
+
+/** The centre a drawing turns about. */
+export function rotationCentre(drawing: BoardDrawing): [number, number] {
+  return frameOf(drawing).centre;
+}
+
+/**
+ * The absolute drawing turned by `degrees` about its centre. Boxes, ellipses and text record
+ * the angle; strokes, lines, arrows and dimensions have their points turned.
+ */
+export function rotateDrawing(drawing: BoardDrawing, degrees: number): BoardDrawing {
+  if (drawing.points) {
+    const centre = rotationCentre(drawing);
+    return {
+      ...drawing,
+      points: drawing.points.map((point) => {
+        const [x, y] = rotatePoint(point, centre, degrees);
+        return [round(x), round(y)];
+      }),
+    };
+  }
+  const rotation = normalizeRotation((drawing.rotation ?? 0) + degrees);
+  const next: BoardDrawing = { ...drawing, rotation };
+  if (!rotation) delete next.rotation;
+  return next;
 }
 
 /**

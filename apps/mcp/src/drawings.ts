@@ -55,6 +55,13 @@ export const DrawingFieldsSchema = {
     .describe('solid (default), dashed (hidden/proposed) or center (dash-dot centre line).'),
   strokeWidth: z.number().finite().min(0.5).max(16).optional().describe('Default 2.'),
   fill: z.boolean().optional().describe('A translucent fill, for boxes and ellipses.'),
+  rotation: z
+    .number()
+    .finite()
+    .min(-360)
+    .max(360)
+    .optional()
+    .describe('Degrees clockwise about the centre, for rect, ellipse and text only.'),
 };
 
 export const DrawingInputSchema = z.object({
@@ -129,6 +136,7 @@ export function describeDrawings(board: BoardDocument) {
         line: drawing.line,
         strokeWidth: drawing.strokeWidth,
         ...(drawing.fill ? { fill: true } : {}),
+        ...(drawing.rotation ? { rotation: drawing.rotation } : {}),
         ...(drawing.anchorId ? { movesWith: drawing.anchorId } : {}),
         ...(layer ? { layer: layer.name } : {}),
         ...(isDrawingEditable(drawing, layers) ? {} : { locked: true }),
@@ -216,6 +224,7 @@ export function addDrawings(snapshot: BoardSnapshot, inputs: readonly DrawingInp
       ...(input.text !== undefined ? { text: input.text } : {}),
       ...(input.fontSize !== undefined ? { fontSize: input.fontSize } : {}),
       ...(input.fill !== undefined ? { fill: input.fill } : {}),
+      ...(input.rotation ? { rotation: input.rotation } : {}),
       ...(input.layer ? { layerId: layerNamed(layers, input.layer).id } : {}),
     };
     validDrawing(drawing, index);
@@ -263,6 +272,10 @@ export function updateDrawing(snapshot: BoardSnapshot, id: string, patch: Drawin
   if (patch.line) drawing.line = patch.line;
   if (patch.strokeWidth !== undefined) drawing.strokeWidth = patch.strokeWidth;
   if (patch.fill !== undefined) drawing.fill = patch.fill;
+  if (patch.rotation !== undefined) {
+    if (patch.rotation) drawing.rotation = patch.rotation;
+    else delete drawing.rotation;
+  }
   if (patch.layer === null) delete drawing.layerId;
   else if (patch.layer) drawing.layerId = layerNamed(layers, patch.layer).id;
   validDrawing(drawing);

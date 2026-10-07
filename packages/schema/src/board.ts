@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CustomIconSchema, IllustrationSchema } from './illustration';
 import {
+  AgentDrawingSchema,
   BoardDrawingSchema,
+  MAX_AGENT_DRAWINGS,
   DrawingLayerSchema,
   DrawingScaleSchema,
   MAX_BOARD_DRAWINGS,
@@ -125,6 +127,8 @@ export const BoardContentSchema = z
     suggestions: z.array(z.string().min(1).max(200)).max(3).optional(),
     /** The narrator's opening line before playback walks through the board. */
     narration: z.string().max(600).optional(),
+    /** A chat agent's sketch beside the diagram; see `withAgentSketch` in board-drawings.ts. */
+    drawings: z.array(AgentDrawingSchema).max(MAX_AGENT_DRAWINGS).optional(),
   })
   .strict();
 
@@ -145,7 +149,14 @@ export function validateBoardReferences(
     });
   for (const message of processProblems(board.nodes)) context.addIssue({ code: 'custom', message });
 }
-export const BoardGraphSchema = BoardContentSchema.superRefine(validateBoardReferences);
+export const BoardGraphSchema = BoardContentSchema.superRefine((graph, context) => {
+  validateBoardReferences(graph, context);
+  for (const message of drawingProblems(
+    graph.drawings ?? [],
+    new Set(graph.nodes.map((node) => node.id)),
+  ))
+    context.addIssue({ code: 'custom', message });
+});
 export const BoardPortSchema = z.enum(['left', 'right', 'top', 'bottom']);
 export type BoardPort = z.infer<typeof BoardPortSchema>;
 /** Canvas palettes and icon tints the web app paints; agents choose from these by id. */
@@ -301,6 +312,13 @@ export const boardOutputSchema = JSON.stringify(
         )
         .min(1)
         .max(50),
+      drawings: z
+        .array(AgentDrawingSchema)
+        .max(MAX_AGENT_DRAWINGS)
+        .optional()
+        .describe(
+          'Optional sketch beside the diagram for spatial subjects; see the Drawings instructions.',
+        ),
     }),
     { $refStrategy: 'none' },
   ),
@@ -382,6 +400,12 @@ export function boardChanges(before: BoardGraph, after: BoardGraph): string[] {
         changes.push(`Change ${key === 'nodes' ? 'concept' : 'connection'}: ${item.id}`);
     }
   }
+  // `before` is the board sent with the request, whose drawings are the agent's own sketch.
+  if (
+    after.drawings !== undefined &&
+    JSON.stringify(before.drawings ?? []) !== JSON.stringify(after.drawings)
+  )
+    changes.push('Change agent sketch');
   if (before.title !== after.title) changes.push('Change title');
   if (before.description !== after.description) changes.push('Change description');
   return changes;
