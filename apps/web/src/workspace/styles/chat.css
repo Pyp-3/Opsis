@@ -547,6 +547,32 @@ body.chat-docked .generation-review {
   padding: 8px 16px 12px;
   background: linear-gradient(180deg, transparent, var(--paper) 18px);
 }
+/* The open model settings can be taller than the chat column. The composer shrinks within
+   the column and only the settings panel scrolls, so the prompt and the Model toggle that
+   closes it stay on screen; some of the conversation remains visible above it. */
+.chat-composer {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 85%;
+}
+.chat-composer > *,
+.chat-composer .composer > * {
+  flex-shrink: 0;
+}
+.chat-composer > .composer {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-composer .composer > .model-settings {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .chat-composer .composer {
   background: var(--surface);
   border: 1px solid var(--line-strong);

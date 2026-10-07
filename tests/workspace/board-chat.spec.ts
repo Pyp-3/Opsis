@@ -140,3 +140,48 @@ test('chat docks beside a live canvas on wide screens and can take the full page
   await expect(chat).toHaveCount(0);
   await expect(page.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'true');
 });
+
+test('docked chat model settings stay reachable and can be closed on a short screen', async ({
+  page,
+}) => {
+  await signUp(page, 'Short docked chat');
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Interactive diagram canvas' })).toBeVisible();
+  await page.getByLabel('Agent', { exact: true }).selectOption('claude');
+  const toggle = page.getByRole('button', { name: /^Model settings:/ });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // Every optional section makes the panel taller than the chat column.
+  await page.getByLabel('Show task-based suggestions').check();
+  await page.getByLabel('Track this agent’s usage windows and disable it at the cap').check();
+  await page.getByLabel('Model', { exact: true }).selectOption('custom');
+
+  // The panel scrolls within the chat instead of pushing its controls off the screen.
+  const viewport = page.viewportSize()!;
+  for (const control of [
+    page.getByLabel('Named profile'),
+    page.getByLabel('Model', { exact: true }),
+    page.getByLabel('Weekly cap'),
+  ]) {
+    await control.scrollIntoViewIfNeeded();
+    const box = (await control.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  }
+  // Only the settings panel scrolls; a hidden-overflow page scroll would strand the layout.
+  const scrolled = await page.evaluate(() =>
+    [...document.querySelectorAll('*')]
+      .filter((element) => element.scrollTop > 0)
+      .map((element) => element.id || element.className),
+  );
+  expect(scrolled).toEqual(['model-settings']);
+  const toggleBox = (await toggle.boundingBox())!;
+  expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(viewport.height);
+  await expect(page.getByLabel('What would you like to understand?')).toBeInViewport();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#model-settings')).toHaveCount(0);
+});

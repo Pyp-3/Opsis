@@ -35,6 +35,15 @@ no paid model calls were made. While validating, a desktop-sync fingerprint bug 
 found and fixed: only the first file was hashed, so web changes were missed. A
 regression test now covers it (`pnpm release:test`).
 
+Chat model-settings fix (2026-10-07, user report): opening Model settings in the docked
+chat made the panel taller than the chat column, pushing its controls and the Model toggle
+off-screen with no way to scroll or close it. The chat composer now shrinks within the
+column and only the settings panel scrolls; the prompt and toggle stay visible. A new
+browser scenario on a short 1280×640 screen checks every section is reachable, only the
+panel scrolls, and the toggle closes it; it failed before the fix. Verified: lint,
+typecheck, Rust check/24 tests, desktop check/race tests, 399 unit tests and all 58
+Fastify browser scenarios pass. CSS-only; the desktop binary was not rebuilt by hand.
+
 Local Linux desktop sync (2026-10-07, user request): `pnpm desktop:sync` rebuilds
 the desktop app from the current checkout when sources changed. It reuses the
 speech runtime when its inputs are unchanged and installs to `~/.local/opt/opsis`
