@@ -217,8 +217,8 @@ test('selects several drawings, copies, resizes, locks, layers and scales them',
   await expect(page.getByRole('region', { name: 'Selected drawings' })).toContainText(
     '2 drawings selected',
   );
-  await page.keyboard.press('Control+c');
-  await page.keyboard.press('Control+v');
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.keyboard.press('ControlOrMeta+v');
   await expect(page.getByRole('status').filter({ hasText: 'Pasted 2 drawings.' })).toBeVisible();
   await expect.poll(async () => (await drawings(page)).length).toBe(4);
   const [first, , copy] = await drawings(page);

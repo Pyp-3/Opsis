@@ -322,7 +322,9 @@ in the panel's link button. Lint, typecheck, Rust check/24 tests, desktop check/
 (including the 15-tool MCP catalogue), 411 unit tests and 59 Fastify browser scenarios pass.
 The rebuilt Linux binary passes packaged database/MCP integration, all 59 browser scenarios
 and all 24 hidden WebView checks. Desktop and phone screenshots were reviewed. No paid model
-calls were made.
+calls were made. CI run 37636842699 passed web, Linux and Windows. Both Mac jobs failed only
+the new scenario, because the test pressed Control+C/V; on macOS the browser copies and pastes
+with ⌘. The test now uses Playwright's platform modifier; the app is unchanged.
 
 Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
 uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,
