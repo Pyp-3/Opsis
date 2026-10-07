@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CustomIconSchema, IllustrationSchema } from './illustration';
-import { BoardDrawingSchema, MAX_BOARD_DRAWINGS, drawingProblems } from './board-drawings';
+import {
+  BoardDrawingSchema,
+  DrawingLayerSchema,
+  DrawingScaleSchema,
+  MAX_BOARD_DRAWINGS,
+  MAX_DRAWING_LAYERS,
+  drawingProblems,
+} from './board-drawings';
 import { ProcessStepSchema, processProblems } from './process';
 
 import { BOARD_ICONS } from './board-icons';
@@ -189,11 +196,16 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
   look: BoardLookSchema.optional(),
   /** The reader's own sketches on the canvas; see board-drawings.ts. */
   drawings: z.array(BoardDrawingSchema).max(MAX_BOARD_DRAWINGS).optional(),
+  /** Named drawing layers, painted in order above the base layer. */
+  drawingLayers: z.array(DrawingLayerSchema).max(MAX_DRAWING_LAYERS).optional(),
+  /** What one grid square measures, for dimension lines. */
+  drawingScale: DrawingScaleSchema.optional(),
 }).superRefine((board, context) => {
   validateBoardReferences(board, context);
   for (const message of drawingProblems(
     board.drawings ?? [],
     new Set(board.nodes.map((node) => node.id)),
+    board.drawingLayers,
   ))
     context.addIssue({ code: 'custom', message });
   const groups = board.groups ?? [];

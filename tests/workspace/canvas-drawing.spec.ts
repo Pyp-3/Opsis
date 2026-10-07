@@ -194,3 +194,93 @@ test('a board can be a sketch without any concepts', async ({ page }) => {
   await page.reload();
   await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(1);
 });
+
+test('selects several drawings, copies, resizes, locks, layers and scales them', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await page.getByRole('button', { name: 'Hide the big picture' }).click();
+  await page.getByRole('button', { name: 'Show drawing tools' }).click();
+  const tools = page.getByRole('toolbar', { name: 'Drawing tools' });
+  await tools.getByRole('button', { name: 'Box', exact: true }).click();
+  await drag(page, [0.5, 0.2], [0.6, 0.3]);
+  await drag(page, [0.7, 0.2], [0.8, 0.3]);
+  await expect.poll(async () => (await drawings(page)).length).toBe(2);
+
+  // A selection rectangle picks both; copy and paste adds offset copies as one step.
+  await tools.getByRole('button', { name: 'Select drawings' }).click();
+  await drag(page, [0.45, 0.15], [0.85, 0.35]);
+  await expect(page.getByRole('region', { name: 'Selected drawings' })).toContainText(
+    '2 drawings selected',
+  );
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Control+v');
+  await expect(page.getByRole('status').filter({ hasText: 'Pasted 2 drawings.' })).toBeVisible();
+  await expect.poll(async () => (await drawings(page)).length).toBe(4);
+  const [first, , copy] = await drawings(page);
+  expect(copy!.x! - first!.x!).toBe(24);
+  expect(copy!.id).not.toBe(first!.id);
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await drawings(page)).length).toBe(2);
+
+  // One selected box shows handles; dragging a corner resizes it as one edit.
+  await drag(page, [0.55, 0.2], [0.55, 0.2]);
+  await expect(page.getByRole('region', { name: 'Selected drawing' })).toBeVisible();
+  const handle = (await page.locator('.drawing-handle[data-handle="se"]').boundingBox())!;
+  const width = (await drawings(page))[0]!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 80, handle.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => ((await drawings(page))[0] as { width?: number }).width)
+    .toBeGreaterThan((width as { width?: number }).width! + 40);
+
+  // A locked drawing stays put and cannot be deleted until unlocked.
+  const panel = page.getByRole('region', { name: 'Selected drawing' });
+  await panel.getByLabel('Lock (no moving or changes)').check();
+  await expect.poll(async () => (await drawings(page))[0]!).toHaveProperty('locked', true);
+  const locked = (await drawings(page))[0]!;
+  await drag(page, [0.55, 0.2], [0.65, 0.4]);
+  await page.keyboard.press('Delete');
+  await expect(panel).toContainText('Locked');
+  expect((await drawings(page))[0]).toEqual(locked);
+
+  // Layers: a new layer takes new drawings; hiding it hides them on the canvas and reload.
+  await tools.getByRole('button', { name: 'Layers and scale' }).click();
+  const layers = page.getByRole('region', { name: 'Layers and scale' });
+  await layers.getByLabel('Grid square size').fill('0.5');
+  await layers.getByLabel('Unit').fill('m');
+  await layers.getByRole('button', { name: 'Apply scale' }).click();
+  await layers.getByRole('button', { name: 'New layer' }).click();
+  await layers.getByLabel('Layer name: Layer 1').fill('Walls');
+  await layers.getByLabel('Layer name: Layer 1').press('Enter');
+  await expect(layers.getByLabel('Draw on Walls')).toBeChecked();
+  expect((await accessibilityScan(page)).violations).toEqual([]);
+  await tools.getByRole('button', { name: 'Dimension', exact: true }).click();
+  await drag(page, [0.5, 0.6], [0.7, 0.6], true);
+  await expect.poll(async () => (await drawings(page)).length).toBe(3);
+  const board = await savedBoard(page);
+  const dimension = board.drawings!.at(-1)!;
+  expect(dimension).toMatchObject({ shape: 'dimension', layerId: expect.any(String) });
+  await expect(page.locator('.drawing-labels [data-shape="dimension"] text')).toHaveText(/ m$/);
+
+  await tools.getByRole('button', { name: 'Layers and scale' }).click();
+  await layers.getByRole('button', { name: 'Hide Walls' }).click();
+  await expect(page.locator(`.drawing-layer [data-drawing="${dimension.id}"]`)).toHaveCount(0);
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await page.reload();
+  await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(2);
+  const saved = (await savedBoard(page)) as Board & {
+    drawingLayers?: { name: string; hidden?: boolean }[];
+    drawingScale?: { gridValue: number; unit: string };
+  };
+  await expect
+    .poll(async () => ((await savedBoard(page)) as typeof saved).drawingLayers)
+    .toEqual([expect.objectContaining({ name: 'Walls', hidden: true })]);
+  expect(saved.drawingScale).toEqual({ gridValue: 0.5, unit: 'm' });
+});

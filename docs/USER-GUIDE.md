@@ -79,9 +79,21 @@ canvas to show the drawing tools:
   points freely.
 - **Text** (T) places a label and opens it for editing.
 - **Dimension** lines show their length in grid units (one fine grid square is 1 u)
-  unless you give them a label such as `3.2 m`.
+  unless you give them a label such as `3.2 m`. Set the board's scale to measure in real
+  units instead (see below).
 - **Select drawings** (V) picks a drawing to move, restyle or delete (Delete key).
-  **Eraser** (E) removes every drawing it touches during one sweep.
+  Shift+click adds or removes drawings from the selection, and dragging across an empty
+  part of the canvas selects every drawing the rectangle touches. Ctrl/⌘ A selects them all.
+  Dragging any selected drawing moves the whole selection.
+- **Resize handles** appear around one selected box, ellipse or freehand stroke, and at both
+  ends of a line, arrow or dimension. Drag one to reshape it; it snaps like drawing does,
+  Shift keeps a corner drag in proportion and Alt places it freely. Text is resized with its
+  size setting.
+- **Copy and paste**: Ctrl/⌘ C, X and V copy, cut and paste selected drawings, also into
+  another board or browser tab. Ctrl/⌘ D, or **Duplicate**, copies them in place. Copies land
+  one grid square down and right, keep following their concept on the same board, and are
+  never locked.
+- **Eraser** (E) removes every drawing it touches during one sweep.
 
 The panel beside the tools chooses ink, solid/dashed/centre-line style, weight and
 a translucent fill. With a drawing selected, the same controls restyle it, and
@@ -89,10 +101,28 @@ a translucent fill. With a drawing selected, the same controls restyle it, and
 or rearrange it. Lines and shapes are painted beneath icons and arrows; text and
 dimension labels stay on top so they remain legible.
 
-Each finished shape, move, restyle or eraser sweep is one undoable step. Drawings are
-saved with the board, included in SVG and PNG exports and JSON files, and shown read-only
-to public viewers. They belong to you: agents do not receive or change them, and a
-drawing attached to a concept that a follow-up removes stays where it was drawn.
+With several drawings selected, the panel restyles, attaches, moves to a layer, locks or
+deletes them together. **Lock** keeps a drawing from being moved, resized, restyled, erased
+or deleted. A locked drawing can still be picked, so you can unlock it.
+
+**Layers and scale** (the stacked-sheets button in the tool column) opens two settings:
+
+- **Scale** says what one grid square measures, for example `0.5` `m`. Unlabelled dimension
+  lines then read in metres (or feet, millimetres, or any unit you type). **Use grid units**
+  returns to `u`.
+- **Layers** group drawings, for example walls, services and notes. New drawings go on the
+  layer marked with the radio button. The top of the list paints on top. Each layer can be
+  renamed, moved up or down, hidden or locked. A hidden layer is left out of the canvas and
+  of SVG/PNG exports. A locked layer cannot be picked or erased. Deleting a layer moves its
+  drawings to the base layer rather than deleting them.
+
+Each finished shape, move, resize, restyle, paste, eraser sweep and layer or scale change is
+one undoable step. Drawings, layers and the scale are saved with the board, included in
+SVG and PNG exports and JSON files, and shown read-only to public viewers. Chat generation
+does not receive or change them, and a drawing attached to a concept that a follow-up
+removes stays where it was drawn. External agents connected over MCP can read and draw
+with `opsis_add_drawings`, `opsis_update_drawing` and `opsis_remove_drawings`, and set the
+scale with `opsis_update_board`. They cannot change anything you have locked, or hidden.
 
 ## Save and organize projects
 

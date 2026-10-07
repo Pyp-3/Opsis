@@ -6,6 +6,10 @@ import {
   BoardDrawingSchema,
   dimensionLabel,
   drawingBounds,
+  isDrawingEditable,
+  isDrawingPickable,
+  removeDrawingLayer,
+  visibleDrawings,
   type BoardDrawing,
 } from './board-drawings';
 import { createEmptyBoard, removeBoardNode } from './board-operations';
@@ -155,5 +159,70 @@ describe('canvas drawings', () => {
     expect(dimensionLabel(dimension)).toBe('2.5 u');
     expect(dimensionLabel({ ...dimension, text: ' 3.2 m ' })).toBe('3.2 m');
     expect(drawingBounds(dimension, {}).maxY).toBeGreaterThan(60);
+  });
+
+  it('reads unlabelled dimensions in the board scale', () => {
+    const dimension: BoardDrawing = {
+      id: 'd',
+      shape: 'dimension',
+      points: [
+        [0, 0],
+        [72, 0],
+      ],
+      ...ink,
+    };
+    expect(dimensionLabel(dimension, { gridValue: 0.5, unit: 'm' })).toBe('1.5 m');
+    expect(dimensionLabel(dimension, { gridValue: 250, unit: 'mm' })).toBe('750 mm');
+    expect(dimensionLabel(dimension, { gridValue: 1 / 3, unit: 'ft' })).toBe('1 ft');
+    expect(dimensionLabel({ ...dimension, text: 'Door' }, { gridValue: 2, unit: 'm' })).toBe(
+      'Door',
+    );
+    const board = { ...boardWith([dimension]), drawingScale: { gridValue: 0.5, unit: 'm' } };
+    expect(BoardDocumentSchema.parse(board).drawingScale).toEqual({ gridValue: 0.5, unit: 'm' });
+    expect(
+      BoardDocumentSchema.safeParse({ ...board, drawingScale: { gridValue: 0, unit: 'm' } })
+        .success,
+    ).toBe(false);
+  });
+
+  it('paints layers in order, leaves hidden ones out and protects locked ones', () => {
+    const base = { ...wall, id: 'base' };
+    const walls = { ...wall, id: 'walls', layerId: 'structure' };
+    const notes = { ...wall, id: 'notes', layerId: 'notes' };
+    const board: BoardDocument = {
+      ...boardWith([notes, walls, base]),
+      drawingLayers: [
+        { id: 'structure', name: 'Structure', locked: true },
+        { id: 'notes', name: 'Notes' },
+      ],
+    };
+    expect(BoardDocumentSchema.parse(board).drawingLayers).toHaveLength(2);
+    expect(visibleDrawings(board).map((item) => item.id)).toEqual(['base', 'walls', 'notes']);
+    expect(isDrawingPickable(walls, board.drawingLayers)).toBe(false);
+    expect(isDrawingEditable({ ...base, locked: true }, board.drawingLayers)).toBe(false);
+    expect(isDrawingPickable({ ...base, locked: true }, board.drawingLayers)).toBe(true);
+    const hidden = {
+      ...board,
+      drawingLayers: [board.drawingLayers![0]!, { id: 'notes', name: 'Notes', hidden: true }],
+    };
+    expect(visibleDrawings(hidden).map((item) => item.id)).toEqual(['base', 'walls']);
+
+    // A layer's drawings move to the base layer when it is deleted.
+    const removed = removeDrawingLayer(board, 'structure');
+    expect(removed.drawingLayers).toEqual([{ id: 'notes', name: 'Notes' }]);
+    expect(removed.drawings!.find((item) => item.id === 'walls')!.layerId).toBeUndefined();
+    expect(removeDrawingLayer(removed, 'notes').drawingLayers).toBeUndefined();
+
+    const problems = (candidate: BoardDocument) =>
+      BoardDocumentSchema.safeParse(candidate).error?.issues.map((issue) => issue.message);
+    expect(problems({ ...board, drawingLayers: [] })).toContain(
+      'A drawing can only be on an existing layer.',
+    );
+    expect(
+      problems({
+        ...board,
+        drawingLayers: [...board.drawingLayers!, { id: 'notes', name: 'Again' }],
+      }),
+    ).toContain('Drawing layer IDs must be unique.');
   });
 });

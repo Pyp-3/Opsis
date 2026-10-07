@@ -9,7 +9,10 @@ import {
 import { useReactFlow, useViewport, ViewportPortal } from '@xyflow/react';
 import {
   Circle,
+  Copy,
   Eraser,
+  Layers,
+  Lock,
   MousePointer2,
   MoveUpRight,
   PenTool,
@@ -25,24 +28,39 @@ import {
 import {
   absoluteDrawing,
   anchorDrawing,
+  drawingOrigin,
+  isDrawingEditable,
+  isDrawingPickable,
   translateDrawing,
+  visibleDrawings,
   ILLUSTRATION_INKS,
   MAX_BOARD_DRAWINGS,
   type BoardDocument,
   type BoardDrawing,
+  type DrawingLayer as BoardDrawingLayer,
   type DrawingLineStyle,
   type DrawingShape as DrawingKind,
   type IllustrationInk,
 } from '@opsis/schema';
 import { DrawingShape } from './DrawingShape';
+import { DrawingLayersPanel, useDrawingLayers } from './DrawingLayersPanel';
 import { INK_VALUES } from './Illustration';
 import {
   boxBetween,
   drawingAt,
+  drawingBox,
+  drawingClipboard,
+  drawingsInBox,
+  handleAt,
+  pasteDrawings,
+  readDrawingClipboard,
+  resizeDrawing,
+  resizeHandles,
   round,
   roundDrawing,
   simplifyStroke,
   type Point,
+  type ResizeHandle,
 } from './canvas-drawing';
 import { lookOf, paletteOf } from './canvas-theme';
 import { useRememberedOpen } from './useRememberedOpen';
@@ -50,9 +68,9 @@ import { useRememberedOpen } from './useRememberedOpen';
 /**
  * Freehand and illustrative drawing on the canvas, beside the icon diagram. In "diagram" mode
  * the canvas behaves as before (drawings are inert and sit beneath icons and arrows). Any other
- * tool lays a capture surface over the canvas: drawing tools add shapes, "select" picks, moves
- * and edits drawings, and the eraser removes them. Each finished shape, move or erasing sweep
- * is one undoable edit.
+ * tool lays a capture surface over the canvas: drawing tools add shapes, "select" picks, moves,
+ * resizes and edits drawings, and the eraser removes them. Each finished shape, move, resize,
+ * paste or erasing sweep is one undoable edit.
  */
 export type DrawingTool = 'diagram' | 'select' | 'erase' | DrawingKind;
 
@@ -89,11 +107,26 @@ const FONT_SIZES = [12, 16, 24, 36];
 /** Straight shapes land on half a grid square, matching concepts that snap to whole squares. */
 const SNAP = 12;
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
+/** Pasted and duplicated drawings land one grid square down and right of their source. */
+const PASTE_OFFSET = SNAP * 2;
+const LIMIT_NOTICE = `A board holds at most ${MAX_BOARD_DRAWINGS} drawings.`;
+const plural = (count: number) => `${count} drawing${count === 1 ? '' : 's'}`;
 
 type Gesture =
   | { kind: 'draw'; points: Point[] }
-  | { kind: 'move'; id: string; last: Point; moved: boolean }
+  | { kind: 'move'; ids: string[]; last: Point; moved: boolean }
+  | {
+      kind: 'resize';
+      id: string;
+      handle: ResizeHandle;
+      original: BoardDrawing;
+      origin: { x: number; y: number };
+    }
+  | { kind: 'marquee'; from: Point; base: string[] }
   | { kind: 'erase' };
+
+const inTextField = (target: EventTarget | null) =>
+  !!(target as HTMLElement | null)?.closest?.('input,textarea,select,[contenteditable]');
 
 export function useCanvasDrawing(options: {
   board: BoardDocument | null;
@@ -111,7 +144,7 @@ export function useCanvasDrawing(options: {
   const [chosenTool, setToolState] = useState<DrawingTool>('diagram');
   // Viewing someone else's board, or a generation in flight, puts the pencil down.
   const tool = editable ? chosenTool : 'diagram';
-  const [chosenId, setSelectedId] = useState<string | null>(null);
+  const [chosenIds, setChosenIds] = useState<readonly string[]>([]);
   const [style, setStyle] = useState<DrawingStyle>({
     ink: 'ink',
     line: 'solid',
@@ -119,30 +152,67 @@ export function useCanvasDrawing(options: {
     fill: false,
   });
   const [draft, setDraft] = useState<BoardDrawing | null>(null);
+  const [marquee, setMarquee] = useState<{ from: Point; to: Point } | null>(null);
   const [open, setOpen] = useRememberedOpen('opsis:drawing-tools-open', false);
-  // A drawing removed by undo or another edit is no longer selected.
-  const selected = board?.drawings?.find((drawing) => drawing.id === chosenId) ?? null;
-  const selectedId = selected?.id ?? null;
+  const [notice, setNotice] = useState('');
+  const layers = useDrawingLayers({ board, boardRef, commit, onNotice: setNotice });
+  const setLayersOpen = layers.setOpen;
+  const clipboard = useRef<{ text: string; pastes: number } | null>(null);
+  // Drawings removed by undo or another edit, or on a layer since hidden or locked, are no
+  // longer selected.
+  const selection = useMemo(
+    () =>
+      (board?.drawings ?? []).filter(
+        (drawing) =>
+          chosenIds.includes(drawing.id) && isDrawingPickable(drawing, board?.drawingLayers),
+      ),
+    [board, chosenIds],
+  );
+  const selectedIds = useMemo(() => selection.map((drawing) => drawing.id), [selection]);
+  const selected = selection.length === 1 ? selection[0]! : null;
   const active = editable && tool !== 'diagram';
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const select = useCallback(
-    (id: string | null) => {
-      setSelectedId(id);
-      if (id) onSelect();
+    (ids: readonly string[]) => {
+      setChosenIds(ids);
+      if (ids.length) onSelect();
     },
     [onSelect],
   );
-  const setTool = useCallback((next: DrawingTool) => {
-    setToolState(next);
-    setDraft(null);
-    if (next !== 'select') setSelectedId(null);
-  }, []);
-  const changeDrawing = useCallback(
-    (id: string, change: (drawing: BoardDrawing) => BoardDrawing | null) => {
+  const setTool = useCallback(
+    (next: DrawingTool) => {
+      setToolState(next);
+      setDraft(null);
+      setMarquee(null);
+      if (next !== 'select') setChosenIds([]);
+      if (next !== 'select' && next !== 'diagram') setLayersOpen(false);
+    },
+    [setLayersOpen],
+  );
+  /**
+   * Changes several drawings in one undoable edit. Locked drawings, and those on locked layers,
+   * are left alone unless `includeLocked` (for unlocking them).
+   */
+  const changeDrawings = useCallback(
+    (
+      ids: readonly string[],
+      change: (drawing: BoardDrawing) => BoardDrawing | null,
+      includeLocked = false,
+    ) => {
       const current = boardRef.current;
       if (!current?.drawings) return;
       const drawings = current.drawings.flatMap((drawing) => {
-        if (drawing.id !== id) return [drawing];
+        if (!ids.includes(drawing.id)) return [drawing];
+        const allowed = includeLocked
+          ? isDrawingPickable(drawing, current.drawingLayers)
+          : isDrawingEditable(drawing, current.drawingLayers);
+        if (!allowed) return [drawing];
         const next = change(drawing);
         return next ? [next] : [];
       });
@@ -150,44 +220,126 @@ export function useCanvasDrawing(options: {
     },
     [boardRef, commit],
   );
-  /** Restyles the selected drawing, and draws later shapes in the same style. */
+  const changeDrawing = useCallback(
+    (id: string, change: (drawing: BoardDrawing) => BoardDrawing | null) =>
+      changeDrawings([id], change),
+    [changeDrawings],
+  );
+  /** Restyles the selected drawings, and draws later shapes in the same style. */
   const restyle = useCallback(
     (patch: Partial<DrawingStyle>) => {
       setStyle((current) => ({ ...current, ...patch }));
-      if (selectedId) changeDrawing(selectedId, (drawing) => ({ ...drawing, ...patch }));
+      if (!selectedIds.length) return;
+      changeDrawings(selectedIds, (drawing) => {
+        const next = { ...drawing, ...patch };
+        // Only boxes and ellipses are filled.
+        if (patch.fill !== undefined && drawing.shape !== 'rect' && drawing.shape !== 'ellipse')
+          next.fill = drawing.fill;
+        if (next.fill === undefined) delete next.fill;
+        return next;
+      });
     },
-    [selectedId, changeDrawing],
+    [selectedIds, changeDrawings],
   );
-  const remove = useCallback(
-    (id: string) => {
-      changeDrawing(id, () => null);
-      setSelectedId(null);
-    },
-    [changeDrawing],
-  );
+  const removeSelected = useCallback(() => {
+    changeDrawings(selectedIds, () => null);
+    setChosenIds([]);
+  }, [changeDrawings, selectedIds]);
   const add = useCallback(
     (drawing: BoardDrawing) => {
       const current = boardRef.current;
-      if (!current || (current.drawings?.length ?? 0) >= MAX_BOARD_DRAWINGS) return false;
-      commit({ ...current, drawings: [...(current.drawings ?? []), drawing] });
+      if (!current) return false;
+      if ((current.drawings?.length ?? 0) >= MAX_BOARD_DRAWINGS) {
+        setNotice(LIMIT_NOTICE);
+        return false;
+      }
+      const placed = layers.drawOn ? { ...drawing, layerId: layers.drawOn } : drawing;
+      commit({ ...current, drawings: [...(current.drawings ?? []), placed] });
       return true;
     },
-    [boardRef, commit],
+    [boardRef, commit, layers.drawOn],
   );
+  /** Adds the copied drawings as one edit and selects them; false when the text is not ours. */
+  const pasteText = useCallback(
+    (text: string) => {
+      const copied = readDrawingClipboard(text);
+      if (!copied) return false;
+      const current = boardRef.current;
+      if (!current || !copied.length) return true;
+      if (clipboard.current?.text !== text) clipboard.current = { text, pastes: 0 };
+      clipboard.current.pastes += 1;
+      const pasted = pasteDrawings(current, copied, PASTE_OFFSET * clipboard.current.pastes, () =>
+        crypto.randomUUID(),
+      );
+      if (!pasted) {
+        setNotice(LIMIT_NOTICE);
+        return true;
+      }
+      commit(pasted.board);
+      setOpen(true);
+      setToolState('select');
+      select(pasted.ids);
+      setNotice(`Pasted ${plural(pasted.ids.length)}.`);
+      return true;
+    },
+    [boardRef, commit, setOpen, select],
+  );
+  const copySelection = useCallback(() => {
+    const current = boardRef.current;
+    if (!current || !selectedIds.length) return null;
+    const text = drawingClipboard(current, selectedIds);
+    clipboard.current = { text, pastes: 0 };
+    return text;
+  }, [boardRef, selectedIds]);
+  const duplicate = useCallback(() => {
+    const current = boardRef.current;
+    if (!current || !selectedIds.length) return;
+    const pasted = pasteDrawings(
+      current,
+      readDrawingClipboard(drawingClipboard(current, selectedIds)) ?? [],
+      PASTE_OFFSET,
+      () => crypto.randomUUID(),
+    );
+    if (!pasted) {
+      setNotice(LIMIT_NOTICE);
+      return;
+    }
+    commit(pasted.board);
+    select(pasted.ids);
+  }, [boardRef, commit, select, selectedIds]);
+  const selectAll = useCallback(() => {
+    const current = boardRef.current;
+    if (!current) return;
+    select(
+      visibleDrawings(current)
+        .filter((drawing) => isDrawingPickable(drawing, current.drawingLayers))
+        .map((drawing) => drawing.id),
+    );
+  }, [boardRef, select]);
 
   useEffect(() => {
     if (!editable) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('input,textarea,select,[contenteditable]')) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
+      if (inTextField(event.target)) return;
+      if (event.altKey) return;
+      if (event.ctrlKey || event.metaKey) {
+        const key = event.key.toLowerCase();
+        if (key === 'a' && open && tool === 'select') {
+          event.preventDefault();
+          selectAll();
+        } else if (key === 'd' && selectedIds.length) {
+          event.preventDefault();
+          duplicate();
+        }
+        return;
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedIds.length) {
         event.preventDefault();
-        remove(selectedId);
+        removeSelected();
         return;
       }
       if (event.key === 'Escape') {
-        if (selectedId) setSelectedId(null);
+        if (selectedIds.length) setChosenIds([]);
         else if (tool !== 'diagram') setTool('diagram');
         return;
       }
@@ -196,9 +348,43 @@ export function useCanvasDrawing(options: {
       const shortcut = TOOLS.find((item) => item.key === event.key.toLowerCase());
       if (shortcut && shortcut.key !== 'Escape') setTool(shortcut.tool);
     };
+    // Copy, cut and paste use the clipboard events, which need no permission and leave text
+    // fields and selected page text to the browser.
+    const onCopy = (event: ClipboardEvent) => {
+      if (inTextField(event.target) || window.getSelection()?.toString()) return;
+      const text = copySelection();
+      if (!text || !event.clipboardData) return;
+      event.clipboardData.setData('text/plain', text);
+      event.preventDefault();
+      if (event.type === 'cut') removeSelected();
+      setNotice(`${event.type === 'cut' ? 'Cut' : 'Copied'} ${plural(selectedIds.length)}.`);
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      if (inTextField(event.target)) return;
+      if (pasteText(event.clipboardData?.getData('text/plain') ?? '')) event.preventDefault();
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editable, open, selectedId, tool, remove, setTool]);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('cut', onCopy);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('cut', onCopy);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, [
+    editable,
+    open,
+    selectedIds,
+    tool,
+    removeSelected,
+    setTool,
+    selectAll,
+    duplicate,
+    copySelection,
+    pasteText,
+  ]);
 
   return {
     tool,
@@ -206,15 +392,23 @@ export function useCanvasDrawing(options: {
     active,
     open,
     setOpen,
+    selection,
     selected,
+    selectedIds,
     select,
     style,
     restyle,
     draft,
     setDraft,
+    marquee,
+    setMarquee,
     changeDrawing,
-    remove,
+    changeDrawings,
+    removeSelected,
+    duplicate,
     add,
+    layers,
+    notice,
     board,
     boardRef,
     setBoard,
@@ -228,27 +422,35 @@ export type CanvasDrawing = ReturnType<typeof useCanvasDrawing>;
 /**
  * The drawings, rendered as children of React Flow so they follow its pan and zoom. Lines and
  * shapes are painted between the grid and the diagram, so icons and arrows stay on top; words,
- * the selection outline and the shape being drawn are painted above the diagram.
+ * the selection outlines, resize handles and the shape being drawn are painted above it.
+ * Hidden layers are not drawn.
  */
 export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
   const { x, y, zoom } = useViewport();
-  const { board, selected } = drawing;
+  const { board, selection, selected, marquee } = drawing;
   // A shape half-drawn when the board became read-only is dropped.
   const draft = drawing.active ? drawing.draft : null;
   const halo = paletteOf(lookOf(board)).deep;
+  const scale = board?.drawingScale;
   const drawings = useMemo(
-    () => (board?.drawings ?? []).map((item) => absoluteDrawing(item, board!.positions)),
+    () =>
+      (board ? visibleDrawings(board) : []).map((item) => absoluteDrawing(item, board!.positions)),
     [board],
   );
-  if (!drawings.length && !draft) return null;
-  const outline = selected && board ? absoluteDrawing(selected, board.positions) : null;
+  if (!drawings.length && !draft && !marquee) return null;
+  const outlines = board ? selection.map((item) => absoluteDrawing(item, board.positions)) : [];
+  const resizable =
+    board && selected && drawing.active && isDrawingEditable(selected, board.drawingLayers)
+      ? absoluteDrawing(selected, board.positions)
+      : null;
+  const area = marquee ? boxBetween(marquee.from, marquee.to) : null;
   return (
     <>
       <svg className="drawing-layer" aria-hidden="true">
         <g transform={`translate(${x} ${y}) scale(${zoom})`}>
           {drawings.map((item) => (
             <g key={item.id} data-drawing={item.id} data-shape={item.shape}>
-              <DrawingShape drawing={item} halo={halo} part="shape" />
+              <DrawingShape drawing={item} halo={halo} part="shape" scale={scale} />
             </g>
           ))}
         </g>
@@ -257,13 +459,44 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
         <svg className="drawing-labels" aria-hidden="true">
           {drawings.map((item) => (
             <g key={item.id} data-drawing-label={item.id} data-shape={item.shape}>
-              <DrawingShape drawing={item} halo={halo} part="label" />
+              <DrawingShape drawing={item} halo={halo} part="label" scale={scale} />
             </g>
           ))}
-          {outline && <SelectionOutline drawing={outline} zoom={zoom} />}
+          {outlines.map((item) => (
+            <SelectionOutline key={item.id} drawing={item} zoom={zoom} />
+          ))}
+          {resizable &&
+            resizeHandles(resizable).map(({ handle, at }) => (
+              <rect
+                key={handle}
+                className="drawing-handle"
+                data-handle={handle}
+                x={at[0] - 4 / zoom}
+                y={at[1] - 4 / zoom}
+                width={8 / zoom}
+                height={8 / zoom}
+                fill="#ffffff"
+                stroke={halo}
+                strokeWidth={1.5 / zoom}
+              />
+            ))}
+          {area && (
+            <rect
+              className="drawing-marquee"
+              x={area.x}
+              y={area.y}
+              width={area.width}
+              height={area.height}
+              fill="#ffffff"
+              fillOpacity={0.06}
+              stroke="#ffffff"
+              strokeWidth={1 / zoom}
+              strokeDasharray={`${3 / zoom} ${3 / zoom}`}
+            />
+          )}
           {draft && (
             <g className="drawing-draft">
-              <DrawingShape drawing={draft} halo={halo} />
+              <DrawingShape drawing={draft} halo={halo} scale={scale} />
             </g>
           )}
         </svg>
@@ -273,28 +506,20 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
 }
 
 function SelectionOutline({ drawing, zoom }: { drawing: BoardDrawing; zoom: number }) {
-  const xs = drawing.points?.map(([x]) => x) ?? [drawing.x!, drawing.x! + (drawing.width ?? 0)];
-  const ys = drawing.points?.map(([, y]) => y) ?? [drawing.y!, drawing.y! + (drawing.height ?? 0)];
-  if (drawing.shape === 'text') {
-    const size = drawing.fontSize ?? 16;
-    const lines = drawing.text!.split('\n');
-    xs.push(drawing.x! + Math.max(...lines.map((line) => line.length)) * size * 0.6);
-    ys.push(drawing.y! + lines.length * size * 1.25);
-  }
+  const box = drawingBox(drawing);
   const pad = 6 + drawing.strokeWidth;
-  const left = Math.min(...xs) - pad;
-  const top = Math.min(...ys) - pad;
   return (
     <rect
       className="drawing-selection"
-      x={left}
-      y={top}
-      width={Math.max(...xs) + pad - left}
-      height={Math.max(...ys) + pad - top}
+      data-locked={drawing.locked ? 'true' : undefined}
+      x={box.x - pad}
+      y={box.y - pad}
+      width={box.width + pad * 2}
+      height={box.height + pad * 2}
       fill="none"
       stroke="#ffffff"
       strokeWidth={1 / zoom}
-      strokeDasharray={`${4 / zoom} ${4 / zoom}`}
+      strokeDasharray={drawing.locked ? undefined : `${4 / zoom} ${4 / zoom}`}
     />
   );
 }
@@ -349,8 +574,8 @@ function shapeFor(
 }
 
 /**
- * The drawing palette, the style/inspector panel and, while a tool is active, the surface that
- * captures pointer input. Placed inside the canvas, after React Flow.
+ * The drawing palette, the style/inspector or layers panel and, while a tool is active, the
+ * surface that captures pointer input. Placed inside the canvas, after React Flow.
  */
 export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
   // The zoom is read when needed, so panning does not re-render the controls.
@@ -365,14 +590,21 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     active,
     open,
     setOpen,
+    selection,
     selected,
+    selectedIds,
     select,
     style,
     restyle,
     setDraft,
+    setMarquee,
     changeDrawing,
-    remove,
+    changeDrawings,
+    removeSelected,
+    duplicate,
     add,
+    layers,
+    notice,
     board,
     boardRef,
     setBoard,
@@ -398,10 +630,14 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     setBoard((current) => {
       if (!current) return current;
       const hit = drawingAt(current, point, tolerance());
-      return hit
+      return hit && isDrawingEditable(hit, current.drawingLayers)
         ? { ...current, drawings: current.drawings!.filter((item) => item.id !== hit.id) }
         : current;
     });
+  const editableIds = (current: BoardDocument, ids: readonly string[]) =>
+    (current.drawings ?? [])
+      .filter((item) => ids.includes(item.id) && isDrawingEditable(item, current.drawingLayers))
+      .map((item) => item.id);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -412,11 +648,46 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     const current = boardRef.current;
     if (!current) return;
     if (tool === 'select') {
+      // A handle of the one selected drawing resizes it.
+      if (selected && isDrawingEditable(selected, current.drawingLayers)) {
+        const original = absoluteDrawing(selected, current.positions);
+        const handle = handleAt(original, point, 8 / flow.getZoom());
+        if (handle) {
+          begin();
+          gesture.current = {
+            kind: 'resize',
+            id: selected.id,
+            handle,
+            original,
+            origin: drawingOrigin(selected, current.positions),
+          };
+          return;
+        }
+      }
       const hit = drawingAt(current, point, tolerance());
-      select(hit?.id ?? null);
-      if (hit) {
+      if (!hit) {
+        // An empty spot starts a selection rectangle; Shift adds to the selection.
+        const base = event.shiftKey ? [...selectedIds] : [];
+        if (!event.shiftKey) select([]);
+        gesture.current = { kind: 'marquee', from: point, base };
+        setMarquee({ from: point, to: point });
+        return;
+      }
+      if (event.shiftKey) {
+        select(
+          selectedIds.includes(hit.id)
+            ? selectedIds.filter((id) => id !== hit.id)
+            : [...selectedIds, hit.id],
+        );
+        return;
+      }
+      // Dragging one of several selected drawings moves them all.
+      const ids = selectedIds.includes(hit.id) ? selectedIds : [hit.id];
+      if (!selectedIds.includes(hit.id)) select([hit.id]);
+      const movable = editableIds(current, ids);
+      if (movable.length) {
         begin();
-        gesture.current = { kind: 'move', id: hit.id, last: point, moved: false };
+        gesture.current = { kind: 'move', ids: movable, last: point, moved: false };
       }
     } else if (tool === 'erase') {
       begin();
@@ -436,7 +707,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
       };
       if (add(created)) {
         setTool('select');
-        select(created.id);
+        select([created.id]);
         focusText.current = true;
       }
     } else if (tool !== 'diagram') {
@@ -448,7 +719,30 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     if (!current) return;
     const point = at(event);
     if (current.kind === 'erase') eraseAt(point);
-    else if (current.kind === 'move') {
+    else if (current.kind === 'marquee') setMarquee({ from: current.from, to: point });
+    else if (current.kind === 'resize') {
+      const fix = (value: number) => (event.altKey ? round(value) : snap(value));
+      const resized = resizeDrawing(
+        current.original,
+        current.handle,
+        [fix(point[0]), fix(point[1])],
+        event.shiftKey,
+      );
+      setBoard((board) =>
+        board
+          ? {
+              ...board,
+              drawings: board.drawings?.map((item) => {
+                if (item.id !== current.id) return item;
+                const stored = roundDrawing(
+                  translateDrawing(resized, -current.origin.x, -current.origin.y),
+                );
+                return item.anchorId ? { ...stored, anchorId: item.anchorId } : stored;
+              }),
+            }
+          : board,
+      );
+    } else if (current.kind === 'move') {
       const dx = point[0] - current.last[0];
       const dy = point[1] - current.last[1];
       current.last = point;
@@ -458,7 +752,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
           ? {
               ...board,
               drawings: board.drawings?.map((item) =>
-                item.id === current.id ? translateDrawing(item, dx, dy) : item,
+                current.ids.includes(item.id) ? translateDrawing(item, dx, dy) : item,
               ),
             }
           : board,
@@ -479,13 +773,19 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
           ? {
               ...boardRef.current,
               drawings: boardRef.current.drawings?.map((item) =>
-                item.id === current.id ? roundDrawing(item) : item,
+                current.ids.includes(item.id) ? roundDrawing(item) : item,
               ),
             }
           : undefined,
       );
-    } else if (current.kind === 'erase') end();
-    else if (current.kind === 'draw') {
+    } else if (current.kind === 'resize' || current.kind === 'erase') end();
+    else if (current.kind === 'marquee') {
+      setMarquee(null);
+      const latest = boardRef.current;
+      if (!latest) return;
+      const picked = drawingsInBox(latest, current.from, at(event)).map((item) => item.id);
+      select([...new Set([...current.base, ...picked])]);
+    } else if (current.kind === 'draw') {
       setDraft(null);
       const shape = shapeFor(
         tool as DrawingKind,
@@ -499,12 +799,30 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
   };
 
   const concepts = board.nodes;
-  const editsText = selected?.shape === 'text' || selected?.shape === 'dimension';
-  const filled = selected
-    ? selected.shape === 'rect' || selected.shape === 'ellipse'
+  const boardLayers: readonly BoardDrawingLayer[] = board.drawingLayers ?? [];
+  const changeable = selection.filter((item) => isDrawingEditable(item, boardLayers));
+  const allLocked = selection.length > 0 && selection.every((item) => item.locked);
+  const single = selected && changeable.includes(selected) ? selected : null;
+  const editsText = single?.shape === 'text' || single?.shape === 'dimension';
+  const filled = selection.length
+    ? selection.some((item) => item.shape === 'rect' || item.shape === 'ellipse')
     : tool === 'rect' || tool === 'ellipse';
-  const shown = selected ?? style;
-  const showPanel = !!selected || (tool !== 'diagram' && tool !== 'erase' && tool !== 'select');
+  const shown = changeable[0] ?? selection[0] ?? style;
+  const drawingTool = tool !== 'diagram' && tool !== 'erase' && tool !== 'select';
+  const showPanel = !layers.open && (selection.length > 0 || drawingTool);
+  const styleDisabled = selection.length > 0 && !changeable.length;
+  const sharedAnchor = changeable.every((item) => item.anchorId === changeable[0]?.anchorId)
+    ? (changeable[0]?.anchorId ?? '')
+    : 'mixed';
+  const sharedLayer = selection.every((item) => item.layerId === selection[0]?.layerId)
+    ? (selection[0]?.layerId ?? '')
+    : 'mixed';
+  const openLayers = boardLayers.filter((layer) => !layer.hidden && !layer.locked);
+  const panelName = selected
+    ? 'Selected drawing'
+    : selection.length
+      ? 'Selected drawings'
+      : 'Drawing style';
 
   return (
     <>
@@ -516,9 +834,11 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => {
-            if (gesture.current?.kind !== 'draw' && gesture.current) end();
+            const current = gesture.current;
+            if (current && current.kind !== 'draw' && current.kind !== 'marquee') end();
             gesture.current = null;
             setDraft(null);
+            setMarquee(null);
           }}
         />
       )}
@@ -543,11 +863,20 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
             ))}
             <span />
             <button
+              aria-label="Layers and scale"
+              title="Drawing layers and the board's scale"
+              aria-pressed={layers.open}
+              onClick={() => layers.setOpen(!layers.open)}
+            >
+              <Layers size={16} />
+            </button>
+            <button
               aria-label="Hide drawing tools"
               title="Put the drawing tools away"
               aria-expanded
               onClick={() => {
                 setTool('diagram');
+                layers.setOpen(false);
                 setOpen(false);
               }}
             >
@@ -565,85 +894,102 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
           </button>
         )}
       </div>
+      {notice && (
+        <p className="drawing-notice" role="status">
+          {notice}
+        </p>
+      )}
+      {open && layers.open && <DrawingLayersPanel board={board} layers={layers} />}
       {open && showPanel && (
-        <section
-          className="drawing-panel"
-          aria-label={selected ? 'Selected drawing' : 'Drawing style'}
-        >
-          <div className="drawing-inks" role="radiogroup" aria-label="Ink">
-            {ILLUSTRATION_INKS.map((ink) => (
-              <button
-                key={ink}
-                role="radio"
-                aria-checked={shown.ink === ink}
-                aria-label={`${ink} ink`}
-                title={ink}
-                style={{ background: INK_VALUES[ink] }}
-                onClick={() => restyle({ ink })}
-              />
-            ))}
-          </div>
-          <div className="drawing-options">
-            <label>
-              Line
-              <select
-                aria-label="Line style"
-                value={shown.line}
-                onChange={(event) => restyle({ line: event.target.value as DrawingLineStyle })}
-              >
-                {LINES.map((line) => (
-                  <option key={line.value} value={line.value}>
-                    {line.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Weight
-              <select
-                aria-label="Line weight"
-                value={shown.strokeWidth}
-                onChange={(event) => restyle({ strokeWidth: Number(event.target.value) })}
-              >
-                {WEIGHTS.map((weight) => (
-                  <option key={weight.value} value={weight.value}>
-                    {weight.label}
-                  </option>
-                ))}
-                {!WEIGHTS.some((weight) => weight.value === shown.strokeWidth) && (
-                  <option value={shown.strokeWidth}>{shown.strokeWidth}</option>
-                )}
-              </select>
-            </label>
-            {filled && (
-              <label className="drawing-check">
-                <input
-                  type="checkbox"
-                  checked={!!shown.fill}
-                  onChange={(event) => restyle({ fill: event.target.checked })}
+        <section className="drawing-panel" aria-label={panelName}>
+          {selection.length > 1 && (
+            <p className="drawing-count">
+              {plural(selection.length)} selected
+              {changeable.length < selection.length &&
+                ` · ${selection.length - changeable.length} locked`}
+            </p>
+          )}
+          {selected?.locked && (
+            <p className="drawing-count">
+              <Lock size={12} aria-hidden /> Locked: unlock it to move or change it.
+            </p>
+          )}
+          <fieldset className="drawing-fieldset" disabled={styleDisabled}>
+            <div className="drawing-inks" role="radiogroup" aria-label="Ink">
+              {ILLUSTRATION_INKS.map((ink) => (
+                <button
+                  key={ink}
+                  role="radio"
+                  aria-checked={shown.ink === ink}
+                  aria-label={`${ink} ink`}
+                  title={ink}
+                  style={{ background: INK_VALUES[ink] }}
+                  onClick={() => restyle({ ink })}
                 />
-                Fill
+              ))}
+            </div>
+            <div className="drawing-options">
+              <label>
+                Line
+                <select
+                  aria-label="Line style"
+                  value={shown.line}
+                  onChange={(event) => restyle({ line: event.target.value as DrawingLineStyle })}
+                >
+                  {LINES.map((line) => (
+                    <option key={line.value} value={line.value}>
+                      {line.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-            )}
-          </div>
-          {selected && editsText && (
+              <label>
+                Weight
+                <select
+                  aria-label="Line weight"
+                  value={shown.strokeWidth}
+                  onChange={(event) => restyle({ strokeWidth: Number(event.target.value) })}
+                >
+                  {WEIGHTS.map((weight) => (
+                    <option key={weight.value} value={weight.value}>
+                      {weight.label}
+                    </option>
+                  ))}
+                  {!WEIGHTS.some((weight) => weight.value === shown.strokeWidth) && (
+                    <option value={shown.strokeWidth}>{shown.strokeWidth}</option>
+                  )}
+                </select>
+              </label>
+              {filled && (
+                <label className="drawing-check">
+                  <input
+                    type="checkbox"
+                    checked={!!shown.fill}
+                    onChange={(event) => restyle({ fill: event.target.checked })}
+                  />
+                  Fill
+                </label>
+              )}
+            </div>
+          </fieldset>
+          {single && editsText && (
             <label className="drawing-text">
-              {selected.shape === 'text' ? 'Text' : 'Label (blank shows the length)'}
+              {single.shape === 'text' ? 'Text' : 'Label (blank shows the length)'}
               <textarea
                 ref={textInput}
-                rows={selected.shape === 'text' ? 2 : 1}
+                rows={single.shape === 'text' ? 2 : 1}
                 maxLength={500}
                 // Text drawings need some text; an emptied one keeps its last words.
-                defaultValue={selected.text ?? ''}
-                key={selected.id}
+                defaultValue={single.text ?? ''}
+                key={single.id}
                 onBlur={(event) => {
                   const text = event.target.value;
-                  if (selected.shape === 'text' && !text.trim()) {
-                    event.target.value = selected.text ?? '';
+                  if (single.shape === 'text' && !text.trim()) {
+                    event.target.value = single.text ?? '';
                     return;
                   }
-                  if (text !== (selected.text ?? ''))
-                    changeDrawing(selected.id, (item) => {
+                  if (text !== (single.text ?? ''))
+                    changeDrawing(single.id, (item) => {
                       const next: BoardDrawing = { ...item, text };
                       if (!text.trim()) delete next.text;
                       return next;
@@ -652,14 +998,14 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
               />
             </label>
           )}
-          {selected?.shape === 'text' && (
+          {single?.shape === 'text' && (
             <label>
               Size
               <select
                 aria-label="Text size"
-                value={selected.fontSize ?? 16}
+                value={single.fontSize ?? 16}
                 onChange={(event) =>
-                  changeDrawing(selected.id, (item) => ({
+                  changeDrawing(single.id, (item) => ({
                     ...item,
                     fontSize: Number(event.target.value),
                   }))
@@ -673,19 +1019,54 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
               </select>
             </label>
           )}
-          {selected && (
+          {!selection.length && (
+            <label>
+              Draw on
+              <select
+                aria-label="Draw on layer"
+                value={layers.drawOn ?? ''}
+                onChange={(event) => layers.setDrawOn(event.target.value || null)}
+              >
+                <option value="">Base layer</option>
+                {openLayers.map((layer) => (
+                  <option key={layer.id} value={layer.id}>
+                    {layer.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!selection.length && tool === 'dimension' && (
+            <p className="drawing-count">
+              Scale:{' '}
+              {board.drawingScale
+                ? `1 grid square = ${board.drawingScale.gridValue} ${board.drawingScale.unit}`
+                : 'grid units (u)'}
+              .{' '}
+              <button className="drawing-link" onClick={() => layers.setOpen(true)}>
+                Set scale
+              </button>
+            </p>
+          )}
+          {changeable.length > 0 && (
             <>
               <label>
                 Moves with
                 <select
                   aria-label="Moves with"
-                  value={selected.anchorId ?? ''}
+                  value={sharedAnchor}
                   onChange={(event) =>
-                    changeDrawing(selected.id, (item) =>
-                      anchorDrawing(item, event.target.value || null, board.positions),
+                    changeDrawings(
+                      changeable.map((item) => item.id),
+                      (item) => anchorDrawing(item, event.target.value || null, board.positions),
                     )
                   }
                 >
+                  {sharedAnchor === 'mixed' && (
+                    <option value="mixed" disabled>
+                      Mixed
+                    </option>
+                  )}
                   <option value="">Canvas (stays put)</option>
                   {concepts.map((node) => (
                     <option key={node.id} value={node.id}>
@@ -694,9 +1075,74 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
                   ))}
                 </select>
               </label>
-              <button className="drawing-delete" onClick={() => remove(selected.id)}>
-                <Trash2 size={14} /> Delete drawing
-              </button>
+              <label>
+                Layer
+                <select
+                  aria-label="Layer"
+                  value={sharedLayer}
+                  onChange={(event) =>
+                    changeDrawings(
+                      changeable.map((item) => item.id),
+                      (item) => {
+                        const next = { ...item };
+                        if (event.target.value) next.layerId = event.target.value;
+                        else delete next.layerId;
+                        return next;
+                      },
+                    )
+                  }
+                >
+                  {sharedLayer === 'mixed' && (
+                    <option value="mixed" disabled>
+                      Mixed
+                    </option>
+                  )}
+                  <option value="">Base layer</option>
+                  {openLayers.map((layer) => (
+                    <option key={layer.id} value={layer.id}>
+                      {layer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+          {selection.length > 0 && (
+            <>
+              <label className="drawing-check">
+                <input
+                  type="checkbox"
+                  checked={allLocked}
+                  onChange={(event) =>
+                    changeDrawings(
+                      selectedIds,
+                      (item) => {
+                        const next = { ...item };
+                        if (event.target.checked) next.locked = true;
+                        else delete next.locked;
+                        return next;
+                      },
+                      true,
+                    )
+                  }
+                />
+                Lock (no moving or changes)
+              </label>
+              <div className="drawing-actions">
+                <button className="drawing-delete" onClick={duplicate}>
+                  <Copy size={14} /> Duplicate
+                </button>
+                {changeable.length > 0 && (
+                  <button className="drawing-delete" onClick={removeSelected}>
+                    <Trash2 size={14} />{' '}
+                    {selected ? 'Delete drawing' : `Delete ${plural(changeable.length)}`}
+                  </button>
+                )}
+              </div>
+              <p className="drawing-hint">
+                Shift+click adds to the selection · Ctrl/⌘ C, X, V copy, cut and paste · Ctrl/⌘ D
+                duplicates
+              </p>
             </>
           )}
         </section>

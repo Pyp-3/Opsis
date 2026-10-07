@@ -10,7 +10,12 @@ import { ILLUSTRATION_INKS } from './illustration';
  * Like icons and illustrations they are declarative, validated shapes, never markup. Points use
  * canvas coordinates. A drawing attached to a concept (`anchorId`) stores its coordinates
  * relative to that concept's position, so it moves with the concept when the concept is dragged
- * or rearranged. Agents never receive or produce drawings; they belong to the reader.
+ * or rearranged.
+ *
+ * Drawings may sit on named layers that can be reordered, hidden or locked, and a single drawing
+ * can be locked too. A board-level scale says what one grid square measures, so dimension lines
+ * read in real units. Generation agents never receive or produce drawings; external agents edit
+ * them only through the explicit MCP drawing tools, which respect locks.
  */
 
 export const DRAWING_SHAPES = [
@@ -32,16 +37,43 @@ export const MAX_DRAWING_POINTS = 400;
 /** One fine grid square; dimension lines measure in these units unless labelled. */
 export const DRAWING_GRID_UNIT = 24;
 
+export const MAX_DRAWING_LAYERS = 12;
+
 const coordinate = z.number().finite().min(-100_000).max(100_000);
 const point = z.tuple([coordinate, coordinate]);
+const drawingId = z
+  .string()
+  .min(1)
+  .max(80)
+  .regex(/^[a-zA-Z0-9_-]+$/);
+
+/**
+ * A named drawing layer. Layers paint in list order above the base layer (drawings without a
+ * layer). A hidden layer is not drawn on the canvas or in exports; a locked one cannot be picked,
+ * moved, erased or changed until it is unlocked.
+ */
+export const DrawingLayerSchema = z
+  .object({
+    id: drawingId,
+    name: z.string().trim().min(1).max(40),
+    hidden: z.boolean().optional(),
+    locked: z.boolean().optional(),
+  })
+  .strict();
+export type DrawingLayer = z.infer<typeof DrawingLayerSchema>;
+
+/** What one fine grid square measures, e.g. 0.5 m; dimension lines read in this unit. */
+export const DrawingScaleSchema = z
+  .object({
+    gridValue: z.number().finite().positive().max(1_000_000),
+    unit: z.string().trim().min(1).max(12),
+  })
+  .strict();
+export type DrawingScale = z.infer<typeof DrawingScaleSchema>;
 
 export const BoardDrawingSchema = z
   .object({
-    id: z
-      .string()
-      .min(1)
-      .max(80)
-      .regex(/^[a-zA-Z0-9_-]+$/),
+    id: drawingId,
     shape: z.enum(DRAWING_SHAPES),
     /** A freehand stroke's samples, or the two ends of a line, arrow or dimension. */
     points: z.array(point).min(2).max(MAX_DRAWING_POINTS).optional(),
@@ -59,12 +91,11 @@ export const BoardDrawingSchema = z
     strokeWidth: z.number().finite().min(0.5).max(16),
     line: z.enum(DRAWING_LINE_STYLES),
     /** The concept this drawing moves with; its coordinates are then relative to it. */
-    anchorId: z
-      .string()
-      .min(1)
-      .max(80)
-      .regex(/^[a-zA-Z0-9_-]+$/)
-      .optional(),
+    anchorId: drawingId.optional(),
+    /** The layer this drawing is on; the base layer when absent. */
+    layerId: drawingId.optional(),
+    /** A locked drawing can be picked, to unlock it, but not moved, erased or changed. */
+    locked: z.boolean().optional(),
   })
   .strict()
   .superRefine((drawing, context) => {
@@ -96,17 +127,82 @@ function drawingShapeProblem(drawing: z.infer<typeof BoardDrawingSchema>): strin
   }
 }
 
-/** Board-level rules: unique drawing IDs and anchors that name existing concepts. */
+/**
+ * Board-level rules: unique drawing and layer IDs, anchors that name existing concepts and
+ * layers that exist.
+ */
 export function drawingProblems(
   drawings: readonly BoardDrawing[],
   nodeIds: ReadonlySet<string>,
+  layers: readonly DrawingLayer[] = [],
 ): string[] {
   const problems: string[] = [];
   if (new Set(drawings.map((drawing) => drawing.id)).size !== drawings.length)
     problems.push('Drawing IDs must be unique.');
   if (drawings.some((drawing) => drawing.anchorId && !nodeIds.has(drawing.anchorId)))
     problems.push('A drawing can only move with an existing concept.');
+  const layerIds = new Set(layers.map((layer) => layer.id));
+  if (layerIds.size !== layers.length) problems.push('Drawing layer IDs must be unique.');
+  if (drawings.some((drawing) => drawing.layerId && !layerIds.has(drawing.layerId)))
+    problems.push('A drawing can only be on an existing layer.');
   return problems;
+}
+
+type LayeredBoard = {
+  drawings?: readonly BoardDrawing[] | undefined;
+  drawingLayers?: readonly DrawingLayer[] | undefined;
+};
+
+/** The layer a drawing is on, or null for the base layer. */
+export function layerOf(
+  drawing: Pick<BoardDrawing, 'layerId'>,
+  layers: readonly DrawingLayer[] | undefined,
+): DrawingLayer | null {
+  return (drawing.layerId && layers?.find((layer) => layer.id === drawing.layerId)) || null;
+}
+
+/**
+ * The drawings shown on the canvas and in exports, bottom first: the base layer, then each
+ * visible layer in order, each keeping the order its drawings were made in.
+ */
+export function visibleDrawings<T extends LayeredBoard>(board: T): BoardDrawing[] {
+  const drawings = board.drawings ?? [];
+  const layers = board.drawingLayers ?? [];
+  return [
+    ...drawings.filter((drawing) => !layerOf(drawing, layers)),
+    ...layers
+      .filter((layer) => !layer.hidden)
+      .flatMap((layer) => drawings.filter((drawing) => drawing.layerId === layer.id)),
+  ];
+}
+
+/** Whether a drawing can be picked on the canvas: visible and not on a locked layer. */
+export function isDrawingPickable(drawing: BoardDrawing, layers?: readonly DrawingLayer[]) {
+  const layer = layerOf(drawing, layers);
+  return !layer?.hidden && !layer?.locked;
+}
+
+/** Whether a drawing may be moved, resized, restyled, erased or deleted. */
+export function isDrawingEditable(drawing: BoardDrawing, layers?: readonly DrawingLayer[]) {
+  return !drawing.locked && isDrawingPickable(drawing, layers);
+}
+
+/** Removes a layer; its drawings move to the base layer rather than being deleted. */
+export function removeDrawingLayer<T extends LayeredBoard>(board: T, layerId: string): T {
+  const layers = (board.drawingLayers ?? []).filter((layer) => layer.id !== layerId);
+  const next: LayeredBoard = {
+    ...board,
+    drawings: board.drawings?.map((drawing) => {
+      if (drawing.layerId !== layerId) return drawing;
+      const moved = { ...drawing };
+      delete moved.layerId;
+      return moved;
+    }),
+    drawingLayers: layers,
+  };
+  if (!board.drawings) delete next.drawings;
+  if (!layers.length) delete next.drawingLayers;
+  return next as T;
 }
 
 type Position = { x: number; y: number };
@@ -205,10 +301,15 @@ export function drawingBounds(drawing: BoardDrawing, positions: Positions) {
   };
 }
 
-/** What a dimension line says: its label, or its length in grid units. */
-export function dimensionLabel(drawing: BoardDrawing): string {
+/**
+ * What a dimension line says: its label, or its length in the board's scale (grid units, "u",
+ * without one). Scaled lengths keep two decimals below ten, so small metric values stay exact.
+ */
+export function dimensionLabel(drawing: BoardDrawing, scale?: DrawingScale): string {
   if (drawing.text?.trim()) return drawing.text.trim();
   const [[x1, y1], [x2, y2]] = drawing.points as [[number, number], [number, number]];
-  const units = Math.hypot(x2 - x1, y2 - y1) / DRAWING_GRID_UNIT;
-  return `${Number(units.toFixed(1))} u`;
+  const squares = Math.hypot(x2 - x1, y2 - y1) / DRAWING_GRID_UNIT;
+  if (!scale) return `${Number(squares.toFixed(1))} u`;
+  const value = squares * scale.gridValue;
+  return `${Number(value.toFixed(Math.abs(value) < 10 ? 2 : 1))} ${scale.unit.trim()}`;
 }

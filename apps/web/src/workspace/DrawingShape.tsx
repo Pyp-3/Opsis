@@ -1,4 +1,4 @@
-import { dimensionLabel, type BoardDrawing } from '@opsis/schema';
+import { dimensionLabel, type BoardDrawing, type DrawingScale } from '@opsis/schema';
 import { INK_VALUES } from './Illustration';
 import { arrowHead, dimensionGeometry, LINE_DASHES, strokePath } from './canvas-drawing';
 
@@ -11,16 +11,19 @@ export type DrawingPart = 'shape' | 'label' | 'all';
 /**
  * One canvas drawing as SVG, in absolute canvas coordinates. The live canvas and the SVG/PNG
  * export both draw through this component so they never disagree. `halo` is the canvas colour
- * painted behind text so labels stay legible over grid lines and arrows.
+ * painted behind text so labels stay legible over grid lines and arrows. `scale` is the board's
+ * drawing scale, in which unlabelled dimension lines read.
  */
 export function DrawingShape({
   drawing,
   halo,
   part = 'all',
+  scale,
 }: {
   drawing: BoardDrawing;
   halo: string;
   part?: DrawingPart;
+  scale?: DrawingScale | undefined;
 }) {
   const shape = part !== 'label';
   const label = part !== 'shape';
@@ -116,7 +119,7 @@ export function DrawingShape({
               transform={`rotate(${angle} ${x} ${y})`}
               {...text}
             >
-              {dimensionLabel(drawing)}
+              {dimensionLabel(drawing, scale)}
             </text>
           )}
         </g>

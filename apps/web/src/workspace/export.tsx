@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { saveBlob } from '../desktop';
-import { absoluteDrawing, drawingBounds, type BoardDocument } from '@opsis/schema';
+import { absoluteDrawing, drawingBounds, visibleDrawings, type BoardDocument } from '@opsis/schema';
 import { DrawingShape } from './DrawingShape';
 import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
@@ -31,7 +31,7 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
       const p = board.positions[node.id] ?? { x: 0, y: 0 };
       return [p, { x: p.x + NODE_WIDTH, y: p.y + nodeHeight(node) }];
     }),
-    ...(board.drawings ?? []).flatMap((drawing) => {
+    ...visibleDrawings(board).flatMap((drawing) => {
       const bounds = drawingBounds(drawing, board.positions);
       return [
         { x: bounds.minX, y: bounds.minY },
@@ -93,15 +93,17 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
       return `<g transform="translate(${p.x} ${p.y})"><g transform="translate(${NODE_WIDTH / 2 - 24} 20)" color="${iconColorOf(look)}">${renderToStaticMarkup(<NodeIcon node={node} size={48} />)}</g>${ports}${label}${command}<title>${escape(node.explanation)}</title></g>`;
     })
     .join('');
-  // As on the canvas: shapes beneath arrows and icons, their words above them.
+  // As on the canvas: shapes beneath arrows and icons, their words above them, in layer order
+  // and without hidden layers.
   const drawingPart = (part: 'shape' | 'label') =>
-    (board.drawings ?? [])
+    visibleDrawings(board)
       .map((drawing) =>
         renderToStaticMarkup(
           <DrawingShape
             drawing={absoluteDrawing(drawing, board.positions)}
             halo={palette.deep}
             part={part}
+            scale={board.drawingScale}
           />,
         ),
       )

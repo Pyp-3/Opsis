@@ -1,7 +1,14 @@
 import {
   absoluteDrawing,
+  anchorDrawing,
+  BoardDrawingSchema,
   drawingTextSize,
+  isDrawingPickable,
+  layerOf,
+  MAX_BOARD_DRAWINGS,
   MAX_DRAWING_POINTS,
+  translateDrawing,
+  visibleDrawings,
   type BoardDrawing,
   type BoardDocument,
   type DrawingLineStyle,
@@ -173,13 +180,212 @@ export function drawingContains(drawing: BoardDrawing, point: Point, tolerance: 
   );
 }
 
-/** The topmost drawing under a canvas point (later drawings are painted above earlier ones). */
+/**
+ * The topmost pickable drawing under a canvas point, in paint order (later layers and later
+ * drawings above earlier ones). Hidden and locked layers are skipped.
+ */
 export function drawingAt(board: BoardDocument, point: Point, tolerance: number) {
-  const drawings = board.drawings ?? [];
+  const drawings = visibleDrawings(board);
   for (let i = drawings.length - 1; i >= 0; i--) {
     const drawing = drawings[i]!;
+    if (!isDrawingPickable(drawing, board.drawingLayers)) continue;
     if (drawingContains(absoluteDrawing(drawing, board.positions), point, tolerance))
       return drawing;
   }
   return null;
+}
+
+/** The outline of an absolute drawing's own geometry, without stroke padding. */
+export function drawingBox(drawing: BoardDrawing) {
+  if (drawing.points) {
+    const xs = drawing.points.map(([x]) => x);
+    const ys = drawing.points.map(([, y]) => y);
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+    };
+  }
+  const size =
+    drawing.shape === 'text'
+      ? drawingTextSize(drawing)
+      : { width: drawing.width!, height: drawing.height! };
+  return { x: drawing.x!, y: drawing.y!, ...size };
+}
+
+/** Pickable drawings whose outline overlaps a dragged selection rectangle. */
+export function drawingsInBox(board: BoardDocument, from: Point, to: Point): BoardDrawing[] {
+  const area = boxBetween(from, to);
+  return visibleDrawings(board).filter((drawing) => {
+    if (!isDrawingPickable(drawing, board.drawingLayers)) return false;
+    const box = drawingBox(absoluteDrawing(drawing, board.positions));
+    return (
+      box.x <= area.x + area.width &&
+      box.x + box.width >= area.x &&
+      box.y <= area.y + area.height &&
+      box.y + box.height >= area.y
+    );
+  });
+}
+
+/**
+ * Resize handles: both ends of a line, arrow or dimension; the eight compass points around a
+ * box, ellipse or freehand stroke. Text is sized with its font size instead.
+ */
+export type ResizeHandle = 'start' | 'end' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+export function resizeHandles(drawing: BoardDrawing): { handle: ResizeHandle; at: Point }[] {
+  if (drawing.shape === 'text') return [];
+  if (drawing.shape !== 'stroke' && drawing.points)
+    return [
+      { handle: 'start', at: drawing.points[0]! },
+      { handle: 'end', at: drawing.points[1]! },
+    ];
+  const { x, y, width, height } = drawingBox(drawing);
+  const midX = x + width / 2;
+  const midY = y + height / 2;
+  return [
+    { handle: 'nw', at: [x, y] },
+    { handle: 'n', at: [midX, y] },
+    { handle: 'ne', at: [x + width, y] },
+    { handle: 'e', at: [x + width, midY] },
+    { handle: 'se', at: [x + width, y + height] },
+    { handle: 's', at: [midX, y + height] },
+    { handle: 'sw', at: [x, y + height] },
+    { handle: 'w', at: [x, midY] },
+  ];
+}
+
+/** The resize handle of an absolute drawing under a canvas point, if any. */
+export function handleAt(drawing: BoardDrawing, point: Point, tolerance: number) {
+  return (
+    resizeHandles(drawing).find(
+      ({ at }) => Math.hypot(point[0] - at[0], point[1] - at[1]) <= tolerance,
+    )?.handle ?? null
+  );
+}
+
+/**
+ * The absolute drawing after dragging one of its handles to `point`. Dragging past the opposite
+ * side flips the shape; `keepRatio` (Shift) keeps a corner drag in proportion. Freehand strokes
+ * scale every sample within their outline.
+ */
+export function resizeDrawing(
+  drawing: BoardDrawing,
+  handle: ResizeHandle,
+  point: Point,
+  keepRatio = false,
+): BoardDrawing {
+  if (handle === 'start' || handle === 'end') {
+    const [start, end] = drawing.points as [[number, number], [number, number]];
+    const moved: [number, number] = [round(point[0]), round(point[1])];
+    return { ...drawing, points: handle === 'start' ? [moved, end] : [start, moved] };
+  }
+  const box = drawingBox(drawing);
+  let left = box.x;
+  let top = box.y;
+  let right = box.x + box.width;
+  let bottom = box.y + box.height;
+  if (handle.includes('w')) left = point[0];
+  if (handle.includes('e')) right = point[0];
+  if (handle.includes('n')) top = point[1];
+  if (handle.includes('s')) bottom = point[1];
+  if (keepRatio && handle.length === 2 && box.width > 0 && box.height > 0) {
+    const scale = Math.max(Math.abs(right - left) / box.width, Math.abs(bottom - top) / box.height);
+    const width = box.width * scale * Math.sign(right - left || 1);
+    const height = box.height * scale * Math.sign(bottom - top || 1);
+    if (handle.includes('w')) left = right - width;
+    else right = left + width;
+    if (handle.includes('n')) top = bottom - height;
+    else bottom = top + height;
+  }
+  const next = boxBetween([left, top], [right, bottom]);
+  if (drawing.shape === 'stroke') {
+    // Each sample keeps its relative place; a flipped drag mirrors the stroke.
+    const mapX = (x: number) =>
+      box.width ? left + ((x - box.x) / box.width) * (right - left) : left;
+    const mapY = (y: number) =>
+      box.height ? top + ((y - box.y) / box.height) * (bottom - top) : top;
+    return {
+      ...drawing,
+      points: drawing.points!.map(([x, y]) => [round(mapX(x)), round(mapY(y))]),
+    };
+  }
+  return {
+    ...drawing,
+    x: round(next.x),
+    y: round(next.y),
+    width: round(next.width),
+    height: round(next.height),
+  };
+}
+
+/**
+ * Copied drawings travel as JSON text, so they paste into another board or another tab, and
+ * read as plain data anywhere else. Coordinates are absolute; anchors are kept so a paste on
+ * the same board can keep following the same concepts.
+ */
+export const DRAWING_CLIPBOARD_KIND = 'opsis-drawings';
+
+export function drawingClipboard(board: BoardDocument, ids: readonly string[]): string {
+  const drawings = (board.drawings ?? [])
+    .filter((drawing) => ids.includes(drawing.id))
+    .map((drawing) => ({
+      ...absoluteDrawing(drawing, board.positions),
+      ...(drawing.anchorId ? { anchorId: drawing.anchorId } : {}),
+      ...(drawing.layerId ? { layerId: drawing.layerId } : {}),
+    }));
+  return JSON.stringify({ kind: DRAWING_CLIPBOARD_KIND, version: 1, drawings });
+}
+
+/**
+ * The valid drawings in copied text, or null when the text is not a drawing copy. Pasted text
+ * may come from anywhere, so each drawing is validated like saved board data.
+ */
+export function readDrawingClipboard(text: string): BoardDrawing[] | null {
+  let parsed: { kind?: unknown; drawings?: unknown };
+  try {
+    parsed = JSON.parse(text) as typeof parsed;
+  } catch {
+    return null;
+  }
+  if (parsed?.kind !== DRAWING_CLIPBOARD_KIND || !Array.isArray(parsed.drawings)) return null;
+  return parsed.drawings.slice(0, MAX_BOARD_DRAWINGS).flatMap((item) => {
+    const drawing = BoardDrawingSchema.safeParse(item);
+    return drawing.success ? [drawing.data] : [];
+  });
+}
+
+/**
+ * Adds copies of absolute drawings, offset by `offset`, with new IDs. A copy keeps following
+ * its concept and stays on its layer when this board has them; otherwise it is fixed to the
+ * canvas on the base layer. Copies are never locked. Returns null when they would not fit.
+ */
+export function pasteDrawings(
+  board: BoardDocument,
+  copied: readonly BoardDrawing[],
+  offset: number,
+  makeId: () => string,
+): { board: BoardDocument; ids: string[] } | null {
+  const existing = board.drawings ?? [];
+  if (!copied.length || existing.length + copied.length > MAX_BOARD_DRAWINGS) return null;
+  const pasted = copied.map((drawing) => {
+    const copy: BoardDrawing = {
+      ...translateDrawing(drawing, offset, offset),
+      id: makeId(),
+    };
+    delete copy.anchorId;
+    delete copy.locked;
+    if (!layerOf(copy, board.drawingLayers)) delete copy.layerId;
+    const anchored =
+      drawing.anchorId && board.positions[drawing.anchorId]
+        ? anchorDrawing(copy, drawing.anchorId, board.positions)
+        : copy;
+    return roundDrawing(anchored);
+  });
+  return {
+    board: { ...board, drawings: [...existing, ...pasted] },
+    ids: pasted.map((drawing) => drawing.id),
+  };
 }

@@ -193,6 +193,8 @@ export async function layoutBoard(
           ),
         }
       : {}),
+    ...(previous?.drawingLayers ? { drawingLayers: previous.drawingLayers } : {}),
+    ...(previous?.drawingScale ? { drawingScale: previous.drawingScale } : {}),
   });
 }
 
@@ -204,6 +206,8 @@ export function withoutIllustrations(board: BoardDocument): BoardDocument {
   const rest = { ...board };
   delete rest.look;
   delete rest.drawings;
+  delete rest.drawingLayers;
+  delete rest.drawingScale;
   return {
     ...rest,
     nodes: board.nodes.map((node) => {
