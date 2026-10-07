@@ -74,27 +74,41 @@ function unavailableReason() {
   return undefined;
 }
 
-// Committed tree hashes plus any uncommitted (tracked or untracked) changes, so an
-// edited working tree is never mistaken for the commit it started from.
+const files = (...gitArgs) =>
+  git(...gitArgs, '-z')
+    .split('\0')
+    .filter(Boolean);
+
+// Hashes the working-tree content of every tracked and untracked (non-ignored) file,
+// so committing unchanged content does not trigger a rebuild, while uncommitted
+// edits are never mistaken for the commit they started from.
 function fingerprint(paths) {
+  const blobs = new Map();
+  for (const line of files('ls-files', '--stage', '--', ...paths)) {
+    const [meta, path] = line.split('\t');
+    blobs.set(path, meta.split(' ')[1]);
+  }
+  const changed = [
+    ...files('ls-files', '--modified', '--', ...paths),
+    ...files('ls-files', '--others', '--exclude-standard', '--', ...paths),
+  ];
+  for (const path of changed) blobs.delete(path);
+  const present = [...new Set(changed)].filter((path) => existsSync(join(root, path)));
+  if (present.length) {
+    const hashes = execFileSync('git', ['hash-object', '--stdin-paths'], {
+      cwd: root,
+      encoding: 'utf8',
+      input: present.join('\n'),
+      maxBuffer: 64 * 1024 * 1024,
+    })
+      .trim()
+      .split('\n');
+    present.forEach((path, index) => blobs.set(path, hashes[index]));
+  }
   const hash = createHash('sha256');
   hash.update(process.version);
-  for (const path of paths) {
-    let object = '';
-    try {
-      object = git('rev-parse', `HEAD:${path === '.' ? '' : path}`).trim();
-    } catch {
-      // A path absent from HEAD only contributes its working-tree changes.
-    }
-    hash.update(`${path}\0${object}\0`);
-  }
-  hash.update(git('diff', 'HEAD', '--binary', '--', ...paths));
-  for (const file of git('ls-files', '--others', '--exclude-standard', '-z', '--', ...paths)
-    .split('\0')
-    .filter(Boolean)) {
-    hash.update(`${file}\0`);
-    hash.update(readFileSync(join(root, file)));
-  }
+  for (const [path, blob] of [...blobs].sort(([a], [b]) => (a < b ? -1 : 1)))
+    hash.update(`${path}\0${blob}\0`);
   return hash.digest('hex');
 }
 
