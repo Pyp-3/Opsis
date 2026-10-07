@@ -351,7 +351,8 @@ corner sizing and a locked agent layer, with an accessibility scan. It found two
 the grid-snapped pointer and a review that saw a reordered but identical sketch as changed.
 Lint, typecheck, Rust check/24 tests, desktop check/race tests, 418 unit tests and 60 Fastify
 browser scenarios pass. The rebuilt Linux binary passes packaged integration, all 60 browser
-scenarios and all 24 hidden WebView checks. No paid model calls were made.
+scenarios and all 24 hidden WebView checks. No paid model calls were made. CI run 37657514613
+passed every job, including both Mac architectures and release publishing.
 
 Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
 uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,
