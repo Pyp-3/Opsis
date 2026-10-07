@@ -136,7 +136,34 @@ test('draws blueprint shapes beside the diagram, saves them and attaches one to 
   await page.reload();
   await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(4);
   await page.getByRole('button', { name: 'Eraser' }).click();
-  await drag(page, [0.55, 0.6], [0.75, 0.64]);
+  // Reload reframes the canvas with a short animation, so wait for the view to settle
+  // and erase at a point on the stroke where it is rendered now.
+  const transform = () => page.locator('.drawing-layer > g').first().getAttribute('transform');
+  let previous: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const [current, settled] = [await transform(), previous];
+        previous = current;
+        return current === settled;
+      },
+      { intervals: [400] },
+    )
+    .toBe(true);
+  const surface = (await page.getByTestId('drawing-surface').boundingBox())!;
+  const onStroke = await page
+    .locator('.drawing-layer [data-shape="stroke"] path')
+    .first()
+    .evaluate((path: SVGPathElement) => {
+      const point = path.getPointAtLength(path.getTotalLength() / 2);
+      const screen = new DOMPoint(point.x, point.y).matrixTransform(path.getScreenCTM()!);
+      return [screen.x, screen.y] as const;
+    });
+  const at: [number, number] = [
+    (onStroke[0] - surface.x) / surface.width,
+    (onStroke[1] - surface.y) / surface.height,
+  ];
+  await drag(page, at, at);
   await expect.poll(async () => (await drawings(page)).length).toBe(3);
   expect((await drawings(page)).some((item) => item.shape === 'stroke')).toBe(false);
 
