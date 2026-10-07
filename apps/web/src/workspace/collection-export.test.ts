@@ -17,6 +17,18 @@ it('exports escaped offline content and only links to boards in the collection',
         board: {
           ...createEmptyBoard('Start', 'demo'),
           ...EMAIL_DEMO,
+          drawings: [
+            {
+              id: 'sketch',
+              shape: 'text',
+              x: 10,
+              y: 20,
+              text: 'Collection sketch',
+              ink: 'mint',
+              line: 'solid',
+              strokeWidth: 2,
+            },
+          ],
           nodes: EMAIL_DEMO.nodes.map((node, index) => ({
             ...node,
             notes: 'Literal <em>notes</em>',
@@ -32,6 +44,8 @@ it('exports escaped offline content and only links to boards in the collection',
   expect(html).toContain('Literal &lt;em&gt;notes&lt;/em&gt;');
   expect(html).toContain(`href="#board-${target}">Continue to Finish`);
   expect(html).toContain('data:image/svg+xml;');
+  const diagram = /src="data:image\/svg\+xml;charset=utf-8,([^"]+)"/.exec(html)![1]!;
+  expect(decodeURIComponent(diagram)).toContain('Collection sketch');
   expect(html).toContain('@media print');
   expect(html).not.toContain('<script');
   expect(html).not.toContain('<iframe');

@@ -53,6 +53,36 @@ details. **Settings → Agents and models** contains named profiles, CLI diagnos
 limits and reported usage; **Appearance** keeps the theme controls.
 See [model and canvas controls](P1-CONTROLS.md) for details and limitations.
 
+## Draw on the canvas
+
+Beside the icon diagram you can sketch directly on the canvas: floor plans, walls,
+equipment outlines, zones and annotations, so one board can combine a process flow
+with engineering or architectural drawings. Press the pen button at the left of the
+canvas to show the drawing tools:
+
+- **Diagram** (Esc) returns to normal canvas use: moving concepts and connecting them.
+  Drawings stay visible but cannot be clicked in this mode.
+- **Pen** (P) draws freehand. **Line** (L), **Arrow** (A), **Box** (R), **Ellipse** (O)
+  and **Dimension** (D) draw straight shapes that snap to half a grid square. Hold Shift
+  for horizontal, vertical or 45° lines and for squares and circles; hold Alt to place
+  points freely.
+- **Text** (T) places a label and opens it for editing.
+- **Dimension** lines show their length in grid units (one fine grid square is 1 u)
+  unless you give them a label such as `3.2 m`.
+- **Select drawings** (V) picks a drawing to move, restyle or delete (Delete key).
+  **Eraser** (E) removes every drawing it touches during one sweep.
+
+The panel beside the tools chooses ink, solid/dashed/centre-line style, weight and
+a translucent fill. With a drawing selected, the same controls restyle it, and
+**Moves with** attaches it to a concept so that it follows the concept when you drag
+or rearrange it. Lines and shapes are painted beneath icons and arrows; text and
+dimension labels stay on top so they remain legible.
+
+Each finished shape, move, restyle or eraser sweep is one undoable step. Drawings are
+saved with the board, included in SVG and PNG exports and JSON files, and shown read-only
+to public viewers. They belong to you: agents do not receive or change them, and a
+drawing attached to a concept that a follow-up removes stays where it was drawn.
+
 ## Save and organize projects
 
 Select a regular collection in **Boards**, then open **Share or export**. You can

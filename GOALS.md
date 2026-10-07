@@ -1,13 +1,14 @@
 # Opsis goals
 
-Last reviewed: 2026-10-06.
+Last reviewed: 2026-10-07.
 
 ## Current delivery
 
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.
 Remote mode remains opt-in; instance API keys remain server-wide. Signing and
-manual platform checks remain separate. These three goals are not yet complete.
+manual platform checks remain separate. #3 and #6 are implemented and verified below;
+#4 remote server/device sync is still outstanding.
 
 Additional authorized scope: Canvas workspace tabs for Canvas, Chat and a future
 placeholder. Move prompting into provider-specific per-board chat threads; retain
@@ -15,22 +16,23 @@ live generation progress/previews on Canvas. Threads are private to each account
 including on boards shared with editors (confirmed by the user).
 This supplements rather than replaces #3, #6 and #4.
 
-Implementation in progress on `codex/links-chat-collections` in the isolated
-`Opsis-links-chat` worktree. Claude is concurrently building canvas drawing tools
-in the original worktree; do not include those changes in this delivery.
-Board links, collection sharing/export/import and private per-account/provider/model
-chat are implemented on both hosts. Web browser coverage passed 49 scenarios plus
-five corrected/rerun scenarios (one Linux-only skip); native browser coverage passed
-53 scenarios with the same skip. Three additional native scenarios verify private
-chat, mobile layout and the print invocation. Packaged integration and all 24 hidden
-WebView checks pass. Lint, typecheck, Rust check/24 tests, Go vet and native race tests
-pass. JS tests: 387 pass and two five-second timeouts in the full run; the two affected
-files plus Workspace pass all 20 tests with one worker. No paid model calls were made.
-The system print dialog itself remains a manual platform check.
+Integrated on `codex/links-chat-collections` in the isolated `Opsis-links-chat`
+worktree: board links, collection sharing/export/import, private account/provider/model
+chat and, at the user's request, Claude's `canvas-drawing` branch. Drawing shortcuts
+are active only on Canvas. Regression tests preserve drawings and links through chat
+regeneration and collection copies/HTML export. Chat persistence is independent of
+board sharing; public viewers can still browse/delete their own existing threads.
 
-The user also requested merging Claude's `canvas-drawing` branch (642196a).
-Merge and combined validation, commit/push and remote server/sync implementation
-remain outstanding. Do not mark the integration complete before those checks.
+Combined validation (2026-10-07): full Fastify and rebuilt Windows-executable browser
+suites each pass 55 scenarios with one Linux-only skip. The Linux screenshot was
+regenerated with Playwright's Linux Chromium in WSL against the built app and visually
+reviewed. Lint/typecheck, Go vet/full race suite, packaged integration and all 24 hidden
+WebView checks pass. Rust check/24 tests pass (Rust unchanged by the merge). Unit tests:
+398 pass in the full single-worker run; the one new HTML-test decoding mistake was fixed
+and passes in its rerun (399 total). Earlier interrupted browser runs are not counted.
+Desktop and mobile chat screenshots were inspected. No paid model calls were made.
+The system print dialog itself remains a manual platform check. CI for this integration
+must still be confirmed after push. Remote server/sync (#4) has not been implemented.
 
 CI follow-up: provider run 37454454247 passed web, Linux and Windows. Both Mac
 architectures passed native tests, builds, integration and browser coverage but
@@ -225,6 +227,39 @@ Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.
 
+## In progress: canvas drawings (requested 2026-10-06)
+
+Add normal/illustrative drawing on the canvas beside icon diagrams, so a board can hold
+blueprints and hybrid flows (engineering and architecture) instead of only process flows.
+
+- [x] Board document v2 gains an optional, bounded `drawings` list (shared schema,
+      `board-drawings.ts`): stroke, line, arrow, box, ellipse, text and dimension shapes in
+      named inks with solid/dashed/centre-line styles. Shapes are validated declarative data,
+      never markup; at most 200 per board and 400 points per stroke.
+- [x] A drawing may move with a concept (`anchorId`, coordinates relative to it). Removing that
+      concept by hand, review, MCP rewrite or regeneration keeps the drawing where it was drawn.
+- [x] Canvas tools: diagram/select/pen/line/arrow/box/ellipse/text/dimension/eraser, keyboard
+      shortcuts, grid snapping with Shift constraints, restyling, attach/detach and delete. Each
+      shape, move, restyle or erase sweep is one undoable edit; viewers only see drawings.
+- [x] Shapes paint beneath icons and arrows; text and dimension labels paint above them.
+      SVG/PNG exports draw them the same way. Agents never receive drawings, and follow-ups
+      keep them.
+- [ ] Not yet: MCP/agent drawing tools, a board-level scale for dimension units, resize handles
+      and multi-select, drawing layers/locking, and copy/paste.
+
+Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
+uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,
+dimension labels), web geometry/export tests and two browser scenarios on Fastify (drawing,
+persistence across reload, undo/redo, attach-and-drag, erasing, accessibility scan; and a
+board with drawings but no concepts). Lint, typecheck and all 393 unit tests pass (six
+API/lint-rule tests timed out under full-suite load and pass when rerun alone). The full
+Fastify browser suite passes 51 of 52 scenarios; the Linux-only pixel baseline is skipped.
+The Go desktop host validates the same embedded contracts: Go vet and the full race suite
+pass with the rebuilt contract bundle, and Rust check plus its 24 tests pass. Not yet run:
+the built desktop executable's browser suite and hidden WebView smoke. The always-visible drawing-tools button
+changes the Linux canvas baseline (`approval-canvas.png`), so CI needs a reviewed update.
+See the [user guide](docs/USER-GUIDE.md#draw-on-the-canvas).
+
 ## In progress: board collections (requested 2026-10-05)
 
 Let an account group its own boards ("canvases") into named collections for faster access.
@@ -296,15 +331,15 @@ page fade-ins. Confirm the next CI run before relying on these items.
 
 ### Links between boards (#3)
 
-- [ ] A concept may link to another board (optional saved field, never requested from agents and
+- [x] A concept may link to another board (optional saved field, never requested from agents and
       kept through regenerations). The canvas marks linked concepts; opening follows the link with
       a way back; boards show which boards link to them (backlinks).
 
 ### Collection sharing and export (#6)
 
-- [ ] Owners can make every board in a collection public/private and invite/revoke an editor for
+- [x] Owners can make every board in a collection public/private and invite/revoke an editor for
       all of its boards in one action.
-- [ ] Export a collection as a bundle and import it as new private boards in a new collection,
+- [x] Export a collection as a bundle and import it as new private boards in a new collection,
       remapping links between its boards; export a self-contained read-only static site; print a
       collection walkthrough (save as PDF from the print dialog).
 

@@ -1,6 +1,7 @@
 import { arrangeGraph } from './layout-engine';
 import {
   BoardDocumentSchema,
+  detachDrawings,
   type BoardDocument,
   type BoardGraph,
   type BoardAgent,
@@ -182,16 +183,27 @@ export async function layoutBoard(
       : {}),
     // Agents never see the canvas colours; a follow-up keeps the ones the reader chose.
     ...(previous?.look ? { look: previous.look } : {}),
+    // Nor the reader's canvas drawings; a sketch on a dropped concept stays where it was drawn.
+    ...(previous?.drawings
+      ? {
+          drawings: detachDrawings(
+            previous.drawings,
+            new Set(nodes.map((node) => node.id)),
+            previous.positions,
+          ),
+        }
+      : {}),
   });
 }
 
 /**
- * Drawings are large and only matter to playback, and colours only to the reader, so agents
- * are sent the board without them; `layoutBoard` restores both afterwards.
+ * Drawings are large and only matter to playback, and colours and canvas sketches only to the
+ * reader, so agents are sent the board without them; `layoutBoard` restores them afterwards.
  */
 export function withoutIllustrations(board: BoardDocument): BoardDocument {
   const rest = { ...board };
   delete rest.look;
+  delete rest.drawings;
   return {
     ...rest,
     nodes: board.nodes.map((node) => {

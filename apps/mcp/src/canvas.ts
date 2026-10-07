@@ -4,6 +4,7 @@ import {
   BoardEdgeKindSchema,
   EDGE_COLORS,
   createEmptyBoard,
+  detachDrawings,
   recordBoardEdit,
   removeBoardNode,
   patchBoardNode,
@@ -315,6 +316,16 @@ export function writeDiagram(snapshot: BoardSnapshot, input: DiagramInput) {
       : {}),
     ...(before.pinnedNodeIds
       ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => nodes.some((node) => node.id === id)) }
+      : {}),
+    // A sketch attached to a concept the agent dropped stays where the reader drew it.
+    ...(before.drawings
+      ? {
+          drawings: detachDrawings(
+            before.drawings,
+            new Set(nodes.map((node) => node.id)),
+            before.positions,
+          ),
+        }
       : {}),
     positions: Object.fromEntries(
       Object.entries(before.positions).filter(([id]) => nodes.some((node) => node.id === id)),

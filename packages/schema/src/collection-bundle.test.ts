@@ -13,6 +13,18 @@ describe('collection copies', () => {
       ...createEmptyBoard('Mail'),
       ...EMAIL_DEMO,
       agent: 'demo',
+      drawings: [
+        {
+          id: 'sketch',
+          shape: 'text',
+          x: 10,
+          y: 20,
+          text: 'Keep this sketch',
+          ink: 'mint',
+          line: 'solid',
+          strokeWidth: 2,
+        },
+      ],
       nodes: EMAIL_DEMO.nodes.map((node, index) => ({
         ...node,
         linkedBoardId: index === 0 ? b : c,
@@ -32,6 +44,7 @@ describe('collection copies', () => {
     expect(copies[0]!.snapshot.board!.nodes[1]!.linkedBoardId).toBeUndefined();
     expect(copies[0]!.snapshot.past).toEqual([]);
     expect(copies[0]!.tags).toEqual(['Work']);
+    expect(copies[0]!.snapshot.board!.drawings).toEqual(board.drawings);
     expect(() => prepareCollectionImport(bundle, [a, d])).toThrow();
     expect(() => prepareCollectionImport(bundle, [c, c])).toThrow();
     expect(
