@@ -19,6 +19,8 @@ type BoardHeaderProps = {
   working: boolean;
   saved: string;
   railToggle: ReactNode;
+  /** The Canvas / Chat switch, between the board name and its actions. */
+  tabs?: ReactNode;
   /** Board-level dropdowns (sharing, groups), kept in the header so the canvas keeps its height. */
   menus?: ReactNode;
   onImport: () => void;
@@ -31,6 +33,7 @@ export function BoardHeader({
   working,
   saved,
   railToggle,
+  tabs,
   menus,
   onImport,
   setError,
@@ -85,6 +88,7 @@ export function BoardHeader({
         <ChevronRight size={14} aria-hidden />
         <h1>{board?.title ?? 'Untitled canvas'}</h1>
       </div>
+      {tabs}
       <div className="header-actions">
         <span className={`save-status ${saved.startsWith('Could') ? 'is-warning' : ''}`}>
           {saved && !saved.startsWith('Could') && <Check size={13} />}
@@ -102,8 +106,9 @@ export function BoardHeader({
           <span className="button-label">Import</span>
         </button>
         <details className="header-menu export-menu" ref={exportMenu}>
-          <summary>
-            <Download size={15} /> Export <ChevronDown className="chevron" size={14} />
+          <summary aria-label="Export">
+            <Download size={15} /> <span className="button-label">Export</span>{' '}
+            <ChevronDown className="chevron" size={14} />
           </summary>
           <div className="header-menu-panel export-menu-panel">
             <p className="export-menu-group">Picture of the diagram</p>

@@ -16,6 +16,19 @@ live generation progress/previews on Canvas. Threads are private to each account
 including on boards shared with editors (confirmed by the user).
 This supplements rather than replaces #3, #6 and #4.
 
+Canvas/Chat polish (2026-10-07, user request; layout chosen by the user): the
+Canvas/Chat/reserved tabs moved into the header as a compact switch, so the canvas
+gains the former tab row. On screens 1100 px and wider, Chat docks beside a live,
+editable canvas. It is resizable, and can expand to a full page with a thread sidebar;
+both choices are per-device preferences. Narrow screens use a full-page chat with a
+thread menu. The chat has message bubbles labelled with provider and model, inline live
+activity with Stop, and a "Review on canvas" card. Errors are styled, and the composer
+is docked to the bottom. The Canvas tab shows working/review status and the Chat tab
+an unread reply. A proposal review opens beside the docked chat. Header Export/Linked
+from become icons on phones. A new browser scenario covers docking, review placement,
+expansion persistence and accessibility. The reviewed Linux pixel baseline was
+regenerated for the taller canvas.
+
 Local Linux desktop sync (2026-10-07, user request): `pnpm desktop:sync` rebuilds
 the desktop app from the current checkout when sources changed. It reuses the
 speech runtime when its inputs are unchanged and installs to `~/.local/opt/opsis`

@@ -1,3 +1,4 @@
+import { Link2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 type Backlink = { id: string; title: string; conceptId: string; label: string };
@@ -32,8 +33,11 @@ export function BoardLinks({
   return (
     <>
       {onBack && <button onClick={onBack}>Back to previous board</button>}
-      <details className="header-menu">
-        <summary>Linked from</summary>
+      <details className="header-menu board-links">
+        <summary title="Boards that link here" aria-label="Linked from">
+          <Link2 size={15} aria-hidden />
+          <span className="button-label">Linked from</span>
+        </summary>
         <div className="header-menu-panel">
           <p>Boards you can access that link here</p>
           {error ? (

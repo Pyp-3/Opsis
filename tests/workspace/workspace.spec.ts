@@ -162,10 +162,9 @@ test('board menus, canvas tools and composer tuck away to give the canvas room',
   // Sharing and groups drop down from the header instead of taking rows above the canvas.
   const header = page.locator('.workspace-header');
   const canvas = page.getByRole('region', { name: 'Interactive diagram canvas' });
-  const tabs = page.getByRole('tablist', { name: 'Board workspace tabs' });
-  expect((await canvas.boundingBox())!.y).toBe(
-    (await header.boundingBox())!.height + (await tabs.boundingBox())!.height,
-  );
+  // The Canvas / Chat tabs are in the header too: the canvas starts right below it.
+  await expect(header.getByRole('tablist', { name: 'Board workspace tabs' })).toBeVisible();
+  expect((await canvas.boundingBox())!.y).toBe((await header.boundingBox())!.height);
   await page.locator('.board-groups summary').click();
   await expect(page.getByLabel('New group name')).toBeVisible();
   await page.keyboard.press('Escape');

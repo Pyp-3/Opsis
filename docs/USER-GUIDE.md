@@ -14,16 +14,27 @@ up to 40 past/future states. A drag is one undoable action.
 
 To give the canvas more room, tuck the workspace away: the sidebar button hides the
 sidebar, **The big picture** folds into one line, **Hide canvas tools** shrinks the
-toolbar to a single button. Prompting lives in **Chat**; **Open chat** and
-**Explore this step** take you there. **Canvas** retains generation activity, draft
-concepts and proposal review. Board menus (**Share**, **Groups**, **Import**, **Export**)
+toolbar to a single button. Board menus (**Share**, **Groups**, **Import**, **Export**)
 drop down from the header and close on Escape or a click elsewhere. The toolbar
-choice is remembered on this device. The third workspace tab is reserved for a
-future feature and is disabled.
+choice is remembered on this device.
+
+The **Canvas** and **Chat** tabs sit in the header, beside the board name. Prompting
+lives in **Chat**; **Open chat** and **Explore this step** take you there. On wide
+screens (1100 px and up) Chat docks beside a live, editable canvas, so new concepts
+and proposals appear while you talk. Drag the chat's left edge to resize it, **Expand
+chat** to give it the full page with saved threads listed alongside, and **Chat beside
+canvas** to dock it again; both choices are remembered on this device. On narrower
+screens Chat takes the page. The reply in progress shows the agent's live activity and
+**Stop generation**. A ready proposal appears as a card with **Review on canvas**, and
+the review opens beside the docked chat. The Canvas tab shows a pulsing dot while an
+agent works and **Review** while a proposal waits. A reply that arrives while Chat is
+out of view marks the Chat tab and **Open chat**. The third (sparkle) tab is reserved
+for a future feature and is disabled.
 
 Chat threads belong to your signed-in account, even on a shared board. They are
 stored with that account on this Opsis instance, separately from board documents
-and exports. Select a saved thread or start a new one. Changing provider or model
+and exports. Pick a saved thread from the thread menu (or the list beside an expanded
+chat), or start a new one. Changing provider or model
 starts a separate thread on the next request; selecting a saved thread restores
 its provider and model. Generation receives the current diagram, your new prompt
 and up to 12 recent messages from that thread. Chat currently creates/refines the

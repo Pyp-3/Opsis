@@ -430,12 +430,16 @@
   .header-breadcrumb > svg,
   .header-button .button-label,
   .board-sharing summary :is(.button-label, .chevron),
-  .board-groups summary :is(.button-label, .chevron) {
+  .board-groups summary :is(.button-label, .chevron),
+  .board-links summary .button-label,
+  .export-menu summary :is(.button-label, .chevron) {
     display: none;
   }
   .header-button,
   .board-sharing summary,
-  .board-groups summary {
+  .board-groups summary,
+  .board-links summary,
+  .export-menu summary {
     width: 32px;
     padding: 0;
     justify-content: center;
