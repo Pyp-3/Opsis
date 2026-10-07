@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rebuilds the local Linux desktop app in the background when sources changed.
+# Enabled by `pnpm desktop:sync --install-hooks`; OPSIS_DESKTOP_SYNC=off disables it.
+node scripts/sync-desktop.mjs --background || true

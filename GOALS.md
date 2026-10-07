@@ -16,6 +16,23 @@ live generation progress/previews on Canvas. Threads are private to each account
 including on boards shared with editors (confirmed by the user).
 This supplements rather than replaces #3, #6 and #4.
 
+Local Linux desktop sync (2026-10-07, user request): `pnpm desktop:sync` rebuilds
+the desktop app from the current checkout when sources changed. It reuses the
+speech runtime when its inputs are unchanged and installs to `~/.local/opt/opsis`
+with a command link and application-menu entry. Opt-in git hooks
+(`--install-hooks`) run it in the background after commits, merges, rebases and
+branch checkouts. It is a no-op on non-Linux systems, in CI, or without the native
+toolchain. Verified on Arch/Hyprland: the full build, an incremental rebuild that
+reused the runtime, the no-op check, a background hook build with a concurrent
+request, and the hidden WebView smoke test (24 checks) against the rebuilt binary.
+Lint, typecheck, Rust check/24 tests, desktop check/race tests and packaged
+integration pass. The full browser suite passes 56/56 against the rebuilt Linux
+binary, including the Linux pixel baseline. Fastify `test:qa` passes 399 unit tests
+and 56 browser scenarios. The canvas-drawing eraser step consistently raced the
+post-reload viewport animation on this machine. It now waits for the view to settle
+and erases at the stroke's rendered position, with its assertions unchanged. It
+passes 4/4 repeats on each host.
+
 Integrated on `codex/links-chat-collections` in the isolated `Opsis-links-chat`
 worktree: board links, collection sharing/export/import, private account/provider/model
 chat and, at the user's request, Claude's `canvas-drawing` branch. Drawing shortcuts

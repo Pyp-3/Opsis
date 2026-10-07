@@ -148,6 +148,36 @@ Browser tests use isolated servers, a temporary database and fake/demo providers
 Override `OPSIS_QA_API_PORT` and `OPSIS_QA_WEB_PORT` when default ports 8100/3100
 are occupied. No test should stop an unrelated local server or make paid calls.
 
+### Keep a local Linux build in sync
+
+`pnpm desktop:sync` keeps a development checkout's desktop app matching the web
+application. It rebuilds `output/desktop/opsis` only when tracked or untracked
+source files differ from its last build. It reuses the packaged speech runtime
+unless the API, schema, lockfile, build script or Node version changed. The app
+is then installed for the current user without root:
+
+| Item             | Location                                                |
+| ---------------- | ------------------------------------------------------- |
+| Executable       | `~/.local/opt/opsis/opsis`                              |
+| Command          | `~/.local/bin/opsis` (a link; an existing file is kept) |
+| Application menu | `$XDG_DATA_HOME/applications/opsis.desktop` and icon    |
+
+An already running app keeps its current build; the next launch uses the new one.
+Data and profiles are unaffected. `--force` rebuilds regardless, and `--no-install`
+only builds.
+
+To rebuild automatically, run `pnpm desktop:sync --install-hooks` once per clone.
+It sets `core.hooksPath` to `.githooks` (and refuses to replace another hooks
+path). After each commit, merge/pull, rebase/amend and branch checkout, the hook
+starts a detached background sync and returns immediately. Output goes to
+`output/desktop/sync.log`, with a desktop notification when `notify-send` is
+available. Only one build runs at a time; changes made during a build trigger one
+follow-up check. Uncommitted edits are included the next time a sync runs.
+
+The sync does nothing, and exits successfully, on non-Linux systems, in CI, without
+Go/Rust/pkg-config or GTK 3/WebKitGTK 4.1 development files, or with
+`OPSIS_DESKTOP_SYNC=off`. Disable the hooks with `git config --unset core.hooksPath`.
+
 ## Windows
 
 ### Install and update

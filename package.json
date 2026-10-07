@@ -23,6 +23,7 @@
     "test:browser": "playwright test",
     "test:qa": "pnpm build && pnpm test && pnpm test:browser",
     "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:sync": "node scripts/sync-desktop.mjs",
     "desktop:test": "node scripts/build-desktop-code.mjs && cd apps/desktop && go test -race ./internal/...",
     "desktop:check": "node scripts/build-desktop-code.mjs && tsc -p apps/desktop/tsconfig.json && cd apps/desktop && go vet ./internal/...",
     "desktop:package": "node scripts/package-desktop.mjs",
