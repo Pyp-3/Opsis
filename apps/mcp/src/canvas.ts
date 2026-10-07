@@ -11,6 +11,7 @@ import {
   withoutBrokenProcesses,
   type BoardDocument,
   type BoardSnapshot,
+  type DrawingScale,
 } from '@opsis/schema';
 import { z } from 'zod';
 
@@ -36,7 +37,10 @@ export const ConceptFieldsSchema = {
 
 export class CanvasError extends Error {}
 
-/** A compact, agent-readable view of a board: no positions, drawings or history. */
+/**
+ * A compact, agent-readable view of a board: concepts with where they sit (the top-left of a
+ * 224-unit-wide icon and label) and connections. Drawings are described by drawings.ts.
+ */
 export function describeBoard(id: string, revision: number, board: BoardDocument | null) {
   if (!board) return { id, revision, empty: true };
   return {
@@ -52,6 +56,7 @@ export function describeBoard(id: string, revision: number, board: BoardDocument
       icon: node.icon,
       summary: node.summary,
       explanation: node.explanation,
+      ...(board.positions[node.id] ? { position: board.positions[node.id] } : {}),
       ...(node.linkedBoardId ? { linkedBoardId: node.linkedBoardId } : {}),
       ...(node.confidence ? { confidence: node.confidence } : {}),
       ...(node.terminal ? { command: node.terminal.command } : {}),
@@ -75,7 +80,7 @@ export function withEdit(snapshot: BoardSnapshot, next: BoardDocument): BoardSna
   return recordBoardEdit(snapshot, parsed.data);
 }
 
-function boardOf(snapshot: BoardSnapshot) {
+export function boardOf(snapshot: BoardSnapshot) {
   return snapshot.board ?? createEmptyBoard();
 }
 
@@ -260,15 +265,20 @@ export function updateDetails(
     title?: string | undefined;
     description?: string | undefined;
     look?: { canvas: string; icon: string } | undefined;
+    /** What one grid square measures; null returns to grid units. */
+    drawingScale?: DrawingScale | null | undefined;
   },
 ) {
   const board = boardOf(snapshot);
-  return withEdit(snapshot, {
+  const next: BoardDocument = {
     ...board,
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.look ? { look: patch.look } : {}),
-  });
+    ...(patch.drawingScale ? { drawingScale: patch.drawingScale } : {}),
+  };
+  if (patch.drawingScale === null) delete next.drawingScale;
+  return withEdit(snapshot, next);
 }
 
 export type DiagramInput = {

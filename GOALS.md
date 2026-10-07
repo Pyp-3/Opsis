@@ -295,8 +295,34 @@ blueprints and hybrid flows (engineering and architecture) instead of only proce
 - [x] Shapes paint beneath icons and arrows; text and dimension labels paint above them.
       SVG/PNG exports draw them the same way. Agents never receive drawings, and follow-ups
       keep them.
-- [ ] Not yet: MCP/agent drawing tools, a board-level scale for dimension units, resize handles
-      and multi-select, drawing layers/locking, and copy/paste.
+- [x] MCP drawing tools (2026-10-07): `opsis_add_drawings`, `opsis_update_drawing` and
+      `opsis_remove_drawings`, plus a scale on `opsis_update_board`. `opsis_get_board` returns
+      concept positions, drawings in absolute coordinates, layers and the scale. Agents cannot
+      change locked drawings or those on locked/hidden layers, and cannot lock or unlock.
+- [x] Board-level scale (`drawingScale`: what one grid square measures, any unit up to 12
+      characters); unlabelled dimension lines read in it on the canvas and in exports.
+- [x] Resize handles (box/ellipse/stroke compass points, line/arrow/dimension ends; snapping,
+      Shift keeps proportion, Alt free) and multi-select (Shift+click, drag rectangle, Ctrl/⌘ A;
+      group move, restyle, attach, layer, lock and delete).
+- [x] Layers (`drawingLayers`, up to 12: order, rename, hide, lock, delete moves drawings to the
+      base layer) and per-drawing locks. Hidden layers are left out of the canvas and exports.
+- [x] Copy/cut/paste via clipboard events (validated JSON text, works across boards and tabs)
+      and Ctrl/⌘ D duplicate; each paste is one undoable step.
+- [ ] Not yet: chat-generation agents drawing (would change the generation output contract and
+      proposal review for every provider), rotation, and resizing text by dragging.
+
+Verified 2026-10-07 on Arch Linux: schema tests (layer order/visibility/locks, layer removal,
+scale labels and validation), web geometry tests (handles, resize/flip/proportion, stroke
+scaling, rectangle selection, clipboard validation and paste remapping, export of hidden
+layers and scale, regeneration keeping layers/scale and not sending them), MCP unit tests and
+an MCP round trip through the real Fastify API. A new browser scenario covers rectangle
+selection, copy/paste/undo, handle resizing, locking, the scale, a new layer, hiding it and
+persistence across reload, with an accessibility scan; it found and fixed a contrast failure
+in the panel's link button. Lint, typecheck, Rust check/24 tests, desktop check/race tests
+(including the 15-tool MCP catalogue), 411 unit tests and 59 Fastify browser scenarios pass.
+The rebuilt Linux binary passes packaged database/MCP integration, all 59 browser scenarios
+and all 24 hidden WebView checks. Desktop and phone screenshots were reviewed. No paid model
+calls were made.
 
 Verified 2026-10-06 on Windows 11 (Node 22.23.3) against a clean `HEAD` worktree (other
 uncommitted work excluded): schema tests (shapes, anchors, removal/review detachment,

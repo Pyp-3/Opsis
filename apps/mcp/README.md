@@ -53,19 +53,28 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 
 ## Tools
 
-| Tool                   | What it does                                                        |
-| ---------------------- | ------------------------------------------------------------------- |
-| `opsis_list_boards`    | Saved boards, most recent first                                     |
-| `opsis_search_boards`  | Concepts matching words, across boards you own or edit; best first  |
-| `opsis_get_board`      | Title, big-picture summary, colours, concepts (with ids) and arrows |
-| `opsis_create_board`   | A new empty board                                                   |
-| `opsis_update_board`   | Title, summary, background palette and icon tint                    |
-| `opsis_add_concept`    | Adds a concept; `after` places it below another and draws the arrow |
-| `opsis_update_concept` | Label, summary, explanation, icon or kind                           |
-| `opsis_remove_concept` | Removes a concept and its arrows                                    |
-| `opsis_connect`        | Draws a labelled arrow (flow, request, response, feedback or retry) |
-| `opsis_disconnect`     | Removes an arrow                                                    |
-| `opsis_write_diagram`  | Replaces a whole diagram in one step, or creates a board for it     |
+| Tool                    | What it does                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `opsis_list_boards`     | Saved boards, most recent first                                                |
+| `opsis_search_boards`   | Concepts matching words, across boards you own or edit; best first             |
+| `opsis_get_board`       | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale |
+| `opsis_create_board`    | A new empty board                                                              |
+| `opsis_update_board`    | Title, summary, background palette, icon tint and drawing scale                |
+| `opsis_add_concept`     | Adds a concept; `after` places it below another and draws the arrow            |
+| `opsis_update_concept`  | Label, summary, explanation, icon or kind                                      |
+| `opsis_remove_concept`  | Removes a concept and its arrows                                               |
+| `opsis_connect`         | Draws a labelled arrow (flow, request, response, feedback or retry)            |
+| `opsis_disconnect`      | Removes an arrow                                                               |
+| `opsis_write_diagram`   | Replaces a whole diagram in one step, or creates a board for it                |
+| `opsis_add_drawings`    | Draws shapes, text and dimension lines beside the diagram, in one step         |
+| `opsis_update_drawing`  | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer  |
+| `opsis_remove_drawings` | Removes drawings in one step                                                   |
+
+Drawings use canvas coordinates, where one grid square is 24 units. `opsis_get_board`
+returns each concept's position, so a sketch can be placed around the diagram. A drawing
+added with `movesWith` follows that concept when it is moved. A `layer` name puts it on that
+layer, creating the layer if needed. Agents cannot change drawings the reader has locked, or
+drawings on locked or hidden layers, and cannot lock, hide or unlock anything themselves.
 
 New concepts are placed clear of existing ones; **Arrange downward** on the canvas tidies a
 larger agent-built diagram. Agents cannot see or change which board your browser has open, run

@@ -27,7 +27,7 @@ _Follow the connections, then select a concept for its explanation._
 - Use **Canvas** for the diagram and live generation progress, and **Chat** for private per-account threads tied to each board and provider/model. A third tab is reserved for a future feature.
 - Link concepts to other boards, follow them and return; see incoming links from boards you can access.
 - Edit connections, collapse groups, attach notes and sources, and reuse boards as templates.
-- Sketch on the canvas beside the icons, for example floor plans, outlines, arrows, labels and dimension lines, to combine process flows with engineering and architecture drawings.
+- Sketch on the canvas beside the icons, for example floor plans, outlines, arrows, labels and dimension lines, to combine process flows with engineering and architecture drawings. Select several drawings, resize them with handles, copy and paste them between boards, organise them on layers that can be hidden or locked, and set a board scale so dimensions read in real units. Agents connected over MCP can draw too.
 - Save locally with SQLite, group boards into private collections, undo history, revisions and recovery; invite named accounts on the same server to edit.
 - Import text or existing diagrams; export editable JSON, images or Markdown.
 - Share every board in a collection at once; export/import linked collection bundles, download one read-only HTML file, or print a walkthrough to PDF.

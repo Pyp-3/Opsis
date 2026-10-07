@@ -71,6 +71,7 @@ describe('Opsis MCP server', () => {
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'opsis_add_concept',
+      'opsis_add_drawings',
       'opsis_connect',
       'opsis_create_board',
       'opsis_disconnect',
@@ -78,9 +79,11 @@ describe('Opsis MCP server', () => {
       'opsis_list_boards',
       'opsis_list_public_boards',
       'opsis_remove_concept',
+      'opsis_remove_drawings',
       'opsis_search_boards',
       'opsis_update_board',
       'opsis_update_concept',
+      'opsis_update_drawing',
       'opsis_write_diagram',
     ]);
     const add = tools.find((tool) => tool.name === 'opsis_add_concept')!;
@@ -139,6 +142,63 @@ describe('Opsis MCP server', () => {
         open: `http://localhost:3000/canvas?board=${created.id}`,
       }),
     ]);
+  });
+
+  it('draws a scaled plan that the saved-board API accepts', async () => {
+    const created = (await call('opsis_create_board', { title: 'Plant room' })).json();
+    const added = (
+      await call('opsis_add_drawings', {
+        boardId: created.id,
+        drawings: [
+          { shape: 'rect', x: 0, y: 0, width: 480, height: 288, layer: 'Walls', line: 'solid' },
+          {
+            shape: 'dimension',
+            points: [
+              [0, 312],
+              [480, 312],
+            ],
+          },
+        ],
+      })
+    ).json();
+    expect(added.drawingIds).toEqual(['rect-1', 'dimension-1']);
+    await call('opsis_update_board', {
+      boardId: created.id,
+      drawingScale: { gridValue: 0.25, unit: 'm' },
+    });
+    await call('opsis_update_drawing', {
+      boardId: created.id,
+      drawingId: 'rect-1',
+      ink: 'sky',
+      fill: true,
+    });
+    const read = (await call('opsis_get_board', { boardId: created.id })).json();
+    expect(read).toMatchObject({
+      gridSquare: 24,
+      scale: { gridValue: 0.25, unit: 'm' },
+      layers: [{ name: 'Walls' }],
+      drawings: [
+        { id: 'rect-1', x: 0, y: 0, width: 480, ink: 'sky', fill: true, layer: 'Walls' },
+        {
+          id: 'dimension-1',
+          points: [
+            [0, 312],
+            [480, 312],
+          ],
+        },
+      ],
+    });
+    await call('opsis_remove_drawings', { boardId: created.id, drawingIds: ['dimension-1'] });
+    const after = (await call('opsis_get_board', { boardId: created.id })).json();
+    expect(after.drawings.map((item: { id: string }) => item.id)).toEqual(['rect-1']);
+    const bad = await call('opsis_add_drawings', {
+      boardId: created.id,
+      drawings: [{ shape: 'text', x: 0, y: 0 }],
+    });
+    expect(bad).toMatchObject({
+      isError: true,
+      text: expect.stringMatching(/needs x, y and some text/),
+    });
   });
 
   it('writes a whole diagram onto a new board and reports mistakes as tool errors', async () => {

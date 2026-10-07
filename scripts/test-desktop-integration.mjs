@@ -116,7 +116,7 @@ try {
   await mcp.connect(
     new StdioClientTransport({ command: binary, args: ['--mcp'], env: mcpEnv, stderr: 'inherit' }),
   );
-  assert.equal((await mcp.listTools()).tools.length, 12);
+  assert.equal((await mcp.listTools()).tools.length, 15);
   const call = async (name, args) => {
     const result = await mcp.callTool({ name, arguments: args });
     assert.ok(!result.isError, `MCP ${name} failed`);

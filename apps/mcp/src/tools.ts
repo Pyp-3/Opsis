@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   BoardEdgeKindSchema,
   CANVAS_BACKGROUNDS,
+  DrawingScaleSchema,
   CANVAS_ICON_TINTS,
   EDGE_COLORS,
 } from '@opsis/schema';
@@ -21,6 +22,14 @@ import {
   writeDiagram,
 } from './canvas.js';
 import type { OpsisClient } from './client.js';
+import {
+  DrawingInputSchema,
+  DrawingPatchSchema,
+  addDrawings,
+  describeDrawings,
+  removeDrawings,
+  updateDrawing,
+} from './drawings.js';
 
 export const INSTRUCTIONS = `Opsis turns explanations into diagrams on a canvas: concepts (an icon, a label, a summary and a longer explanation) joined by labelled arrows, which the reader can explore and play as a walkthrough.
 
@@ -28,7 +37,9 @@ Every edit here is saved like an edit made in the app: a canvas the reader has o
 
 Agents act as the account whose agent key they hold: they edit that account's boards and can read boards others have made public.
 
-Work like this: list, search (opsis_search_boards) or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.`;
+Work like this: list, search (opsis_search_boards) or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.
+
+Boards can also hold drawings beside the diagram: floor plans, walls, equipment outlines, zones, labels and dimension lines, for engineering and architecture sketches. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.`;
 
 const boardId = z
   .string()
@@ -118,14 +129,16 @@ export function registerTools(
     {
       title: 'Read a board',
       description:
-        'Returns a board’s title, summary, colours, concepts (with ids) and connections. Read before editing.',
+        'Returns a board’s title, summary, colours, concepts (with ids and positions), connections, drawings, drawing layers and scale. Read before editing.',
       inputSchema: { boardId },
       annotations: { readOnlyHint: true },
     },
     guarded(async ({ boardId: id }) => {
       const entry = await client.get(id);
+      const board = entry.snapshot.board;
       return {
-        ...describeBoard(entry.id, entry.revision, entry.snapshot.board),
+        ...describeBoard(entry.id, entry.revision, board),
+        ...(board ? describeDrawings(board) : {}),
         // Someone else's public board: readable here, but edits will be refused.
         ...(entry.access === 'viewer' ? { readOnly: true, owner: entry.owner?.name } : {}),
         open: open(id),
@@ -165,6 +178,11 @@ export function registerTools(
         description: z.string().max(500).optional(),
         background: z.enum(CANVAS_BACKGROUNDS).optional().describe('Canvas palette.'),
         iconColor: z.enum(CANVAS_ICON_TINTS).optional().describe('Icon tint.'),
+        drawingScale: DrawingScaleSchema.nullable()
+          .optional()
+          .describe(
+            'What one grid square measures, e.g. {"gridValue": 0.5, "unit": "m"}; dimension lines read in it. null returns to grid units.',
+          ),
       },
     },
     guarded(async (args) => {
@@ -181,6 +199,7 @@ export function registerTools(
                     icon: args.iconColor ?? look.icon,
                   }
                 : undefined,
+            drawingScale: args.drawingScale,
           }),
           result: null,
         };
@@ -297,6 +316,61 @@ export function registerTools(
     guarded(async ({ boardId: id, connectionId }) => {
       const { revision } = await client.edit(id, (snapshot) => ({
         snapshot: disconnect(snapshot, connectionId),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_add_drawings',
+    {
+      title: 'Add drawings',
+      description:
+        'Draws shapes on the canvas beside the diagram in one undoable step: stroke (freehand), line, arrow, rect (box), ellipse, text and dimension lines. Coordinates are canvas units; one grid square is 24. Returns the new drawing ids.',
+      inputSchema: {
+        boardId,
+        drawings: z.array(DrawingInputSchema).min(1).max(100),
+      },
+    },
+    guarded(async ({ boardId: id, drawings }) => {
+      const { revision, result } = await client.edit(id, (snapshot) => {
+        const added = addDrawings(snapshot, drawings);
+        return { snapshot: added.snapshot, result: added.ids };
+      });
+      return saved(id, revision, { drawingIds: result });
+    }),
+  );
+
+  server.registerTool(
+    'opsis_update_drawing',
+    {
+      title: 'Update a drawing',
+      description:
+        'Moves, reshapes, relabels or restyles one drawing, or changes the concept it moves with or its layer. Locked drawings cannot be changed.',
+      inputSchema: { boardId, drawingId: ConceptIdSchema, ...DrawingPatchSchema },
+    },
+    guarded(async ({ boardId: id, drawingId, ...patch }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: updateDrawing(snapshot, drawingId, patch),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_remove_drawings',
+    {
+      title: 'Remove drawings',
+      description:
+        'Removes drawings by id in one undoable step. Nothing is removed if any of them is locked.',
+      inputSchema: { boardId, drawingIds: z.array(ConceptIdSchema).min(1).max(200) },
+      annotations: { destructiveHint: true },
+    },
+    guarded(async ({ boardId: id, drawingIds }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: removeDrawings(snapshot, drawingIds),
         result: null,
       }));
       return saved(id, revision);
