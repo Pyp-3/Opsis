@@ -1,0 +1,50 @@
+name: Release retention
+
+# Keeps only the newest published releases; older releases and their tags are deleted.
+# CI calls this after publishing each build; it can also be run by hand from the Actions tab
+# (choose "Dry run" to see what would be deleted without deleting anything).
+on:
+  workflow_call:
+    inputs:
+      keep:
+        type: number
+        default: 5
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: Number of newest releases to keep
+        type: number
+        default: 5
+      dry_run:
+        description: Only list what would be deleted
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Builds publish concurrently; prune one at a time so runs never race over the same releases.
+concurrency:
+  group: release-retention
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Keep the ${{ inputs.keep }} newest releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Delete older releases and their tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          KEEP: ${{ inputs.keep }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: node scripts/prune-releases.mjs --keep "$KEEP" $DRY_RUN

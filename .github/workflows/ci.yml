@@ -376,3 +376,13 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" release/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+
+  release-retention:
+    name: Keep the 5 newest releases
+    needs: release
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-retention.yml
+    with:
+      keep: 5

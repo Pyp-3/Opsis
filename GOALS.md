@@ -278,6 +278,15 @@ Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.
 
+## Completed: release retention (requested 2026-10-08)
+
+- [x] CI keeps only the 5 newest build prereleases: after each publication a reusable
+      `release-retention` workflow deletes older ones with their tags, one run at a time.
+      Drafts in progress and hand-published stable releases are kept; a manual dispatch
+      defaults to a dry run. Unit tests cover ranking, drafts, stable releases and limits;
+      a dry run against the live repository planned to keep 5 of 37 and delete 32. The
+      first deletion happens on the next push's CI run, which must be confirmed.
+
 ## In progress: continuous chat and drawing focus (requested 2026-10-08)
 
 The user asked that chat threads keep their context continuously ("harness based") and that

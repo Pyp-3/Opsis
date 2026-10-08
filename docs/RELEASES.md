@@ -16,6 +16,15 @@ version bumps back to the repository. Automatic builds do not replace the latest
 release. Re-running a build produces a new attempt version; re-running only publication
 leaves an existing release untouched.
 
+Only the **5 newest** build prereleases are kept. After each publication, CI runs the
+[release retention workflow](../.github/workflows/release-retention.yml), which deletes
+older build prereleases together with their tags (`scripts/prune-releases.mjs`). Drafts
+still being published and hand-published stable releases are never deleted. Installed
+desktop copies update from the newest signed build, so pruning never strands an update.
+Runs prune one at a time. To preview or prune by hand, run **Release retention** from the
+Actions tab (dry run is the default) or `node scripts/prune-releases.mjs --dry-run`
+with the GitHub CLI signed in.
+
 The ZIP includes project source, locked dependency manifests, compiled web assets,
 compiled API JavaScript, and the Rust/WASM engine. It excludes installed dependencies,
 databases, speech-model downloads, local agent settings and environment files. This is
