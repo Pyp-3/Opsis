@@ -92,7 +92,7 @@ describe('2D board API', () => {
       expect(result.json().nodes[2].terminal.exampleInput.split('\n')).toHaveLength(12);
       expect(complete).toHaveBeenCalledWith(
         expect.objectContaining({
-          promptId: 'board/v7',
+          promptId: 'board/v8',
           system: expect.stringContaining('Generate small, plausible synthetic example data'),
         }),
         expect.any(AbortSignal),
@@ -255,12 +255,14 @@ describe('2D board API', () => {
     expect(reply.statusCode).toBe(200);
     expect(factory).toHaveBeenCalledWith('codex', { model: 'gpt-6-luna', effort: 'low' });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v7' }),
+      expect.objectContaining({ user: expect.stringContaining('"x":123'), promptId: 'board/v8' }),
       expect.any(AbortSignal),
       [],
       expect.any(Function),
     );
-    expect(BoardGraphSchema.safeParse(reply.json()).success).toBe(true);
+    const { turn, ...graph } = reply.json();
+    expect(BoardGraphSchema.safeParse(graph).success).toBe(true);
+    expect(turn).toEqual({});
   });
   it('accepts an agent sketch, repairs a broken one once and reviews sketch changes', async () => {
     const sketch = [
@@ -472,13 +474,16 @@ describe('2D board API', () => {
     });
     expect(first.statusCode).toBe(200);
     expect(first.json().nodes.slice(0, 5)).toEqual(EMAIL_DEMO.nodes);
+    // The chat reply travels beside the diagram, not in it.
+    const { turn, ...graph } = first.json();
+    expect(turn.reply).toMatch(/delivery fails/);
     const second = await app.inject({
       method: 'POST',
       url: '/v1/boards/generate',
       payload: {
         agent: 'demo',
         prompt: 'Show delivery failures',
-        board: { ...document, ...first.json() },
+        board: { ...document, ...graph },
       },
     });
     expect(second.json()).toEqual(first.json());

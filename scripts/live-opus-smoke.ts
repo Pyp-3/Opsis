@@ -41,7 +41,10 @@ try {
     },
   });
   assert.equal(initial.statusCode, 200, initial.body);
-  const graph = BoardGraphSchema.parse(initial.json());
+  // The chat reply and notes travel beside the diagram as `turn`.
+  const initialGraph = initial.json();
+  delete initialGraph.turn;
+  const graph = BoardGraphSchema.parse(initialGraph);
   assert.ok(graph.edges.some((edge) => edge.kind === 'response'));
   results.push({ operation: 'initial', status: initial.statusCode, graph });
   console.log(
@@ -66,6 +69,7 @@ try {
   });
   assert.ok([200, 409].includes(followup.statusCode), followup.body);
   const payload = followup.json();
+  delete payload.turn;
   const next = BoardGraphSchema.parse(followup.statusCode === 409 ? payload.candidate : payload);
   assert.ok(next.edges.some((edge) => edge.kind === 'retry'));
   if (followup.statusCode === 200) {

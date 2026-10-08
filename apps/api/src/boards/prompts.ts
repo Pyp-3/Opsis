@@ -62,3 +62,20 @@ Live progress: the reader watches a one-line status of your work while they wait
 - Each note is under 9 words, starts with a present participle, and names the real things in this request (for example: ${examples.map((example) => `"${example}"`).join(', ')}). Never generic ("Thinking", "Analysing the request", "Generating JSON").
 - No markdown, numbering, quotation marks or ending punctuation. Notes say what you are doing, not the result: never write the answer, a summary or any other prose outside the structured output.`;
 }
+
+/** Every chat request: how to use the thread's history and keep it going. */
+export const CONVERSATION = `
+Conversation: this request comes from a chat thread with the reader. "conversation" holds recent messages, oldest first; an assistant message may carry an outcome: applied (placed on the canvas), review (awaiting the reader's review), partial (the reader applied only some changes), discarded (the reader rejected it) or failed (nothing changed). "memory" holds your notes from earlier turns, including turns no longer listed. Use both: keep what the reader accepted, do not propose again what they discarded unless they ask, and resolve references such as "that", "the second one" or "go back" against them. The reader may have edited the board since; currentDiagram is how it is now.
+- reply: one to three short sentences for the chat: what you did and why, any assumption you made, or one question when the request is genuinely ambiguous (still return your best diagram). Plain text without markdown; do not list every concept.
+- memory: rewrite your notes for the next turn in at most about 1200 characters of terse lines, newest last: the reader's goal and audience, decisions and preferences (scope, style, naming, units), what was accepted or rejected and open questions. Drop what no longer matters. Never copy the diagram itself, credentials or personal details into memory.`;
+
+/** Requests with drawings in focus. */
+export const FOCUS = `
+Focus: focus.drawings are drawings the reader selected, or those attached to the selected concept; this request is about them. Their coordinates are as stored: relative to the concept named by anchorId, otherwise canvas coordinates. They belong to the reader: change one only when the request calls for it, by returning it complete with the same id in focusEdits.update, and list ids to delete in focusEdits.remove. Omit focusEdits to leave them unchanged. Never copy the reader's drawings into "drawings", which is your own sketch layer; put new drawings there. focus.sketchIds names selected drawings in your own sketch (currentDiagram.drawings) that this request is about.`;
+
+/** Requests where the reader is working on the drawing rather than the diagram. */
+export const DRAWING_FIRST = `
+Priority: drawing first. The reader is working on the sketch, so the drawing is the main result. Draw or refine it carefully and in proportion, label rooms, parts and zones, and use dimension lines with real measurements when the board has a scale. Keep the concepts and connections exactly as they are unless the request explicitly asks to change them, and still return them complete. Keep the reply about the drawing.`;
+
+/** A resumed CLI session already holds the full instructions and earlier turns. */
+export const RESUME = `Continue as Opsis in this session, under the same instructions and JSON schema as before. The reader may have edited the board since your last answer: currentDiagram is the board now, and lastOutcome says what happened to your last answer. Answer the new request below and return the complete JSON answer, including reply and memory.`;

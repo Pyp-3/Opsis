@@ -12,6 +12,7 @@ import {
 } from './client.js';
 import { SpawnProcessRunner } from './runner.js';
 import type { HarnessProvider, ProcessRunner } from './types.js';
+import type { SessionStore } from './sessions.js';
 
 const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
   claude: ['/home/pyp/.local/bin/claude'],
@@ -23,6 +24,8 @@ const APPROVED_PATHS: Record<HarnessProvider, readonly string[]> = {
 
 export type CreateHarnessOptions = {
   resultSchema?: string;
+  /** Where chat threads' native CLI sessions are kept; see sessions.ts. Off without one. */
+  sessions?: { root: string; store: SessionStore };
   runner?: ProcessRunner;
   executableValidation?: ExecutableValidationOptions;
   processEnv?: NodeJS.ProcessEnv;
@@ -68,6 +71,7 @@ export async function createHarnessLLMClient(
       options.processEnv,
       undefined,
       options.resultSchema,
+      options.sessions,
     );
   } finally {
     await workspace.dispose();

@@ -2,10 +2,12 @@ package generation
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"strings"
 	"sync"
@@ -59,6 +61,25 @@ func response(value any, err error) string {
 // the same TS feature modules as the browser API, without a Node process.
 func (e *Engine) execute(ctx context.Context, method string, args []string, progress func(json.RawMessage)) (json.RawMessage, error) {
 	vm := goja.New()
+	// A chat thread's native CLI session: which session to resume, kept beside its directory.
+	_ = vm.Set("nativeSessionRead", func(key string) string {
+		value, err := harness.ReadSession(key)
+		return response(value, err)
+	})
+	_ = vm.Set("nativeSessionWrite", func(key, state string) string {
+		return response(true, harness.WriteSession(key, state))
+	})
+	_ = vm.Set("nativeSessionClear", func(key string) string {
+		return response(true, harness.ClearSession(key))
+	})
+	_ = vm.Set("nativeRandomId", func() string {
+		var bytes [16]byte
+		_, _ = rand.Read(bytes[:])
+		bytes[6] = bytes[6]&0x0f | 0x40
+		bytes[8] = bytes[8]&0x3f | 0x80
+		hex := fmt.Sprintf("%x", bytes)
+		return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:]
+	})
 	providerSession := &providerSession{pending: map[string]string{}}
 	defer providerSession.close()
 	_ = vm.Set("nativeProviderKey", func(provider string) string {
@@ -186,13 +207,18 @@ func (e *Engine) execute(ctx context.Context, method string, args []string, prog
 }
 
 func (e *Engine) Run(ctx context.Context, operation string, body json.RawMessage, progress func(json.RawMessage)) (Outcome, error) {
+	return e.RunAs(ctx, operation, body, "", progress)
+}
+
+// RunAs runs a workflow for a signed-in account, which scopes chat threads' CLI sessions.
+func (e *Engine) RunAs(ctx context.Context, operation string, body json.RawMessage, account string, progress func(json.RawMessage)) (Outcome, error) {
 	select {
 	case e.slots <- struct{}{}:
 		defer func() { <-e.slots }()
 	case <-ctx.Done():
 		return Outcome{}, ctx.Err()
 	}
-	result, err := e.execute(ctx, "run", []string{operation, string(body)}, progress)
+	result, err := e.execute(ctx, "run", []string{operation, string(body), account}, progress)
 	if err != nil {
 		return Outcome{}, err
 	}

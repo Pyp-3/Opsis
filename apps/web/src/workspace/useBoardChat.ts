@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BoardChatEntrySchema,
+  appendChatMessage,
+  withChatOutcome,
   type BoardAgent,
   type BoardChatEntry,
   type BoardChatThread,
+  type ChatOutcome,
 } from '@opsis/schema';
 import { z } from 'zod';
 
@@ -71,33 +74,56 @@ export function useBoardChat(boardId: string) {
     }
     return saved;
   }
+  /** The thread's saved content, without its storage metadata. */
+  const content = (thread: BoardChatEntry): BoardChatThread => {
+    const copy: Partial<BoardChatEntry> = { ...thread };
+    delete copy.revision;
+    delete copy.updatedAt;
+    return copy as BoardChatThread;
+  };
+  /**
+   * Adds the reader's message to the selected thread, or starts one. A full thread condenses its
+   * oldest messages into the thread's notes and continues.
+   */
   async function begin(agent: BoardAgent, model: string, text: string, target = boardId) {
     const thread =
       target === boardId && selected?.agent === agent && selected.model === model ? selected : null;
-    if (thread && thread.messages.length > 78)
-      throw new Error('This thread is full. Start a new thread.');
+    const next: BoardChatThread = thread
+      ? appendChatMessage(content(thread), { role: 'user', text })
+      : { id: crypto.randomUUID(), agent, model, messages: [{ role: 'user', text }] };
+    return write(next, thread?.revision ?? 0, target);
+  }
+  /** Saves the agent's reply, what happened to its answer and its updated notes. */
+  async function finish(
+    thread: BoardChatEntry,
+    reply: { text: string; outcome: ChatOutcome; memory?: string | undefined },
+    target = boardId,
+  ) {
+    const next = appendChatMessage(content(thread), {
+      role: 'assistant',
+      text: reply.text.slice(0, 4000),
+      outcome: reply.outcome,
+    });
     return write(
-      {
-        id: thread?.id ?? crypto.randomUUID(),
-        agent,
-        model,
-        messages: [...(thread?.messages ?? []), { role: 'user', text }],
-      },
-      thread?.revision ?? 0,
+      reply.memory !== undefined ? { ...next, memory: reply.memory } : next,
+      thread.revision,
       target,
     );
   }
-  async function finish(thread: BoardChatEntry, text: string, target = boardId) {
-    const { revision, id, agent, model, messages } = thread;
-    const content = { id, agent, model, messages };
-    await write(
-      {
-        ...content,
-        messages: [...content.messages, { role: 'assistant', text: text.slice(0, 4000) }],
-      },
-      revision,
-      target,
-    );
+  /** Records what the reader did with the thread's latest proposal. */
+  async function settle(thread: BoardChatEntry, outcome: ChatOutcome, target = boardId) {
+    return write(withChatOutcome(content(thread), outcome), thread.revision, target);
+  }
+  /** Forgets the thread's notes; its messages stay. */
+  async function forget() {
+    if (!selected) return;
+    const next = content(selected);
+    delete next.memory;
+    try {
+      await write(next, selected.revision);
+    } catch {
+      // `write` already reported the problem.
+    }
   }
   async function remove() {
     if (!selected) return;
@@ -124,6 +150,8 @@ export function useBoardChat(boardId: string) {
     loading: loading || loadedBoard !== boardId,
     begin,
     finish,
+    settle,
+    forget,
     remove,
     reload: () => {
       setLoading(true);

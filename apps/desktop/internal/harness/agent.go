@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -197,6 +198,76 @@ type Completion struct {
 	Files          []File            `json:"files"`
 	WorkspaceFiles map[string]string `json:"workspaceFiles"`
 	Environment    map[string]string `json:"environment"`
+	// Session is a chat thread's server-derived key ("account/thread"). The CLI then works
+	// in the thread's stable directory, where it finds its saved session again.
+	Session string `json:"session"`
+}
+
+var sessionSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`)
+
+// SessionDirectory is the stable working directory of a chat thread's native CLI session,
+// matching the browser-development API's layout.
+func SessionDirectory(key string) (string, error) {
+	parts := strings.Split(key, "/")
+	if len(parts) != 2 || !sessionSegment.MatchString(parts[0]) || !sessionSegment.MatchString(parts[1]) {
+		return "", Error("harness_config")
+	}
+	return filepath.Join(os.TempDir(), "opsis-sessions", parts[0], parts[1]), nil
+}
+
+// sessionStateFile holds which session a thread resumes; see sessions.ts.
+func sessionStateFile(key string) (string, error) {
+	directory, err := SessionDirectory(key)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, "session.json"), nil
+}
+
+// ReadSession returns a thread's saved session state, or "" when it has none.
+func ReadSession(key string) (string, error) {
+	path, err := sessionStateFile(key)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil || len(data) > 4096 {
+		return "", Error("harness_exit")
+	}
+	return string(data), nil
+}
+
+// WriteSession records a thread's session state after a successful turn.
+func WriteSession(key, state string) error {
+	path, err := sessionStateFile(key)
+	if err != nil {
+		return err
+	}
+	if len(state) > 4096 {
+		return Error("harness_config")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return Error("harness_exit")
+	}
+	if err := os.WriteFile(path, []byte(state), 0600); err != nil {
+		return Error("harness_exit")
+	}
+	return nil
+}
+
+// ClearSession forgets a thread's session, so its next turn starts a new one.
+func ClearSession(key string) error {
+	path, err := sessionStateFile(key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return Error("harness_exit")
+	}
+	return nil
 }
 
 func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor func(string, []string) ([]string, error), onLine func(string)) (string, error) {
@@ -230,11 +301,30 @@ func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor
 			return "", Error("harness_config")
 		}
 	}
-	directory, err := os.MkdirTemp("", "opsis-harness-")
+	// A run in a thread's session works in its stable directory; the schema and uploads still
+	// go in a disposable folder, inside it.
+	cwd, parent := "", ""
+	if input.Session != "" {
+		if input.Provider != "claude" && input.Provider != "codex" {
+			return "", Error("harness_config")
+		}
+		session, err := SessionDirectory(input.Session)
+		if err != nil {
+			return "", err
+		}
+		if err := os.MkdirAll(session, 0700); err != nil {
+			return "", Error("harness_exit")
+		}
+		cwd, parent = session, session
+	}
+	directory, err := os.MkdirTemp(parent, "opsis-harness-")
 	if err != nil {
 		return "", Error("harness_exit")
 	}
 	defer os.RemoveAll(directory)
+	if cwd == "" {
+		cwd = directory
+	}
 	for name, content := range input.WorkspaceFiles {
 		if (filepath.Base(name) != name && name != ".gemini/antigravity-cli/settings.json") || name == "." || name == ".." || len(content) > 1_000_000 {
 			return "", Error("harness_config")
@@ -304,7 +394,7 @@ func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor
 		encoded, _ := json.Marshal(map[string]any{"event": "user", "message": map[string]string{"content": stdin}})
 		stdin = string(encoded) + "\n"
 	}
-	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: stdin, Directory: directory, Environment: environment, Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
+	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: stdin, Directory: cwd, Environment: environment, Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
 }
 
 func NodePath(directory string) string {

@@ -13,6 +13,8 @@ import {
   type HarnessProgress,
 } from '../harness/index.js';
 import { resolveAgentExecutable } from '../cli-executable.js';
+import { fileSessionStore } from '../cli-sessions.js';
+import { DEFAULT_SESSION_ROOT } from '../harness/client.js';
 import { providerApiClient } from '../providers/api-client';
 import { providerHttp, providerPause, withProviderSlot } from '../providers/http';
 
@@ -75,7 +77,11 @@ export const localBoardClient: BoardClientFactory = async (
         ? { OPSIS_LLM_MAX_BUDGET_USD: String(settings.maxBudgetUSD) }
         : {}),
     },
-    { resultSchema, executableValidation: { allowedPaths: [executable] } },
+    {
+      resultSchema,
+      executableValidation: { allowedPaths: [executable] },
+      sessions: { root: DEFAULT_SESSION_ROOT, store: fileSessionStore(DEFAULT_SESSION_ROOT) },
+    },
   );
   if (!client) throw new Error('Agent unavailable');
   return {

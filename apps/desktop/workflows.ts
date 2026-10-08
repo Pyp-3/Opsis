@@ -9,6 +9,7 @@ import { harnessArguments } from '../api/src/harness/arguments';
 import { extractHarnessResult } from '../api/src/harness/envelope';
 import { progressReader } from '../api/src/harness/progress';
 import { parseVersion } from '../api/src/harness/version';
+import { withNativeSession, type SessionStore } from '../api/src/harness/sessions';
 import type { BoardClientFactory } from '../api/src/boards/client';
 import type { HarnessFile, LLMRequest, HarnessConfig } from '../api/src/harness/types';
 import type { HarnessProgress } from '../api/src/harness/progress';
@@ -30,6 +31,10 @@ declare function nativeComplete(
 declare function nativeCancelled(): boolean;
 declare function nativeProgress(json: string): void;
 declare function nativeDecodeFile(base64: string): string;
+declare function nativeSessionRead(key: string): string;
+declare function nativeSessionWrite(key: string, state: string): string;
+declare function nativeSessionClear(key: string): string;
+declare function nativeRandomId(): string;
 
 function result<T>(value: string): T {
   const parsed = JSON.parse(value) as { error?: HarnessErrorCode; value: T };
@@ -52,6 +57,13 @@ function result<T>(value: string): T {
       toJSON: () => decoded.data,
     };
   },
+};
+
+/** Chat threads' native CLI session state, kept by the Go host beside each thread's directory. */
+const sessions: SessionStore = {
+  read: async (key) => result<string>(nativeSessionRead(key)) || null,
+  write: async (key, state) => void result<boolean>(nativeSessionWrite(key, state)),
+  clear: async (key) => void result<boolean>(nativeSessionClear(key)),
 };
 
 const factory: BoardClientFactory = async (
@@ -94,38 +106,57 @@ const factory: BoardClientFactory = async (
         timeoutMs: 180000,
         ...(settings.maxBudgetUSD !== undefined ? { maxBudgetUSD: settings.maxBudgetUSD } : {}),
       };
-      const response = result<{ stdout: string }>(
-        nativeComplete(
-          JSON.stringify({
-            executable: prepared.executable,
-            provider,
-            schema,
-            request,
-            files,
-            workspaceFiles: providerWorkspaceFiles(provider, schema),
-            environment: providerEnvironment(provider),
-          }),
-          (schemaPath, paths) =>
-            JSON.stringify(
-              harnessArguments(
-                config,
-                schemaPath,
+      const stdout = await withNativeSession(
+        {
+          provider,
+          model: settings.model,
+          key: request.session?.key,
+          store: sessions,
+          freshId: nativeRandomId,
+        },
+        async (plan) => {
+          const resume = plan?.resume ? request.session : undefined;
+          const system = resume ? resume.resumeSystem : request.system;
+          const user = resume ? resume.resumeUser : request.user;
+          const runConfig: HarnessConfig = plan
+            ? { ...config, session: { resume: plan.resume, ...(plan.id ? { id: plan.id } : {}) } }
+            : config;
+          return result<{ stdout: string }>(
+            nativeComplete(
+              JSON.stringify({
+                executable: prepared.executable,
+                provider,
                 schema,
+                request: { system, user },
                 files,
-                JSON.parse(paths) as string[],
-                `${request.system}\n\n${request.user}`,
-              ),
+                workspaceFiles: providerWorkspaceFiles(provider, schema),
+                environment: providerEnvironment(provider),
+                session: plan ? request.session!.key : '',
+              }),
+              (schemaPath, paths) =>
+                JSON.stringify(
+                  harnessArguments(
+                    runConfig,
+                    schemaPath,
+                    schema,
+                    files,
+                    JSON.parse(paths) as string[],
+                    `${system}\n\n${user}`,
+                  ),
+                ),
+              (line) => read(line).forEach((progress) => onProgress?.(progress)),
             ),
-          (line) => read(line).forEach((progress) => onProgress?.(progress)),
-        ),
+          ).stdout;
+        },
       );
-      return extractHarnessResult(provider, response.stdout);
+      return extractHarnessResult(provider, stdout);
     },
   };
 };
 
-export async function run(operation: string, body: string): Promise<string> {
+export async function run(operation: string, body: string, account = ''): Promise<string> {
   const context = {
+    ...(account ? { account } : {}),
     signal: {
       get aborted() {
         return nativeCancelled();

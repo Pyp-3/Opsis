@@ -14,8 +14,9 @@ import { ILLUSTRATION_INKS } from './illustration';
  *
  * Drawings may sit on named layers that can be reordered, hidden or locked, and a single drawing
  * can be locked too. A board-level scale says what one grid square measures, so dimension lines
- * read in real units. Generation agents never receive or produce drawings; external agents edit
- * them only through the explicit MCP drawing tools, which respect locks.
+ * read in real units. Chat agents draw on their own layer (see `AGENT_SKETCH_LAYER`) and see the
+ * reader's drawings only when the reader puts them in focus (see `chat-focus.ts`); external
+ * agents edit them only through the explicit MCP drawing tools, which respect locks.
  */
 
 export const DRAWING_SHAPES = [
@@ -120,6 +121,15 @@ export const AgentDrawingSchema = BoardDrawingObject.omit({ layerId: true, locke
   .extend({ points: z.array(point).min(2).max(120).optional() })
   .superRefine(checkShape);
 export type AgentDrawing = z.infer<typeof AgentDrawingSchema>;
+/**
+ * One of the reader's own drawings as a chat agent is shown it when the reader puts it in focus:
+ * the stored shape without its layer or lock, so long strokes keep every sample.
+ */
+export const FocusDrawingSchema = BoardDrawingObject.omit({
+  layerId: true,
+  locked: true,
+}).superRefine(checkShape);
+export type FocusDrawing = z.infer<typeof FocusDrawingSchema>;
 
 function drawingShapeProblem(drawing: z.infer<typeof BoardDrawingObject>): string | null {
   if (drawing.rotation && !ROTATABLE_SHAPES.includes(drawing.shape))

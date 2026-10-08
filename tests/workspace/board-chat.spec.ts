@@ -199,3 +199,104 @@ test('docked chat model settings stay reachable and can be closed on a short scr
   );
   expect(overflow).toBe(false);
 });
+
+test('selected drawings become the chat focus, and threads keep notes and outcomes', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page, 'Focus reader');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  const requests: Record<string, unknown>[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/v1/boards/generate')) requests.push(request.postDataJSON());
+  });
+
+  // Draw a box, then select it.
+  await page.getByRole('button', { name: 'Hide the big picture' }).click();
+  await page.getByRole('button', { name: 'Show drawing tools' }).click();
+  const tools = page.getByRole('toolbar', { name: 'Drawing tools' });
+  await tools.getByRole('button', { name: 'Box', exact: true }).click();
+  const surface = (await page.getByTestId('drawing-surface').boundingBox())!;
+  await page.mouse.move(surface.x + surface.width * 0.6, surface.y + surface.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(surface.x + surface.width * 0.75, surface.y + surface.height * 0.45, {
+    steps: 6,
+  });
+  await page.mouse.up();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  const boards = await (await page.request.get('/v1/boards')).json();
+  const boardId = boards[0].id as string;
+  const board = async () =>
+    (await (await page.request.get(`/v1/boards/${boardId}`)).json()).snapshot.board as {
+      drawings: { id: string; ink: string; line: string }[];
+    };
+  await expect.poll(async () => (await board()).drawings?.length).toBe(1);
+  const [box] = (await board()).drawings;
+  await tools.getByRole('button', { name: 'Select drawings' }).click();
+  const outline = (await page
+    .locator(`.drawing-layer [data-drawing="${box!.id}"] rect`)
+    .boundingBox())!;
+  await page.mouse.click(outline.x + 2, outline.y + outline.height / 2);
+  await expect(page.getByRole('region', { name: 'Selected drawing' })).toBeVisible();
+
+  // The chat composer shows the focus, and works drawing-first.
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  const focus = page.getByRole('group', { name: 'Request focus' });
+  await expect(focus).toContainText('Focus: 1 drawing selected');
+  await page.screenshot({ path: test.info().outputPath('chat-focus-chip.png') });
+  await expect(focus.getByRole('button', { name: 'Drawing first' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect((await accessibilityScan(page)).violations).toEqual([]);
+  await page.getByLabel('Agent', { exact: true }).selectOption('demo');
+  await page.getByLabel('What would you like to understand?').fill('Dash the selected drawing');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('I dashed the drawing you selected');
+  await expect(page.getByRole('log')).toContainText('A proposal is ready for review on Canvas.');
+  expect(requests[0]).toMatchObject({
+    priority: 'drawing',
+    focus: { drawings: [{ id: box!.id }] },
+  });
+  expect(requests[0]!.thread).toEqual(expect.any(String));
+
+  // Edits to the reader's drawing are reviewed before they apply.
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  const review = page.getByRole('region', { name: 'Review proposed changes' });
+  await expect(review).toContainText('Change your selected drawings: 1 updated');
+  await review.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await expect
+    .poll(async () => (await board()).drawings.map(({ ink, line }) => [ink, line]))
+    .toEqual([['coral', 'dashed']]);
+
+  // The thread records the outcome and keeps notes for the next turn.
+  await expect(page.locator('.chat-outcome').last()).toHaveText('Applied');
+  await page.locator('.chat-memory summary').click();
+  await expect(page.locator('.chat-memory pre')).toContainText(
+    'Reader asked: Dash the selected drawing',
+  );
+  await page.screenshot({ path: test.info().outputPath('chat-focus.png') });
+  const [thread] = await (await page.request.get(`/v1/boards/${boardId}/chat`)).json();
+  expect(thread.messages.at(-1).outcome).toBe('applied');
+
+  // The reader can keep the drawing private for a message; notes and outcomes still travel.
+  await page.getByRole('button', { name: 'Remove drawings from focus' }).click();
+  await expect(focus).toContainText('Include 1 drawing');
+  await page.getByLabel('What would you like to understand?').fill('Show delivery failures');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await expect(page.getByRole('log')).toContainText('I added what happens when delivery fails');
+  expect(requests[1]).not.toHaveProperty('focus');
+  expect(requests[1]).toMatchObject({
+    memory: expect.stringContaining('Reader asked: Dash the selected drawing'),
+    conversation: [
+      { role: 'user', text: 'Dash the selected drawing' },
+      { role: 'assistant', outcome: 'applied' },
+    ],
+  });
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  await review.getByRole('button', { name: 'Keep current board' }).click();
+  await expect(page.locator('.chat-outcome').last()).toHaveText('Discarded');
+});

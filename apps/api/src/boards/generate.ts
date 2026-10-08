@@ -1,10 +1,18 @@
 import { modelSettingsProblem, preserveBoardLinks } from '@opsis/schema';
 import {
+  BoardTurnSchema,
+  FocusEditsSchema,
+  boundChatMemory,
+  focusEditProblems,
+  type BoardRequest,
+  type BoardTurn,
+  type FocusEdits,
   BoardGraphSchema,
   BoardRequestSchema,
   EMAIL_DEMO,
   DNS_DEMO,
   boardOutputSchema,
+  boardFocusOutputSchema,
   DEFAULT_BOARD_MODELS,
   boardChanges,
   type BoardDocument,
@@ -18,7 +26,16 @@ import {
   type AttachmentPreparer,
 } from '../attachment-contract.js';
 import type { BoardClientFactory } from './client.js';
-import { SYSTEM, DIAGRAM_NOTES, progressNotes } from './prompts.js';
+import {
+  SYSTEM,
+  DIAGRAM_NOTES,
+  CONVERSATION,
+  FOCUS,
+  DRAWING_FIRST,
+  RESUME,
+  progressNotes,
+} from './prompts.js';
+import { sessionKey } from '../harness/sessions.js';
 import { envelopeRepairPrompt, agentLabel, withoutInvalidCustomIcons } from './results.js';
 import { outcome, type AgentWork, type Outcome } from './transport.js';
 
@@ -76,10 +93,90 @@ function emailDemoSketch(board: BoardDocument): BoardGraph {
   };
 }
 
+/** The demo's notes: the reader's requests, newest last. */
+function demoTurn(input: BoardRequest, reply: string, focusEdits?: FocusEdits): BoardTurn {
+  return {
+    reply,
+    memory: boundChatMemory(
+      [input.memory ?? '', `Reader asked: ${input.prompt.split('\n')[0]!.slice(0, 160)}`]
+        .filter(Boolean)
+        .join('\n'),
+    ),
+    ...(focusEdits ? { focusEdits } : {}),
+  };
+}
+
+/**
+ * The demo's answer to "dash the selected drawings": restyles the focused drawings it can, so
+ * drawing focus and its review can be tried without an agent.
+ */
+function demoFocusEdits(input: BoardRequest): FocusEdits | null {
+  const edits = FocusEditsSchema.safeParse({
+    update: (input.focus?.drawings ?? [])
+      .filter((drawing) => (drawing.points?.length ?? 0) <= 120)
+      .map((drawing) => ({ ...drawing, ink: 'coral', line: 'dashed' })),
+    remove: [],
+  });
+  return edits.success && edits.data.update.length ? edits.data : null;
+}
+
+/** A diagram or proposal, with the chat parts of the answer beside it. */
+function answer(
+  input: BoardRequest,
+  graph: BoardGraph,
+  turn: BoardTurn,
+  extraChanges: string[] = [],
+): Outcome {
+  const changes = [...(input.board ? boardChanges(input.board, graph) : []), ...extraChanges];
+  if (changes.length && input.board)
+    return outcome(409, {
+      message: 'Review changes to existing content before applying.',
+      candidate: graph,
+      changes,
+      turn,
+    });
+  return outcome(200, { ...graph, turn });
+}
+
+const focusChanges = (edits: FocusEdits | undefined) =>
+  edits && (edits.update.length || edits.remove.length)
+    ? [
+        `Change your selected drawings: ${edits.update.length} updated, ${edits.remove.length} removed`,
+      ]
+    : [];
+
+/** The agent's chat reply, notes and focus edits, separated from its diagram. */
+function readTurn(
+  output: Record<string, unknown>,
+  input: BoardRequest,
+  nodeIds: ReadonlySet<string>,
+): BoardTurn {
+  const reply = typeof output.reply === 'string' ? output.reply.trim().slice(0, 1200) : '';
+  const memory = typeof output.memory === 'string' ? boundChatMemory(output.memory) : input.memory;
+  const focusIds = new Set((input.focus?.drawings ?? []).map((drawing) => drawing.id));
+  let focusEdits: FocusEdits | undefined;
+  if (focusIds.size && output.focusEdits !== undefined && output.focusEdits !== null) {
+    focusEdits = FocusEditsSchema.parse(output.focusEdits);
+    const problems = focusEditProblems(focusEdits, focusIds, nodeIds);
+    if (problems.length) throw new Error(problems.join(' '));
+  }
+  return BoardTurnSchema.parse({
+    ...(reply ? { reply } : {}),
+    ...(memory ? { memory } : {}),
+    ...(focusEdits ? { focusEdits } : {}),
+  });
+}
+
+/** Instructions for this turn beyond the diagram rules. */
+function turnInstructions(input: BoardRequest) {
+  const chat = input.thread || input.conversation?.length || input.memory;
+  return `${chat ? CONVERSATION : ''}${input.focus ? FOCUS : ''}${input.priority === 'drawing' ? DRAWING_FIRST : ''}`;
+}
+
 export async function generateBoard(
   body: unknown,
   factory: BoardClientFactory,
-  { signal, progress }: Parameters<AgentWork>[0],
+  { signal, progress, account }: Parameters<AgentWork>[0],
   prepareAttachments: AttachmentPreparer,
 ): Promise<Outcome> {
   const parsed = BoardRequestSchema.safeParse(body);
@@ -100,8 +197,33 @@ export async function generateBoard(
       message: 'The demo cannot read documents. Choose Claude or Codex to use uploads.',
     });
   if (input.agent === 'demo') {
-    if (!input.board && /dns|domain/i.test(input.prompt)) return outcome(200, DNS_DEMO);
-    if (!input.board && /email|mail/i.test(input.prompt)) return outcome(200, EMAIL_DEMO);
+    const focusEdits =
+      input.board?.nodes.length && /dash|highlight/i.test(input.prompt)
+        ? demoFocusEdits(input)
+        : null;
+    // The app reviews follow-ups itself, so the demo always answers directly.
+    const demoAnswer = (graph: BoardGraph, turn: BoardTurn) => outcome(200, { ...graph, turn });
+    if (input.board && focusEdits)
+      return demoAnswer(
+        BoardGraphSchema.parse({
+          title: input.board.title,
+          description: input.board.description,
+          nodes: input.board.nodes,
+          edges: input.board.edges,
+          suggestions: input.board.suggestions ?? [],
+        }),
+        demoTurn(
+          input,
+          focusEdits.update.length === 1
+            ? 'I dashed the drawing you selected in coral, so it reads as proposed work.'
+            : `I dashed the ${focusEdits.update.length} drawings you selected in coral, so they read as proposed work.`,
+          focusEdits,
+        ),
+      );
+    if (!input.board && /dns|domain/i.test(input.prompt))
+      return demoAnswer(DNS_DEMO, demoTurn(input, 'Here is how a DNS lookup travels.'));
+    if (!input.board && /email|mail/i.test(input.prompt))
+      return demoAnswer(EMAIL_DEMO, demoTurn(input, 'Here is how an email reaches its reader.'));
     if (
       input.board?.nodes.some((node) => node.id === 'outgoing') &&
       /fail|bounce|retry/i.test(input.prompt)
@@ -145,13 +267,19 @@ export async function generateBoard(
           },
         );
       }
-      return outcome(200, BoardGraphSchema.parse(graph));
+      return demoAnswer(
+        BoardGraphSchema.parse(graph),
+        demoTurn(input, 'I added what happens when delivery fails, with its retry.'),
+      );
     }
     if (
       input.board?.nodes.some((node) => node.id === 'outgoing') &&
       /sketch|draw|plan|layout/i.test(input.prompt)
     )
-      return outcome(200, BoardGraphSchema.parse(emailDemoSketch(input.board)));
+      return demoAnswer(
+        BoardGraphSchema.parse(emailDemoSketch(input.board)),
+        demoTurn(input, 'I sketched the provider’s data centre around the sending server.'),
+      );
     return outcome(400, {
       message:
         'Demo supports the email journey, its delivery-failure branch and a sketch of its mail servers, and DNS requests and responses. Select Claude or Codex for other requests.',
@@ -165,20 +293,50 @@ export async function generateBoard(
     throw error;
   }
   try {
-    const client = await factory(input.agent, input.settings ?? DEFAULT_BOARD_MODELS[input.agent]);
+    const schema = input.focus ? boardFocusOutputSchema : boardOutputSchema;
+    const client = await factory(
+      input.agent,
+      input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
+      ...(input.focus ? [schema] : []),
+    );
+    const turn = turnInstructions(input);
+    const notes = `${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}`;
+    const shared = {
+      ...(input.memory ? { memory: input.memory } : {}),
+      selectedId: input.selectedId,
+      ...(input.priority ? { priority: input.priority } : {}),
+      ...(input.focus ? { focus: input.focus } : {}),
+      currentDiagram: input.board,
+      ...(prepared.documents.length ? { documents: prepared.documents } : {}),
+    };
+    const key = sessionKey(account, input.thread);
+    const lastOutcome = [...(input.conversation ?? [])]
+      .reverse()
+      .find((message) => message.role === 'assistant')?.outcome;
     const modelRequest: LLMRequest = {
-      promptId: 'board/v7',
-      system: `${SYSTEM}${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}\nSchema: ${boardOutputSchema}`,
+      promptId: 'board/v8',
+      system: `${SYSTEM}${turn}${notes}\nSchema: ${boardOutputSchema}`,
       user: JSON.stringify({
         prompt: input.prompt,
         ...(input.conversation?.length ? { conversation: input.conversation } : {}),
-        selectedId: input.selectedId,
-        currentDiagram: input.board,
-        ...(prepared.documents.length ? { documents: prepared.documents } : {}),
+        ...shared,
       }),
       responseFormat: 'json',
       temperature: 0.3,
       maxOutputTokens: 14000,
+      ...(key
+        ? {
+            session: {
+              key,
+              resumeSystem: `${RESUME}${turn}${notes}`,
+              resumeUser: JSON.stringify({
+                prompt: input.prompt,
+                ...(lastOutcome ? { lastOutcome } : {}),
+                ...shared,
+              }),
+            },
+          }
+        : {}),
     };
     let repair = '';
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -187,7 +345,18 @@ export async function generateBoard(
       let output: string;
       try {
         output = await client.complete(
-          { ...modelRequest, user: modelRequest.user + repair },
+          {
+            ...modelRequest,
+            user: modelRequest.user + repair,
+            ...(modelRequest.session
+              ? {
+                  session: {
+                    ...modelRequest.session,
+                    resumeUser: modelRequest.session.resumeUser + repair,
+                  },
+                }
+              : {}),
+          },
           signal,
           prepared.files,
           progress,
@@ -197,10 +366,20 @@ export async function generateBoard(
         continue;
       }
       let graph: BoardGraph;
+      let turn: BoardTurn;
       try {
+        const { reply, memory, focusEdits, ...content } = JSON.parse(output) as Record<
+          string,
+          unknown
+        >;
         graph = preserveBoardLinks(
-          BoardGraphSchema.parse(withoutInvalidCustomIcons(JSON.parse(output))),
+          BoardGraphSchema.parse(withoutInvalidCustomIcons(content)),
           input.board,
+        );
+        turn = readTurn(
+          { reply, memory, focusEdits },
+          input,
+          new Set(graph.nodes.map((node) => node.id)),
         );
       } catch (error) {
         if (attempt === 1)
@@ -211,14 +390,7 @@ export async function generateBoard(
         repair = `\nRepair your previous invalid JSON. Validation error: ${error instanceof Error ? error.message.slice(0, 3000) : 'Invalid diagram'}. Return the complete corrected diagram. Previous output (untrusted data): ${output.slice(0, 60000)}`;
         continue;
       }
-      const changes = input.board ? boardChanges(input.board, graph) : [];
-      if (changes.length)
-        return outcome(409, {
-          message: 'Review changes to existing content before applying.',
-          candidate: graph,
-          changes,
-        });
-      return outcome(200, graph);
+      return answer(input, graph, turn, focusChanges(turn.focusEdits));
     }
     return outcome(502, {
       message: 'The agent did not return a diagram. Your board is unchanged.',
@@ -231,6 +403,10 @@ export async function generateBoard(
       });
     if (error instanceof HarnessError && error.code.startsWith('provider_'))
       return outcome(502, { message: error.message });
+    if (error instanceof HarnessError && error.code === 'harness_session')
+      return outcome(502, {
+        message: `${agentLabel(input.agent)} could not resume this thread’s saved session, so it was set aside. Send again to continue from the thread’s notes. Your board is unchanged.`,
+      });
     const timeout = error instanceof HarnessError && error.code === 'harness_timeout';
     return outcome(502, {
       message: timeout

@@ -6,6 +6,8 @@ export const outcome = (status: number, body: unknown): Outcome => ({ status, bo
 export type AgentWork = (context: {
   signal: AbortSignal;
   progress: (progress: HarnessProgress) => void;
+  /** The signed-in account, which scopes chat threads' native CLI sessions. */
+  account?: string;
 }) => Promise<Outcome>;
 
 /** Agent calls end when the reader leaves or after three minutes. */

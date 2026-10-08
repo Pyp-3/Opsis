@@ -88,6 +88,13 @@ func request(t *testing.T, engine *Engine, body any) Outcome {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The chat reply travels beside the diagram; these tests reuse the diagram itself as an
+	// agent's answer or a saved board.
+	var answer map[string]json.RawMessage
+	if result.Status == 200 && json.Unmarshal(result.Body, &answer) == nil && answer["turn"] != nil {
+		delete(answer, "turn")
+		result.Body, _ = json.Marshal(answer)
+	}
 	return result
 }
 

@@ -667,3 +667,105 @@ body.chat-docked .generation-review {
     animation: none;
   }
 }
+
+/* Thread notes: the agent's running memory for a long conversation */
+.chat-memory {
+  margin: 8px 16px 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.chat-memory summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.chat-memory summary small {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.chat-memory-body {
+  padding: 0 10px 8px;
+}
+.chat-memory-body .chat-muted {
+  padding: 0 0 6px;
+}
+.chat-memory pre {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-outcome {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.chat-outcome.is-applied,
+.chat-outcome.is-partial {
+  color: var(--ink-2);
+  border-color: var(--ok);
+}
+.chat-outcome.is-review {
+  color: var(--accent-text);
+}
+
+/* What the next message is about: drawings in focus and drawing-first */
+.chat-focus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.chat-focus-chip,
+.chat-focus-restore,
+.chat-focus-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 2px 8px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.chat-focus-chip {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.chat-focus-chip button {
+  display: inline-flex;
+  padding: 2px;
+  color: inherit;
+  background: transparent;
+  border-radius: 50%;
+}
+.chat-focus-chip button:hover,
+.chat-focus-restore:hover,
+.chat-focus-priority:hover {
+  background: var(--hover);
+}
+.chat-focus-priority[aria-pressed='true'] {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: transparent;
+}
+.chat-focus .chat-link {
+  margin: 0;
+}

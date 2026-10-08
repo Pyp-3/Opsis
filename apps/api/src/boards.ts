@@ -58,7 +58,12 @@ export function registerBoardRoutes(
 
   app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, (request, reply) =>
     respond(request, reply, (context) =>
-      generateBoard(request.body, factory, context, prepareAttachments),
+      generateBoard(
+        request.body,
+        factory,
+        { ...context, ...(request.user ? { account: request.user.id } : {}) },
+        prepareAttachments,
+      ),
     ),
   );
   app.post('/v1/boards/illustrate', { bodyLimit: 4_000_000 }, (request, reply) =>

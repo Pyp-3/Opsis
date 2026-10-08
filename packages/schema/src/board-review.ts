@@ -5,6 +5,7 @@ import {
   detachDrawings,
   type BoardDrawing,
 } from './board-drawings';
+import { readerDrawingsOf } from './chat-focus';
 
 export type BoardReviewChange = { key: string; label: string };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -55,7 +56,42 @@ export function boardReviewChanges(
         ? 'Remove agent sketch'
         : `${oldSketch.length ? 'Update' : 'Add'} agent sketch: ${newSketch.length} drawing${newSketch.length === 1 ? '' : 's'}`,
     });
+  const reader = readerDrawingChanges(before, candidate);
+  if (reader.updated.length || reader.removed.length)
+    changes.push({
+      key: 'reader-drawings',
+      label: `Change your selected drawings: ${[
+        reader.updated.length ? `${reader.updated.length} updated` : '',
+        reader.removed.length ? `${reader.removed.length} removed` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')}`,
+    });
   return changes;
+}
+
+/**
+ * Which of the reader's drawings a proposal changes or removes. Drawings attached to a concept
+ * the proposal removes are compared where they would stay, so only real edits count.
+ */
+export function readerDrawingChanges(
+  before: BoardDocument,
+  candidate: BoardDocument,
+): { updated: string[]; removed: string[] } {
+  const ids = new Set(candidate.nodes.map((node) => node.id));
+  const old = detachDrawings(readerDrawingsOf(before), ids, before.positions) ?? [];
+  const next = readerDrawingsOf(candidate);
+  return {
+    updated: old
+      .filter((drawing) => {
+        const proposed = next.find((item) => item.id === drawing.id);
+        return proposed && !same(canonical(drawing), canonical(proposed));
+      })
+      .map((drawing) => drawing.id),
+    removed: old
+      .filter((drawing) => !next.some((item) => item.id === drawing.id))
+      .map((drawing) => drawing.id),
+  };
 }
 
 /** Invalid combinations fail explicitly. Rejecting a change never silently accepts a dependent removal. */
@@ -120,31 +156,40 @@ export function selectBoardChanges(
     ...(before.pinnedNodeIds
       ? { pinnedNodeIds: before.pinnedNodeIds.filter((id) => ids.has(id)) }
       : {}),
-    ...reviewedDrawings(before, candidate, keys.has('drawings'), ids),
+    ...reviewedDrawings(
+      before,
+      candidate,
+      { sketch: keys.has('drawings'), reader: keys.has('reader-drawings') },
+      ids,
+    ),
   });
 }
 
 /**
- * The reader's drawings always stay; the agent's sketch is the proposed one only when its change
- * is accepted. A drawing attached to a concept that is not kept stays where it was drawn.
+ * The reader's drawings stay as they were unless their proposed edits are accepted; the agent's
+ * sketch is the proposed one only when its change is accepted. A drawing attached to a concept
+ * that is not kept stays where it was drawn.
  */
 function reviewedDrawings(
   before: BoardDocument,
   candidate: BoardDocument,
-  acceptSketch: boolean,
+  accept: { sketch: boolean; reader: boolean },
   ids: ReadonlySet<string>,
 ): Pick<BoardDocument, 'drawings' | 'drawingLayers'> {
-  if (!acceptSketch)
+  if (!accept.sketch && !accept.reader)
     return before.drawings
       ? { drawings: detachDrawings(before.drawings, ids, before.positions) }
       : {};
-  const others = (before.drawings ?? []).filter(
-    (drawing) => drawing.layerId !== AGENT_SKETCH_LAYER.id,
-  );
-  const drawings: BoardDrawing[] = [
-    ...(detachDrawings(others, ids, before.positions) ?? []),
-    ...(detachDrawings(agentSketchOf(candidate), ids, candidate.positions) ?? []),
-  ];
+  const proposed = new Map(readerDrawingsOf(candidate).map((drawing) => [drawing.id, drawing]));
+  const reader = readerDrawingsOf(before).flatMap((drawing): BoardDrawing[] => {
+    if (!accept.reader) return detachDrawings([drawing], ids, before.positions)!;
+    const next = proposed.get(drawing.id);
+    return next ? detachDrawings([next], ids, candidate.positions)! : [];
+  });
+  const sketch = accept.sketch
+    ? (detachDrawings(agentSketchOf(candidate), ids, candidate.positions) ?? [])
+    : (detachDrawings(agentSketchOf(before), ids, before.positions) ?? []);
+  const drawings: BoardDrawing[] = [...reader, ...sketch];
   const layers = before.drawingLayers ?? [];
   const drawingLayers =
     drawings.some((drawing) => drawing.layerId === AGENT_SKETCH_LAYER.id) &&

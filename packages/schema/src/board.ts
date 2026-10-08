@@ -15,6 +15,8 @@ import { ProcessStepSchema, processProblems } from './process';
 
 import { BOARD_ICONS } from './board-icons';
 import { BoardAgentSchema, BoardModelSettingsSchema } from './model-settings';
+import { CHAT_CONVERSATION_WINDOW, ConversationMessageSchema, MAX_CHAT_MEMORY } from './board-chat';
+import { CHAT_PRIORITIES, ChatFocusSchema, FocusEditsSchema } from './chat-focus';
 export * from './board-icons';
 export * from './model-settings';
 export { EMAIL_DEMO } from './email-demo';
@@ -269,17 +271,34 @@ export type BoardAttachment = z.infer<typeof BoardAttachmentSchema>;
 export const BoardRequestSchema = z
   .object({
     prompt: z.string().trim().min(1).max(4000),
-    conversation: z
-      .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(4000) }).strict())
-      .max(12)
-      .optional(),
+    conversation: z.array(ConversationMessageSchema).max(CHAT_CONVERSATION_WINDOW).optional(),
+    /** The chat thread's running notes, written by the agent on earlier turns. */
+    memory: z.string().max(MAX_CHAT_MEMORY).optional(),
+    /** The chat thread, so a CLI agent can resume its own session for it. */
+    thread: z.string().uuid().optional(),
     agent: BoardAgentSchema,
     settings: BoardModelSettingsSchema.optional(),
     board: BoardDocumentSchema.optional(),
     selectedId: id.optional(),
+    /** The drawings this request is about; see chat-focus.ts. */
+    focus: ChatFocusSchema.optional(),
+    /** Whether the agent should work drawing-first. */
+    priority: z.enum(CHAT_PRIORITIES).optional(),
     attachments: z.array(BoardAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
   })
   .strict();
+/** The chat parts of an agent's answer, returned beside the diagram as `turn`. */
+export const BoardTurnSchema = z
+  .object({
+    /** A short conversational answer for the chat thread. */
+    reply: z.string().trim().min(1).max(1200).optional(),
+    /** The updated running notes for the thread. */
+    memory: z.string().max(MAX_CHAT_MEMORY).optional(),
+    /** Proposed changes to the focused drawings. */
+    focusEdits: FocusEditsSchema.optional(),
+  })
+  .strict();
+export type BoardTurn = z.infer<typeof BoardTurnSchema>;
 export const BoardAgentsSchema = z.array(
   z.object({
     id: BoardAgentSchema,
@@ -287,38 +306,62 @@ export const BoardAgentsSchema = z.array(
     detail: z.string(),
   }),
 );
+const BoardOutputSchema = BoardContentSchema.extend({
+  suggestions: z.array(z.string().min(1).max(200)).min(2).max(3),
+  narration: z.string().min(1).max(600),
+  // Colours are a reader's styling choice; agents describe structure only.
+  edges: z
+    .array(
+      BoardEdgeSchema.omit({ color: true }).extend({
+        kind: BoardEdgeKindSchema,
+        narration: z.string().min(1).max(300),
+      }),
+    )
+    .max(100),
+  nodes: z
+    .array(
+      // Illustrations are drawn on request by the illustrate route, not with the diagram.
+      BoardNodeSchema.omit({ illustration: true, linkedBoardId: true }).extend({
+        confidence: z.enum(['normal', 'simplified', 'uncertain']),
+        caveat: z.string().max(500),
+        narration: z.string().min(1).max(400),
+      }),
+    )
+    .min(1)
+    .max(50),
+  drawings: z
+    .array(AgentDrawingSchema)
+    .max(MAX_AGENT_DRAWINGS)
+    .optional()
+    .describe(
+      'Optional sketch beside the diagram for spatial subjects; see the Drawings instructions.',
+    ),
+  reply: z
+    .string()
+    .min(1)
+    .max(1200)
+    .describe('One to three short sentences for the reader: what you did and why.'),
+  memory: z
+    .string()
+    .max(MAX_CHAT_MEMORY)
+    .describe(
+      'Terse notes for your next turn: goals, decisions, preferences; empty when there are none.',
+    ),
+});
+/** The JSON schema of an agent's answer. */
 export const boardOutputSchema = JSON.stringify(
+  zodToJsonSchema(BoardOutputSchema, { $refStrategy: 'none' }),
+);
+/**
+ * The same with edits to focused drawings, used only when the reader puts drawings in focus so
+ * other requests stay small (Grok's CLI takes the whole request as one bounded argument).
+ */
+export const boardFocusOutputSchema = JSON.stringify(
   zodToJsonSchema(
-    BoardContentSchema.extend({
-      suggestions: z.array(z.string().min(1).max(200)).min(2).max(3),
-      narration: z.string().min(1).max(600),
-      // Colours are a reader's styling choice; agents describe structure only.
-      edges: z
-        .array(
-          BoardEdgeSchema.omit({ color: true }).extend({
-            kind: BoardEdgeKindSchema,
-            narration: z.string().min(1).max(300),
-          }),
-        )
-        .max(100),
-      nodes: z
-        .array(
-          // Illustrations are drawn on request by the illustrate route, not with the diagram.
-          BoardNodeSchema.omit({ illustration: true, linkedBoardId: true }).extend({
-            confidence: z.enum(['normal', 'simplified', 'uncertain']),
-            caveat: z.string().max(500),
-            narration: z.string().min(1).max(400),
-          }),
-        )
-        .min(1)
-        .max(50),
-      drawings: z
-        .array(AgentDrawingSchema)
-        .max(MAX_AGENT_DRAWINGS)
-        .optional()
-        .describe(
-          'Optional sketch beside the diagram for spatial subjects; see the Drawings instructions.',
-        ),
+    BoardOutputSchema.extend({
+      focusEdits: FocusEditsSchema.optional().describe(
+        'Changes to the focused drawings; see the Focus instructions.',
+      ),
     }),
     { $refStrategy: 'none' },
   ),

@@ -8,6 +8,7 @@ import { BoardHeader } from './BoardHeader';
 import { BoardLinks } from './BoardLinks';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
 import { BoardChat } from './BoardChat';
+import { ChatFocusBar } from './ChatFocusBar';
 import { WorkspaceTabs, type CanvasTab } from './WorkspaceTabs';
 import { DOCK_QUERY, useMediaQuery } from './useMediaQuery';
 import { useBoardChat } from './useBoardChat';
@@ -70,6 +71,13 @@ import {
   type BoardGraph,
   type BoardAgent,
   type BoardAttachment,
+  type BoardChatEntry,
+  type ChatOutcome,
+  type ChatPriority,
+  boardReviewChanges,
+  chatConversation,
+  chatFocusFor,
+  chatPriority,
   terminalExampleFor,
 } from '@opsis/schema';
 import { useProcessEngine } from './useProcessEngine';
@@ -233,6 +241,28 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     editable: !busy && !playerOpen && page === 'canvas' && canvasVisible,
     onSelect: clearDiagramSelection,
   });
+  // The next chat message is about the selected drawings, or those attached to the selected
+  // concept. The reader can leave them out, and can switch drawing-first on or off.
+  const chatFocus = useMemo(
+    () => chatFocusFor(board, { drawingIds: drawing.selectedIds, nodeId: selected }),
+    [board, drawing.selectedIds, selected],
+  );
+  const focusKey = JSON.stringify([drawing.selectedIds, selected]);
+  // Leaving a focus out applies to that selection only; selecting something else includes it.
+  const [excludedFocus, setExcludedFocus] = useState<string | null>(null);
+  const focusExcluded = excludedFocus === focusKey;
+  const [priorityOverride, setPriorityOverride] = useState<ChatPriority | null>(null);
+  const drawingTool = !['diagram', 'select', 'eraser'].includes(drawing.tool);
+  const sentFocus = focusExcluded ? undefined : chatFocus;
+  const autoPriority = chatPriority({ prompt, focus: sentFocus, drawingTool });
+  const priority = priorityOverride ?? autoPriority.priority;
+  /** The thread waiting on the reader's review, so its outcome can be recorded. */
+  const reviewThread = useRef<{ thread: BoardChatEntry; boardId: string } | null>(null);
+  const settleReview = (outcome: ChatOutcome) => {
+    const pending = reviewThread.current;
+    reviewThread.current = null;
+    if (pending) void chat.settle(pending.thread, outcome, pending.boardId).catch(() => undefined);
+  };
   // A board with only drawings is a sketch in progress, not an empty canvas.
   const showWelcome =
     (!board || (board.nodes.length === 0 && !board.drawings?.length)) && !drawing.active;
@@ -472,27 +502,43 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         text,
         chatBoardId,
       );
-      const success = await generation.generate(
+      const focus = freshCanvas ? undefined : sentFocus;
+      const result = await generation.generate(
         text,
         agent,
         modelPreferences,
         boardRef.current,
         freshCanvas ? null : selected,
         agent === 'demo' || freshCanvas ? [] : attachments,
-        thread.messages.slice(0, -1).slice(-12),
+        {
+          conversation: chatConversation(thread.messages),
+          memory: thread.memory,
+          thread: thread.id,
+          focus,
+          priority: freshCanvas
+            ? chatPriority({ prompt: text }).priority
+            : (priorityOverride ?? chatPriority({ prompt: text, focus, drawingTool }).priority),
+        },
       );
-      if (success && callsAgent) provider.record(agent as ProviderAgent);
-      await chat.finish(
+      if (result && callsAgent) provider.record(agent as ProviderAgent);
+      const outcome: ChatOutcome = result === 'review' ? 'review' : result ? 'applied' : 'failed';
+      const saved = await chat.finish(
         thread,
-        success
-          ? generation.responseText.current || 'A diagram is ready on Canvas.'
-          : 'Generation stopped or failed. No generated proposal was applied.',
+        {
+          text: result
+            ? generation.responseText.current || 'A diagram is ready on Canvas.'
+            : 'Generation stopped or failed. No generated proposal was applied.',
+          outcome,
+          memory: result ? generation.turn.current?.memory : undefined,
+        },
         chatBoardId,
       );
+      reviewThread.current = outcome === 'review' ? { thread: saved, boardId: chatBoardId } : null;
       if (!chatVisible.current) setChatUnread(true);
-      if (success) {
+      if (result) {
         setPrompt('');
         setAttachments([]);
+        setPriorityOverride(null);
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save this conversation.');
@@ -716,8 +762,25 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
       setComposerPreference(true);
     }
   };
+  const focusSource =
+    chatFocus && !drawing.selectedIds.length && selected
+      ? (board?.nodes.find((node) => node.id === selected)?.label ?? null)
+      : null;
   const chatComposer = (
     <>
+      {board && (
+        <ChatFocusBar
+          focus={chatFocus}
+          source={focusSource}
+          excluded={focusExcluded}
+          onExclude={(exclude) => setExcludedFocus(exclude ? focusKey : null)}
+          priority={priority}
+          reason={autoPriority.reason}
+          overridden={priorityOverride !== null}
+          onPriority={setPriorityOverride}
+          disabled={busy}
+        />
+      )}
       {board && !busy && (
         <NextSteps
           suggestions={[
@@ -1329,11 +1392,19 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   <GenerationReview
                     {...generation.review}
                     apply={(accepted) => {
+                      settleReview(
+                        boardReviewChanges(accepted, generation.review!.candidate).length
+                          ? 'partial'
+                          : 'applied',
+                      );
                       generation.apply(accepted);
                       setSelected(null);
                       setSelectedEdge(null);
                     }}
-                    discard={generation.discard}
+                    discard={() => {
+                      settleReview('discarded');
+                      generation.discard();
+                    }}
                   />
                 )}
                 {error && canvasTab === 'canvas' && (
@@ -1493,6 +1564,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 onShowCanvas={() => setCanvasTab('canvas')}
                 error={error}
                 onDismissError={() => setError('')}
+                sessionNote={
+                  (agent === 'claude' || agent === 'codex') &&
+                  modelPreferences[agent].connection !== 'api'
+                    ? `${PROVIDER_LABELS[agent]} resumes its own session for each thread`
+                    : undefined
+                }
               >
                 {readOnly ? (
                   <p className="chat-muted">

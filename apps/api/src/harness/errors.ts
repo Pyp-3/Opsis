@@ -13,6 +13,7 @@ export type HarnessErrorCode =
   | 'harness_cancelled'
   | 'harness_overflow'
   | 'harness_exit'
+  | 'harness_session'
   | 'harness_malformed'
   | 'harness_schema';
 
@@ -31,6 +32,8 @@ const SAFE_MESSAGES: Record<HarnessErrorCode, string> = {
   harness_cancelled: 'Harness request was cancelled.',
   harness_overflow: 'Harness output exceeded a safety limit.',
   harness_exit: 'Harness process failed.',
+  harness_session:
+    'The agent could not resume this thread’s saved session. Send again to continue from the thread’s notes.',
   harness_malformed: 'Harness returned malformed output.',
   harness_schema: 'Harness result did not match the JSON response contract.',
 };

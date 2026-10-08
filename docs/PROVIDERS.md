@@ -60,8 +60,8 @@ resolve their known package entry point.
 
 | CLI         | Accepted versions         | Integration                                                                                                       |
 | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Claude Code | 2.1.x                     | Existing isolated headless integration                                                                            |
-| Codex       | 0.156.x, 0.157.x, 0.159.x | Existing ephemeral, read-only integration                                                                         |
+| Claude Code | 2.1.x                     | Existing isolated headless integration; chat threads resume a saved session                                       |
+| Codex       | 0.156.x, 0.157.x, 0.159.x | Existing read-only integration, ephemeral except for chat threads' resumed sessions                               |
 | Kimi Code   | 1.52.x                    | Print mode, custom agent with no tools, explicit empty MCP configuration, one step and no provider retries        |
 | Grok Build  | 1.0.46                    | Headless plain JSON answer, empty tools, no subagents/memory/search, one turn                                     |
 | Antigravity | 1.3.0                     | Streaming JSON input/result envelopes, isolated settings/home, deny rules for file, shell, web and MCP operations |
@@ -72,6 +72,19 @@ its default configuration: custom configuration, extensions or unrecognized stat
 entries in `~/.grok` cause a refusal. Authentication, sessions, logs, downloads,
 binary and cache directories are allowed. Compatibility scans for Claude/Cursor
 extensions are disabled. Opsis never removes or changes these user files.
+
+Chat threads resume a saved CLI session with Claude Code (`--session-id`, then
+`--resume`) and Codex (`exec resume`, with the same read-only sandbox through
+configuration). Each thread runs in its own directory under the system temporary
+folder (`opsis-sessions/<account>/<thread>`), which the CLI uses to find its session;
+uploads and the schema still go in a disposable folder inside it. The server derives
+that directory from the signed-in account, never from browser input. Tools, sandboxing
+and permission settings are unchanged. Opsis records only which session to resume and
+its turn count; the CLI keeps the transcript in its own store. A session is replaced
+after 16 turns. A resumed turn sends a short continuation instruction rather than the
+full instructions again. Requests without a thread (and every other CLI) remain
+ephemeral. Grok's CLI receives the whole request as one argument bounded at 24,000
+characters, so long chat requests on large boards may need its API connection.
 
 Antigravity uses the OS keyring login with a disposable home/configuration rather
 than importing user permissions or extensions. If your installation cannot access

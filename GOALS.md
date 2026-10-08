@@ -1,6 +1,6 @@
 # Opsis goals
 
-Last reviewed: 2026-10-07.
+Last reviewed: 2026-10-08.
 
 ## Current delivery
 
@@ -277,6 +277,47 @@ Downloaded installers are now removed before each download and at startup.
 Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
 override parity with the Fastify host. macOS packaging remains pending.
+
+## In progress: continuous chat and drawing focus (requested 2026-10-08)
+
+The user asked that chat threads keep their context continuously ("harness based") and that
+the agent prioritise drawings when items are chosen. Confirmed choices: hybrid continuity
+(Opsis thread notes for every provider plus native CLI session resume for Claude/Codex) and
+"selected become focus" (selected drawings are sent and may be edited after review).
+Line endings: the repository now forces LF via `.gitattributes`, so commits from Windows
+match Linux.
+
+- [x] Thread notes: the agent returns a short `reply` and rewrites bounded `memory` each turn;
+      the thread stores both (optional fields in the chat document, no migration).
+- [x] Outcomes: assistant messages record applied / review / partial / discarded / failed,
+      updated when the reader resolves a review, and sent to the agent with recent messages.
+- [x] Continuous threads: at 80 messages the oldest are condensed into the notes instead of
+      refusing; the demo or a model without notes keeps condensed requests as note lines.
+- [x] Native sessions: Claude (`--session-id`/`--resume`) and Codex (`exec resume`) resume a
+      per-thread session in a server-derived `opsis-sessions/<account>/<thread>` directory on
+      both hosts; resumed turns send a short continuation prompt; sessions rotate after 16
+      turns; a failed resume is forgotten and reported, never retried. Other CLIs and API
+      connections stay ephemeral.
+- [x] Drawing focus: selected drawings, or those attached to the selected concept, are sent
+      (never hidden/locked ones); the agent may return `focusEdits` for exactly those, which
+      the review shows as one selectable "Change your selected drawings" item.
+- [x] Drawing first: a shared pure rule (focus, drawing tool, spatial request) sets the
+      priority, shown and overridable in the chat composer.
+- [ ] Not yet: deleting a thread does not remove the CLI's own transcript; no live provider
+      call has verified resume against real Claude/Codex accounts; semantic summarisation of
+      very old turns relies on the agent's notes.
+
+Verified 2026-10-08 on Windows 11 (Node 22.23.2): lint, typecheck, Rust check/24 tests,
+439 unit tests (new: thread condensation/outcomes, focus privacy and merge, review
+selection, session planning/rotation/failed resume, CLI session arguments, per-thread
+working directory, chat generation with notes/focus/repair/demo), Go vet and the full race
+suite (new: Codex session resume scoped per account on the Go host). Browser suite: 60 pass
+plus one Linux-only skip on both Fastify and the rebuilt `opsis.exe`, including a new
+scenario covering focus chip, drawing-first, reviewed focus edits, notes, outcomes and
+excluding a focus. Packaged database/MCP integration and all 24 hidden WebView2 checks
+pass. Chat screenshots were inspected. No live provider calls were made, so native resume
+is verified against fake CLIs and the installed CLIs' `--help` (Claude Code 2.1.293,
+Codex 0.161.0), not a real account. CI for this delivery must still be confirmed.
 
 ## In progress: canvas drawings (requested 2026-10-06)
 

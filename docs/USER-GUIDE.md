@@ -36,12 +36,30 @@ stored with that account on this Opsis instance, separately from board documents
 and exports. Pick a saved thread from the thread menu (or the list beside an expanded
 chat), or start a new one. Changing provider or model
 starts a separate thread on the next request; selecting a saved thread restores
-its provider and model. Generation receives the current diagram, your new prompt
-and up to 12 recent messages from that thread. Chat currently creates/refines the
-canvas; it is not a separate general-purpose assistant. A board can hold up to 30
-threads per account, with 80 messages each. Delete older threads or start a new one
-when a limit is reached. Concurrent edits report a conflict instead of overwriting
-another browser's thread; use **Reload threads** to continue.
+its provider and model. Chat creates and refines the canvas; it is not a separate
+general-purpose assistant. A board can hold up to 30 threads per account. Delete
+older threads when that limit is reached. Concurrent edits report a conflict instead
+of overwriting another browser's thread; use **Reload threads** to continue.
+
+**Long conversations.** Each request sends the current diagram, your new prompt, the
+12 most recent messages and the thread's **notes**. The agent replies in a sentence or
+three and rewrites the notes every turn: your goal, decisions, preferences, what you
+accepted or discarded, and open questions. Each reply is marked **Applied**, **Awaiting
+review**, **Partly applied** or **Discarded** once you decide, and the agent sees those
+outcomes, so it does not propose a discarded change again. A thread never fills up: at
+80 messages its oldest messages are condensed into the notes and the conversation
+continues. Open **Thread notes** above the messages to read the notes or **Clear notes**.
+
+With Claude or Codex connected through their CLI, each thread also keeps that CLI's own
+saved session, so the agent resumes with its full earlier context rather than a summary.
+The chat footer says so. The session belongs to your account and the thread; another
+account can never resume it. After 16 turns a fresh session starts, with the thread's
+notes carrying the context, which keeps resumed context and cost bounded. If a saved
+session cannot be resumed, the message fails without a retry and says so; send it again
+to continue from the notes. The CLI keeps the session's transcript in its own store on
+the machine running Opsis (for example under your home directory), and deleting the
+thread in Opsis does not remove it. API connections and the other CLIs rely on the notes
+and recent messages.
 
 In a concept's details, choose **Linked board** to connect it to another saved
 board. Linked concepts carry an arrow badge. Double-click one, or choose **Open
@@ -129,10 +147,24 @@ attached to a concept that a follow-up removes stays where it was drawn.
 equipment arrangements, or when you ask it to sketch or lay something out, the chat agent
 may add a sketch beside the diagram. Its drawings go on their own **Agent sketch** layer.
 On a new diagram, a free-standing sketch is placed to the right of the concepts; parts of
-it can follow particular concepts. On a follow-up the agent is shown only its own sketch
-and the board's scale, never your drawings on other layers, and any change to its sketch
-appears as one item in the proposal review. Lock or hide the Agent sketch layer to keep
-the agent from seeing or changing it. Edit or restyle the sketch like any other drawing.
+it can follow particular concepts. On a follow-up the agent is shown its own sketch and the
+board's scale, and any change to its sketch appears as one item in the proposal review.
+Lock or hide the Agent sketch layer to keep the agent from seeing or changing it. Edit or
+restyle the sketch like any other drawing.
+
+**Drawings in focus.** Your own drawings stay private unless you put them in focus. Select
+drawings (or select a concept that has drawings attached) and then write in Chat: the
+composer shows **Focus: N drawings selected**, and those drawings are sent with your
+message as what it is about. The agent may propose changes to exactly those drawings;
+they appear in the review as **Change your selected drawings**, and nothing changes until
+you apply them. Drawings on hidden or locked layers, and locked drawings, are never sent.
+Choose **×** on the focus to keep the drawings private for that message.
+
+**Drawing first.** When drawings are in focus, a drawing tool is in hand or your message
+asks for a sketch, plan or layout, the agent works drawing-first: the sketch becomes the
+main result, with labels and real dimensions when the board has a scale, and the concepts
+stay as they are unless you ask otherwise. The **Drawing first** button shows the current
+choice; press it to switch, and **Automatic** to return to the automatic choice.
 
 External agents connected over MCP can read and draw with `opsis_add_drawings`,
 `opsis_update_drawing` and `opsis_remove_drawings`, and set the scale with

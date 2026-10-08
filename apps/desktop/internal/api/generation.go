@@ -26,7 +26,8 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 	})
 	for _, operation := range []string{"generate", "illustrate", "check-agent"} {
 		s.handle("POST /v1/boards/"+operation, func(w http.ResponseWriter, r *http.Request) error {
-			if _, err := requireUser(r); err != nil {
+			user, err := requireUser(r)
+			if err != nil {
 				return err
 			}
 			if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
@@ -56,7 +57,7 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 				w.Header().Set("X-Content-Type-Options", "nosniff")
 				w.WriteHeader(200)
 			}
-			result, err := engine.Run(ctx, operation, body, func(progress json.RawMessage) {
+			result, err := engine.RunAs(ctx, operation, body, user.ID, func(progress json.RawMessage) {
 				if stream {
 					send(map[string]any{"type": "progress", "progress": progress})
 				}

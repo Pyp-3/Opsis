@@ -11,6 +11,8 @@ export type HarnessConfig = {
   executable: string;
   timeoutMs: number;
   maxBudgetUSD?: number;
+  /** The chat thread's native CLI session for this run; see sessions.ts. */
+  session?: { id?: string; resume: boolean };
 };
 
 /** A bounded child-process request. Implementations must never invoke a shell. */
@@ -56,6 +58,12 @@ export type LLMRequest = {
   responseFormat: 'json' | 'text';
   temperature: number;
   maxOutputTokens: number;
+  /**
+   * The chat thread whose native CLI session this request continues, where the CLI supports it.
+   * A resumed session already holds the instructions and earlier turns, so it is sent the
+   * shorter `resumeSystem`/`resumeUser` instead.
+   */
+  session?: { key: string; resumeSystem: string; resumeUser: string };
 };
 
 export interface LLMClient {

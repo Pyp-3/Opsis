@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, realpath, rm, stat, writeFile, readdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { accessSync, constants } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { providerWorkspaceFiles, providerEnvironment } from './provider-workspace';
@@ -8,6 +9,12 @@ import { HarnessError } from './errors.js';
 import { harnessArguments } from './arguments.js';
 import { extractHarnessResult } from './envelope.js';
 import { progressReader, type HarnessProgress } from './progress.js';
+import {
+  sessionKeyParts,
+  withNativeSession,
+  type SessionPlan,
+  type SessionStore,
+} from './sessions.js';
 import type { HarnessConfig, HarnessFile, ProcessRunner, ProcessRunRequest } from './types.js';
 
 // Room for extracted document text as well as the current diagram.
@@ -31,6 +38,35 @@ export async function privateHarnessWorkspace(schema = RESULT_SCHEMA): Promise<H
   const schemaPath = join(directory, 'response-schema.json');
   await writeFile(schemaPath, schema, { mode: 0o600, flag: 'wx' });
   return {
+    directory,
+    schemaPath,
+    dispose: async () => rm(directory, { recursive: true, force: true }),
+  };
+}
+
+/** Where chat threads' native CLI sessions keep their working directories and state. */
+export const DEFAULT_SESSION_ROOT = join(tmpdir(), 'opsis-sessions');
+
+/** A chat thread's stable working directory, in which its CLI finds its session again. */
+export const sessionDirectory = (root: string, key: string) => join(root, ...sessionKeyParts(key));
+
+/**
+ * A run inside a thread's session: the CLI works in the thread's stable directory, which it uses
+ * to find the session again, while the schema and uploads go in a disposable folder within it.
+ */
+async function sessionWorkspace(
+  root: string,
+  key: string,
+  schema: string,
+): Promise<HarnessWorkspace & { cwd: string }> {
+  const cwd = sessionDirectory(root, key);
+  await mkdir(cwd, { recursive: true, mode: 0o700 });
+  const directory = await mkdtemp(join(cwd, 'run-'));
+  await chmod(directory, 0o700);
+  const schemaPath = join(directory, 'response-schema.json');
+  await writeFile(schemaPath, schema, { mode: 0o600, flag: 'wx' });
+  return {
+    cwd,
     directory,
     schemaPath,
     dispose: async () => rm(directory, { recursive: true, force: true }),
@@ -116,6 +152,8 @@ export class HarnessLLMClient implements LLMClient {
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly workspaceFactory: (() => Promise<HarnessWorkspace>) | undefined = undefined,
     private readonly resultSchema = RESULT_SCHEMA,
+    /** Without a store, requests run without native sessions. */
+    private readonly sessions: { root: string; store: SessionStore } | undefined = undefined,
   ) {
     this.model = config.model;
     this.identity = `harness:${config.provider}:${config.model}:cli-${version}`;
@@ -156,68 +194,95 @@ export class HarnessLLMClient implements LLMClient {
       });
       if (plugins.length) throw new HarnessError('harness_config');
     }
+    const session = request.session;
     return harnessSlots.use(async () => {
       try {
-        const workspace = await (this.workspaceFactory?.() ??
-          privateHarnessWorkspace(this.resultSchema));
-        try {
-          for (const [name, content] of Object.entries(
-            providerWorkspaceFiles(this.config.provider, this.resultSchema),
-          )) {
-            await mkdir(dirname(join(workspace.directory, name)), { recursive: true, mode: 0o700 });
-            await writeFile(join(workspace.directory, name), content, { mode: 0o600, flag: 'wx' });
-          }
-          const paths = await stageFiles(workspace.directory, files);
-          const result = await this.runner.run({
-            executable: this.config.executable,
-            args: harnessArguments(
-              this.config,
-              workspace.schemaPath,
-              this.resultSchema,
-              files,
-              paths,
-              prompt(request),
-            ),
-            stdin:
-              this.config.provider === 'grok'
-                ? ''
-                : this.config.provider === 'agy'
-                  ? JSON.stringify({ event: 'user', message: { content: prompt(request) } }) + '\n'
-                  : prompt(request),
-            cwd: workspace.directory,
-            env: {
-              ...childEnvironment(this.env),
-              ...Object.fromEntries(
-                Object.entries(providerEnvironment(this.config.provider)).map(([key, value]) => [
-                  key,
-                  value === '.' ? workspace.directory : value,
-                ]),
-              ),
-            },
-            timeoutMs: this.config.timeoutMs,
-            maxStdinBytes: MAX_STDIN_BYTES,
-            maxStdoutBytes: this.config.provider === 'claude' ? MAX_STREAM_BYTES : MAX_STDOUT_BYTES,
-            maxStderrBytes: MAX_STDERR_BYTES,
-            ...(signal ? { signal } : {}),
-            ...(onProgress
-              ? {
-                  onStdoutLine: (() => {
-                    const read = progressReader(this.config.provider);
-                    return (line: string) => read(line).forEach(onProgress);
-                  })(),
-                }
-              : {}),
-          });
-          if (result.exitCode !== 0) throw new HarnessError('harness_exit');
-          return extractHarnessResult(this.config.provider, result.stdout);
-        } finally {
-          await workspace.dispose();
-        }
+        const run = (plan: SessionPlan | null) =>
+          this.run(request, plan, signal, files, onProgress);
+        const stdout = this.sessions
+          ? await withNativeSession(
+              {
+                provider: this.config.provider,
+                model: this.config.model,
+                key: session?.key,
+                store: this.sessions.store,
+                freshId: randomUUID,
+              },
+              run,
+            )
+          : await run(null);
+        return extractHarnessResult(this.config.provider, stdout);
       } catch (error) {
         if (error instanceof HarnessError) throw error;
         throw new HarnessError('harness_exit');
       }
     });
+  }
+
+  /** One CLI process; a session plan runs it in the thread's directory and resumes it. */
+  private async run(
+    request: LLMRequest,
+    plan: SessionPlan | null,
+    signal: AbortSignal | undefined,
+    files: readonly HarnessFile[],
+    onProgress: ((progress: HarnessProgress) => void) | undefined,
+  ): Promise<string> {
+    const workspace = plan
+      ? await sessionWorkspace(this.sessions!.root, request.session!.key, this.resultSchema)
+      : await (this.workspaceFactory?.() ?? privateHarnessWorkspace(this.resultSchema));
+    const cwd = 'cwd' in workspace ? (workspace.cwd as string) : workspace.directory;
+    const config = plan
+      ? { ...this.config, session: { resume: plan.resume, ...(plan.id ? { id: plan.id } : {}) } }
+      : this.config;
+    const text = plan?.resume
+      ? `${request.session!.resumeSystem}\n\n${request.session!.resumeUser}`
+      : prompt(request);
+    try {
+      for (const [name, content] of Object.entries(
+        providerWorkspaceFiles(this.config.provider, this.resultSchema),
+      )) {
+        await mkdir(dirname(join(workspace.directory, name)), { recursive: true, mode: 0o700 });
+        await writeFile(join(workspace.directory, name), content, { mode: 0o600, flag: 'wx' });
+      }
+      const paths = await stageFiles(workspace.directory, files);
+      const result = await this.runner.run({
+        executable: this.config.executable,
+        args: harnessArguments(config, workspace.schemaPath, this.resultSchema, files, paths, text),
+        stdin:
+          this.config.provider === 'grok'
+            ? ''
+            : this.config.provider === 'agy'
+              ? JSON.stringify({ event: 'user', message: { content: text } }) + '\n'
+              : text,
+        cwd,
+        env: {
+          ...childEnvironment(this.env),
+          ...Object.fromEntries(
+            Object.entries(providerEnvironment(this.config.provider)).map(([key, value]) => [
+              key,
+              value === '.' ? workspace.directory : value,
+            ]),
+          ),
+        },
+        timeoutMs: this.config.timeoutMs,
+        maxStdinBytes: MAX_STDIN_BYTES,
+        maxStdoutBytes: this.config.provider === 'claude' ? MAX_STREAM_BYTES : MAX_STDOUT_BYTES,
+        maxStderrBytes: MAX_STDERR_BYTES,
+        ...(signal ? { signal } : {}),
+        ...(onProgress
+          ? {
+              onStdoutLine: (() => {
+                const read = progressReader(this.config.provider);
+                return (line: string) => read(line).forEach(onProgress);
+              })(),
+            }
+          : {}),
+      });
+      if (result.exitCode !== 0) throw new HarnessError('harness_exit');
+      return result.stdout;
+    } finally {
+      await workspace.dispose();
+    }
   }
 }
 

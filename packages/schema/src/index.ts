@@ -30,3 +30,4 @@ export * from './board-organization';
 export * from './board-search';
 export * from './cost-projection';
 export * from './board-chat';
+export * from './chat-focus';

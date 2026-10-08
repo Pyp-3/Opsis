@@ -83,15 +83,22 @@ export function harnessArguments(
       '--strict-mcp-config',
       '--permission-prompts',
       'none',
-      '--no-session-persistence',
+      // A chat thread's session is saved so its next turn can resume it; nothing else is.
+      ...(config.session?.id
+        ? config.session.resume
+          ? ['--resume', config.session.id]
+          : ['--session-id', config.session.id]
+        : ['--no-session-persistence']),
     ];
   }
   if (config.provider === 'codex') {
+    const resume = config.session?.resume && config.session.id;
     return [
       '--ask-for-approval',
       'never',
       'exec',
-      '-',
+      // `exec resume` takes the same isolation, with the sandbox set through configuration.
+      ...(resume ? ['resume', config.session!.id!, '-'] : ['-']),
       ...(config.model === 'default' ? [] : ['--model', config.model]),
       ...(config.effort ? ['--config', `model_reasoning_effort="${config.effort}"`] : []),
       // Concise reasoning summaries become live progress notes.
@@ -104,14 +111,13 @@ export function harnessArguments(
       '--output-schema',
       schemaPath,
       '--json',
-      '--ephemeral',
+      // A chat thread's session is saved so its next turn can resume it; nothing else is.
+      ...(config.session ? [] : ['--ephemeral']),
       '--ignore-user-config',
       '--ignore-rules',
-      '--sandbox',
-      'read-only',
-      '--skip-git-repo-check',
-      '--color',
-      'never',
+      ...(resume
+        ? ['--config', 'sandbox_mode="read-only"', '--skip-git-repo-check']
+        : ['--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never']),
     ];
   }
   return [

@@ -1,5 +1,11 @@
-import { PROVIDER_LABELS, type BoardAgent, type BoardChatEntry } from '@opsis/schema';
 import {
+  PROVIDER_LABELS,
+  type BoardAgent,
+  type BoardChatEntry,
+  type ChatOutcome,
+} from '@opsis/schema';
+import {
+  Brain,
   ChevronDown,
   CircleAlert,
   Eye,
@@ -32,6 +38,54 @@ function since(time: number) {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
   return new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+const OUTCOME_LABELS: Partial<Record<ChatOutcome, string>> = {
+  applied: 'Applied',
+  review: 'Awaiting review',
+  partial: 'Partly applied',
+  discarded: 'Discarded',
+};
+
+/**
+ * The agent's notes for this thread. They carry the conversation's context forward, including
+ * messages condensed out of a long thread, and the reader can clear them.
+ */
+function ThreadMemory({
+  thread,
+  busy,
+  onForget,
+}: {
+  thread: BoardChatEntry;
+  busy: boolean;
+  onForget(): void;
+}) {
+  if (!thread.memory && !thread.condensed) return null;
+  return (
+    <details className="chat-memory">
+      <summary>
+        <Brain size={13} aria-hidden /> Thread notes
+        {thread.condensed ? (
+          <small>
+            {' '}
+            · {thread.condensed} earlier {thread.condensed === 1 ? 'message' : 'messages'} condensed
+          </small>
+        ) : null}
+      </summary>
+      <div className="chat-memory-body">
+        <p className="chat-muted">
+          The agent rewrites these notes each turn and reads them before answering, so the thread
+          keeps its context as it grows.
+        </p>
+        {thread.memory ? <pre>{thread.memory}</pre> : <p className="chat-muted">No notes yet.</p>}
+        {thread.memory && (
+          <button type="button" className="chat-link" disabled={busy} onClick={onForget}>
+            Clear notes
+          </button>
+        )}
+      </div>
+    </details>
+  );
 }
 
 const CHAT_WIDTH_KEY = 'opsis:chat-width';
@@ -176,6 +230,7 @@ export function BoardChat({
   onShowCanvas,
   error,
   onDismissError,
+  sessionNote,
   children,
 }: {
   chat: ReturnType<typeof useBoardChat>;
@@ -192,6 +247,8 @@ export function BoardChat({
   onShowCanvas(): void;
   error: string;
   onDismissError(): void;
+  /** Says when a CLI agent resumes its own saved session for the thread. */
+  sessionNote?: string | undefined;
   children: ReactNode;
 }) {
   useSavedChatWidth();
@@ -330,7 +387,17 @@ export function BoardChat({
             <CircleAlert size={15} aria-hidden /> {chat.error}
           </p>
         )}
-        <div className="chat-messages" role="log" aria-label="Thread messages" ref={log}>
+        {selected && (
+          <ThreadMemory thread={selected} busy={busy} onForget={() => void chat.forget()} />
+        )}
+        {/* Focusable so a long thread can be scrolled from the keyboard. */}
+        <div
+          className="chat-messages"
+          role="log"
+          aria-label="Thread messages"
+          tabIndex={0}
+          ref={log}
+        >
           {!selected && !progress && (
             <div className="chat-empty">
               <span className="chat-empty-mark" aria-hidden>
@@ -357,6 +424,11 @@ export function BoardChat({
                 </header>
               )}
               <p>{message.text}</p>
+              {message.outcome && OUTCOME_LABELS[message.outcome] && (
+                <small className={`chat-outcome is-${message.outcome}`}>
+                  {OUTCOME_LABELS[message.outcome]}
+                </small>
+              )}
               {index === lastAssistant && layout !== 'docked' && !review && !progress && (
                 <button className="chat-link" onClick={onShowCanvas}>
                   <Eye size={13} aria-hidden /> View on canvas
@@ -394,7 +466,7 @@ export function BoardChat({
           {children}
           <p className="chat-privacy">
             <Lock size={11} aria-hidden /> Private to your account · each thread keeps its provider
-            and model
+            and model{sessionNote ? ` · ${sessionNote}` : ''}
           </p>
         </div>
       </div>
