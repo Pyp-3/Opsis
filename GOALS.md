@@ -284,8 +284,10 @@ override parity with the Fastify host. macOS packaging remains pending.
       `release-retention` workflow deletes older ones with their tags, one run at a time.
       Drafts in progress and hand-published stable releases are kept; a manual dispatch
       defaults to a dry run. Unit tests cover ranking, drafts, stable releases and limits;
-      a dry run against the live repository planned to keep 5 of 37 and delete 32. The
-      first deletion happens on the next push's CI run, which must be confirmed.
+      a dry run against the live repository planned to keep 5 of 37 and delete 32. CI run
+      37745959481 (9fc2312) passed every job; its retention job deleted 33 older build
+      prereleases and their tags (the 32 planned plus build 87, displaced by build 93),
+      with no failures. Exactly 5 build prereleases and 5 tags remain (builds 88–93).
 
 ## In progress: continuous chat and drawing focus (requested 2026-10-08)
 
