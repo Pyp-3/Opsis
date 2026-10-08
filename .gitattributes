@@ -1,0 +1,18 @@
+# Opsis is developed on Linux, Windows and macOS. Keep every text file LF in the
+# repository and in each checkout, so commits never depend on the committer's OS.
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
+*.syso binary
+*.zip binary
+*.pdf binary
