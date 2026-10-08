@@ -321,7 +321,11 @@ Codex 0.161.0), not a real account. CI run 37735096270 (e18fa47): Linux, Windows
 macOS desktop jobs passed (native tests, packaged browser and hidden WebView checks); the web
 `check` job failed at typecheck on test-only `exactOptionalPropertyTypes` errors in
 `sessions.test.ts`, so its later steps did not run there. Fixed in the follow-up commit (full
-local typecheck passes); the next CI run must still be confirmed.
+local typecheck passes). Follow-up run 37737511117 (ee3a2eb): the web `check` job (typecheck,
+unit tests and the full browser suite), Linux and both macOS desktop jobs passed. Its first
+Windows attempt failed in packaged integration with the known intermittent "Native server
+startup timed out" (also seen in run 37423155398; no code change involved); the rerun of that
+job passed, and the prerelease was published. Retain this note if the timeout recurs.
 
 ## In progress: canvas drawings (requested 2026-10-06)
 
