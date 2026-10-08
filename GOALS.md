@@ -317,7 +317,11 @@ scenario covering focus chip, drawing-first, reviewed focus edits, notes, outcom
 excluding a focus. Packaged database/MCP integration and all 24 hidden WebView2 checks
 pass. Chat screenshots were inspected. No live provider calls were made, so native resume
 is verified against fake CLIs and the installed CLIs' `--help` (Claude Code 2.1.293,
-Codex 0.161.0), not a real account. CI for this delivery must still be confirmed.
+Codex 0.161.0), not a real account. CI run 37735096270 (e18fa47): Linux, Windows and both
+macOS desktop jobs passed (native tests, packaged browser and hidden WebView checks); the web
+`check` job failed at typecheck on test-only `exactOptionalPropertyTypes` errors in
+`sessions.test.ts`, so its later steps did not run there. Fixed in the follow-up commit (full
+local typecheck passes); the next CI run must still be confirmed.
 
 ## In progress: canvas drawings (requested 2026-10-06)
 

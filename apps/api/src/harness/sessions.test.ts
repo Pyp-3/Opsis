@@ -93,7 +93,7 @@ describe('native CLI sessions for chat threads', () => {
       return '';
     });
     await withNativeSession({ ...options, model: 'gpt-6' }, async (plan) => {
-      expect(plan.resume).toBe(false);
+      expect(plan?.resume).toBe(false);
       return '';
     });
   });
@@ -145,11 +145,14 @@ describe('native CLI sessions for chat threads', () => {
   });
 
   it('passes the session to each CLI while keeping its isolation flags', () => {
-    const config = (provider: 'claude' | 'codex', resume: boolean): HarnessConfig => ({
+    const plainConfig = (provider: 'claude' | 'codex'): HarnessConfig => ({
       provider,
       model: 'm',
       executable: '/approved/cli',
       timeoutMs: 1000,
+    });
+    const config = (provider: 'claude' | 'codex', resume: boolean): HarnessConfig => ({
+      ...plainConfig(provider),
       session: { id: THREAD, resume },
     });
     const claudeStart = harnessArguments(config('claude', false), '/s.json');
@@ -172,11 +175,11 @@ describe('native CLI sessions for chat threads', () => {
     );
     expect(codexResume).not.toContain('--ephemeral');
     // Without a thread, runs stay ephemeral.
-    const plain = harnessArguments({ ...config('codex', false), session: undefined }, '/s.json');
+    const plain = harnessArguments(plainConfig('codex'), '/s.json');
     expect(plain).toEqual(expect.arrayContaining(['--ephemeral', '--sandbox', 'read-only']));
-    expect(
-      harnessArguments({ ...config('claude', false), session: undefined }, '/s.json'),
-    ).toContain('--no-session-persistence');
+    expect(harnessArguments(plainConfig('claude'), '/s.json')).toContain(
+      '--no-session-persistence',
+    );
   });
 });
 
@@ -225,7 +228,9 @@ describe('HarnessLLMClient with a chat thread', () => {
     const sessionId = requests[0]!.args[requests[0]!.args.indexOf('--session-id') + 1];
     expect(requests[1]!.args).toEqual(expect.arrayContaining(['--resume', sessionId]));
     // Without a thread, the private disposable workspace is used as before.
-    await client.complete({ ...request, session: undefined });
+    const withoutThread: LLMRequest = { ...request };
+    delete withoutThread.session;
+    await client.complete(withoutThread);
     expect(requests[2]!.cwd).not.toBe(directory);
     expect(requests[2]!.args).toContain('--no-session-persistence');
   });
