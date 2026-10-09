@@ -440,6 +440,41 @@ export function rotateDrawing(drawing: BoardDrawing, degrees: number): BoardDraw
 }
 
 /**
+ * The centre several absolute drawings turn about together: the middle of their combined
+ * painted outline, so a group rotates as one piece instead of each part about its own centre.
+ */
+export function groupRotationCentre(drawings: readonly BoardDrawing[]): [number, number] {
+  const points = drawings.flatMap((drawing) => drawingOutlinePoints(drawing));
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+
+/**
+ * The absolute drawing turned by `degrees` about `centre`. Its own centre travels around that
+ * point and it turns by the same angle, so rotating every member of a group about the group's
+ * centre keeps their arrangement.
+ */
+export function rotateDrawingAbout(
+  drawing: BoardDrawing,
+  degrees: number,
+  centre: Point,
+): BoardDrawing {
+  if (drawing.points) {
+    return {
+      ...drawing,
+      points: drawing.points.map((point) => {
+        const [x, y] = rotatePoint(point, centre, degrees);
+        return [round(x), round(y)];
+      }),
+    };
+  }
+  const own = rotationCentre(drawing);
+  const [cx, cy] = rotatePoint(own, centre, degrees);
+  return rotateDrawing(translateDrawing(drawing, round(cx - own[0]), round(cy - own[1])), degrees);
+}
+
+/**
  * Copied drawings travel as JSON text, so they paste into another board or another tab, and
  * read as plain data anywhere else. Coordinates are absolute; anchors are kept so a paste on
  * the same board can keep following the same concepts.

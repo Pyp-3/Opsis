@@ -55,12 +55,14 @@ import {
   drawingBox,
   drawingClipboard,
   drawingsInBox,
+  groupRotationCentre,
   handleAt,
   pasteDrawings,
   readDrawingClipboard,
   resizeDrawing,
   resizeHandles,
   rotateDrawing,
+  rotateDrawingAbout,
   rotationCentre,
   round,
   roundDrawing,
@@ -237,6 +239,36 @@ export function useCanvasDrawing(options: {
     (id: string, change: (drawing: BoardDrawing) => BoardDrawing | null) =>
       changeDrawings([id], change),
     [changeDrawings],
+  );
+  /**
+   * Turns the changeable drawings among `ids` in one undoable edit. One drawing turns about its
+   * own centre; several turn together about the centre of their combined outline, keeping
+   * their arrangement. Attached drawings stay attached to their concepts.
+   */
+  const rotateDrawings = useCallback(
+    (ids: readonly string[], degrees: number) => {
+      const current = boardRef.current;
+      if (!current?.drawings || !degrees) return;
+      const turning = current.drawings
+        .filter((item) => ids.includes(item.id) && isDrawingEditable(item, current.drawingLayers))
+        .map((item) => absoluteDrawing(item, current.positions));
+      if (!turning.length) return;
+      if (turning.length === 1) {
+        changeDrawings(ids, (item) => roundDrawing(rotateDrawing(item, degrees)));
+        return;
+      }
+      const centre = groupRotationCentre(turning);
+      changeDrawings(ids, (item) =>
+        roundDrawing(
+          anchorDrawing(
+            rotateDrawingAbout(absoluteDrawing(item, current.positions), degrees, centre),
+            item.anchorId ?? null,
+            current.positions,
+          ),
+        ),
+      );
+    },
+    [boardRef, changeDrawings],
   );
   /** Restyles the selected drawings, and draws later shapes in the same style. */
   const restyle = useCallback(
@@ -417,6 +449,7 @@ export function useCanvasDrawing(options: {
     setMarquee,
     changeDrawing,
     changeDrawings,
+    rotateDrawings,
     removeSelected,
     duplicate,
     add,
@@ -631,6 +664,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     setMarquee,
     changeDrawing,
     changeDrawings,
+    rotateDrawings,
     removeSelected,
     duplicate,
     add,
@@ -1181,13 +1215,38 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
               />
             </label>
           )}
+          {changeable.length > 1 && (
+            <label>
+              Turn selection (°)
+              <input
+                aria-label="Turn selection by degrees"
+                type="number"
+                min={-180}
+                max={180}
+                step={1}
+                defaultValue={0}
+                onBlur={(event) => {
+                  const value = Number(event.target.value);
+                  event.target.value = '0';
+                  if (!Number.isFinite(value)) return;
+                  rotateDrawings(
+                    changeable.map((item) => item.id),
+                    normalizeRotation(value),
+                  );
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+              />
+            </label>
+          )}
           {changeable.length > 0 && (
             <button
               className="drawing-delete"
               onClick={() =>
-                changeDrawings(
+                rotateDrawings(
                   changeable.map((item) => item.id),
-                  (item) => roundDrawing(rotateDrawing(item, 90)),
+                  90,
                 )
               }
             >

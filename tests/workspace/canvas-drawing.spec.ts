@@ -363,6 +363,31 @@ test('chat sketches beside the diagram after review, and sketches rotate and res
     .poll(async () => ((await drawings(page))[1] as { fontSize?: number }).fontSize)
     .toBeGreaterThan(14);
 
+  // Several selected drawings turn together about their shared centre, keeping their layout.
+  type Shape = { x?: number; y?: number; rotation?: number; points?: [number, number][] };
+  const [zoneBefore, , widthBefore] = (await drawings(page)) as Shape[];
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ControlOrMeta+a');
+  const group = page.getByRole('region', { name: 'Selected drawings' });
+  await group.getByLabel('Turn selection by degrees').fill('90');
+  await group.getByLabel('Turn selection by degrees').press('Enter');
+  await expect.poll(async () => ((await drawings(page))[0] as Shape).rotation).toBe(60);
+  const [zoneAfter, , widthAfter] = (await drawings(page)) as Shape[];
+  // The zone travelled around the group's centre instead of turning in place…
+  expect([zoneAfter!.x, zoneAfter!.y]).not.toEqual([zoneBefore!.x, zoneBefore!.y]);
+  // …and the dimension line turned a quarter: (dx, dy) became (-dy, dx).
+  const span = (shape: Shape) => {
+    const [[x1, y1], [x2, y2]] = shape.points!;
+    return [x2 - x1, y2 - y1];
+  };
+  const [dx, dy] = span(widthBefore!);
+  const [tx, ty] = span(widthAfter!);
+  expect(tx).toBeCloseTo(-dy!, 0);
+  expect(ty).toBeCloseTo(dx!, 0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(async () => ((await drawings(page))[0] as Shape).rotation).toBe(-30);
+  await page.keyboard.press('Escape');
+
   // With the agent's layer locked, a new chat request cannot change the sketch.
   await tools.getByRole('button', { name: 'Layers and scale' }).click();
   await page

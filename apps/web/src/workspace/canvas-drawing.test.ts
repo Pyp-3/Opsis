@@ -14,6 +14,8 @@ import {
   resizeDrawing,
   resizeHandles,
   rotateDrawing,
+  rotateDrawingAbout,
+  groupRotationCentre,
   simplifyStroke,
   strokePath,
 } from './canvas-drawing';
@@ -284,6 +286,32 @@ describe('canvas drawing geometry', () => {
     const handle = resizeHandles(turned, 24).find((item) => item.handle === 'rotate')!;
     expect(handle.at[0]).toBeCloseTo(104);
     expect(handle.at[1]).toBeCloseTo(30);
+  });
+
+  it('turns several drawings together about the centre of their combined outline', () => {
+    // A 100×60 box at the origin and a line to its right, spanning x 0–200, y 0–60.
+    const line: BoardDrawing = {
+      id: 'l',
+      shape: 'line',
+      points: [
+        [160, 0],
+        [200, 0],
+      ],
+      ...ink,
+    };
+    const centre = groupRotationCentre([box, line]);
+    expect(centre).toEqual([100, 30]);
+    // The box's centre (50, 30) travels to (100, -20) and the box turns by the same angle.
+    const turnedBox = rotateDrawingAbout(box, 90, centre);
+    expect(turnedBox).toMatchObject({ x: 50, y: -50, width: 100, height: 60, rotation: 90 });
+    expect(rotateDrawingAbout(line, 90, centre).points).toEqual([
+      [130, 90],
+      [130, 130],
+    ]);
+    // A full turn in quarters brings the group back where it started.
+    let back = box;
+    for (let i = 0; i < 4; i++) back = rotateDrawingAbout(back, 90, centre);
+    expect(back).toEqual(box);
   });
 
   it('resizes a rotated box in its own frame, keeping the opposite corner in place', () => {
