@@ -252,12 +252,16 @@ export function HomeBackdrop() {
     // Bleed past the host so the field reads as an ambient backdrop, not a boxed panel.
     const BLEED_TOP = 56;
     const BLEED_BOTTOM = 24;
+    const scroller = host.closest('.page-scroll');
     const resize = () => {
       // A <canvas> is a replaced element, so top/bottom insets can't size it — set it explicitly.
-      // Full-bleed width (the viewport), host height plus the bleed above and below.
-      width = Math.round(window.innerWidth);
+      // Full-bleed width is the page's scroll area beside the sidebar, not the window, so the
+      // field never overflows it sideways; height is the host plus the bleed above and below.
+      const area = scroller?.getBoundingClientRect();
+      width = Math.round(scroller?.clientWidth ?? window.innerWidth);
       height = Math.round(host.clientHeight + BLEED_TOP + BLEED_BOTTOM);
       if (width === 0 || height === 0) return;
+      canvas.style.left = `${Math.round((area?.left ?? 0) - host.getBoundingClientRect().left)}px`;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       cols = Math.ceil(width / CELL);
@@ -279,9 +283,11 @@ export function HomeBackdrop() {
     };
 
     resize();
-    // Watch the host for height changes (content reflow) and the window for width (full bleed).
+    // Watch the host for height changes (content reflow), the scroll area for its width (the
+    // sidebar can be resized) and the window for zoom.
     const ro = new ResizeObserver(resize);
     ro.observe(host);
+    if (scroller) ro.observe(scroller);
     window.addEventListener('resize', resize);
 
     if (!reduced) {
