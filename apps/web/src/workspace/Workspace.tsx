@@ -91,6 +91,7 @@ import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
+import { fileIntoCollectionNamed, splitBoardFile } from './board-file';
 const ProcessPlayer = lazy(() =>
   import('./ProcessPlayer').then((module) => ({ default: module.ProcessPlayer })),
 );
@@ -292,6 +293,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     data: ReturnType<typeof LegacyBundleSchema.parse>;
   } | null>(null);
   const [importPreview, setImportPreview] = useState<BoardDocument | null>(null);
+  // The collection an imported board file names; the new board is filed there.
+  const [importCollection, setImportCollection] = useState<string | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   // The composer and canvas tools can be tucked away to give the canvas more room.
@@ -982,6 +985,11 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             </>
           }
           onImport={() => importInput.current?.click()}
+          collectionId={
+            library.access === 'owner'
+              ? library.entries.find((entry) => entry.id === library.activeId)?.collectionId
+              : null
+          }
           setError={setError}
         />
         <input
@@ -1005,10 +1013,14 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   return;
                 }
               }
-              const next = /\.(txt|md)$/i.test(file.name)
-                ? boardFromText(text, file.name)
-                : await importBoard(JSON.parse(text));
+              const parsed = /\.(txt|md)$/i.test(file.name)
+                ? null
+                : splitBoardFile(JSON.parse(text));
+              const next = parsed
+                ? await importBoard(parsed.board)
+                : boardFromText(text, file.name);
               setImportPreview(next);
+              setImportCollection(parsed?.collection ?? null);
               setLegacyBundle(null);
               setError('');
             } catch {
@@ -1034,6 +1046,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
               {importPreview.nodes.length} concepts · {importPreview.edges.length} relationships.
               Original file remains unchanged.
             </p>
+            {importCollection && (
+              <p>Files into your “{importCollection}” collection, creating it if needed.</p>
+            )}
             <ul>
               {importPreview.nodes.map((node) => (
                 <li key={node.id}>
@@ -1051,6 +1066,17 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 setSelected(null);
                 setSelectedEdge(null);
                 setImportPreview(null);
+                if (!importCollection) return;
+                try {
+                  await fileIntoCollectionNamed(await library.ensureSaved(), importCollection);
+                  await library.refresh();
+                } catch (e) {
+                  setError(
+                    `Imported the board, but could not file it into “${importCollection}”. ${
+                      e instanceof Error ? e.message : ''
+                    }`.trim(),
+                  );
+                }
               }}
             >
               Import as new board

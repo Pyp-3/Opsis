@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { signUp } from './session';
 
@@ -108,4 +109,73 @@ test('collection sharing is atomic and bundles import as private linked copies',
   expect(saved.snapshot.board.nodes[0].linkedBoardId).toBe(copiedTarget.id);
   expect(saved.snapshot.past).toEqual([]);
   expect(await (await page.request.get(`/v1/boards/${copiedSource.id}/chat`)).json()).toEqual([]);
+});
+
+test('a filed board’s JSON export names its collection, and importing files the copy there', async ({
+  page,
+}) => {
+  await signUp(page, 'Board filer');
+  const collection = await (
+    await page.request.post('/v1/collections', { data: { name: 'Field notes' } })
+  ).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  const [source] = await (await page.request.get('/v1/boards')).json();
+  await page.request.put(`/v1/boards/${source.id}/collection`, {
+    data: { collectionId: collection.id },
+  });
+  await page.reload();
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+
+  const exportBoard = async () => {
+    await page.locator('.export-menu summary').click();
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: /^Editable board/ }).click();
+    return readFile((await (await pending).path())!);
+  };
+  // The name sits beside the board document; the document itself is unchanged.
+  await expect
+    .poll(async () => JSON.parse((await exportBoard()).toString()).collection)
+    .toBe('Field notes');
+  const bytes = await exportBoard();
+  const { collection: name, ...board } = JSON.parse(bytes.toString());
+  expect(name).toBe('Field notes');
+  const saved = await (await page.request.get(`/v1/boards/${source.id}`)).json();
+  expect(board).toEqual(saved.snapshot.board);
+
+  const importFile = async () => {
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name: 'filed.json', mimeType: 'application/json', buffer: bytes });
+    const review = page.getByRole('region', { name: 'Import review' });
+    await expect(review).toContainText('Files into your “Field notes” collection');
+    await review.getByRole('button', { name: 'Import as new board', exact: true }).click();
+  };
+  const filedIn = async () =>
+    (
+      (await (await page.request.get('/v1/boards')).json()) as {
+        id: string;
+        collectionId?: string;
+      }[]
+    )
+      .filter((entry) => entry.id !== source.id)
+      .map((entry) => entry.collectionId ?? null);
+
+  // An existing collection is matched by name, ignoring case.
+  await page.request.patch(`/v1/collections/${collection.id}`, { data: { name: 'FIELD NOTES' } });
+  await importFile();
+  await expect.poll(filedIn).toEqual([collection.id]);
+
+  // Without one, the collection is created.
+  await page.request.delete(`/v1/collections/${collection.id}`);
+  await importFile();
+  await expect
+    .poll(async () => (await (await page.request.get('/v1/collections')).json()).length)
+    .toBe(1);
+  const [created] = await (await page.request.get('/v1/collections')).json();
+  expect(created.name).toBe('Field notes');
+  await expect
+    .poll(async () => (await filedIn()).filter((id) => id === created.id))
+    .toHaveLength(1);
 });

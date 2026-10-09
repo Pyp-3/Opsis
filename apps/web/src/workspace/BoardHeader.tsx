@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
   ChevronRight,
@@ -12,6 +12,7 @@ import {
 import type { BoardDocument } from '@opsis/schema';
 import { boardSvg, boardMarkdown, downloadRaster, download, type RasterFormat } from './export';
 import { navigate } from '../router';
+import { boardFileJson, collectionNameOf } from './board-file';
 
 type BoardHeaderProps = {
   board: BoardDocument | null;
@@ -25,6 +26,8 @@ type BoardHeaderProps = {
   menus?: ReactNode;
   onImport: () => void;
   setError: (error: string) => void;
+  /** The collection the reader filed this board in, named in its JSON export. */
+  collectionId?: string | null | undefined;
 };
 
 export function BoardHeader({
@@ -37,7 +40,22 @@ export function BoardHeader({
   menus,
   onImport,
   setError,
+  collectionId,
 }: BoardHeaderProps) {
+  // Looked up ahead of time, so the export still runs within the click that asked for it.
+  const [collection, setCollection] = useState<{ id: string; name?: string } | null>(null);
+  useEffect(() => {
+    if (!collectionId) return;
+    let current = true;
+    void collectionNameOf(collectionId)
+      .then((name) => current && setCollection({ id: collectionId, ...(name ? { name } : {}) }))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [collectionId]);
+  const collectionName =
+    collectionId && collection?.id === collectionId ? collection.name : undefined;
   const header = useRef<HTMLElement>(null);
   const exportMenu = useRef<HTMLDetailsElement>(null);
   // Every header dropdown closes on an outside press or Escape, so none is left over the canvas.
@@ -155,7 +173,11 @@ export function BoardHeader({
               disabled={!board}
               onClick={() =>
                 board &&
-                exportAs(JSON.stringify(board, null, 2), 'opsis-board.json', 'application/json')
+                exportAs(
+                  boardFileJson(board, collectionName),
+                  'opsis-board.json',
+                  'application/json',
+                )
               }
             >
               <FileJson size={16} />
