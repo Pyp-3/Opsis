@@ -503,8 +503,9 @@ same-named collection and, after deleting that, into a newly created one. Board 
 cover name trimming and invalid names. Lint, typecheck, Rust check/24 tests, desktop check
 and full race suite, 446 unit tests and all 63 Fastify browser scenarios pass. The rebuilt
 Linux binary passes packaged database/MCP integration, all 63 browser scenarios and all 24
-hidden WebView checks. No paid model calls or real CLI sessions were used. CI for this
-delivery must be confirmed after push.
+hidden WebView checks. No paid model calls or real CLI sessions were used. CI run
+37934511964 (4914600) passed every job: web checks, Linux, Windows and both macOS desktop
+jobs, prerelease publication and release retention.
 
 Verified 2026-10-05 on Windows 11 (Node 22.23.3): Fastify collection tests (privacy,
 duplicate names, filing at creation, unchanged revision/update time, copy filing,
