@@ -1,9 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { BoardChatWriteSchema, BoardIdSchema } from '@opsis/schema';
 import type { ApiStore } from './storage.js';
+import type { ThreadSessionCleaner } from './cli-sessions.js';
+import { sessionKey } from './harness/sessions.js';
 
-/** A thread belongs to its account even when the board has other editors. */
-export function registerBoardChat(app: FastifyInstance, store: ApiStore) {
+/**
+ * A thread belongs to its account even when the board has other editors. Deleting a thread
+ * also removes its native CLI sessions, transcripts included.
+ */
+export function registerBoardChat(
+  app: FastifyInstance,
+  store: ApiStore,
+  removeThreadSessions: ThreadSessionCleaner,
+) {
   const authorize = (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user || request.viaAgent) {
       reply.code(401).send({ message: 'Sign in to use private chat.' });
@@ -52,6 +61,8 @@ export function registerBoardChat(app: FastifyInstance, store: ApiStore) {
     if (!scope) return reply;
     const id = (request.params as { threadId: string }).threadId;
     store.deleteChatThread(scope.userId, scope.boardId, id);
+    const key = sessionKey(scope.userId, id);
+    if (key) await removeThreadSessions([key]);
     return reply.code(204).send();
   });
 }

@@ -695,9 +695,13 @@ export class ApiStore {
       const current = this.getBoard(id);
       if (!current) return 'missing' as const;
       if (current.revision !== revision) return 'conflict' as const;
+      // Every account's chat threads on the board go with it; their CLI sessions are removed after.
+      const threads = this.sqlite
+        .prepare('SELECT user_id AS userId, id FROM board_chat_threads WHERE board_id=?')
+        .all(id) as { userId: string; id: string }[];
       this.sqlite.prepare('INSERT INTO deleted_boards_v2 (id) VALUES (?)').run(id);
       this.sqlite.prepare('DELETE FROM boards_v2 WHERE id = ?').run(id);
-      return 'deleted' as const;
+      return { threads };
     })();
   }
 

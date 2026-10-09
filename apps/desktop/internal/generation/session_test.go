@@ -72,6 +72,10 @@ func TestChatThreadsResumeTheirCodexSessionPerAccount(t *testing.T) {
 	if !strings.HasPrefix(second.Stdin, "Continue as Opsis in this session") {
 		t.Fatal("resumed turn resent the full instructions")
 	}
+	// The state lists the session, so deleting the thread can remove its transcript.
+	if state, _ := harness.ReadSession("account-1/" + sessionThread); !strings.Contains(state, `"transcripts":[{"provider":"codex","id":"`+codexSession+`"`) {
+		t.Fatalf("session not listed for removal: %s", state)
+	}
 	// Without an account, or for another account, nothing is resumed.
 	if _, err := engine.RunAs(context.Background(), "generate", body, "", nil); err != nil {
 		t.Fatal(err)

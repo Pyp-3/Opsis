@@ -5,8 +5,24 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
+
+	"github.com/Pyp-3/Opsis/apps/desktop/internal/harness"
 )
+
+var threadUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// removeThreadSessions removes deleted chat threads' native CLI sessions, transcripts included,
+// keyed like sessionKey in sessions.ts. Cleanup is best effort: the threads are already gone.
+func (s *Server) removeThreadSessions(threads [][2]string) {
+	for _, thread := range threads {
+		if threadUUID.MatchString(thread[1]) {
+			_, _ = harness.RemoveSession(thread[0]+"/"+strings.ToLower(thread[1]), s.transcriptHomes)
+		}
+	}
+}
 
 // Threads are scoped to the signed-in account, independently of board editors.
 func (s *Server) chatRoutes() {
@@ -132,7 +148,26 @@ func (s *Server) chatRoutes() {
 		if _, err := s.db.Exec(`DELETE FROM board_chat_threads WHERE user_id=? AND board_id=? AND id=?`, user, id, r.PathValue("threadId")); err != nil {
 			return err
 		}
+		s.removeThreadSessions([][2]string{{user, r.PathValue("threadId")}})
 		writeJSON(w, 204, nil)
 		return nil
 	})
+}
+
+// boardChatThreads lists every account's threads on a board as (account, thread) pairs.
+func boardChatThreads(tx *sql.Tx, board string) ([][2]string, error) {
+	rows, err := tx.Query(`SELECT user_id,id FROM board_chat_threads WHERE board_id=?`, board)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var threads [][2]string
+	for rows.Next() {
+		var thread [2]string
+		if err := rows.Scan(&thread[0], &thread[1]); err != nil {
+			return nil, err
+		}
+		threads = append(threads, thread)
+	}
+	return threads, rows.Err()
 }

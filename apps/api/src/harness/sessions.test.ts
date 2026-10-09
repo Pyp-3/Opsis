@@ -1,14 +1,15 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { fileSessionStore } from '../cli-sessions.js';
+import { fileSessionStore, removeThreadSessions } from '../cli-sessions.js';
 import { harnessArguments } from './arguments.js';
 import { HarnessLLMClient, sessionDirectory } from './client.js';
 import { HarnessError } from './errors.js';
 import {
   MAX_SESSION_TURNS,
   parseSessionState,
+  parseSessionTranscripts,
   sessionIdFrom,
   sessionKey,
   withNativeSession,
@@ -30,6 +31,11 @@ function memoryStore(): SessionStore & { values: Map<string, string> } {
 }
 
 describe('native CLI sessions for chat threads', () => {
+  const roots: string[] = [];
+  afterEach(async () => {
+    for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+  });
+
   it('scopes a session to the signed-in account and a real thread id', () => {
     expect(sessionKey('account-1', THREAD)).toBe(`account-1/${THREAD}`);
     expect(sessionKey(undefined, THREAD)).toBeUndefined();
@@ -116,7 +122,117 @@ describe('native CLI sessions for chat threads', () => {
       ),
     ).rejects.toMatchObject({ code: 'harness_session' });
     expect(runs).toBe(1);
-    expect(store.values.has(key)).toBe(false);
+    // The session is no longer resumed, but stays listed so deleting the thread removes it.
+    expect(parseSessionState(store.values.get(key)!)).toBeNull();
+    expect(parseSessionTranscripts(store.values.get(key)!)).toEqual([
+      { provider: 'claude', id: THREAD },
+    ]);
+  });
+
+  it('lists every session a thread has used, across replacements and providers', async () => {
+    const store = memoryStore();
+    const key = `a/${THREAD}`;
+    let fresh = 0;
+    const claude = {
+      provider: 'claude' as const,
+      model: 'm',
+      key,
+      store,
+      freshId: () => `00000000-0000-4000-8000-${String(fresh).padStart(12, '0')}`,
+      today: () => '2026-10-09',
+    };
+    // A first turn that fails is listed too: Claude may already have saved part of it.
+    await expect(
+      withNativeSession(claude, async () => {
+        throw new HarnessError('harness_timeout');
+      }),
+    ).rejects.toMatchObject({ code: 'harness_timeout' });
+    fresh = 1;
+    for (let turn = 0; turn <= MAX_SESSION_TURNS; turn++) {
+      if (turn === MAX_SESSION_TURNS) fresh = 2;
+      await withNativeSession(claude, async () => '');
+    }
+    await withNativeSession(
+      { ...claude, provider: 'codex', today: () => '2026-10-10' },
+      async () => `{"type":"thread.started","thread_id":"${CODEX_THREAD}"}`,
+    );
+    expect(parseSessionTranscripts(store.values.get(key)!)).toEqual([
+      { provider: 'claude', id: '00000000-0000-4000-8000-000000000000', day: '2026-10-09' },
+      { provider: 'claude', id: '00000000-0000-4000-8000-000000000001', day: '2026-10-09' },
+      { provider: 'claude', id: '00000000-0000-4000-8000-000000000002', day: '2026-10-09' },
+      { provider: 'codex', id: CODEX_THREAD, day: '2026-10-10' },
+    ]);
+    // Ids are validated before a host deletes files by them.
+    expect(
+      parseSessionTranscripts(
+        JSON.stringify({
+          transcripts: [
+            { provider: 'claude', id: '../../x' },
+            { provider: 'kimi', id: THREAD },
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("removes a deleted thread's transcripts from each CLI's store, and nothing else", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'opsis-remove-'));
+    roots.push(root);
+    const homes = { claude: join(root, 'claude'), codex: join(root, 'codex') };
+    const key = `a/${THREAD}`;
+    const other = '11111111-2222-4333-8444-555555555555';
+    const claudeId = '00000000-0000-4000-8000-000000000001';
+    const project = join(homes.claude, 'projects', '-tmp-opsis-sessions-a-thread');
+    const elsewhere = join(homes.claude, 'projects', '-home-reader-project');
+    const codexDay = join(homes.codex, 'sessions', '2026', '10', '09');
+    const files = {
+      transcript: join(project, `${claudeId}.jsonl`),
+      toolResults: join(project, claudeId, 'tool-results', 'r.txt'),
+      sessionEnv: join(homes.claude, 'session-env', claudeId, 'env'),
+      todo: join(homes.claude, 'todos', `${claudeId}-agent-${claudeId}.json`),
+      // The next day's folder: the session started just before midnight UTC.
+      rollout: join(
+        homes.codex,
+        'sessions',
+        '2026',
+        '10',
+        '10',
+        `rollout-2026-10-10T00-01-02-${CODEX_THREAD}.jsonl`,
+      ),
+      readersClaude: join(elsewhere, `${other}.jsonl`),
+      readersCodex: join(codexDay, `rollout-2026-10-09T10-00-00-${other}.jsonl`),
+    };
+    for (const file of Object.values(files)) {
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, '{}');
+    }
+    const store = fileSessionStore(root);
+    await store.write(
+      key,
+      JSON.stringify({
+        provider: 'codex',
+        model: 'm',
+        id: CODEX_THREAD,
+        turns: 1,
+        transcripts: [
+          { provider: 'claude', id: claudeId, day: '2026-10-09' },
+          { provider: 'codex', id: CODEX_THREAD, day: '2026-10-09' },
+        ],
+      }),
+    );
+    expect(await removeThreadSessions(root, key, homes)).toBe(2);
+    const exists = (file: string) =>
+      access(file).then(
+        () => true,
+        () => false,
+      );
+    for (const name of ['transcript', 'toolResults', 'sessionEnv', 'todo', 'rollout'] as const)
+      expect(await exists(files[name]), name).toBe(false);
+    expect(await exists(files.readersClaude)).toBe(true);
+    expect(await exists(files.readersCodex)).toBe(true);
+    expect(await exists(sessionDirectory(root, key))).toBe(false);
+    // A thread that never used a native session has nothing to remove.
+    expect(await removeThreadSessions(root, `a/${other}`, homes)).toBe(0);
   });
 
   it('leaves other providers and requests without a thread unchanged', async () => {

@@ -13,6 +13,8 @@ import { registerAuth } from './auth.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
 import { ProviderKeys, registerProviderKeys } from './provider-keys';
 import { localBoardClient } from './boards/client';
+import { fileThreadSessionCleaner, type ThreadSessionCleaner } from './cli-sessions.js';
+import { DEFAULT_SESSION_ROOT } from './harness/client.js';
 
 const defaultDatabasePath = fileURLToPath(new URL('../data/opsis.sqlite', import.meta.url));
 
@@ -23,6 +25,8 @@ export type BuildAppOptions = FastifyServerOptions & {
   rateWindowMs?: number;
   /** The natural narrator; null turns it off. Defaults to Kokoro unless OPSIS_SPEECH=off. */
   speech?: SpeechEngine | null;
+  /** Removes deleted chat threads' native CLI sessions; defaults to the shared session root. */
+  removeThreadSessions?: ThreadSessionCleaner;
 };
 
 function errorResponse(code: string, message: string, stage: string, retryable = false) {
@@ -37,6 +41,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     rateLimit = Number(process.env.OPSIS_RATE_LIMIT ?? 60),
     rateWindowMs = Number(process.env.OPSIS_RATE_WINDOW_MS ?? 60_000),
     speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine(),
+    removeThreadSessions = fileThreadSessionCleaner(DEFAULT_SESSION_ROOT),
     ...fastifyOptions
   } = options;
   const app = Fastify(fastifyOptions);
@@ -68,10 +73,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     )
       return reply.code(401).send({ message: 'Sign in to continue.' });
   });
-  registerBoardLibrary(app, store);
+  registerBoardLibrary(app, store, removeThreadSessions);
   registerBoardCollections(app, store);
   registerAccountSettings(app, store);
-  registerBoardChat(app, store);
+  registerBoardChat(app, store, removeThreadSessions);
   registerBoardSearch(app, store);
   registerSpeech(app, speech);
   const requests = new Map<string, number[]>();

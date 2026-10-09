@@ -6,9 +6,10 @@ import type { HarnessProvider } from './types.js';
  * so a chat thread keeps the agent's full context rather than only its recent messages and
  * notes. Each thread has its own working directory, derived by the server from the signed-in
  * account and the thread, so one account can never resume another's session. The CLI keeps the
- * transcript in its own store; Opsis keeps only which session to resume and how many turns it
- * has had. Sessions are replaced after `MAX_SESSION_TURNS` turns, when the thread's notes carry
- * the context forward, so resumed context and cost stay bounded.
+ * transcript in its own store; Opsis keeps which session to resume, how many turns it has had,
+ * and every session the thread has used (`transcripts`), so deleting the thread can remove those
+ * transcripts too. Sessions are replaced after `MAX_SESSION_TURNS` turns, when the thread's notes
+ * carry the context forward, so resumed context and cost stay bounded.
  */
 
 export const MAX_SESSION_TURNS = 16;
@@ -20,6 +21,13 @@ export type NativeSessionState = {
   id: string;
   turns: number;
 };
+/**
+ * A CLI session a thread has used, kept after the thread moves on to a new one. `day` is the
+ * local date it started, where Codex files its transcript; older records may lack it.
+ */
+export type SessionTranscript = { provider: HarnessProvider; id: string; day?: string };
+/** Enough for 2,000 turns; a thread condenses long before that. */
+export const MAX_SESSION_TRANSCRIPTS = 128;
 /** How one run uses the thread's session: start one (Codex names its own) or resume it. */
 export type SessionPlan = { id?: string; resume: boolean; turns: number };
 
@@ -67,6 +75,55 @@ export function parseSessionState(text: string | null): NativeSessionState | nul
   return null;
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * Every CLI session a thread's state records, including the one it would resume. Unreadable
+ * entries are skipped; the result names only validated providers and ids, since a host deletes
+ * files by them.
+ */
+export function parseSessionTranscripts(text: string | null): SessionTranscript[] {
+  if (!text) return [];
+  let value: { transcripts?: unknown };
+  try {
+    value = JSON.parse(text) as typeof value;
+  } catch {
+    return [];
+  }
+  const listed = (Array.isArray(value?.transcripts) ? value.transcripts : []).flatMap(
+    (item: Partial<SessionTranscript>) =>
+      item &&
+      typeof item.provider === 'string' &&
+      SESSION_PROVIDERS.includes(item.provider) &&
+      typeof item.id === 'string' &&
+      UUID.test(item.id)
+        ? [
+            {
+              provider: item.provider,
+              id: item.id,
+              ...(typeof item.day === 'string' && DAY.test(item.day) ? { day: item.day } : {}),
+            },
+          ]
+        : [],
+  );
+  const current = parseSessionState(text);
+  return current
+    ? recordTranscript(listed, { provider: current.provider, id: current.id })
+    : listed;
+}
+
+/** Adds a session unless it is already recorded (keeping the day it started), within the bound. */
+function recordTranscript(list: SessionTranscript[], transcript: SessionTranscript) {
+  if (list.some((item) => item.provider === transcript.provider && item.id === transcript.id))
+    return list;
+  return [...list, transcript].slice(-MAX_SESSION_TRANSCRIPTS);
+}
+
+function localDay(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Resume the thread's session when it belongs to this provider and model and has room. */
 export function planSession(
   provider: HarnessProvider,
@@ -104,6 +161,7 @@ export function sessionIdFrom(provider: HarnessProvider, stdout: string): string
 /**
  * Runs one CLI turn within the thread's session. A failed resume forgets the session and says
  * so; the next message starts a new session with the thread's notes. Nothing is retried here.
+ * Every session used stays listed in the state, so deleting the thread can remove it.
  */
 export async function withNativeSession(
   options: {
@@ -112,33 +170,41 @@ export async function withNativeSession(
     key: string | undefined;
     store: SessionStore;
     freshId: () => string;
+    /** The local date, `YYYY-MM-DD`; tests fix it. */
+    today?: () => string;
   },
   run: (plan: SessionPlan | null) => Promise<string>,
 ): Promise<string> {
   const { provider, model, key, store } = options;
   if (!key || !SESSION_PROVIDERS.includes(provider)) return run(null);
-  const plan = planSession(
-    provider,
-    model,
-    parseSessionState(await store.read(key)),
-    options.freshId(),
-  );
+  const text = await store.read(key);
+  const previous = parseSessionState(text);
+  let transcripts = parseSessionTranscripts(text);
+  const plan = planSession(provider, model, previous, options.freshId());
+  const day = (options.today ?? localDay)();
+  const save = async (state: NativeSessionState | null) => {
+    if (!state && !transcripts.length) return store.clear(key);
+    await store.write(key, JSON.stringify({ ...state, transcripts }));
+  };
+  // A new Claude session is named before it runs, so even a failed first turn is listed.
+  if (plan.id && !plan.resume) {
+    transcripts = recordTranscript(transcripts, { provider, id: plan.id, day });
+    await save(previous);
+  }
   let stdout: string;
   try {
     stdout = await run(plan);
   } catch (error) {
     if (plan.resume && error instanceof HarnessError && error.code === 'harness_exit') {
-      await store.clear(key);
+      await save(null);
       throw new HarnessError('harness_session');
     }
     throw error;
   }
   const id = plan.resume || provider === 'claude' ? plan.id : sessionIdFrom(provider, stdout);
-  if (id)
-    await store.write(
-      key,
-      JSON.stringify({ provider, model, id, turns: plan.turns + 1 } satisfies NativeSessionState),
-    );
-  else await store.clear(key);
+  if (id) {
+    transcripts = recordTranscript(transcripts, { provider, id, day });
+    await save({ provider, model, id, turns: plan.turns + 1 });
+  } else await save(null);
   return stdout;
 }

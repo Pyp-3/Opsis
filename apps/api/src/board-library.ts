@@ -16,12 +16,18 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { ApiStore, User } from './storage.js';
 import { requireUser } from './auth.js';
+import type { ThreadSessionCleaner } from './cli-sessions.js';
+import { sessionKey } from './harness/sessions.js';
 
 /**
  * Owners manage boards and may invite named editors. Public visibility grants only
  * read access to signed-in accounts. Uninvited private boards answer 404.
  */
-export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
+export function registerBoardLibrary(
+  app: FastifyInstance,
+  store: ApiStore,
+  removeThreadSessions: ThreadSessionCleaner,
+) {
   const idSchema = BoardIdSchema;
   const notFound = (reply: FastifyReply) => reply.code(404).send({ message: 'Board not found.' });
   /** The board, if `user` may read it. */
@@ -245,6 +251,9 @@ export function registerBoardLibrary(app: FastifyInstance, store: ApiStore) {
       return reply.code(409).send({
         message: 'This board changed in another tab. Reopen the board manager before deleting.',
       });
+    await removeThreadSessions(
+      result.threads.flatMap((thread) => sessionKey(thread.userId, thread.id) ?? []),
+    );
     return reply.code(204).send();
   });
   app.get('/v1/boards/:id', async (request, reply) => {

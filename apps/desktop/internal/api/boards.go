@@ -263,6 +263,11 @@ func (s *Server) boardRoutes() {
 		if board.Revision != body.Revision {
 			return failure(409, "This board changed in another tab. Reopen the board manager before deleting.")
 		}
+		// Every account's chat threads on the board go with it; their CLI sessions are removed after.
+		threads, err := boardChatThreads(tx, id)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`INSERT INTO deleted_boards_v2(id) VALUES(?)`, id); err != nil {
 			return err
 		}
@@ -272,6 +277,7 @@ func (s *Server) boardRoutes() {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		s.removeThreadSessions(threads)
 		writeJSON(w, 204, nil)
 		return nil
 	})

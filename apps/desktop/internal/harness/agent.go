@@ -215,6 +215,9 @@ func SessionDirectory(key string) (string, error) {
 	return filepath.Join(os.TempDir(), "opsis-sessions", parts[0], parts[1]), nil
 }
 
+// maxSessionState bounds a thread's session state, which lists up to 128 sessions it used.
+const maxSessionState = 32 * 1024
+
 // sessionStateFile holds which session a thread resumes; see sessions.ts.
 func sessionStateFile(key string) (string, error) {
 	directory, err := SessionDirectory(key)
@@ -234,7 +237,7 @@ func ReadSession(key string) (string, error) {
 	if os.IsNotExist(err) {
 		return "", nil
 	}
-	if err != nil || len(data) > 4096 {
+	if err != nil || len(data) > maxSessionState {
 		return "", Error("harness_exit")
 	}
 	return string(data), nil
@@ -246,7 +249,7 @@ func WriteSession(key, state string) error {
 	if err != nil {
 		return err
 	}
-	if len(state) > 4096 {
+	if len(state) > maxSessionState {
 		return Error("harness_config")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/contracts"
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/generation"
+	"github.com/Pyp-3/Opsis/apps/desktop/internal/harness"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -51,6 +52,8 @@ type Server struct {
 	requests     map[string][]time.Time
 	rateLimit    int
 	rateWindow   time.Duration
+	// Where the CLIs keep the transcripts of deleted chat threads' native sessions.
+	transcriptHomes harness.TranscriptHomes
 }
 
 func New(database string, fallback http.Handler) (*Server, error) {
@@ -79,7 +82,7 @@ func New(database string, fallback http.Handler) (*Server, error) {
 		db.Close()
 		return nil, err
 	}
-	s := &Server{db: db, contracts: c, mux: http.NewServeMux(), fallback: fallback, requests: make(map[string][]time.Time), rateLimit: 60, rateWindow: time.Minute}
+	s := &Server{db: db, contracts: c, mux: http.NewServeMux(), fallback: fallback, requests: make(map[string][]time.Time), rateLimit: 60, rateWindow: time.Minute, transcriptHomes: harness.DefaultTranscriptHomes()}
 	s.providerKeys, err = generation.NewProviderKeys(database)
 	if err != nil {
 		db.Close()
