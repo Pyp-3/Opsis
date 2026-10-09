@@ -1,6 +1,6 @@
 # Opsis goals
 
-Last reviewed: 2026-10-08.
+Last reviewed: 2026-10-09.
 
 ## Current delivery
 
@@ -443,8 +443,34 @@ Let an account group its own boards ("canvases") into named collections for fast
 - [x] Shared migration 3 (`board_collections`, `boards_v2.collection_id`) on both the
       Fastify and Go hosts; included in full-database backups.
 - [x] Race-enabled Go suite verified in CI run 37343651152 (Linux and Windows desktop jobs).
-- [ ] Not yet in scope: MCP tools to list/file collections, collection-aware home/sidebar
-      recents, multi-select bulk moves, and per-board JSON export of the collection.
+- [x] MCP collection tools (2026-10-09): `opsis_list_collections` (with board counts),
+      `opsis_create_collection` and `opsis_file_board` (owner only, `null` unfiles), plus
+      `collectionId` on `opsis_create_board` and in `opsis_list_boards`. Filing adds no revision
+      or undo step. The catalogue is now 18 tools on both hosts.
+- [x] Bulk moves (2026-10-09): **Select boards** in My boards ticks several cards (or
+      **Select all shown**) and moves them to one collection or Unfiled. Only boards shown
+      under the current filters count; one request per board with a single refresh, and a
+      failure is reported with how many moved. The library keeps its collection filter in the
+      address (`/boards?collection=<id>`), so reloads and links reopen it.
+- [x] Collection-aware recents (2026-10-09): Home's Recent boards labels each board's
+      collection, offers chips for collections holding recent boards, and **All in …** opens that
+      collection in the library. The sidebar no longer has a recents list (removed in the earlier
+      minimal-rail redesign), so it has nothing to make collection-aware.
+- [ ] Not yet: per-board JSON export recording the board's collection.
+
+Verified 2026-10-09 on Arch Linux: MCP round trip through the real Fastify API (create, case-
+insensitive duplicate refused, file at creation and later, counts, unfiling, unknown collection,
+another account's board refused, revision 1 and empty history kept) and the Go native MCP test
+(filing through the embedded catalogue keeps the revision). A new browser scenario covers
+selecting, moving, unchanged revisions, home recents labels/chips, the library link and reload,
+select-all-shown, unfiling, phone overflow and accessibility scans. While reviewing its
+screenshots, a pre-existing home/library layout bug was found and fixed: the decorative backdrop
+was sized to the window rather than the page beside the sidebar, so the page could scroll 132 px
+sideways at 1280 px; the scenario now asserts no sideways scroll. Lint, typecheck, Rust check/24
+tests, desktop check and full race suite, 440 unit tests and all 62 Fastify browser scenarios
+pass. The rebuilt Linux binary passes packaged database/MCP integration (18 stdio tools), all 62
+browser scenarios and all 24 hidden WebView checks. Desktop and phone screenshots were reviewed.
+No paid model calls were made. CI for this delivery must still be confirmed after push.
 
 Verified 2026-10-05 on Windows 11 (Node 22.23.3): Fastify collection tests (privacy,
 duplicate names, filing at creation, unchanged revision/update time, copy filing,

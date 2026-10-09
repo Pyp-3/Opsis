@@ -19,6 +19,7 @@ import {
   CopyPlus,
   FolderInput,
   Tag,
+  ListChecks,
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
@@ -26,8 +27,11 @@ import { HomeBackdrop } from './HomeBackdrop';
 import { BoardRevisionPanel } from './BoardRevisionPanel';
 import { useBoardCollections } from './useBoardCollections';
 import {
+  BulkMoveBar,
   CollectionBar,
   EditTags,
+  boardsInCollectionPath,
+  collectionFilterFromSearch,
   filingTarget,
   MoveToCollection,
   inCollection,
@@ -89,7 +93,17 @@ export function BoardsPage({
   const [moving, setMoving] = useState<string | null>(null);
   const [tagging, setTagging] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState('');
-  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all');
+  // The address carries the filter, so home's "All in <collection>" and a reload open it.
+  const [collectionFilter, setFilterState] = useState<CollectionFilter>(() =>
+    collectionFilterFromSearch(location.search),
+  );
+  const setCollectionFilter = (filter: CollectionFilter) => {
+    setFilterState(filter);
+    history.replaceState(history.state, '', boardsInCollectionPath(filter));
+  };
+  // Selecting several boards to move them together; ids not currently shown are ignored.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const collections = useBoardCollections(refresh);
   const collectionName = (id: string | null | undefined) =>
     collections.collections.find((collection) => collection.id === id)?.name;
@@ -145,6 +159,14 @@ export function BoardsPage({
   const entries = visibleEntries
     .filter((entry) => entry.title.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : b.updatedAt - a.updatedAt));
+  const canSelect = selecting && tab === 'mine';
+  const selectedEntries = canSelect ? entries.filter((entry) => selectedIds.has(entry.id)) : [];
+  const toggleSelected = (id: string) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   return (
     <main className="page-main boards-main">
       <div className="boards-intro">
@@ -337,7 +359,48 @@ export function BoardsPage({
             <span className="boards-count">
               {entries.length} of {visibleEntries.length} boards
             </span>
+            {tab === 'mine' && !canSelect && entries.length > 1 && (
+              <button
+                type="button"
+                className="boards-select"
+                disabled={library.switching}
+                onClick={() => {
+                  setSelecting(true);
+                  setSelectedIds(new Set());
+                  setMoving(null);
+                }}
+              >
+                <ListChecks size={14} /> Select boards
+              </button>
+            )}
           </div>
+          {canSelect && (
+            <BulkMoveBar
+              selected={selectedEntries.length}
+              shown={entries.length}
+              collections={collections.collections}
+              disabled={library.switching || collections.busy}
+              onSelectAll={() => setSelectedIds(new Set(entries.map((entry) => entry.id)))}
+              onClear={() => setSelectedIds(new Set())}
+              onDone={() => setSelecting(false)}
+              onMove={async (collectionId) => {
+                // Boards already there need no request.
+                const ids = selectedEntries
+                  .filter((entry) => (entry.collectionId ?? null) !== collectionId)
+                  .map((entry) => entry.id);
+                const moved = ids.length ? await collections.fileMany(ids, collectionId) : 0;
+                if (moved < ids.length) return;
+                const count = `${selectedEntries.length} ${selectedEntries.length === 1 ? 'board' : 'boards'}`;
+                setNotice(
+                  collectionId
+                    ? `Moved ${count} to ${collectionName(collectionId)}.`
+                    : `Removed ${count} from their collections.`,
+                );
+                setSelectedIds(new Set());
+                setSelecting(false);
+              }}
+            />
+          )}
           {library.error && (
             <p className="workspace-error" role="alert">
               {library.error}
@@ -347,7 +410,26 @@ export function BoardsPage({
             {entries.map((entry) => {
               const current = entry.id === library.activeId;
               return (
-                <li key={entry.id} className={current ? 'is-current' : ''}>
+                <li
+                  key={entry.id}
+                  className={[
+                    current ? 'is-current' : '',
+                    canSelect && selectedIds.has(entry.id) ? 'is-selected' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {canSelect && ![moving, tagging, editing].includes(entry.id) && (
+                    <label className="board-card-select">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${entry.title}`}
+                        checked={selectedIds.has(entry.id)}
+                        disabled={library.switching || collections.busy}
+                        onChange={() => toggleSelected(entry.id)}
+                      />
+                    </label>
+                  )}
                   {tagging === entry.id ? (
                     <EditTags
                       title={entry.title}

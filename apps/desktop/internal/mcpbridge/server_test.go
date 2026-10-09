@@ -70,14 +70,14 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	slices.Sort(names)
 	expected := []string{
 		"opsis_add_concept", "opsis_add_drawings", "opsis_connect", "opsis_create_board",
-		"opsis_disconnect", "opsis_get_board", "opsis_list_boards", "opsis_list_public_boards",
-		"opsis_remove_concept", "opsis_remove_drawings", "opsis_search_boards", "opsis_update_board",
+		"opsis_create_collection", "opsis_disconnect", "opsis_file_board", "opsis_get_board",
+		"opsis_list_boards", "opsis_list_collections", "opsis_list_public_boards", "opsis_remove_concept", "opsis_remove_drawings", "opsis_search_boards", "opsis_update_board",
 		"opsis_update_concept", "opsis_update_drawing", "opsis_write_diagram",
 	}
 	if !slices.Equal(names, expected) {
 		t.Fatalf("tools: got %v, want %v", names, expected)
 	}
-	call := func(name string, args map[string]any) map[string]any {
+	callInto := func(name string, args map[string]any, value any) {
 		t.Helper()
 		result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
 		if err != nil {
@@ -86,10 +86,14 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 		if result.IsError {
 			t.Fatalf("tool error: %v", result.Content)
 		}
-		var value map[string]any
-		if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), &value); err != nil {
+		if err := json.Unmarshal([]byte(result.Content[0].(*mcp.TextContent).Text), value); err != nil {
 			t.Fatal(err)
 		}
+	}
+	call := func(name string, args map[string]any) map[string]any {
+		t.Helper()
+		var value map[string]any
+		callInto(name, args, &value)
 		return value
 	}
 	created := call("opsis_create_board", map[string]any{"title": "Native board"})
@@ -116,5 +120,27 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	read := call("opsis_get_board", map[string]any{"boardId": id})
 	if read["open"] != web.URL+"/canvas?board="+id {
 		t.Fatal(read["open"])
+	}
+
+	// Filing through MCP is organization on the native host too: no new revision.
+	collection := call("opsis_create_collection", map[string]any{"name": "Native"})["id"].(string)
+	call("opsis_file_board", map[string]any{"boardId": id, "collectionId": collection})
+	var collections []struct {
+		ID     string
+		Name   string
+		Boards int
+	}
+	callInto("opsis_list_collections", map[string]any{}, &collections)
+	if len(collections) != 1 || collections[0].ID != collection || collections[0].Boards != 1 {
+		t.Fatalf("collections: %+v", collections)
+	}
+	var boards []struct {
+		ID           string
+		Revision     int
+		CollectionID *string
+	}
+	callInto("opsis_list_boards", map[string]any{}, &boards)
+	if len(boards) != 1 || boards[0].Revision != 2 || boards[0].CollectionID == nil || *boards[0].CollectionID != collection {
+		t.Fatalf("filed board: %+v", boards)
 	}
 }

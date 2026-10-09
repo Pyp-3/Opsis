@@ -74,9 +74,12 @@ describe('Opsis MCP server', () => {
       'opsis_add_drawings',
       'opsis_connect',
       'opsis_create_board',
+      'opsis_create_collection',
       'opsis_disconnect',
+      'opsis_file_board',
       'opsis_get_board',
       'opsis_list_boards',
+      'opsis_list_collections',
       'opsis_list_public_boards',
       'opsis_remove_concept',
       'opsis_remove_drawings',
@@ -258,6 +261,70 @@ describe('Opsis MCP server', () => {
     });
     expect(edit).toMatchObject({ isError: true, text: expect.stringMatching(/someone else/) });
     expect((await call('opsis_get_board', { boardId: hidden.id })).isError).toBe(true);
+  });
+
+  it('files boards into collections without touching their revision or undo history', async () => {
+    const networking = (await call('opsis_create_collection', { name: 'Networking' })).json();
+    expect(networking).toMatchObject({ name: 'Networking' });
+    const duplicate = await call('opsis_create_collection', { name: 'networking' });
+    expect(duplicate).toMatchObject({ isError: true, text: expect.stringMatching(/already/) });
+
+    const inside = (
+      await call('opsis_create_board', { title: 'DNS', collectionId: networking.id })
+    ).json();
+    const loose = (await call('opsis_create_board', { title: 'Garden' })).json();
+    expect((await call('opsis_list_collections')).json()).toEqual([
+      { id: networking.id, name: 'Networking', boards: 1 },
+    ]);
+    expect(
+      (await call('opsis_file_board', { boardId: loose.id, collectionId: networking.id })).json(),
+    ).toMatchObject({ id: loose.id, collectionId: networking.id });
+    const listed = (await call('opsis_list_boards')).json() as {
+      id: string;
+      collectionId: string | null;
+      revision: number;
+    }[];
+    expect(
+      listed.map(({ id, collectionId, revision }) => ({ id, collectionId, revision })),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: inside.id, collectionId: networking.id, revision: 1 },
+        { id: loose.id, collectionId: networking.id, revision: 1 },
+      ]),
+    );
+    expect((await call('opsis_list_collections')).json()[0].boards).toBe(2);
+
+    await call('opsis_file_board', { boardId: loose.id, collectionId: null });
+    expect((await call('opsis_list_collections')).json()[0].boards).toBe(1);
+    const stored = (
+      await app.inject({
+        url: `/v1/boards/${loose.id}`,
+        headers: { authorization: `Bearer ${adaKey}` },
+      })
+    ).json() as { revision: number; snapshot: BoardSnapshot };
+    expect(stored.revision).toBe(1);
+    expect(stored.snapshot.past).toEqual([]);
+
+    const unknown = await call('opsis_file_board', {
+      boardId: loose.id,
+      collectionId: crypto.randomUUID(),
+    });
+    expect(unknown).toMatchObject({ isError: true, text: expect.stringMatching(/No collection/) });
+    // Another account's board cannot be filed, even when it is public.
+    const bob = await account('Bob');
+    const theirs = (
+      await app.inject({
+        method: 'POST',
+        url: '/v1/boards',
+        headers: { cookie: bob.cookie },
+        payload: { title: 'Bob’s rockets' },
+      })
+    ).json() as { id: string };
+    const foreign = await call('opsis_file_board', {
+      boardId: theirs.id,
+      collectionId: networking.id,
+    });
+    expect(foreign).toMatchObject({ isError: true, text: expect.stringMatching(/only owners/) });
   });
 
   it('explains what to do without a usable agent key', async () => {

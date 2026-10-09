@@ -93,6 +93,41 @@ export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
         )
       ).ok;
     },
+    /**
+     * Files several boards, one request each, and refreshes once at the end. A board that
+     * cannot be filed (deleted elsewhere, say) is reported without undoing the others.
+     * Returns how many moved.
+     */
+    async fileMany(boardIds: string[], collectionId: string | null) {
+      setBusy(true);
+      let moved = 0;
+      let failure = '';
+      try {
+        for (const boardId of boardIds) {
+          const response = await fetch(
+            `/v1/boards/${boardId}/collection`,
+            json('PUT', { collectionId }),
+          );
+          if (response.status === 401) {
+            window.dispatchEvent(new Event(AUTH_EXPIRED));
+            failure = 'Sign in again to move boards.';
+            break;
+          }
+          if (response.ok) moved++;
+          else if (!failure) {
+            const payload = (await response.json().catch(() => ({}))) as { message?: string };
+            failure = payload.message ?? 'Collection change failed.';
+          }
+        }
+        if (moved) await onBoardsChanged();
+      } catch (e) {
+        failure ||= e instanceof Error ? e.message : 'Collection change failed.';
+      } finally {
+        setBusy(false);
+      }
+      setError(failure ? `Moved ${moved} of ${boardIds.length} boards. ${failure}` : '');
+      return moved;
+    },
     /** Replaces a board's tags; like filing, this is not an edit to the board. */
     async tag(boardId: string, tags: string[]) {
       return (await run(() => fetch(`/v1/boards/${boardId}/tags`, json('PUT', { tags })), true)).ok;

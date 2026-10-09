@@ -221,8 +221,19 @@ there. The chips above the list show **All boards**, **Unfiled** boards, or one
 collection, with a count for each. Rename or delete the selected collection from
 the actions below the chips; deleting a collection keeps its boards.
 
+To move several boards at once, choose **Select boards**, tick the boards (or
+**Select all shown**), pick a collection under **Move to** and press **Move**.
+Only boards shown under the current chip, tag and search are moved. The library's
+address remembers the selected collection, so a reload or bookmark opens it again.
+
+On **Home**, **Recent boards** shows each board's collection. When you have
+collections, chips above the list narrow it to one, and **All in …** opens that
+collection in the library.
+
 Collections are private to your account and do not change a board's content,
-history or sharing. See [collections](PERSISTENCE.md#collections).
+history or sharing. See [collections](PERSISTENCE.md#collections). Agents connected
+over MCP can list and create your collections and file your boards with
+`opsis_list_collections`, `opsis_create_collection` and `opsis_file_board`.
 
 Add tags with the tag button on a board card, then **Filter by tag**. A **smart
 collection** keeps itself up to date from a rule — for example, every board tagged

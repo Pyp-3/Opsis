@@ -53,22 +53,28 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 
 ## Tools
 
-| Tool                    | What it does                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `opsis_list_boards`     | Saved boards, most recent first                                                |
-| `opsis_search_boards`   | Concepts matching words, across boards you own or edit; best first             |
-| `opsis_get_board`       | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale |
-| `opsis_create_board`    | A new empty board                                                              |
-| `opsis_update_board`    | Title, summary, background palette, icon tint and drawing scale                |
-| `opsis_add_concept`     | Adds a concept; `after` places it below another and draws the arrow            |
-| `opsis_update_concept`  | Label, summary, explanation, icon or kind                                      |
-| `opsis_remove_concept`  | Removes a concept and its arrows                                               |
-| `opsis_connect`         | Draws a labelled arrow (flow, request, response, feedback or retry)            |
-| `opsis_disconnect`      | Removes an arrow                                                               |
-| `opsis_write_diagram`   | Replaces a whole diagram in one step, or creates a board for it                |
-| `opsis_add_drawings`    | Draws shapes, text and dimension lines beside the diagram, in one step         |
-| `opsis_update_drawing`  | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer  |
-| `opsis_remove_drawings` | Removes drawings in one step                                                   |
+| Tool                      | What it does                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `opsis_list_boards`       | Saved boards, most recent first, with each board's collection                  |
+| `opsis_search_boards`     | Concepts matching words, across boards you own or edit; best first             |
+| `opsis_get_board`         | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale |
+| `opsis_create_board`      | A new empty board, optionally filed in a collection                            |
+| `opsis_list_collections`  | Your private collections, with how many boards each holds                      |
+| `opsis_create_collection` | A new private collection                                                       |
+| `opsis_file_board`        | Moves an owned board into a collection, or out of every collection             |
+| `opsis_update_board`      | Title, summary, background palette, icon tint and drawing scale                |
+| `opsis_add_concept`       | Adds a concept; `after` places it below another and draws the arrow            |
+| `opsis_update_concept`    | Label, summary, explanation, icon or kind                                      |
+| `opsis_remove_concept`    | Removes a concept and its arrows                                               |
+| `opsis_connect`           | Draws a labelled arrow (flow, request, response, feedback or retry)            |
+| `opsis_disconnect`        | Removes an arrow                                                               |
+| `opsis_write_diagram`     | Replaces a whole diagram in one step, or creates a board for it                |
+| `opsis_add_drawings`      | Draws shapes, text and dimension lines beside the diagram, in one step         |
+| `opsis_update_drawing`    | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer  |
+| `opsis_remove_drawings`   | Removes drawings in one step                                                   |
+
+Filing a board in a collection is organization, not an edit: it adds no revision or undo step,
+and only the board's owner can file it.
 
 Drawings use canvas coordinates, where one grid square is 24 units. `opsis_get_board`
 returns each concept's position, so a sketch can be placed around the diagram. A drawing

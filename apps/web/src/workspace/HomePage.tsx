@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   Clock,
+  Folder,
   FolderOpen,
   Globe,
   Sparkles,
@@ -22,6 +23,8 @@ import { NodeIcon } from './NodeIcon';
 import { boardIcons } from './icons';
 import { fetchPublicBoards, updatedLabel, type PublicBoard } from './BoardsPage';
 import { navigate } from '../router';
+import { useBoardCollections } from './useBoardCollections';
+import { boardsInCollectionPath } from './BoardCollections';
 
 const EXAMPLES = [
   { title: 'An email’s journey', graph: EMAIL_DEMO },
@@ -65,10 +68,23 @@ export function HomePage({
       live = false;
     };
   }, []);
-  const recent = library.entries
-    .filter((entry) => !entry.archived && entry.id !== library.activeId)
+  const { collections } = useBoardCollections(library.refresh);
+  const [recentFrom, setRecentFrom] = useState<string | null>(null);
+  const others = library.entries.filter(
+    (entry) => !entry.archived && entry.id !== library.activeId,
+  );
+  // Only collections holding at least one of these boards are worth a chip.
+  const recentCollections = collections.filter((collection) =>
+    others.some((entry) => entry.collectionId === collection.id),
+  );
+  const from = recentCollections.find((collection) => collection.id === recentFrom);
+  const recent = others
+    .filter((entry) => !from || entry.collectionId === from.id)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 6);
+  const collectionName = (id: string | null | undefined) =>
+    collections.find((collection) => collection.id === id)?.name;
+  const allBoardsPath = from ? boardsInCollectionPath(from.id) : '/boards';
   const start = (text: string) => {
     if (text.trim() && !busy) onStart(text.trim());
   };
@@ -165,15 +181,42 @@ export function HomePage({
               <FolderOpen size={14} /> Recent boards
             </h2>
             <a
-              href="/boards"
+              href={allBoardsPath}
               onClick={(event) => {
                 event.preventDefault();
-                navigate('/boards');
+                navigate(allBoardsPath);
               }}
             >
-              All boards <ArrowRight size={13} />
+              {from ? `All in ${from.name}` : 'All boards'} <ArrowRight size={13} />
             </a>
           </div>
+          {recentCollections.length > 0 && (
+            <div
+              className="board-collection-chips home-recent-from"
+              role="group"
+              aria-label="Recent boards from"
+            >
+              <button
+                type="button"
+                aria-pressed={!from}
+                disabled={busy}
+                onClick={() => setRecentFrom(null)}
+              >
+                <FolderOpen size={13} /> All collections
+              </button>
+              {recentCollections.map((collection) => (
+                <button
+                  key={collection.id}
+                  type="button"
+                  aria-pressed={from?.id === collection.id}
+                  disabled={busy}
+                  onClick={() => setRecentFrom(collection.id)}
+                >
+                  <Folder size={13} /> {collection.name}
+                </button>
+              ))}
+            </div>
+          )}
           <nav aria-label="Saved boards">
             <ul className="home-cards">
               {recent.map((entry) => (
@@ -185,7 +228,12 @@ export function HomePage({
                     onClick={() => onOpen(entry.id)}
                   >
                     <strong>{entry.title}</strong>
-                    <small id={`updated-${entry.id}`}>{updatedLabel(entry.updatedAt)}</small>
+                    <small id={`updated-${entry.id}`}>
+                      {!from && collectionName(entry.collectionId)
+                        ? `${collectionName(entry.collectionId)} · `
+                        : ''}
+                      {updatedLabel(entry.updatedAt)}
+                    </small>
                   </button>
                 </li>
               ))}

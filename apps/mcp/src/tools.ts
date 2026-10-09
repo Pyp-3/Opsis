@@ -39,12 +39,15 @@ Agents act as the account whose agent key they hold: they edit that account's bo
 
 Work like this: list, search (opsis_search_boards) or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.
 
-Boards can also hold drawings beside the diagram: floor plans, walls, equipment outlines, zones, labels and dimension lines, for engineering and architecture sketches. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.`;
+Boards can also hold drawings beside the diagram: floor plans, walls, equipment outlines, zones, labels and dimension lines, for engineering and architecture sketches. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.
+
+The account's own boards can be filed into private collections (folders): opsis_list_collections, opsis_create_collection and opsis_file_board, or pass collectionId to opsis_create_board. Filing is organization, not an edit, so it adds no undo step.`;
 
 const boardId = z
   .string()
   .uuid()
   .describe('Board id from opsis_list_boards or opsis_create_board.');
+const collectionId = z.string().uuid().describe('Collection id from opsis_list_collections.');
 
 function reply(value: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -82,7 +85,8 @@ export function registerTools(
     'opsis_list_boards',
     {
       title: 'List boards',
-      description: 'Lists saved Opsis boards, most recently updated first.',
+      description:
+        'Lists saved Opsis boards, most recently updated first, with the collection each is filed in (collectionId, or null when unfiled).',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -108,6 +112,49 @@ export function registerTools(
         open: open(hit.boardId, hit.conceptId),
       })),
     ),
+  );
+
+  server.registerTool(
+    'opsis_list_collections',
+    {
+      title: 'List collections',
+      description:
+        'Lists this account’s private board collections by name, with how many boards are filed in each. Boards from opsis_list_boards carry their collectionId.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async () => {
+      const [collections, boards] = await Promise.all([client.listCollections(), client.list()]);
+      return collections.map((collection) => ({
+        ...collection,
+        boards: boards.filter((board) => board.collectionId === collection.id).length,
+      }));
+    }),
+  );
+
+  server.registerTool(
+    'opsis_create_collection',
+    {
+      title: 'Create a collection',
+      description:
+        'Creates a private collection to file boards in. Names are unique regardless of case.',
+      inputSchema: { name: z.string().trim().min(1).max(60) },
+    },
+    guarded(async ({ name }: { name: string }) => client.createCollection(name)),
+  );
+
+  server.registerTool(
+    'opsis_file_board',
+    {
+      title: 'File a board in a collection',
+      description:
+        'Moves a board this account owns into one collection, or out of every collection with null. A board is in at most one collection. This is organization, not an edit: the board’s content and undo history are unchanged.',
+      inputSchema: { boardId, collectionId: collectionId.nullable() },
+    },
+    guarded(async ({ boardId: id, collectionId: into }) => {
+      await client.fileBoard(id, into);
+      return { id, collectionId: into, open: open(id) };
+    }),
   );
 
   server.registerTool(
@@ -154,10 +201,11 @@ export function registerTools(
       inputSchema: {
         title: z.string().trim().min(1).max(100),
         description: z.string().max(500).optional().describe('The big-picture summary.'),
+        collectionId: collectionId.optional().describe('Collection to file the new board in.'),
       },
     },
-    guarded(async ({ title, description }) => {
-      const entry = await client.create(title);
+    guarded(async ({ title, description, collectionId: into }) => {
+      const entry = await client.create(title, into);
       if (!description) return saved(entry.id, entry.revision);
       const { revision } = await client.edit(entry.id, (snapshot) => ({
         snapshot: updateDetails(snapshot, { description }),

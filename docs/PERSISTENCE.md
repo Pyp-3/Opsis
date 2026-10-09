@@ -30,6 +30,11 @@ My boards**. Use **New collection**, then the folder action on a board card
 (**Move … to a collection**) to file it; the chips above the list filter by
 **All boards**, **Unfiled**, or one collection. While a collection is selected,
 new boards are created inside it. A board belongs to at most one collection.
+**Select boards** files several shown boards together (one filing request per
+board; one that fails, for example because it was deleted elsewhere, is reported
+and the others stay moved). Agents can file boards with the MCP tools
+`opsis_list_collections`, `opsis_create_collection` and `opsis_file_board`; only
+the owner can file a board.
 
 - Filing is organization, not an edit: it does not advance the board's revision,
   change its update time or add an undo step, so it cannot conflict with an open

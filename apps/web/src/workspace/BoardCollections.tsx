@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   Folder,
+  FolderInput,
   FolderPlus,
   Inbox,
   LayoutGrid,
@@ -41,6 +42,16 @@ export function inCollection(
     return !!rule && matchesSmartCollection(board, rule);
   }
   return board.collectionId === filter;
+}
+
+/** The library opened on one collection (or smart collection) filter. */
+export function boardsInCollectionPath(filter: CollectionFilter) {
+  return filter === 'all' ? '/boards' : `/boards?collection=${encodeURIComponent(filter)}`;
+}
+
+/** The collection filter a library address asks for, `all` when none. */
+export function collectionFilterFromSearch(search: string): CollectionFilter {
+  return new URLSearchParams(search).get('collection') || 'all';
 }
 
 /** The filter's collection id when new boards should be created inside it. */
@@ -442,6 +453,73 @@ export function MoveToCollection({
           Cancel move
         </button>
       </div>
+    </form>
+  );
+}
+
+/**
+ * Moves the selected boards to one collection (or none) in one action. Only boards still
+ * shown count as selected, so a filter change never moves something out of sight.
+ */
+export function BulkMoveBar({
+  selected,
+  shown,
+  collections,
+  disabled,
+  onSelectAll,
+  onClear,
+  onMove,
+  onDone,
+}: {
+  selected: number;
+  shown: number;
+  collections: BoardCollection[];
+  disabled: boolean;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onMove: (collectionId: string | null) => Promise<void>;
+  onDone: () => void;
+}) {
+  const [target, setTarget] = useState('');
+  return (
+    <form
+      className="board-bulk"
+      aria-label="Move selected boards"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (selected) await onMove(target || null);
+      }}
+    >
+      <span className="board-bulk-count" role="status">
+        {selected} of {shown} selected
+      </span>
+      <button type="button" disabled={disabled || selected === shown} onClick={onSelectAll}>
+        Select all shown
+      </button>
+      <button type="button" disabled={disabled || !selected} onClick={onClear}>
+        Clear selection
+      </button>
+      <label>
+        Move to
+        <select
+          value={target}
+          disabled={disabled}
+          onChange={(event) => setTarget(event.target.value)}
+        >
+          <option value="">No collection (unfiled)</option>
+          {collections.map((collection) => (
+            <option key={collection.id} value={collection.id}>
+              {collection.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="board-bulk-move" disabled={disabled || !selected}>
+        <FolderInput size={13} /> Move {selected} {selected === 1 ? 'board' : 'boards'}
+      </button>
+      <button type="button" disabled={disabled} onClick={onDone}>
+        Done selecting
+      </button>
     </form>
   );
 }

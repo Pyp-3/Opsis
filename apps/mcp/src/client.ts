@@ -18,8 +18,11 @@ const List = z.array(
     updatedAt: z.number(),
     visibility: z.enum(['private', 'public']),
     ownerName: z.string().optional(),
+    archived: z.boolean().optional(),
+    collectionId: z.string().nullable().optional(),
   }),
 );
+const Collection = z.object({ id: z.string().uuid(), name: z.string() });
 const SearchResults = z.object({
   results: z.array(
     z.object({
@@ -98,13 +101,46 @@ export function opsisClient(
       if (!response.ok) throw await failure(response, 'Could not search boards.');
       return SearchResults.parse(await response.json()).results;
     },
-    async create(title: string): Promise<BoardEntry> {
+    async create(title: string, collectionId?: string): Promise<BoardEntry> {
       const response = await call('/v1/boards', {
         method: 'POST',
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, ...(collectionId ? { collectionId } : {}) }),
       });
       if (!response.ok) throw await failure(response, 'Could not create the board.');
       return Entry.parse(await response.json());
+    },
+    /** The account's private collections, by name. */
+    async listCollections() {
+      const response = await call('/v1/collections');
+      if (!response.ok) throw await failure(response, 'Could not list collections.');
+      return z.array(Collection).parse(await response.json());
+    },
+    async createCollection(name: string) {
+      const response = await call('/v1/collections', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) throw await failure(response, 'Could not create the collection.');
+      return Collection.parse(await response.json());
+    },
+    /**
+     * Files an owned board into one collection, or none with `null`. Filing is organization,
+     * not an edit: the board's revision and undo history are unchanged.
+     */
+    async fileBoard(boardId: string, collectionId: string | null) {
+      const response = await call(`/v1/boards/${encodeURIComponent(boardId)}/collection`, {
+        method: 'PUT',
+        body: JSON.stringify({ collectionId }),
+      });
+      if (response.status === 404) {
+        const { message } = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new CanvasError(
+          message === 'Collection not found.'
+            ? `No collection with id ${collectionId}. List them with opsis_list_collections.`
+            : `No board with id ${boardId} that this account owns; only owners file boards.`,
+        );
+      }
+      if (!response.ok) throw await failure(response, 'Could not file the board.');
     },
     /**
      * Reads the latest revision, applies `change` and saves it. If someone saved in between
