@@ -83,7 +83,7 @@ WebView checks pass. Rust check/24 tests pass (Rust unchanged by the merge). Uni
 and passes in its rerun (399 total). Earlier interrupted browser runs are not counted.
 Desktop and mobile chat screenshots were inspected. No paid model calls were made.
 The system print dialog itself remains a manual platform check. CI for this integration
-must still be confirmed after push. Remote server/sync (#4) has not been implemented.
+has since passed: later runs, most recently 37920477193 (2026-10-09), passed every job. Remote server/sync (#4) has not been implemented.
 
 CI follow-up: provider run 37454454247 passed web, Linux and Windows. Both Mac
 architectures passed native tests, builds, integration and browser coverage but
@@ -117,7 +117,7 @@ three 30-second timeouts and one Linux-only skip; all three timed-out scenarios
 plus instance-key settings pass in an isolated rerun against the final executable.
 Key settings pass cross-account sharing, no secret reads/exports, no-call checks,
 removal, mobile overflow and accessibility coverage. Desktop/mobile screenshots
-were inspected. Current delivery CI must still be confirmed after push.
+were inspected. CI has since passed: later runs, most recently 37920477193 (2026-10-09), passed every job.
 
 Trusted Windows signing and Apple signing/notarization are explicitly deferred by
 the user. Windows UI automation was retried and again returned "Computer Use
@@ -138,7 +138,7 @@ CI run 37434731605 completed with both desktop jobs failing on the obsolete
 exact catalogue (45b8e41, pushed); the complete Windows native race suite passes
 locally. The original web CI job passed. Follow-up run 37439376513 passes web,
 Linux, Windows and both Mac architectures' feature/integration checks and release
-publishing. Current feature-delivery CI is tracked separately below.
+publishing.
 
 macOS packaging progress: native Intel/Apple Silicon build paths, application
 bundle metadata/icon/ad-hoc signing, zip distribution and per-architecture CI
@@ -195,7 +195,8 @@ The Linux-only screenshot baseline is skipped locally. Packaged database/MCP
 integration and all 24 hidden WebView2 checks pass. No live provider calls were made.
 Fallback delivery run 37443046673 passed web, Linux, Windows and Intel Mac;
 Apple Silicon failed only its hidden WKWebView smoke with a 90-second timeout and
-no further diagnostic. Its failed job was rerun on 2026-10-06; result pending.
+no further diagnostic. Superseded: run 37456419571 passed both Mac smoke tests (see the CI
+follow-up above), and later runs, most recently 37920477193 (2026-10-09), passed every job.
 
 Provider implementation references: official interfaces exist for Kimi, Grok
 and Antigravity, including Google's managed Antigravity API. Preserve both API and
@@ -241,7 +242,7 @@ tombstones, and the 40-entry undo limit are preserved.
 The separately requested Kimi/Grok/Antigravity providers and instance API-key settings
 are implemented above. Cost projections/graphs and explicit fallback-model settings are
 implemented above. Native Windows and both Mac packages pass CI; trusted signing
-and interactive platform checks remain open. Current delivery CI remains to be confirmed.
+and interactive platform checks remain open; later runs, most recently 37920477193 (2026-10-09), passed every job.
 Appearance settings and initial native platform plumbing have shipped; they do not
 complete those goals. The Linux desktop and browser application remain supported.
 
@@ -275,8 +276,8 @@ published, that installed build 56 found it, verified the manifest and installer
 installed silently and relaunched as build 57 (marker and `release.json` confirmed).
 Downloaded installers are now removed before each download and at startup.
 Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
-provider's signing call), interactive save-dialog/clipboard check, and `.cmd`
-override parity with the Fastify host. macOS packaging remains pending.
+provider's signing call) and the interactive save-dialog/clipboard check. (`.cmd` launcher
+parity and macOS packaging have since shipped; see above.)
 
 ## Completed: release retention (requested 2026-10-08)
 
@@ -314,9 +315,15 @@ match Linux.
       the review shows as one selectable "Change your selected drawings" item.
 - [x] Drawing first: a shared pure rule (focus, drawing tool, spatial request) sets the
       priority, shown and overridable in the chat composer.
-- [ ] Not yet: deleting a thread does not remove the CLI's own transcript; no live provider
-      call has verified resume against real Claude/Codex accounts; semantic summarisation of
-      very old turns relies on the agent's notes.
+- [x] Transcript removal (2026-10-09): a thread's session state now lists every session it has
+      used (up to 128, with the day each started), including ones replaced after 16 turns, a
+      failed resume and a failed first Claude turn. Deleting the thread, or the board holding it,
+      removes those transcripts from Claude's and Codex's own stores by validated session id,
+      then the thread's directory, on both hosts. Other CLI sessions are never touched.
+- [ ] Not yet: no live provider call has verified resume or transcript removal against real
+      Claude/Codex accounts (fake CLI stores only); the CLIs' own indexes and prompt histories
+      (such as Codex's state database) are not edited; semantic summarisation of very old turns
+      relies on the agent's notes.
 
 Verified 2026-10-08 on Windows 11 (Node 22.23.2): lint, typecheck, Rust check/24 tests,
 439 unit tests (new: thread condensation/outcomes, focus privacy and merge, review
@@ -383,8 +390,12 @@ blueprints and hybrid flows (engineering and architecture) instead of only proce
 - [x] Fixed an existing drawing bug found while testing: pointer positions were snapped to the
       canvas's 24-unit concept grid, so freehand strokes were quantised, Alt did not place points
       freely and small handles were missed. Drawing input now does its own snapping only.
-- [ ] Not yet: rotating several drawings about a shared centre (each turns about its own), and
-      streaming an agent's sketch before the full answer arrives.
+- [x] Group rotation (2026-10-09): with several drawings selected, **Rotate 90°** and a new
+      **Turn selection (°)** field turn them together about the centre of their combined outline,
+      keeping their layout, as one undoable edit. Attached drawings stay attached; locked ones
+      are left alone. One drawing still turns about its own centre.
+- [ ] Not yet: streaming an agent's sketch before the full answer arrives, and an on-canvas
+      rotation handle for a multi-selection (the panel controls turn it).
 
 Verified 2026-10-07 on Arch Linux: schema tests (layer order/visibility/locks, layer removal,
 scale labels and validation), web geometry tests (handles, resize/flip/proportion, stroke
@@ -430,7 +441,7 @@ browser and hidden WebView checks. The combined integration and its updated Linu
 baseline are verified in the current-delivery section above.
 See the [user guide](docs/USER-GUIDE.md#draw-on-the-canvas).
 
-## In progress: board collections (requested 2026-10-05)
+## Completed: board collections (requested 2026-10-05)
 
 Let an account group its own boards ("canvases") into named collections for faster access.
 
@@ -456,7 +467,10 @@ Let an account group its own boards ("canvases") into named collections for fast
       collection, offers chips for collections holding recent boards, and **All in …** opens that
       collection in the library. The sidebar no longer has a recents list (removed in the earlier
       minimal-rail redesign), so it has nothing to make collection-aware.
-- [ ] Not yet: per-board JSON export recording the board's collection.
+- [x] Per-board JSON export (2026-10-09): a filed board's **Editable board** file names its
+      collection in a top-level `collection` field beside the unchanged board document.
+      Importing it files the new board into the importer's collection of that name (ignoring
+      case), creating one if needed, and the import preview says so.
 
 Verified 2026-10-09 on Arch Linux: MCP round trip through the real Fastify API (create, case-
 insensitive duplicate refused, file at creation and later, counts, unfiling, unknown collection,
@@ -472,6 +486,25 @@ pass. The rebuilt Linux binary passes packaged database/MCP integration (18 stdi
 browser scenarios and all 24 hidden WebView checks. Desktop and phone screenshots were reviewed.
 No paid model calls were made. CI run 37920477193 (21a7d6d) passed every job: web checks,
 Linux, Windows and both macOS desktop jobs, prerelease publication and release retention.
+
+Verified 2026-10-09 on Arch Linux (group rotation, transcript removal and the collection in
+board JSON files; also referenced from the drawing and chat goals): geometry tests (shared
+centre, a box travelling around it, a full turn returning home); session tests (every session
+listed across replacements, providers, a failed resume and a failed first turn; ids validated);
+removal from fake Claude/Codex homes (transcript, tool results, session-env, to-dos, a rollout
+in the next day's folder; the reader's other sessions and rollouts kept); Fastify route tests
+(thread delete removes only that account's session; board delete removes every account's
+threads' sessions); and a Go API test of the same on the desktop host, a Go harness test (a
+state without days searches every date folder; unsafe ids and keys refused), and the Go
+generation test confirming the embedded workflow lists the Codex session. Browser scenarios
+cover turning three selected sketch drawings 90° together (zone moved, dimension rotated a
+quarter, undo restores) and exporting a filed board, then importing it into a renamed
+same-named collection and, after deleting that, into a newly created one. Board file tests
+cover name trimming and invalid names. Lint, typecheck, Rust check/24 tests, desktop check
+and full race suite, 446 unit tests and all 63 Fastify browser scenarios pass. The rebuilt
+Linux binary passes packaged database/MCP integration, all 63 browser scenarios and all 24
+hidden WebView checks. No paid model calls or real CLI sessions were used. CI for this
+delivery must be confirmed after push.
 
 Verified 2026-10-05 on Windows 11 (Node 22.23.3): Fastify collection tests (privacy,
 duplicate names, filing at creation, unchanged revision/update time, copy filing,
@@ -524,7 +557,7 @@ timeouts on this low-memory machine and passed when rerun), packaged database/MC
 and the hidden WebView2 smoke. CI for those commits failed on three issues fixed in the
 follow-up commit: untagged boards listed `tags: null` on the Go host (breaking saves there),
 the desktop smoke still read profiles from localStorage, and accessibility scans ran during
-page fade-ins. Confirm the next CI run before relying on these items.
+page fade-ins. Those fixes are verified in CI: later runs, most recently 37920477193 (2026-10-09), passed every job.
 
 ### Links between boards (#3)
 

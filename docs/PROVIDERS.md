@@ -79,9 +79,17 @@ configuration). Each thread runs in its own directory under the system temporary
 folder (`opsis-sessions/<account>/<thread>`), which the CLI uses to find its session;
 uploads and the schema still go in a disposable folder inside it. The server derives
 that directory from the signed-in account, never from browser input. Tools, sandboxing
-and permission settings are unchanged. Opsis records only which session to resume and
-its turn count; the CLI keeps the transcript in its own store. A session is replaced
-after 16 turns. A resumed turn sends a short continuation instruction rather than the
+and permission settings are unchanged. Opsis records which session to resume, its turn
+count and every session the thread has used (up to 128, with the day each started);
+the CLI keeps the transcripts in its own store. A session is replaced after 16 turns.
+Deleting a thread, or the board holding it, removes those sessions on both hosts:
+Claude's `projects/*/<id>.jsonl` with its same-named `projects`, `file-history` and
+`session-env` folders and `todos/<id>-*` files (under `CLAUDE_CONFIG_DIR` or
+`~/.claude`), and Codex's `sessions/YYYY/MM/DD/rollout-*-<id>.jsonl` near the recorded
+day (under `CODEX_HOME` or `~/.codex`), then the thread's directory. Only files named
+by a recorded session id are removed. The CLIs' own indexes and prompt histories
+(such as Codex's state database) are not edited, and a CLI home set only in an agent's
+custom environment is not searched. A resumed turn sends a short continuation instruction rather than the
 full instructions again. Requests without a thread (and every other CLI) remain
 ephemeral. Grok's CLI receives the whole request as one argument bounded at 24,000
 characters, so long chat requests on large boards may need its API connection.

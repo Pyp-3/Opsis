@@ -57,8 +57,9 @@ account can never resume it. After 16 turns a fresh session starts, with the thr
 notes carrying the context, which keeps resumed context and cost bounded. If a saved
 session cannot be resumed, the message fails without a retry and says so; send it again
 to continue from the notes. The CLI keeps the session's transcript in its own store on
-the machine running Opsis (for example under your home directory), and deleting the
-thread in Opsis does not remove it. API connections and the other CLIs rely on the notes
+the machine running Opsis (for example under your home directory). Deleting the thread,
+or its board, also removes the transcripts of every session the thread used; your other
+CLI sessions are untouched. API connections and the other CLIs rely on the notes
 and recent messages.
 
 In a concept's details, choose **Linked board** to connect it to another saved
@@ -109,8 +110,10 @@ canvas to show the drawing tools:
   text changes its letter size, keeping the opposite corner in place.
 - **Rotate** with the round handle above a selected shape; hold Shift to turn in 15° steps.
   A box, ellipse or text also has a **Rotation (°)** field for an exact angle, and
-  **Rotate 90°** turns every selected drawing by a quarter turn. A rotated shape keeps its
-  handles along its own sides.
+  **Rotate 90°** turns the selection by a quarter turn. With several drawings selected, they
+  turn together about the centre of the whole selection, keeping their layout, and
+  **Turn selection (°)** turns them by any angle; attached drawings stay attached. A rotated
+  shape keeps its handles along its own sides.
 - **Copy and paste**: Ctrl/⌘ C, X and V copy, cut and paste selected drawings, also into
   another board or browser tab. Ctrl/⌘ D, or **Duplicate**, copies them in place. Copies land
   one grid square down and right, keep following their concept on the same board, and are
@@ -285,7 +288,10 @@ Use **Import** for saved board JSON, legacy OSG, text/Markdown or a legacy datab
 | Markdown notes (`.md`)   | Read the concepts and connections as text.           |
 
 Exports contain the board's content; check them for sensitive information before
-sharing. Image and Markdown exports are not editable board backups.
+sharing. Image and Markdown exports are not editable board backups. A board you filed in
+a collection names that collection in its `.json` file, beside the board itself. Importing
+the file files the new board in your collection of that name (ignoring case), creating it
+if you have none; the import preview says so.
 
 ## Connect a coding agent
 

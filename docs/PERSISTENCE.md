@@ -47,7 +47,11 @@ the owner can file a board.
 - Deleting a collection never deletes boards: its boards return to **Unfiled**.
 - Collections are stored in SQLite (`board_collections` and
   `boards_v2.collection_id`, migration 3), so they are included in full-database
-  backups. Per-board JSON exports do not record a collection.
+  backups. A filed board's JSON export names its collection in a top-level
+  `collection` field beside the board document (the document itself is unchanged).
+  Importing it files the new board in the importer's collection of that name,
+  matched without regard to case, creating one if needed. Collections travel by name
+  because ids differ between accounts.
 
 ### Tags and smart collections
 
