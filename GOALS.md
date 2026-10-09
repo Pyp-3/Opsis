@@ -470,7 +470,8 @@ sideways at 1280 px; the scenario now asserts no sideways scroll. Lint, typechec
 tests, desktop check and full race suite, 440 unit tests and all 62 Fastify browser scenarios
 pass. The rebuilt Linux binary passes packaged database/MCP integration (18 stdio tools), all 62
 browser scenarios and all 24 hidden WebView checks. Desktop and phone screenshots were reviewed.
-No paid model calls were made. CI for this delivery must still be confirmed after push.
+No paid model calls were made. CI run 37920477193 (21a7d6d) passed every job: web checks,
+Linux, Windows and both macOS desktop jobs, prerelease publication and release retention.
 
 Verified 2026-10-05 on Windows 11 (Node 22.23.3): Fastify collection tests (privacy,
 duplicate names, filing at creation, unchanged revision/update time, copy filing,
