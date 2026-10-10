@@ -33,7 +33,9 @@ is empty and no local data was copied. Account/session persistence across a real
 container restart passed. Chrome verified the live login screen; the local prefixed
 browser smoke covered login, board creation/edit/save/reload and logout. Update and
 certificate-renewal timers are enabled. Provider CLIs/credentials remain unconfigured
-and speech is disabled. No OS packages or dependency versions were upgraded.
+and speech is disabled. Cloudflare's own `/cdn-cgi/trace` still returns 200 independently
+of Nginx; the 404 boundary applies to application routes, not hostname concealment.
+No OS packages or dependency versions were upgraded.
 
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.

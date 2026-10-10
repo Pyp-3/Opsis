@@ -142,7 +142,8 @@ desktop behavior unchanged.
 On a dedicated tools host, use an exact `/opsis` redirect to `/opsis/`, proxy only
 `/opsis/` (with buffering off for generation), and return 404 from `location /`.
 Rewrite the session cookie path from `/` to `/opsis/`. This limits exposed routes;
-DNS and certificate transparency can still reveal the hostname.
+DNS and certificate transparency can still reveal the hostname. When Cloudflare proxies
+the host, its own `/cdn-cgi/` endpoints can remain available independently of Nginx.
 
 ### Frozen-dependency VPS updater
 
