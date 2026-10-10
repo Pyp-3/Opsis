@@ -400,7 +400,8 @@ with an accessibility scan. Lint, typecheck, Rust check/24 tests, desktop check 
 suite, 481 unit tests and all 64 Fastify browser scenarios pass. The rebuilt Linux binary passes
 packaged integration (24 stdio tools and a real PNG preview from its bundled `sharp`), all 64
 browser scenarios and all 24 hidden WebView checks. Canvas and preview screenshots were
-reviewed. No paid model calls were made; chat agents' use of the new shapes is covered by the
+reviewed. CI run 38014972744 (3db7383) passed every job, including Windows and both macOS
+desktop jobs. No paid model calls were made; chat agents' use of the new shapes is covered by the
 schema and prompt, not by a live model.
 
 ## In progress: canvas drawings (requested 2026-10-06)
