@@ -772,6 +772,28 @@ body.is-resizing-rail {
 .export-menu-group:first-child {
   margin-top: 2px;
 }
+/* This page / All pages, on a board with pages. */
+.export-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 2px 2px 4px;
+  padding: 2px;
+  background: var(--sunken);
+  border-radius: var(--radius);
+}
+.export-menu-panel .export-scope button {
+  justify-content: center;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  border-radius: calc(var(--radius) - 2px);
+}
+.export-menu-panel .export-scope button[aria-checked='true'] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 0.12));
+}
 
 /* ── Desktop update notice ──────────────────────────────────────────── */
 .update-notice {

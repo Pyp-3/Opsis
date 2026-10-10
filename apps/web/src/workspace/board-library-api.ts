@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   BoardSnapshotSchema,
   BoardVisibilitySchema,
+  BoardPageIdSchema,
   type BoardSnapshot,
   type BoardVisibility,
 } from '@opsis/schema';
@@ -20,6 +21,8 @@ export const BoardEntrySchema = z.object({
   access: z.enum(['owner', 'editor', 'viewer']).optional(),
   owner: z.object({ name: z.string() }).optional(),
   visibility: BoardVisibilitySchema.optional(),
+  /** In a tab's recovery copy: the hidden page whose link opened this board. */
+  revealedPage: BoardPageIdSchema.optional(),
 });
 export const BoardListSchema = z.array(
   z.object({

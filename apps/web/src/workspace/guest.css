@@ -12,7 +12,8 @@
 .guest-header > div {
   flex: 1;
 }
-.guest-workspace button {
+.guest-header button,
+.guest-board-list button {
   padding: 10px 16px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -45,11 +46,4 @@
   .guest-workspace {
     padding: 12px;
   }
-}
-
-/* The page bar sits below the canvas here, not over it. */
-.guest-pages .board-pages {
-  position: static;
-  width: fit-content;
-  margin: 8px auto 0;
 }

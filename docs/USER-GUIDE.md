@@ -215,7 +215,9 @@ undo histories. Links between exported boards point to the imported copies; link
 outside the bundle are removed. Bundles support up to 100 boards and 16 MB.
 
 **Export read-only HTML** produces one offline file with diagrams, explanations
-and internal board links. **Print walkthrough / Save PDF** opens the browser's
+and internal board links, page by page for boards with pages. Pages hidden from viewers are
+left out unless you tick **Include pages hidden from viewers**; the bundle always keeps every
+page. **Print walkthrough / Save PDF** opens the browser's
 print dialog; choose its PDF destination to save a PDF. The HTML file can also be
 opened in a browser and printed. Exports contain the collection's notes and
 sources, so review that content before sharing the resulting file.
@@ -294,10 +296,19 @@ scale are shared by every page.
 - Every edit, including adding, moving or deleting a page, is one undoable step. Undo turns
   back to the page it changes, so the change is always in view.
 
-Search and **Linked from** look at every page and open the page that matched. Image and
-Markdown exports show the page on screen. The editable `.json` file holds every page.
-Chat agents and MCP tools work on the open page and the first page respectively; the
-MCP tool `opsis_get_board` lists all of the board's pages.
+Search and **Linked from** look at every page and open the page that matched. **Compare
+boards or saved revisions** compares page by page: pages added, removed, renamed, hidden or
+moved, and each page's own changes. A reload brings you back to the page you were on.
+
+**Export** has a **This page / All pages** choice on a board with pages. **All pages** stacks
+every page, each titled, in one PNG, JPEG or SVG picture, and gives Markdown notes a section per
+page. The editable `.json` file always holds every page.
+
+Chat answers on the page you asked from, even if you turn the page while it works; turning
+pages waits while an answer is in progress or under review. To build a deck, choose **New page**
+beside **Drawing first** before you send: the answer goes on a new page after the current one,
+named after the answer, and the board keeps its name. Agents connected over MCP can read, fill,
+add, rename, reorder, hide and remove any page (see the [MCP guide](../apps/mcp/README.md)).
 
 ### Hide pages from viewers
 
@@ -325,9 +336,10 @@ library, the sharing button steps through the same three choices.
 | **Public**               | Anyone with the link, and every account on this Opsis server, where it is listed under **Boards → Public boards**.                 |
 
 **Copy link** gives the board's address. Someone who is not signed in sees a read-only
-view: the picture of each page, which they can zoom, its concepts and explanations, and
-the pages to turn. Signed-in viewers open it in the full canvas, where they can play the
-process or save their own copy. Nobody but you and invited editors can change your
+view: the live canvas of each page to pan and zoom, **Play the process** with its narrator,
+the pages to turn, and the concepts with their explanations. Signed-in viewers open it in the
+full canvas, where they can also save their own copy. Someone who opened a hidden page's link
+keeps seeing that page in the same tab, after reloads too. Nobody but you and invited editors can change your
 original, and viewers never receive hidden pages or your undo history. Making the board
 private again closes the link at once: it then leads to sign-in.
 

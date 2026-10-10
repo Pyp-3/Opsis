@@ -36,7 +36,14 @@ export function useBoardLibrary(
   const [owner, setOwner] = useState(initial.owner?.name ?? '');
   const accessRef = useRef(access);
   /** The hidden page whose link opened this board, so later reads keep showing it. */
-  const revealedPage = useRef<string | null>(null);
+  const revealedPage = useRef<string | null>(initial.revealedPage ?? null);
+  /** The tab's recovery copy, which also keeps the revealed hidden page across reloads. */
+  const remember = useCallback((value: Record<string, unknown>) => {
+    writeRecovery({
+      ...value,
+      ...(revealedPage.current ? { revealedPage: revealedPage.current } : {}),
+    });
+  }, []);
   const setAccess = useCallback((next: BoardAccess, ownerName = '') => {
     accessRef.current = next;
     setAccessState(next);
@@ -147,7 +154,7 @@ export function useBoardLibrary(
           lastSaved.current = target;
           // Never replace a newer local edit with this completed request's older snapshot.
           try {
-            writeRecovery({
+            remember({
               access: accessRef.current,
               ...active.current,
               snapshot: current.current,
@@ -173,7 +180,7 @@ export function useBoardLibrary(
         throw e;
       });
     },
-    [refresh, replace, setAccess],
+    [refresh, replace, setAccess, remember],
   );
 
   useEffect(() => {
@@ -213,7 +220,7 @@ export function useBoardLibrary(
             setActiveId(active.current.id);
             setAccess('owner');
             replace(empty);
-            writeRecovery({
+            remember({
               access: accessRef.current,
               ...active.current,
               snapshot: empty,
@@ -242,7 +249,7 @@ export function useBoardLibrary(
           current.current = remote.snapshot;
           lastSaved.current = remote.snapshot;
           replace(remote.snapshot);
-          writeRecovery({
+          remember({
             access: accessRef.current,
             ...identity,
             snapshot: remote.snapshot,
@@ -267,12 +274,12 @@ export function useBoardLibrary(
       clearInterval(timer);
       window.removeEventListener('focus', sync);
     };
-  }, [refresh, replace, setAccess]);
+  }, [refresh, replace, setAccess, remember]);
 
   useEffect(() => {
     if (initial.error && !snapshot.board) return;
     try {
-      writeRecovery({
+      remember({
         access: accessRef.current,
         ...active.current,
         snapshot,
@@ -289,7 +296,7 @@ export function useBoardLibrary(
       void save().catch(() => undefined);
     }, 350);
     return () => clearTimeout(timer);
-  }, [snapshot, save, initial.error]);
+  }, [snapshot, save, initial.error, remember]);
 
   const open = useCallback(
     async (id?: string, page?: string | null) => {
@@ -313,7 +320,7 @@ export function useBoardLibrary(
         lastSaved.current = entry.snapshot;
         let warning = '';
         try {
-          writeRecovery(entry);
+          remember(entry);
         } catch {
           warning = 'Browser recovery is unavailable; wait for the save to finish before closing.';
         }
@@ -330,7 +337,7 @@ export function useBoardLibrary(
         setSwitching(false);
       }
     },
-    [save, replace, setAccess],
+    [save, replace, setAccess, remember],
   );
   const saveCopy = async () => {
     setSwitching(true);
@@ -341,7 +348,7 @@ export function useBoardLibrary(
       active.current = { id: crypto.randomUUID(), revision: 0 };
       setActiveId(active.current.id);
       lastSaved.current = null;
-      writeRecovery({ access: accessRef.current, ...active.current, snapshot: current.current });
+      remember({ access: accessRef.current, ...active.current, snapshot: current.current });
       await save();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save a separate copy.');
@@ -399,12 +406,13 @@ export function useBoardLibrary(
               }
             : Entry.parse(await response.json());
         active.current = { id: next.id, revision: next.revision };
+        revealedPage.current = null;
         current.current = next.snapshot;
         lastSaved.current = next.snapshot;
         setActiveId(next.id);
         setAccess('owner');
         replace(next.snapshot);
-        writeRecovery(next);
+        remember(next);
         setStatus(action === 'delete' ? '' : 'Saved');
       }
       await refresh();

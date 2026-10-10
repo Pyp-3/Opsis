@@ -235,7 +235,8 @@ Only current public snapshots are returned, without undo history or pages hidden
 polling removes a board when its owner makes it private or archives it. Like anyone else, a
 guest can also open a board shared by link, and a hidden page through that page's own link,
 and turn its pages. This cannot erase copies a viewer already saw.
-The guest gallery supports pan/zoom and concept explanations, not the member editing/chat UI.
+The guest gallery supports pan/zoom, the process player, pages and concept explanations, not
+the member editing/chat UI.
 This restriction is specific to the Fastify personal server; native/local accounts are unchanged.
 
 `scripts/server/Dockerfile.agents` layers Codex 0.159.0 and Claude Code 2.1.296 over

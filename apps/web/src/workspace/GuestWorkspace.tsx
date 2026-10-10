@@ -1,65 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Background, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import { useEffect, useState } from 'react';
 import { boardPage, resolvePageId, type BoardDocument } from '@opsis/schema';
-import { BoardPages } from './BoardPages';
+import { ReadOnlyBoard } from './ReadOnlyBoard';
 import { apiFetch } from '../app-url';
 import { navigate } from '../router';
 import { AUTH_EXPIRED, BoardEntrySchema, BoardListSchema } from './board-library-api';
-import { IconNode } from './IconNode';
-import { RoutedConnection } from './RoutedConnection';
-import { useBoardDiagram } from './useBoardDiagram';
-import { useProcessEngine } from './useProcessEngine';
-import { DrawingLayer, useCanvasDrawing } from './CanvasDrawing';
-import { applyLook, lookOf } from './canvas-theme';
-import '@xyflow/react/dist/style.css';
-import './workspace.css';
 import './guest.css';
-
-const nodeTypes = { concept: IconNode };
-const edgeTypes = { routed: RoutedConnection };
-const noEdit = () => undefined;
-
-function PublicCanvas({ board }: { board: BoardDocument }) {
-  const process = useProcessEngine(board);
-  const { nodes, edges } = useBoardDiagram(board, null, null, null, process);
-  const boardRef = useMemo(() => ({ current: board }), [board]);
-  const drawing = useCanvasDrawing({
-    board,
-    boardRef,
-    editable: false,
-    setBoard: noEdit,
-    commit: noEdit,
-    begin: noEdit,
-    end: noEdit,
-    onSelect: noEdit,
-  });
-  const look = lookOf(board);
-  useEffect(() => {
-    applyLook({ canvas: look.canvas, icon: look.icon });
-  }, [look.canvas, look.icon]);
-  return (
-    <section className="blueprint guest-canvas" aria-label="Read-only public diagram">
-      <ReactFlow
-        nodes={nodes.map((node) => ({ ...node, draggable: false }))}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        edgesReconnectable={false}
-        elementsSelectable={false}
-        deleteKeyCode={null}
-        fitView
-        minZoom={0.1}
-        maxZoom={2}
-      >
-        <Background />
-        <Controls showInteractive={false} />
-        <DrawingLayer drawing={drawing} />
-      </ReactFlow>
-    </section>
-  );
-}
 
 /** A guest never mounts editing, chat, account settings, or recovery/autosave hooks. */
 export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }) {
@@ -154,20 +99,15 @@ export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }
           <>
             <h1>{board.title}</h1>
             <p>{board.description}</p>
-            <ReactFlowProvider key={`${id}:${pageId ?? ''}`}>
-              <PublicCanvas board={board} />
-            </ReactFlowProvider>
-            {fullBoard?.pages && id && (
-              <div className="guest-pages">
-                <BoardPages
-                  document={fullBoard}
-                  pageId={pageId}
-                  boardId={id}
-                  editable={false}
-                  onOpen={setRequestedPage}
-                  onChange={() => undefined}
-                />
-              </div>
+            {fullBoard && id && (
+              <ReadOnlyBoard
+                board={fullBoard}
+                boardId={id}
+                pageId={pageId}
+                onPage={setRequestedPage}
+                label="Read-only public diagram"
+                className="guest-canvas"
+              />
             )}
             <section aria-label="Board explanations" className="guest-explanations">
               {board.nodes.map((node) => (

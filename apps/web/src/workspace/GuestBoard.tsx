@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Expand, LogIn, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogIn } from 'lucide-react';
 import { boardPage, resolvePageId } from '@opsis/schema';
 import { BoardEntrySchema } from './board-library-api';
-import { BoardPages } from './BoardPages';
+import { ReadOnlyBoard } from './ReadOnlyBoard';
 import { BrandMark } from './BrandMark';
-import { boardSvg } from './export';
 import { navigate } from '../router';
 import { apiFetch as fetch, appPath, appUrl } from '../app-url';
-import './styles/canvas.css';
 import './styles/shared-board.css';
 
 type Entry = ReturnType<typeof BoardEntrySchema.parse>;
@@ -17,11 +15,10 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'ready'; entry: Entry };
 
-const ZOOMS = [0.5, 0.75, 1, 1.5, 2];
-
 /**
  * A shared board for someone who is not signed in: the owner chose "Anyone with the link" (or
- * Public). It is read-only: the picture of each page, its concepts, and the pages to turn.
+ * Public). It is read-only: the canvas of each page to explore and play, its concepts, and the
+ * pages to turn.
  * Hidden pages never arrive, except the one whose own link was opened.
  */
 export function GuestBoard({
@@ -36,7 +33,6 @@ export function GuestBoard({
 }) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [requested, setRequested] = useState(pageId);
-  const [zoom, setZoom] = useState<number | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void fetch(
@@ -63,11 +59,6 @@ export function GuestBoard({
   const board = state.status === 'ready' ? state.entry.snapshot.board : null;
   const currentPage = resolvePageId(board, requested);
   const view = board ? boardPage(board, currentPage) : null;
-  const svg = useMemo(() => (view ? boardSvg(view) : ''), [view]);
-  const size = useMemo(() => {
-    const match = /width="([\d.]+)" height="([\d.]+)"/u.exec(svg);
-    return match ? { width: Number(match[1]), height: Number(match[2]) } : null;
-  }, [svg]);
   useEffect(() => {
     document.title = view ? `${view.title} · Opsis` : 'Opsis';
     return () => {
@@ -128,66 +119,18 @@ export function GuestBoard({
       </div>
     );
 
-  const scaled = zoom && size ? { width: size.width * zoom, height: size.height * zoom } : null;
   return (
     <div className="shared-page">
       {header}
       <main className="shared-main">
-        <section className="shared-canvas" aria-label="Board picture">
-          <div className="shared-canvas-tools" role="toolbar" aria-label="Zoom">
-            <button
-              type="button"
-              aria-label="Zoom out"
-              disabled={zoom === ZOOMS[0]}
-              onClick={() =>
-                setZoom(
-                  (value) => [...ZOOMS].reverse().find((step) => step < (value ?? 1)) ?? ZOOMS[0]!,
-                )
-              }
-            >
-              <ZoomOut size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label="Zoom in"
-              disabled={zoom === ZOOMS.at(-1)}
-              onClick={() =>
-                setZoom((value) => ZOOMS.find((step) => step > (value ?? 0.75)) ?? ZOOMS.at(-1)!)
-              }
-            >
-              <ZoomIn size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label="Fit to screen"
-              aria-pressed={zoom === null}
-              onClick={() => setZoom(null)}
-            >
-              <Expand size={16} />
-            </button>
-          </div>
-          <div
-            className={`shared-picture ${scaled ? 'is-zoomed' : ''}`}
-            // Zoomed in, the picture scrolls; the keyboard can scroll it too.
-            tabIndex={0}
-            role="group"
-            aria-label="Diagram, scrollable when zoomed in"
-          >
-            <img
-              alt={`Diagram: ${view.title}`}
-              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
-              {...(scaled ? { width: scaled.width, height: scaled.height } : {})}
-            />
-          </div>
-          <BoardPages
-            document={board}
-            pageId={currentPage}
-            boardId={boardId}
-            editable={false}
-            onOpen={(id) => setRequested(id)}
-            onChange={() => undefined}
-          />
-        </section>
+        <ReadOnlyBoard
+          board={board}
+          boardId={boardId}
+          pageId={currentPage}
+          onPage={setRequested}
+          label="Shared diagram"
+          className="shared-canvas"
+        />
         <section className="shared-concepts" aria-label="Concepts">
           {view.description && <p className="shared-description">{view.description}</p>}
           {view.nodes.length ? (

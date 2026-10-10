@@ -399,12 +399,46 @@ opens without sign-in; link access is view-only.
       board not shared by link goes to sign-in as before.
 - [x] Search, backlinks (a shared rule over readable pages on both hosts), collection import
       link remapping and the editable JSON export cover every page. `opsis_get_board` lists pages.
-- [ ] Not yet: MCP tools and chat generation change only the first or open page respectively;
-      there is no MCP page parameter. Image and Markdown exports and board comparison show one
-      page. Collection HTML/print exports show each board's first page only, even if hidden. A guest
-      view is a picture plus text, not the interactive canvas or process player. Revealing a
-      hidden page lasts while the board stays open; reloading the workspace drops it unless the
-      link is opened again. Not verified on a real Nginx host.
+      Follow-up (2026-10-10, user request "solve these limitations"):
+
+- [x] MCP agents work on any page: every tool that reads or edits a diagram or drawings takes an
+      optional `page` (number or id) and edits that page as one undoable step on the board;
+      `opsis_add_page`, `opsis_update_page` (rename, hide/show, move) and `opsis_remove_page`
+      manage pages. The catalogue is 27 tools on both hosts; `open` links name the page.
+- [x] Chat: an answer is placed on the page it was asked from (it previously went to whatever page
+      was open when it arrived), and turning pages waits while an answer is in progress or under
+      review. **New page** in the composer puts the answer on a new page after the current one,
+      generated fresh like a new canvas, titled after the answer, keeping the board's name; a
+      failed answer removes the empty page again. If someone else deletes the source page
+      meanwhile, the answer gets a page of its own rather than landing on another page.
+- [x] Exports: **This page / All pages** in the export menu; all pages stack every page, titled, in
+      one PNG/JPEG/SVG and give Markdown a section per page. Comparison works page by page (pages
+      added, removed, renamed, hidden, moved, and each page's changes).
+- [x] Collection HTML/print show every page; pages hidden from viewers are left out unless the
+      owner ticks **Include pages hidden from viewers** (the bundle keeps everything).
+- [x] The no-account view and the guest-account gallery share one read-only interactive canvas
+      (pan/zoom, arrows, drawings), the page bar and the process player with narration. This also
+      fixed arrows missing from the guest-account gallery (it lacked the canvas's loose connection
+      mode).
+- [x] A revealed hidden page is kept in the tab's recovery copy, so reloads and polling keep it;
+      the open page is remembered per tab, so a reload returns to it.
+- [ ] Not yet: a single chat answer cannot create several pages at once (one page per message);
+      not verified on a real Nginx host. Narration (`/v1/speech`) has never required sign-in, so on
+      a personal server anonymous visitors can use the server's speech model; it is outside the
+      rate limit by design (its own bounded queue).
+
+Follow-up verified 2026-10-10 on Arch Linux: MCP round trip through the real Fastify API (add
+pages hidden or not, write and add concepts and drawings on pages by number and id, move,
+search finding a page, unknown pages refused, every call one undo step) and the Go native MCP
+catalogue test; schema tests for page-by-page comparison; export tests (collection HTML with and
+without hidden pages, all-pages SVG and Markdown). A new browser scenario covers a demo chat answer
+on a new page (board name and first page unchanged), a reload returning to that page, exporting
+Markdown for all pages, hiding a page, the guest's live canvas with arrows and the process player
+with an accessibility scan, and a signed-in viewer keeping a revealed hidden page across a reload.
+Lint, typecheck, Rust check/24 tests, desktop check and full race suite, 515 unit tests and all 71
+Fastify browser scenarios pass. The rebuilt Linux binary passes packaged integration (27 stdio
+tools), all 71 browser scenarios and all 24 hidden WebView checks. Desktop and phone screenshots of
+the guest canvas and player, chat chip, export menu and collection export were reviewed.
 
 Verified 2026-10-10 on Arch Linux: schema tests (views and write-back, add/move/rename/remove,
 renewed links, the visible-page rule, per-page validation, the reader filter with a hidden first

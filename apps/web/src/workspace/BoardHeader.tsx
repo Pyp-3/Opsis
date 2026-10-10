@@ -11,7 +11,16 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import type { BoardDocument } from '@opsis/schema';
-import { boardSvg, boardMarkdown, downloadRaster, download, type RasterFormat } from './export';
+import {
+  allPagesMarkdown,
+  allPagesSvg,
+  boardSvg,
+  boardMarkdown,
+  downloadRaster,
+  download,
+  type ExportScope,
+  type RasterFormat,
+} from './export';
 import { navigate } from '../router';
 import { boardFileJson, collectionNameOf } from './board-file';
 
@@ -89,8 +98,16 @@ export function BoardHeader({
     void download(content, filename, type).catch((e: Error) => setError(e.message));
     if (exportMenu.current) exportMenu.current.open = false;
   };
+  // On a board with pages, pictures and notes show the page on screen or every page.
+  const [scope, setScope] = useState<ExportScope>('page');
+  const paged = !!wholeBoard?.pages;
+  const all = paged && scope === 'all';
+  const source = all ? wholeBoard : board;
   const exportRaster = (format: RasterFormat) => {
-    if (board) void downloadRaster(board, format).catch((e: Error) => setError(e.message));
+    if (source)
+      void downloadRaster(source, format, all ? 'all' : 'page').catch((e: Error) =>
+        setError(e.message),
+      );
     if (exportMenu.current) exportMenu.current.open = false;
   };
 
@@ -134,6 +151,26 @@ export function BoardHeader({
             <ChevronDown className="chevron" size={14} />
           </summary>
           <div className="header-menu-panel export-menu-panel">
+            {paged && (
+              <div className="export-scope" role="radiogroup" aria-label="Pages to export">
+                {(
+                  [
+                    ['page', 'This page'],
+                    ['all', 'All pages'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === value}
+                    onClick={() => setScope(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="export-menu-group">Picture of the diagram</p>
             <button disabled={!board} onClick={() => exportRaster('png')}>
               <ImageIcon size={16} />
@@ -152,7 +189,12 @@ export function BoardHeader({
             <button
               disabled={!board}
               onClick={() =>
-                board && exportAs(boardSvg(board), 'opsis-diagram.svg', 'image/svg+xml')
+                source &&
+                exportAs(
+                  all ? allPagesSvg(source) : boardSvg(source),
+                  'opsis-diagram.svg',
+                  'image/svg+xml',
+                )
               }
             >
               <ImageIcon size={16} />
@@ -165,7 +207,12 @@ export function BoardHeader({
             <button
               disabled={!board}
               onClick={() =>
-                board && exportAs(boardMarkdown(board), 'opsis-notes.md', 'text/markdown')
+                source &&
+                exportAs(
+                  all ? allPagesMarkdown(source) : boardMarkdown(source),
+                  'opsis-notes.md',
+                  'text/markdown',
+                )
               }
             >
               <FileText size={16} />

@@ -42,6 +42,7 @@ export function useBoardGeneration(
     candidate: BoardDocument;
     before: BoardDocument;
     changes: string[];
+    place?: ((board: BoardDocument) => void) | undefined;
   } | null>(null);
   const request = useRef<AbortController | null>(null);
   const responseText = useRef('');
@@ -67,8 +68,14 @@ export function useBoardGeneration(
       thread?: string;
       focus?: ChatFocus | undefined;
       priority?: ChatPriority;
+      /**
+       * Where the result goes, decided when the request starts: the page it was asked from, or
+       * a new page. Defaults to `commit`.
+       */
+      place?: ((board: BoardDocument) => void) | undefined;
     } = {},
   ) {
+    const place = chat.place ?? commit;
     const conversation = chat.conversation ?? [];
     if (request.current || review) return false;
     const usages: ReportedUsage[] = [];
@@ -92,7 +99,7 @@ export function useBoardGeneration(
           document.querySelector('.blueprint')?.clientWidth || 900,
         );
         if (controller.signal.aborted) return false;
-        commit(candidate);
+        place(candidate);
         responseText.current = `${candidate.title}\n${candidate.description}`;
         return 'applied' as const;
       }
@@ -169,10 +176,10 @@ export function useBoardGeneration(
           if (!previous.edges.some((item) => item.id === edge.id))
             changes.push(`Add connection: ${edge.label || edge.id}`);
         }
-        setReview({ candidate, before: previous, changes });
+        setReview({ candidate, before: previous, changes, place: chat.place });
         return 'review' as const;
       }
-      commit(candidate);
+      place(candidate);
       return 'applied' as const;
     } catch (e) {
       if (!controller.signal.aborted)
@@ -213,7 +220,7 @@ export function useBoardGeneration(
     discard: () => setReview(null),
     apply: (accepted: BoardDocument) => {
       if (review) {
-        commit(accepted);
+        (review.place ?? commit)(accepted);
         setReview(null);
       }
     },

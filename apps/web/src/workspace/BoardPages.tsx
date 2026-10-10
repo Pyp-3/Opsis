@@ -41,6 +41,7 @@ export function BoardPages({
   pageId,
   boardId,
   editable,
+  locked = false,
   onOpen,
   onChange,
 }: {
@@ -49,6 +50,8 @@ export function BoardPages({
   boardId: string;
   /** Whether this reader may change pages (owner or editor, and not busy). */
   editable: boolean;
+  /** Keeps the page on screen, while a chat answer to it is in progress or under review. */
+  locked?: boolean;
   onOpen: (pageId: string, direction?: 'next' | 'previous') => void;
   /** Commits a page change to the whole board as one undoable edit. */
   onChange: (board: BoardDocument) => void;
@@ -65,6 +68,7 @@ export function BoardPages({
   const [error, setError] = useState('');
 
   const turn = (step: 1 | -1) => {
+    if (locked) return;
     const next = pages[index + step];
     if (next) onOpen(next.id, step === 1 ? 'next' : 'previous');
   };
@@ -124,7 +128,7 @@ export function BoardPages({
         type="button"
         aria-label="Previous page"
         title="Previous page (Page Up)"
-        disabled={index === 0}
+        disabled={locked || index === 0}
         onClick={() => turn(-1)}
       >
         <ChevronLeft size={16} />
@@ -178,6 +182,7 @@ export function BoardPages({
                   className="board-pages-go"
                   aria-current={page.id === current.id ? 'page' : undefined}
                   aria-label={`Go to page ${at + 1}: ${page.title}`}
+                  disabled={locked && page.id !== current.id}
                   onClick={() => {
                     onOpen(page.id, at > index ? 'next' : 'previous');
                     if (menu.current) menu.current.open = false;
@@ -282,7 +287,7 @@ export function BoardPages({
         type="button"
         aria-label="Next page"
         title="Next page (Page Down)"
-        disabled={index === pages.length - 1}
+        disabled={locked || index === pages.length - 1}
         onClick={() => turn(1)}
       >
         <ChevronRight size={16} />

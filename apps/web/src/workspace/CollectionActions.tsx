@@ -54,6 +54,8 @@ export function CollectionActions({
       await refresh();
       setMessage(`Updated sharing for ${members.length} boards.`);
     });
+  // The HTML and printout are made to be passed on, so hidden pages stay out unless asked for.
+  const [hiddenPages, setHiddenPages] = useState(false);
   const exportAs = (format: 'bundle' | 'html' | 'print') =>
     run(async () => {
       if (!collection) return;
@@ -66,8 +68,12 @@ export function CollectionActions({
           'application/json',
         );
       else if (format === 'html')
-        await download(collectionHtml(bundle), 'opsis-collection.html', 'text/html');
-      else printCollection(collectionHtml(bundle));
+        await download(
+          collectionHtml(bundle, { hiddenPages }),
+          'opsis-collection.html',
+          'text/html',
+        );
+      else printCollection(collectionHtml(bundle, { hiddenPages }));
     });
   return (
     <section className="collection-actions" aria-label="Collection sharing and export">
@@ -161,6 +167,14 @@ export function CollectionActions({
               Print walkthrough / Save PDF
             </button>
           </div>
+          <label className="collection-hidden-pages">
+            <input
+              type="checkbox"
+              checked={hiddenPages}
+              onChange={(event) => setHiddenPages(event.target.checked)}
+            />
+            Include pages hidden from viewers in the HTML and printout
+          </label>
           <p>
             Exports include board notes and sources. Imports create fresh private copies, remap
             links within the bundle, and remove links to boards outside it. Private chat threads are

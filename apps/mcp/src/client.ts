@@ -30,6 +30,7 @@ const SearchResults = z.object({
       boardTitle: z.string(),
       access: z.enum(['owner', 'editor']),
       conceptId: z.string().optional(),
+      pageId: z.string().optional(),
       label: z.string(),
       field: z.string(),
       snippet: z.string(),

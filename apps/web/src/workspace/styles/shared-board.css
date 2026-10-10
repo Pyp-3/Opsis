@@ -1,4 +1,4 @@
-/* A shared board for someone who is not signed in: the picture of each page, then its concepts. */
+/* A shared board for someone who is not signed in: the canvas of each page, then its concepts. */
 .shared-page {
   display: flex;
   flex-direction: column;
@@ -64,54 +64,15 @@
 .shared-canvas {
   position: relative;
   container-type: inline-size;
+  height: calc(100dvh - 61px);
   min-height: 0;
-  background: var(--bp-deep);
 }
-.shared-picture {
-  --picture-height: calc(100dvh - 61px);
-  display: grid;
-  place-items: center;
-  height: var(--picture-height);
-  padding: 16px;
-  overflow: auto;
-}
-.shared-picture:focus-visible {
-  outline: 2px solid var(--bp-gold);
-  outline-offset: -4px;
-}
-.shared-picture img {
-  display: block;
-  max-width: 100%;
-  max-height: calc(var(--picture-height) - 32px);
-}
-.shared-picture.is-zoomed {
-  place-items: start;
-}
-.shared-picture.is-zoomed img {
-  max-width: none;
-  max-height: none;
-}
-.shared-canvas-tools {
+/* Play sits where the canvas's big-picture card keeps it on the editable canvas. */
+.read-only-play {
   position: absolute;
   top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: flex;
-  gap: 2px;
-  padding: 4px;
-  color: var(--bp-ink);
-  background: var(--bp-panel);
-  border: 1px solid var(--bp-line);
-  border-radius: var(--radius-lg);
-}
-.shared-canvas-tools button {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius);
-}
-.shared-canvas-tools button:hover:not(:disabled),
-.shared-canvas-tools button[aria-pressed='true'] {
-  background: var(--bp-panel-hover);
+  left: 16px;
+  z-index: 5;
 }
 .shared-concepts {
   max-height: calc(100dvh - 61px);
@@ -158,8 +119,8 @@
   .shared-main {
     grid-template-columns: 1fr;
   }
-  .shared-picture {
-    --picture-height: 60vh;
+  .shared-canvas {
+    height: 65vh;
   }
   .shared-concepts {
     max-height: none;
@@ -168,13 +129,5 @@
   }
   .shared-header .secondary-button {
     padding: 0 10px;
-  }
-}
-/* On a phone the page bar sits below the picture rather than over it. */
-@media (max-width: 760px) {
-  .shared-canvas .board-pages {
-    position: static;
-    width: fit-content;
-    margin: 0 auto 12px;
   }
 }

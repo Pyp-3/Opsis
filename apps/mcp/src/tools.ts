@@ -9,6 +9,7 @@ import {
   DrawingScaleSchema,
   CANVAS_ICON_TINTS,
   EDGE_COLORS,
+  type BoardSnapshot,
 } from '@opsis/schema';
 import {
   CanvasError,
@@ -39,6 +40,17 @@ import {
   transformDrawings,
   updateDrawing,
 } from './drawings.js';
+import {
+  PageRefSchema,
+  addPage,
+  describePages,
+  onPage,
+  pageIdOf,
+  pageOf,
+  removePage,
+  updatePage,
+  type PageRef,
+} from './pages.js';
 
 export const INSTRUCTIONS = `Opsis turns explanations into diagrams on a canvas: concepts (an icon, a label, a summary and a longer explanation) joined by labelled arrows, which the reader can explore and play as a walkthrough.
 
@@ -50,6 +62,8 @@ Work like this: list, search (opsis_search_boards) or create a board, read it wi
 
 Boards can also hold drawings beside the diagram, so any 2D subject can be shown: floor plans, site layouts, circuits, piping and process diagrams, mechanisms, charts and plots, maps and illustrations. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Shapes: stroke, line, arrow, rect, ellipse, text, dimension, polygon, arc (through three points) and path (any SVG path data, for curves and plots), with fill inks, opacity, hatching, line ends (arrow, dot, bar) and text alignment. Place ready-made symbols (doors, windows, resistors, valves, pumps, people, databases and more) with opsis_place_symbols; each becomes a group. Move, scale, mirror, rotate, align and space drawings or groups with opsis_transform_drawings, copy them in rows with opsis_repeat_drawings, and group them with opsis_group_drawings. Check your work with opsis_render_board, which returns a picture of the board with rulers, then fix what looks wrong. Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.
 
+A board can have several pages, each its own canvas, read in order like a book or a pitch deck. opsis_get_board lists them; pass \`page\` (a number or id) to any reading or editing tool to work on that page instead of the first, and use opsis_add_page, opsis_update_page and opsis_remove_page to add, rename, reorder, hide or remove pages. Hidden pages are kept from people who only view the board.
+
 The account's own boards can be filed into private collections (folders): opsis_list_collections, opsis_create_collection and opsis_file_board, or pass collectionId to opsis_create_board. Filing is organization, not an edit, so it adds no undo step.`;
 
 const boardId = z
@@ -57,6 +71,7 @@ const boardId = z
   .uuid()
   .describe('Board id from opsis_list_boards or opsis_create_board.');
 const collectionId = z.string().uuid().describe('Collection id from opsis_list_collections.');
+const page = PageRefSchema.optional();
 
 function reply(value: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -78,11 +93,19 @@ export function registerTools(
   client: OpsisClient,
   webUrl: string,
 ) {
-  const open = (id: string, concept?: string) =>
+  const open = (id: string, concept?: string, pageId?: string | null) =>
     new URL(
-      `/canvas?board=${id}${concept ? `&concept=${encodeURIComponent(concept)}` : ''}`,
+      `/canvas?board=${id}${concept ? `&concept=${encodeURIComponent(concept)}` : ''}${
+        pageId ? `&page=${pageId}` : ''
+      }`,
       webUrl,
     ).toString();
+  /** A single-page edit on one page of a board; see pages.ts. */
+  const editPage = <R>(
+    id: string,
+    ref: PageRef | undefined,
+    change: (snapshot: BoardSnapshot) => { snapshot: BoardSnapshot; result: R },
+  ) => client.edit(id, (snapshot) => onPage(snapshot, ref, change));
   const saved = (id: string, revision: number, extra: Record<string, unknown> = {}) => ({
     id,
     revision,
@@ -118,7 +141,7 @@ export function registerTools(
     guarded(async ({ query }: { query: string }) =>
       (await client.search(query)).map((hit) => ({
         ...hit,
-        open: open(hit.boardId, hit.conceptId),
+        open: open(hit.boardId, hit.conceptId, hit.pageId),
       })),
     ),
   );
@@ -185,19 +208,22 @@ export function registerTools(
     {
       title: 'Read a board',
       description:
-        'Returns a board’s title, summary, colours, concepts (with ids and positions), connections, drawings, drawing layers and scale. Read before editing.',
-      inputSchema: { boardId },
+        'Returns a board’s title, summary, colours, its pages, and one page’s concepts (with ids and positions), connections, drawings, drawing layers and scale. Read before editing. Every page is its own canvas; pass `page` to read another one.',
+      inputSchema: { boardId, page },
       annotations: { readOnlyHint: true },
     },
-    guarded(async ({ boardId: id }) => {
+    guarded(async ({ boardId: id, page: ref }) => {
       const entry = await client.get(id);
-      const board = entry.snapshot.board;
+      const whole = entry.snapshot.board;
+      const shown = whole ? pageIdOf(whole, ref) : null;
+      const board = whole ? pageOf(whole, ref) : null;
       return {
         ...describeBoard(entry.id, entry.revision, board),
+        ...(whole ? describePages(whole, shown) : {}),
         ...(board ? describeDrawings(board) : {}),
         // Someone else's public board: readable here, but edits will be refused.
         ...(entry.access === 'viewer' ? { readOnly: true, owner: entry.owner?.name } : {}),
-        open: open(id),
+        open: open(id, undefined, shown),
       };
     }),
   );
@@ -273,6 +299,7 @@ export function registerTools(
         'Adds a concept to the canvas. Pass `after` to place it below an existing concept and draw an arrow from it.',
       inputSchema: {
         boardId,
+        page,
         label: ConceptFieldsSchema.label,
         summary: ConceptFieldsSchema.summary,
         explanation: ConceptFieldsSchema.explanation.optional(),
@@ -287,8 +314,8 @@ export function registerTools(
         id: ConceptIdSchema.optional().describe('Optional id; derived from the label otherwise.'),
       },
     },
-    guarded(async ({ boardId: id, ...input }) => {
-      const { revision, result } = await client.edit(id, (snapshot) => {
+    guarded(async ({ boardId: id, page: ref, ...input }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
         const added = addConcept(snapshot, input);
         return { snapshot: added.snapshot, result: added.id };
       });
@@ -304,6 +331,7 @@ export function registerTools(
         'Changes a concept’s content or explicit board link. Set linkedBoardId to null to clear the link.',
       inputSchema: {
         boardId,
+        page,
         conceptId: ConceptIdSchema,
         label: ConceptFieldsSchema.label.optional(),
         linkedBoardId: z.string().uuid().nullable().optional(),
@@ -313,8 +341,8 @@ export function registerTools(
         kind: ConceptFieldsSchema.kind.optional(),
       },
     },
-    guarded(async ({ boardId: id, conceptId, ...patch }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, conceptId, ...patch }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: updateConcept(snapshot, conceptId, patch),
         result: null,
       }));
@@ -327,11 +355,11 @@ export function registerTools(
     {
       title: 'Remove a concept',
       description: 'Removes a concept and its connections. The reader can undo it.',
-      inputSchema: { boardId, conceptId: ConceptIdSchema },
+      inputSchema: { boardId, page, conceptId: ConceptIdSchema },
       annotations: { destructiveHint: true },
     },
-    guarded(async ({ boardId: id, conceptId }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, conceptId }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: removeConcept(snapshot, conceptId),
         result: null,
       }));
@@ -351,10 +379,16 @@ export function registerTools(
     {
       title: 'Connect two concepts',
       description: 'Draws an arrow from one concept to another.',
-      inputSchema: { boardId, from: ConceptIdSchema, to: ConceptIdSchema, ...connectionFields },
+      inputSchema: {
+        boardId,
+        page,
+        from: ConceptIdSchema,
+        to: ConceptIdSchema,
+        ...connectionFields,
+      },
     },
-    guarded(async ({ boardId: id, ...input }) => {
-      const { revision, result } = await client.edit(id, (snapshot) => {
+    guarded(async ({ boardId: id, page: ref, ...input }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
         const made = connect(snapshot, input);
         return { snapshot: made.snapshot, result: made.id };
       });
@@ -367,11 +401,11 @@ export function registerTools(
     {
       title: 'Remove a connection',
       description: 'Removes one arrow by its id.',
-      inputSchema: { boardId, connectionId: z.string().min(1).max(80) },
+      inputSchema: { boardId, page, connectionId: z.string().min(1).max(80) },
       annotations: { destructiveHint: true },
     },
-    guarded(async ({ boardId: id, connectionId }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, connectionId }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: disconnect(snapshot, connectionId),
         result: null,
       }));
@@ -387,11 +421,12 @@ export function registerTools(
         'Draws shapes on the canvas beside the diagram in one undoable step: stroke (freehand), line, arrow, rect (box), ellipse, text, dimension lines, polygon (closed), arc (start, through, end) and path (SVG path data). Coordinates are canvas units; one grid square is 24. Returns the new drawing ids.',
       inputSchema: {
         boardId,
+        page,
         drawings: z.array(DrawingInputSchema).min(1).max(100),
       },
     },
-    guarded(async ({ boardId: id, drawings }) => {
-      const { revision, result } = await client.edit(id, (snapshot) => {
+    guarded(async ({ boardId: id, page: ref, drawings }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
         const added = addDrawings(snapshot, drawings);
         return { snapshot: added.snapshot, result: added.ids };
       });
@@ -405,10 +440,10 @@ export function registerTools(
       title: 'Update a drawing',
       description:
         'Moves, reshapes, relabels or restyles one drawing, or changes the concept it moves with or its layer. Locked drawings cannot be changed.',
-      inputSchema: { boardId, drawingId: ConceptIdSchema, ...DrawingPatchSchema },
+      inputSchema: { boardId, page, drawingId: ConceptIdSchema, ...DrawingPatchSchema },
     },
-    guarded(async ({ boardId: id, drawingId, ...patch }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, drawingId, ...patch }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: updateDrawing(snapshot, drawingId, patch),
         result: null,
       }));
@@ -422,11 +457,11 @@ export function registerTools(
       title: 'Remove drawings',
       description:
         'Removes drawings by id in one undoable step. Nothing is removed if any of them is locked.',
-      inputSchema: { boardId, drawingIds: z.array(ConceptIdSchema).min(1).max(200) },
+      inputSchema: { boardId, page, drawingIds: z.array(ConceptIdSchema).min(1).max(200) },
       annotations: { destructiveHint: true },
     },
-    guarded(async ({ boardId: id, drawingIds }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, drawingIds }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: removeDrawings(snapshot, drawingIds),
         result: null,
       }));
@@ -460,10 +495,10 @@ export function registerTools(
       title: 'Place symbols',
       description:
         'Draws ready-made symbols (doors, windows, stairs, furniture, resistors, capacitors, switches, valves, pumps, tanks, instruments, people, clouds, databases and more) in one undoable step. Each symbol becomes a group of ordinary drawings that moves and transforms as one; returns each group and its drawing ids.',
-      inputSchema: { boardId, symbols: z.array(SymbolPlacementSchema).min(1).max(40) },
+      inputSchema: { boardId, page, symbols: z.array(SymbolPlacementSchema).min(1).max(40) },
     },
-    guarded(async ({ boardId: id, symbols }) => {
-      const { revision, result } = await client.edit(id, (snapshot) => {
+    guarded(async ({ boardId: id, page: ref, symbols }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
         const placed = placeSymbols(snapshot, symbols);
         return { snapshot: placed.snapshot, result: placed.placed };
       });
@@ -477,10 +512,10 @@ export function registerTools(
       title: 'Transform drawings',
       description:
         'Moves, scales, mirrors, rotates, aligns or evenly spaces several drawings and groups in one undoable step (applied in that order). Locked drawings cannot be changed.',
-      inputSchema: { boardId, ...TransformSchema },
+      inputSchema: { boardId, page, ...TransformSchema },
     },
-    guarded(async ({ boardId: id, ...input }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, ...input }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: transformDrawings(snapshot, input),
         result: null,
       }));
@@ -496,6 +531,7 @@ export function registerTools(
         'Copies drawings and groups count times, each copy step further on (rows of columns, stair treads, fence posts, chart bars), in one undoable step. Returns the new drawing ids.',
       inputSchema: {
         boardId,
+        page,
         drawingIds: z.array(ConceptIdSchema).max(200).optional(),
         groups: z.array(z.string().min(1).max(80)).max(50).optional(),
         count: z.number().int().min(1).max(50),
@@ -504,8 +540,8 @@ export function registerTools(
           .describe('[dx, dy] between one copy and the next.'),
       },
     },
-    guarded(async ({ boardId: id, drawingIds, groups, count, step }) => {
-      const { revision, result } = await client.edit(id, (snapshot) => {
+    guarded(async ({ boardId: id, page: ref, drawingIds, groups, count, step }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
         const repeated = repeatBoardDrawings(snapshot, {
           ...(drawingIds ? { drawingIds } : {}),
           ...(groups ? { groups } : {}),
@@ -526,6 +562,7 @@ export function registerTools(
         'Puts drawings in a named group, so the reader selects and drags them as one and transforms can target the group; group null takes them out of any group.',
       inputSchema: {
         boardId,
+        page,
         drawingIds: z.array(ConceptIdSchema).min(1).max(200),
         group: z
           .string()
@@ -535,8 +572,8 @@ export function registerTools(
           .nullable(),
       },
     },
-    guarded(async ({ boardId: id, drawingIds, group }) => {
-      const { revision } = await client.edit(id, (snapshot) => ({
+    guarded(async ({ boardId: id, page: ref, drawingIds, group }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: groupBoardDrawings(snapshot, drawingIds, group),
         result: null,
       }));
@@ -552,6 +589,7 @@ export function registerTools(
         'Returns a PNG picture of the board, or of a region of it, to check your work: every visible drawing as the canvas paints it, concepts as labelled circles where their icons sit, connections as straight arrows, and rulers marked in canvas coordinates. Icons and arrow routing are simplified.',
       inputSchema: {
         boardId,
+        page,
         region: z
           .object({
             x: z.number().finite(),
@@ -571,10 +609,10 @@ export function registerTools(
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ boardId: id, region, maxSize }): Promise<CallToolResult> => {
+    async ({ boardId: id, page: ref, region, maxSize }): Promise<CallToolResult> => {
       try {
         const entry = await client.get(id);
-        const preview = boardPreviewSvg(boardOf(entry.snapshot), {
+        const preview = boardPreviewSvg(pageOf(boardOf(entry.snapshot), ref), {
           ...(region ? { region } : {}),
           ...(maxSize ? { maxSize } : {}),
         });
@@ -605,6 +643,68 @@ export function registerTools(
   );
 
   server.registerTool(
+    'opsis_add_page',
+    {
+      title: 'Add a page',
+      description:
+        'Adds an empty page (its own canvas, like the next slide or page of a book) after `after`, or at the end. Fill it by passing its number or id as `page` to the other tools, such as opsis_write_diagram. A hidden page is left out for people who only view the board, unless they open that page’s link.',
+      inputSchema: {
+        boardId,
+        title: z.string().trim().min(1).max(60),
+        after: PageRefSchema.optional().describe('The page the new one follows.'),
+        hidden: z.boolean().optional().describe('Hide the page from viewers.'),
+      },
+    },
+    guarded(async ({ boardId: id, ...input }) => {
+      const { revision, result } = await client.edit(id, (snapshot) => {
+        const added = addPage(snapshot, input);
+        return { snapshot: added.snapshot, result: { pageId: added.id, number: added.number } };
+      });
+      return { ...saved(id, revision, result), open: open(id, undefined, result.pageId) };
+    }),
+  );
+
+  server.registerTool(
+    'opsis_update_page',
+    {
+      title: 'Update a page',
+      description:
+        'Renames a page, hides it from viewers or shows it again, or moves it to another position (1 is first). At least one page stays visible.',
+      inputSchema: {
+        boardId,
+        page: PageRefSchema,
+        title: z.string().trim().min(1).max(60).optional(),
+        hidden: z.boolean().optional(),
+        moveTo: z.number().int().min(1).max(30).optional(),
+      },
+    },
+    guarded(async ({ boardId: id, page: ref, ...patch }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: updatePage(snapshot, ref, patch),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_remove_page',
+    {
+      title: 'Remove a page',
+      description: 'Removes a page and everything on it. The reader can undo it.',
+      inputSchema: { boardId, page: PageRefSchema },
+      annotations: { destructiveHint: true },
+    },
+    guarded(async ({ boardId: id, page: ref }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: removePage(snapshot, ref),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
     'opsis_write_diagram',
     {
       title: 'Write a whole diagram',
@@ -612,6 +712,7 @@ export function registerTools(
         'Replaces a board’s diagram in one undoable step, or creates a new board when boardId is omitted. Concepts that keep their id keep their place on the canvas.',
       inputSchema: {
         boardId: boardId.optional(),
+        page,
         title: z.string().trim().min(1).max(100),
         description: z.string().max(500).describe('The big-picture summary.'),
         concepts: z
@@ -634,9 +735,9 @@ export function registerTools(
       },
       annotations: { destructiveHint: true },
     },
-    guarded(async ({ boardId: given, ...diagram }) => {
+    guarded(async ({ boardId: given, page: ref, ...diagram }) => {
       const id = given ?? (await client.create(diagram.title)).id;
-      const { revision } = await client.edit(id, (snapshot) => ({
+      const { revision } = await editPage(id, ref, (snapshot) => ({
         snapshot: writeDiagram(snapshot, diagram),
         result: null,
       }));

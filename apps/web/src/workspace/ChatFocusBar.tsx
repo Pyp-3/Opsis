@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ChatFocus, ChatPriority, ChatPriorityReason } from '@opsis/schema';
 import { PencilRuler, Shapes, X } from 'lucide-react';
 
@@ -25,6 +26,7 @@ export function ChatFocusBar({
   overridden,
   onPriority,
   disabled,
+  children,
 }: {
   focus: ChatFocus | undefined;
   /** The concept whose attached drawings are in focus, when none were selected directly. */
@@ -36,10 +38,12 @@ export function ChatFocusBar({
   overridden: boolean;
   onPriority(priority: ChatPriority | null): void;
   disabled: boolean;
+  /** Further request options shown in the same row, such as answering on a new page. */
+  children?: ReactNode;
 }) {
   const readerCount = focus?.drawings.length ?? 0;
   const sketchCount = focus?.sketchIds?.length ?? 0;
-  if (!focus && priority === 'diagram' && !overridden) return null;
+  if (!focus && priority === 'diagram' && !overridden && !children) return null;
   const drawingFirst = priority === 'drawing';
   const parts = [
     readerCount ? plural(readerCount, 'drawing') : '',
@@ -99,6 +103,7 @@ export function ChatFocusBar({
           Automatic
         </button>
       )}
+      {children}
     </div>
   );
 }

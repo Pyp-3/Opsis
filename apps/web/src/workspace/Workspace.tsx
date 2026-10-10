@@ -40,6 +40,7 @@ import {
 } from '@xyflow/react';
 import {
   ArrowUpRight,
+  FilePlus,
   ChevronUp,
   ChevronsRight,
   MessageSquarePlus,
@@ -70,6 +71,11 @@ import {
   patchBoardNode,
   EMAIL_DEMO,
   type BoardGraph,
+  addBoardPage,
+  MAX_BOARD_PAGES,
+  boardPages,
+  updateBoardPage,
+  withBoardPage,
   type BoardAgent,
   type BoardAttachment,
   type BoardChatEntry,
@@ -88,8 +94,8 @@ import { layoutBoard, NODE_WIDTH, removeNode } from './model';
 import { connectBoard } from './connections';
 import { readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
-import { useBoardPages } from './useBoardPages';
-import { BoardPages } from './BoardPages';
+import { rememberedPage, rememberPage, useBoardPages } from './useBoardPages';
+import { BoardPages, newPageId } from './BoardPages';
 import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
@@ -123,6 +129,7 @@ import './workspace.css';
 import { useProviderUsage, type ProviderAgent } from './provider-usage';
 
 const EXPLAIN_KEY = 'opsis:explain';
+const hasContent = (board: BoardDocument) => board.nodes.length > 0 || !!board.drawings?.length;
 const nodeTypes = { concept: IconNode };
 const edgeTypes = { routed: RoutedConnection };
 
@@ -138,7 +145,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const boardHistory = useBoardHistory(initial.snapshot);
   const { history, snapshot, replace, begin } = boardHistory;
   // Everything below edits the open page; `pages.document` is the whole board.
-  const pages = useBoardPages(boardHistory);
+  const pages = useBoardPages(boardHistory, rememberedPage(initial.id));
   const { board, boardRef, setBoard, commit, travel, end, pageId, openPage } = pages;
   // Usage is recorded against the board open when a generation starts.
   const usageBoardRef = useRef<string | undefined>(undefined);
@@ -164,6 +171,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   useEffect(() => {
     usageBoardRef.current = library.activeId;
   }, [library.activeId]);
+  // A reload returns this tab to the page it was on.
+  useEffect(() => rememberPage(library.activeId, pageId), [library.activeId, pageId]);
   const { error, setError, setBusy } = generation;
   useEffect(() => {
     if (settingsError) setError(`${settingsError} Default model settings apply for now.`);
@@ -485,6 +494,22 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [undo, editing]);
 
+  /** A chat answer on its own new page: the page takes the answer's title; the board keeps its. */
+  const placeOnNewPage = (page: string, candidate: BoardDocument) => {
+    let whole = pages.documentRef.current;
+    if (!whole) return;
+    if (!boardPages(whole).some((entry) => entry.id === page))
+      whole = addBoardPage(whole, { id: page, title: 'New page' });
+    const titled = updateBoardPage(whole, page, { title: candidate.title.slice(0, 60) });
+    boardHistory.commit(
+      withBoardPage(titled, page, {
+        ...candidate,
+        title: whole.title,
+        description: whole.description,
+      }),
+    );
+  };
+
   async function generate(event?: FormEvent, text = prompt, freshCanvas = false) {
     event?.preventDefault();
     if (!text.trim() || busy) return;
@@ -516,15 +541,43 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         text,
         chatBoardId,
       );
-      const focus = freshCanvas ? undefined : sentFocus;
+      // The answer goes to the page it was asked from, even if the reader turns the page, or to
+      // a new page after it.
+      const sourcePage = pageId;
+      const whole = pages.documentRef.current;
+      const newPage =
+        answerOnNewPage && !freshCanvas && whole && board && hasContent(board) ? newPageId() : null;
+      let previous = boardRef.current;
+      let added: BoardDocument | null = null;
+      if (newPage && whole) {
+        added = addBoardPage(
+          whole,
+          { id: newPage, title: 'New page' },
+          { after: sourcePage, firstPage: { id: newPageId(), title: 'Page 1' } },
+        );
+        boardHistory.commit(added);
+        goToPage(newPage, 'next');
+        // Like a new canvas: the agent writes a fresh diagram rather than a follow-up.
+        previous = null;
+      }
+      const place = (candidate: BoardDocument) => {
+        const current = pages.documentRef.current;
+        // Someone else removed the page meanwhile: the answer gets a page of its own again.
+        const gone =
+          !!sourcePage && !!current && !boardPages(current).some((page) => page.id === sourcePage);
+        if (newPage || gone) placeOnNewPage(newPage ?? sourcePage!, candidate);
+        else pages.commitTo(sourcePage, candidate);
+      };
+      const focus = freshCanvas || newPage ? undefined : sentFocus;
       const result = await generation.generate(
         text,
         agent,
         modelPreferences,
-        boardRef.current,
-        freshCanvas ? null : selected,
+        previous,
+        freshCanvas || newPage ? null : selected,
         agent === 'demo' || freshCanvas ? [] : attachments,
         {
+          place,
           conversation: chatConversation(thread.messages),
           memory: thread.memory,
           thread: thread.id,
@@ -535,6 +588,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         },
       );
       if (result && callsAgent) provider.record(agent as ProviderAgent);
+      // A new page the answer never filled is taken away again.
+      if (!result && added && pages.documentRef.current === added) {
+        boardHistory.travel();
+        goToPage(sourcePage);
+      }
+      if (newPage) setAnswerOnNewPage(false);
       const outcome: ChatOutcome = result === 'review' ? 'review' : result ? 'applied' : 'failed';
       const saved = await chat.finish(
         thread,
@@ -632,6 +691,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     },
     [flow, boardRef],
   );
+  // Whether the next chat answer goes on a new page instead of the open one.
+  const [answerOnNewPage, setAnswerOnNewPage] = useState(false);
   const [pageTurn, setPageTurn] = useState<{ key: number; direction: 'next' | 'previous' } | null>(
     null,
   );
@@ -807,7 +868,24 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
           overridden={priorityOverride !== null}
           onPriority={setPriorityOverride}
           disabled={busy}
-        />
+        >
+          {hasContent(board) && (
+            <button
+              type="button"
+              className="chat-focus-priority"
+              aria-pressed={answerOnNewPage}
+              disabled={busy || (pages.document?.pages?.length ?? 1) >= MAX_BOARD_PAGES}
+              title={
+                answerOnNewPage
+                  ? 'The answer goes on a new page after this one. Click to answer on this page.'
+                  : 'The answer changes this page. Click to put it on a new page instead.'
+              }
+              onClick={() => setAnswerOnNewPage((value) => !value)}
+            >
+              <FilePlus size={13} aria-hidden /> New page
+            </button>
+          )}
+        </ChatFocusBar>
       )}
       {board && !busy && (
         <NextSteps
@@ -1279,6 +1357,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   pageId={pageId}
                   boardId={library.activeId}
                   editable={!busy && !playerOpen}
+                  // A chat answer in progress or under review belongs to the page on screen.
+                  locked={generation.busy || chatSending || !!generation.review}
                   onOpen={goToPage}
                   onChange={(next) => boardHistory.commit(next)}
                 />

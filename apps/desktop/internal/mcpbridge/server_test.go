@@ -71,12 +71,13 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	}
 	slices.Sort(names)
 	expected := []string{
-		"opsis_add_concept", "opsis_add_drawings", "opsis_connect", "opsis_create_board",
+		"opsis_add_concept", "opsis_add_drawings", "opsis_add_page", "opsis_connect", "opsis_create_board",
 		"opsis_create_collection", "opsis_disconnect", "opsis_file_board", "opsis_get_board",
 		"opsis_group_drawings", "opsis_list_boards", "opsis_list_collections", "opsis_list_public_boards",
 		"opsis_list_symbols", "opsis_place_symbols", "opsis_remove_concept", "opsis_remove_drawings",
-		"opsis_render_board", "opsis_repeat_drawings", "opsis_search_boards", "opsis_transform_drawings",
-		"opsis_update_board", "opsis_update_concept", "opsis_update_drawing", "opsis_write_diagram",
+		"opsis_remove_page", "opsis_render_board", "opsis_repeat_drawings", "opsis_search_boards",
+		"opsis_transform_drawings", "opsis_update_board", "opsis_update_concept", "opsis_update_drawing",
+		"opsis_update_page", "opsis_write_diagram",
 	}
 	if !slices.Equal(names, expected) {
 		t.Fatalf("tools: got %v, want %v", names, expected)

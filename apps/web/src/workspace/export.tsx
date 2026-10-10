@@ -1,6 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { saveBlob } from '../desktop';
-import { absoluteDrawing, drawingBounds, visibleDrawings, type BoardDocument } from '@opsis/schema';
+import {
+  absoluteDrawing,
+  drawingBounds,
+  everyBoardPage,
+  visibleDrawings,
+  type BoardDocument,
+  type PageSummary,
+} from '@opsis/schema';
 import { DrawingShape } from './DrawingShape';
 import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
@@ -164,16 +171,26 @@ export type RasterFormat = keyof typeof RASTER_FORMATS;
  * shows the complete diagram, not just whatever is in the viewport. The canvas is painted
  * with the board's background first, so JPEG (which has no transparency) never bleeds to black.
  */
-export async function downloadRaster(board: BoardDocument, format: RasterFormat): Promise<void> {
+export async function downloadRaster(
+  board: BoardDocument,
+  format: RasterFormat,
+  scope: ExportScope = 'page',
+): Promise<void> {
   const look = lookOf(board);
-  const svg = boardSvg(board, look);
+  const svg = scope === 'all' ? allPagesSvg(board, look) : boardSvg(board, look);
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const image = new Image();
     image.src = url;
     await image.decode();
-    // Cap the longest side so very large boards still encode, but keep small ones crisp at 2×.
-    const scale = Math.min(2, 4096 / image.width, 4096 / image.height);
+    // Cap the size so very large boards (and tall stacks of pages) still encode, but keep small
+    // ones crisp at 2×.
+    const scale = Math.min(
+      2,
+      (scope === 'all' ? 8192 : 4096) / image.width,
+      (scope === 'all' ? 16_384 : 4096) / image.height,
+      Math.sqrt(40_000_000 / (image.width * image.height)),
+    );
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.width * scale));
     canvas.height = Math.max(1, Math.round(image.height * scale));
@@ -197,3 +214,52 @@ export async function downloadRaster(board: BoardDocument, format: RasterFormat)
 }
 
 export const downloadPng = (board: BoardDocument) => downloadRaster(board, 'png');
+
+/** What an image or Markdown export covers: the page on screen, or every page of the board. */
+export type ExportScope = 'page' | 'all';
+const PAGE_GAP = 48;
+
+/** A page's own heading in exports of every page. */
+const pageHeading = (index: number, page: PageSummary) =>
+  `Page ${index + 1}: ${page.title}${page.hidden ? ' (hidden from viewers)' : ''}`;
+
+/** Every page of the board, one below the other, each drawn as {@link boardSvg} draws it. */
+export function allPagesSvg(document: BoardDocument, look: CanvasLook = lookOf(document)): string {
+  if (!document.pages) return boardSvg(document, look);
+  const palette = paletteOf(look);
+  const pictures = everyBoardPage(document).map(({ page, board }, index) => {
+    const svg = boardSvg(
+      { ...board, title: `${board.title} · ${pageHeading(index, page!)}` },
+      look,
+    );
+    const [, width = '1', height = '1'] = /width="([\d.]+)" height="([\d.]+)"/u.exec(svg) ?? [];
+    return { svg, width: Number(width), height: Number(height) };
+  });
+  const width = Math.max(...pictures.map((picture) => picture.width));
+  let y = 0;
+  const placed = pictures.map((picture) => {
+    const at = y;
+    y += picture.height + PAGE_GAP;
+    // A nested <svg> keeps each page's own coordinates and view box.
+    return picture.svg.replace('<svg ', `<svg x="${(width - picture.width) / 2}" y="${at}" `);
+  });
+  const height = y - PAGE_GAP;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="${palette.deep}"/>${placed.join('')}</svg>`;
+}
+
+/** Markdown notes for every page, each under its own heading. */
+export function allPagesMarkdown(document: BoardDocument): string {
+  if (!document.pages) return boardMarkdown(document);
+  const safe = (value: string) => value.replace(/[\\`*_{}[\]<>#|]/g, '\\$&');
+  return (
+    `# ${safe(document.title)}\n\n${safe(document.description)}\n\n` +
+    everyBoardPage(document)
+      .map(({ page, board }, index) =>
+        boardMarkdown({ ...board, title: pageHeading(index, page!), description: '' })
+          // Each page's headings sit one level below the board's.
+          .replace(/^#/gmu, '##')
+          .replace(/\n{3,}/gu, '\n\n'),
+      )
+      .join('\n')
+  );
+}

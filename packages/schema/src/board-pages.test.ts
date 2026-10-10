@@ -5,6 +5,7 @@ import {
   boardPage,
   boardPages,
   changedBoardPage,
+  compareBoards,
   createEmptyBoard,
   everyBoardPage,
   mapBoardPages,
@@ -231,5 +232,29 @@ describe('board pages', () => {
     expect(everyBoardPage(copy).map(({ board: page }) => page.nodes[0]?.linkedBoardId)).toEqual(
       Array(3).fill('4d9b4e3a-8e6d-4fa0-9c7b-2f9f3d2e7c33'),
     );
+  });
+
+  it('compares boards page by page', () => {
+    const before = pitch();
+    const after = updateBoardPage(
+      withBoardPage(before, THIRD, {
+        ...boardPage(before, THIRD),
+        nodes: [{ ...boardPage(before, THIRD).nodes[0]!, label: 'Launch day' }],
+      }),
+      SECOND,
+      { title: 'Prices', hidden: false },
+    );
+    const labels = compareBoards(before, after).map((difference) => difference.label);
+    expect(labels).toEqual(['Page 2 (Prices)', 'Page 3 (Roadmap) · Concept launch']);
+    // A board without pages compares as the other side's first page.
+    expect(compareBoards(cover, before).map((difference) => difference.label)).toEqual([
+      'Page 1 (Cover)',
+      'Page 2 (Pricing)',
+      'Page 2 (Pricing) · Concept price',
+      'Page 2 (Pricing) · Position price',
+      'Page 3 (Roadmap)',
+      'Page 3 (Roadmap) · Concept launch',
+      'Page 3 (Roadmap) · Position launch',
+    ]);
   });
 });

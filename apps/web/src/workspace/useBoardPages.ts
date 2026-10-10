@@ -10,6 +10,30 @@ import {
 import type { useBoardHistory } from './useBoardHistory';
 
 type History = ReturnType<typeof useBoardHistory>;
+const OPEN_PAGE = 'opsis:open-page';
+
+/** Remembers the page this tab shows, so a reload returns to it. */
+export function rememberPage(boardId: string, pageId: string | null) {
+  try {
+    if (pageId) sessionStorage.setItem(OPEN_PAGE, JSON.stringify({ boardId, pageId }));
+    else sessionStorage.removeItem(OPEN_PAGE);
+  } catch {
+    // Remembering the page is a convenience only.
+  }
+}
+
+/** The page this tab last showed of `boardId`, if any. */
+export function rememberedPage(boardId: string): string | null {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(OPEN_PAGE) ?? 'null') as {
+      boardId?: unknown;
+      pageId?: unknown;
+    } | null;
+    return saved?.boardId === boardId && typeof saved.pageId === 'string' ? saved.pageId : null;
+  } catch {
+    return null;
+  }
+}
 type Update = BoardDocument | null | ((board: BoardDocument | null) => BoardDocument | null);
 
 /**
@@ -17,8 +41,8 @@ type Update = BoardDocument | null | ((board: BoardDocument | null) => BoardDocu
  * shows them the open page and writes their edits back into the whole board, so every edit,
  * drag and undo still goes through the board's one history.
  */
-export function useBoardPages(history: History) {
-  const [requested, setRequested] = useState<string | null>(null);
+export function useBoardPages(history: History, initialPage: string | null = null) {
+  const [requested, setRequested] = useState<string | null>(initialPage);
   const full = history.board;
   const pageId = resolvePageId(full, requested);
   const pageRef = useRef(pageId);
@@ -73,6 +97,11 @@ export function useBoardPages(history: History) {
     },
     [commitFull, fullRef, history.snapshotRef],
   );
+  /** An edit for one named page, wherever the reader is now (a chat answer to that page). */
+  const commitTo = useCallback(
+    (page: string | null, next: BoardDocument) => commitFull(write(fullRef.current, next, page)),
+    [commitFull, fullRef],
+  );
   const end = useCallback(
     (next?: BoardDocument | null) =>
       next === undefined ? endFull() : endFull(write(fullRef.current, next)),
@@ -100,6 +129,7 @@ export function useBoardPages(history: History) {
     boardRef,
     setBoard,
     commit,
+    commitTo,
     end,
     travel,
   };

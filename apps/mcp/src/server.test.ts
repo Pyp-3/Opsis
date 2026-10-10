@@ -72,6 +72,7 @@ describe('Opsis MCP server', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'opsis_add_concept',
       'opsis_add_drawings',
+      'opsis_add_page',
       'opsis_connect',
       'opsis_create_board',
       'opsis_create_collection',
@@ -86,6 +87,7 @@ describe('Opsis MCP server', () => {
       'opsis_place_symbols',
       'opsis_remove_concept',
       'opsis_remove_drawings',
+      'opsis_remove_page',
       'opsis_render_board',
       'opsis_repeat_drawings',
       'opsis_search_boards',
@@ -93,6 +95,7 @@ describe('Opsis MCP server', () => {
       'opsis_update_board',
       'opsis_update_concept',
       'opsis_update_drawing',
+      'opsis_update_page',
       'opsis_write_diagram',
     ]);
     const add = tools.find((tool) => tool.name === 'opsis_add_concept')!;
@@ -193,6 +196,81 @@ describe('Opsis MCP server', () => {
         open: `http://localhost:3000/canvas?board=${created.id}`,
       }),
     ]);
+  });
+
+  it('adds, fills, hides and removes pages, editing any page in one undoable step', async () => {
+    const created = (await call('opsis_create_board', { title: 'Pitch' })).json();
+    const id = created.id as string;
+    await call('opsis_write_diagram', {
+      boardId: id,
+      title: 'Pitch',
+      description: 'Why it works.',
+      concepts: [{ id: 'idea', label: 'Idea', summary: 'The idea.' }],
+      connections: [],
+    });
+    expect((await call('opsis_get_board', { boardId: id, page: 2 })).isError).toBe(true);
+    const pricing = (
+      await call('opsis_add_page', { boardId: id, title: 'Pricing', hidden: true })
+    ).json();
+    expect(pricing).toMatchObject({ number: 2 });
+    expect(pricing.open).toContain(`&page=${pricing.pageId}`);
+    await call('opsis_write_diagram', {
+      boardId: id,
+      page: 2,
+      title: 'Pitch',
+      description: 'Why it works.',
+      concepts: [
+        { id: 'free', label: 'Free tier', summary: 'Try it.' },
+        { id: 'pro', label: 'Pro', summary: 'Pay monthly.' },
+      ],
+      connections: [{ from: 'free', to: 'pro', label: 'upgrades' }],
+    });
+    await call('opsis_add_concept', {
+      boardId: id,
+      page: pricing.pageId,
+      label: 'Team',
+      summary: 'Per seat.',
+      after: 'pro',
+    });
+    const roadmap = (await call('opsis_add_page', { boardId: id, title: 'Roadmap' })).json();
+    await call('opsis_add_drawings', {
+      boardId: id,
+      page: roadmap.pageId,
+      drawings: [{ shape: 'text', x: 0, y: 0, text: 'Q3' }],
+    });
+    await call('opsis_update_page', { boardId: id, page: roadmap.pageId, moveTo: 2 });
+
+    const first = (await call('opsis_get_board', { boardId: id })).json();
+    expect(first.concepts.map((c: { id: string }) => c.id)).toEqual(['idea']);
+    expect(first.pages).toEqual([
+      expect.objectContaining({ number: 1, title: 'Page 1', shownHere: true }),
+      expect.objectContaining({ number: 2, title: 'Roadmap' }),
+      expect.objectContaining({ number: 3, title: 'Pricing', hiddenFromViewers: true }),
+    ]);
+    const third = (await call('opsis_get_board', { boardId: id, page: 3 })).json();
+    expect(third.concepts.map((c: { id: string }) => c.id)).toEqual(['free', 'pro', 'team']);
+    expect(third.connections).toHaveLength(2);
+    expect(
+      (await call('opsis_get_board', { boardId: id, page: roadmap.pageId })).json().drawings,
+    ).toHaveLength(1);
+    expect((await call('opsis_search_boards', { query: 'team' })).json()[0]).toMatchObject({
+      conceptId: 'team',
+      pageId: pricing.pageId,
+    });
+
+    // Every tool call is one step on the whole board's undo history.
+    const stored = (
+      await app.inject({
+        url: `/v1/boards/${id}`,
+        headers: { authorization: `Bearer ${adaKey}` },
+      })
+    ).json() as { snapshot: BoardSnapshot };
+    expect(stored.snapshot.past).toHaveLength(7);
+    expect(stored.snapshot.past.every((board) => !board || board.title === 'Pitch')).toBe(true);
+
+    expect((await call('opsis_remove_page', { boardId: id, page: 3 })).isError).toBe(false);
+    expect((await call('opsis_get_board', { boardId: id })).json().pages).toHaveLength(2);
+    expect((await call('opsis_remove_page', { boardId: id, page: 9 })).isError).toBe(true);
   });
 
   it('draws a scaled plan that the saved-board API accepts', async () => {

@@ -78,6 +78,15 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 | `opsis_repeat_drawings`    | Copies drawings or groups in a row, each a step further on                      |
 | `opsis_group_drawings`     | Puts drawings in a named group, or takes them out                               |
 | `opsis_render_board`       | A PNG picture of the board or a region, with rulers, to check the drawing       |
+| `opsis_add_page`           | Adds an empty page after another or at the end, optionally hidden from viewers  |
+| `opsis_update_page`        | Renames a page, hides or shows it, or moves it to another position              |
+| `opsis_remove_page`        | Removes a page and everything on it                                             |
+
+A board can have several pages, each its own canvas. `opsis_get_board` lists them (number, id,
+title, and whether each is hidden from viewers). Every tool that reads or edits a diagram or
+drawings takes an optional `page`, a page number (1 is the first) or id, and works on that page;
+without it, tools use page 1. Each call is still one undoable step on the whole board, and the
+returned `open` link opens the page that was read or added.
 
 Filing a board in a collection is organization, not an edit: it adds no revision or undo step,
 and only the board's owner can file it.
