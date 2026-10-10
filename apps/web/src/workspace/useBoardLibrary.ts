@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
-import { type BoardSnapshot } from '@opsis/schema';
+import { type BoardSnapshot, type BoardVisibility } from '@opsis/schema';
 import { mergeBoardSnapshots } from './board-sync';
 import {
   boardLibraryApi,
@@ -35,6 +35,8 @@ export function useBoardLibrary(
   const [access, setAccessState] = useState<BoardAccess>(initial.access ?? 'owner');
   const [owner, setOwner] = useState(initial.owner?.name ?? '');
   const accessRef = useRef(access);
+  /** The hidden page whose link opened this board, so later reads keep showing it. */
+  const revealedPage = useRef<string | null>(null);
   const setAccess = useCallback((next: BoardAccess, ownerName = '') => {
     accessRef.current = next;
     setAccessState(next);
@@ -194,7 +196,7 @@ export function useBoardLibrary(
             return;
           if (list.find((entry) => entry.id === identity.id)?.revision === identity.revision)
             return;
-          const response = await boardLibraryApi.read(identity.id);
+          const response = await boardLibraryApi.read(identity.id, revealedPage.current);
           if (
             disposed ||
             identity !== active.current ||
@@ -290,13 +292,13 @@ export function useBoardLibrary(
   }, [snapshot, save, initial.error]);
 
   const open = useCallback(
-    async (id?: string) => {
+    async (id?: string, page?: string | null) => {
       setSwitching(true);
       try {
         await save();
         const entry = id
           ? await (async () => {
-              const response = await boardLibraryApi.read(id);
+              const response = await boardLibraryApi.read(id, page);
               if (!response.ok) throw new Error('Could not open this board.');
               return Entry.parse(await response.json());
             })()
@@ -306,6 +308,7 @@ export function useBoardLibrary(
               snapshot: { board: null, past: [], future: [] } as BoardSnapshot,
             };
         active.current = { id: entry.id, revision: entry.revision };
+        revealedPage.current = id ? (page ?? null) : null;
         current.current = entry.snapshot;
         lastSaved.current = entry.snapshot;
         let warning = '';
@@ -352,7 +355,7 @@ export function useBoardLibrary(
       'create' | 'rename' | 'delete' | 'share' | 'template' | 'duplicate' | 'archive' | 'unarchive',
     entry?: z.infer<typeof List>[number],
     title?: string,
-    visibility?: 'private' | 'public',
+    visibility?: BoardVisibility,
     templateId?: string,
     fromRevision?: number,
     collectionId?: string,

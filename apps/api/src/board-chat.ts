@@ -24,7 +24,7 @@ export function registerBoardChat(
       !board ||
       (board.ownerId !== request.user.id &&
         (board.archived ||
-          (board.visibility !== 'public' && !store.isEditor(board.id, request.user.id))))
+          (board.visibility === 'private' && !store.isEditor(board.id, request.user.id))))
     ) {
       reply.code(404).send({ message: 'Board not found.' });
       return null;

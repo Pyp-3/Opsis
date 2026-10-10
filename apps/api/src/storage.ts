@@ -13,10 +13,12 @@ import {
   MAX_BOARD_COLLECTIONS,
   type CollectionSharing,
   type BoardChatThread,
+  type BoardVisibility,
+  boardBacklinks,
 } from '@opsis/schema';
 
 export type User = { id: string; email: string; name: string; role?: 'guest' };
-export type Visibility = 'private' | 'public';
+export type Visibility = BoardVisibility;
 export type BoardListing = {
   id: string;
   title: string;
@@ -173,18 +175,31 @@ export class ApiStore {
     );
   }
 
-  /** The boards one account owns. */
+  /** Concepts on boards this account can read that link to `targetId`, on any readable page. */
   listBacklinks(userId: string, targetId: string) {
-    return this.sqlite
+    const rows = this.sqlite
       .prepare(
-        `SELECT b.id,b.title,json_extract(n.value,'$.id') AS conceptId,
-      json_extract(n.value,'$.label') AS label FROM boards_v2 b, json_each(b.snapshot,'$.board.nodes') n
-      WHERE json_extract(n.value,'$.linkedBoardId')=? AND b.archived=0
+        `SELECT b.id,b.title,b.snapshot,(b.owner_id=? OR EXISTS
+        (SELECT 1 FROM board_editors e WHERE e.board_id=b.id AND e.user_id=?)) AS fullAccess
+      FROM boards_v2 b WHERE instr(b.snapshot,?)>0 AND b.archived=0
       AND (b.owner_id=? OR b.visibility='public' OR EXISTS
-        (SELECT 1 FROM board_editors e WHERE e.board_id=b.id AND e.user_id=?))
-      ORDER BY b.title,b.id,conceptId`,
+        (SELECT 1 FROM board_editors e WHERE e.board_id=b.id AND e.user_id=?))`,
       )
-      .all(targetId, userId, userId);
+      .all(userId, userId, targetId, userId, userId) as {
+      id: string;
+      title: string;
+      snapshot: string;
+      fullAccess: number;
+    }[];
+    return boardBacklinks(
+      targetId,
+      rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        board: BoardSnapshotSchema.parse(JSON.parse(row.snapshot)).board,
+        fullAccess: !!row.fullAccess,
+      })),
+    );
   }
 
   /** The boards one account owns. */

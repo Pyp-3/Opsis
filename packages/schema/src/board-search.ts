@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { BoardDocument } from './board';
+import { everyBoardPage } from './board-pages';
 
 /**
  * Keyword search across saved boards, shared by both hosts so ranking cannot drift.
@@ -33,6 +34,8 @@ export type SearchHit = {
   access: 'owner' | 'editor';
   /** The matching concept; absent for a match on the board itself. */
   conceptId?: string;
+  /** The page holding the concept, on a board with pages. */
+  pageId?: string;
   /** The concept label, or the board title for a board-level hit. */
   label: string;
   field: SearchField;
@@ -61,38 +64,52 @@ export function searchTerms(query: string) {
   return [...new Set(foldText(query).split(/\s+/).filter(Boolean))].slice(0, 12);
 }
 
-type Unit = { conceptId?: string; label: string; fields: [SearchField, string][] };
+type Unit = {
+  conceptId?: string;
+  pageId?: string;
+  label: string;
+  fields: [SearchField, string][];
+};
 
-function units(board: BoardDocument, title: string): Unit[] {
-  const edgesFrom = (id: string) =>
-    board.edges
-      .filter((edge) => edge.source === id)
-      .flatMap((edge) => [edge.label, edge.condition ?? '', edge.description ?? '']);
+function units(document: BoardDocument, title: string): Unit[] {
+  const pages = everyBoardPage(document);
   return [
     {
       label: title,
       fields: [
         ['title', title],
-        ['description', board.description],
-        ...(board.groups ?? []).map((group): [SearchField, string] => ['group', group.label]),
+        ['description', document.description],
+        ...pages.flatMap(({ page, board }) => [
+          ...(page ? [['group', page.title] as [SearchField, string]] : []),
+          ...(board.groups ?? []).map((group): [SearchField, string] => ['group', group.label]),
+        ]),
       ],
     },
-    ...board.nodes.map((node) => ({
-      conceptId: node.id,
-      label: node.label,
-      fields: [
-        ['label', node.label],
-        ['summary', node.summary],
-        ['explanation', node.explanation],
-        ['notes', node.notes ?? ''],
-        ...(node.references ?? []).map((reference): [SearchField, string] => [
-          'source',
-          [reference.title, reference.excerpt ?? '', reference.url ?? ''].join(' '),
-        ]),
-        ...edgesFrom(node.id).map((text): [SearchField, string] => ['connection', text]),
-      ] as [SearchField, string][],
-    })),
+    ...pages.flatMap(({ page, board }) => conceptUnits(board, page?.id)),
   ];
+}
+
+function conceptUnits(board: BoardDocument, pageId: string | undefined): Unit[] {
+  const edgesFrom = (id: string) =>
+    board.edges
+      .filter((edge) => edge.source === id)
+      .flatMap((edge) => [edge.label, edge.condition ?? '', edge.description ?? '']);
+  return board.nodes.map((node) => ({
+    conceptId: node.id,
+    ...(pageId ? { pageId } : {}),
+    label: node.label,
+    fields: [
+      ['label', node.label],
+      ['summary', node.summary],
+      ['explanation', node.explanation],
+      ['notes', node.notes ?? ''],
+      ...(node.references ?? []).map((reference): [SearchField, string] => [
+        'source',
+        [reference.title, reference.excerpt ?? '', reference.url ?? ''].join(' '),
+      ]),
+      ...edgesFrom(node.id).map((text): [SearchField, string] => ['connection', text]),
+    ] as [SearchField, string][],
+  }));
 }
 
 /** A window of the field around the first matched term. */
@@ -133,6 +150,7 @@ export function searchBoard(target: SearchableBoard, query: string): SearchHit[]
       boardTitle: target.title,
       access: target.access,
       ...(unit.conceptId ? { conceptId: unit.conceptId } : {}),
+      ...(unit.pageId ? { pageId: unit.pageId } : {}),
       label: unit.label,
       field: best.field,
       snippet: snippet(best.text, terms.find((term) => best.folded.includes(term)) ?? terms[0]!),

@@ -88,7 +88,9 @@ An owner opens **Share** (Shared editing) in the board header and enters another
 **Grant editing**. This changes that board only. The invitee finds it under
 **Boards → Shared with you**. Owners can revoke editing at any time. Editors can
 change content; they cannot change sharing, archive/delete the original, manage its
-templates or browse private saved revisions. Public visibility alone remains read-only.
+templates or browse private saved revisions. Link or public sharing alone remains read-only,
+and viewers never receive pages the owner or an editor has hidden, unless they open that
+page's own link (see the [user guide](USER-GUIDE.md#turn-a-board-into-pages)).
 Archived boards are unavailable to editors until the owner unarchives them. Copies
 are private and do not inherit invitations.
 

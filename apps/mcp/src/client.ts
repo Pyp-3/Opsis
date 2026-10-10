@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
+import { BoardSnapshotSchema, BoardVisibilitySchema, type BoardSnapshot } from '@opsis/schema';
 import { CanvasError } from './canvas.js';
 
 const Entry = z.object({
@@ -16,7 +16,7 @@ const List = z.array(
     title: z.string(),
     revision: z.number(),
     updatedAt: z.number(),
-    visibility: z.enum(['private', 'public']),
+    visibility: BoardVisibilitySchema,
     ownerName: z.string().optional(),
     archived: z.boolean().optional(),
     collectionId: z.string().nullable().optional(),

@@ -19,7 +19,8 @@ cross-site writes before authentication. This is defense in depth, not a substit
 for a full origin/CSRF policy if deployment scope changes. Source links accept only
 HTTP/HTTPS, render as text links and isolate their opener. Imported text/legacy
 behavior remains declarative data. New shared editing is explicit and per-board;
-public visibility does not grant write access or saved revision access.
+link or public visibility does not grant write access, saved revision access or hidden
+pages (the server leaves hidden pages and undo history out of every viewer's copy).
 
 The review's network-hosting blockers are:
 

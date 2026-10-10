@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { BoardDocumentSchema } from './board';
 import { BoardTagsRequestSchema } from './board-organization';
+import { BoardVisibilitySchema } from './board-requests';
+import { mapBoardPages } from './board-pages';
 
 export const CollectionBundleSchema = z
   .object({
@@ -39,9 +41,7 @@ export const CollectionSharingSchema = z
       .array(z.object({ id: z.string().uuid(), revision: z.number().int().positive() }).strict())
       .max(1000),
     change: z.discriminatedUnion('kind', [
-      z
-        .object({ kind: z.literal('visibility'), visibility: z.enum(['private', 'public']) })
-        .strict(),
+      z.object({ kind: z.literal('visibility'), visibility: BoardVisibilitySchema }).strict(),
       z
         .object({
           kind: z.literal('editor'),
@@ -70,17 +70,16 @@ export function prepareCollectionImport(input: unknown, ids: string[]) {
     tags: entry.tags,
     snapshot: {
       board: entry.board
-        ? {
-            ...entry.board,
-            title: entry.title,
-            nodes: entry.board.nodes.map((node) => {
+        ? mapBoardPages({ ...entry.board, title: entry.title }, (page) => ({
+            ...page,
+            nodes: page.nodes.map((node) => {
               const next = { ...node };
               delete next.linkedBoardId;
               const target = node.linkedBoardId && mapping.get(node.linkedBoardId);
               if (target) next.linkedBoardId = target;
               return next;
             }),
-          }
+          }))
         : null,
       past: [],
       future: [],

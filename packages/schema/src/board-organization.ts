@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BoardAgentSchema } from './model-settings';
+import { BoardVisibilitySchema, type BoardVisibility } from './board-requests';
 
 /**
  * Owner-private organization for saved boards: tags (several per board) and smart
@@ -32,7 +33,7 @@ export const SmartCollectionRuleSchema = z
     tagsAll: z.array(tag).max(MAX_BOARD_TAGS).optional(),
     /** At least one listed tag must be present. */
     tagsAny: z.array(tag).max(MAX_BOARD_TAGS).optional(),
-    visibility: z.enum(['private', 'public']).optional(),
+    visibility: BoardVisibilitySchema.optional(),
     /** A collection id, or `unfiled` for boards in none. */
     collection: z.union([z.literal('unfiled'), z.string().uuid()]).optional(),
     updatedWithinDays: z.number().int().min(1).max(3650).optional(),
@@ -55,7 +56,7 @@ export const SmartCollectionRequestSchema = z
 export type OrganizedBoard = {
   title: string;
   updatedAt: number;
-  visibility?: 'private' | 'public' | undefined;
+  visibility?: BoardVisibility | undefined;
   collectionId?: string | null | undefined;
   tags?: string[] | undefined;
   agent?: string | null | undefined;

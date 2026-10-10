@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { EMAIL_DEMO, type BoardSnapshot } from '@opsis/schema';
+import {
+  addBoardPage,
+  boardPage,
+  boardPages,
+  EMAIL_DEMO,
+  updateBoardPage,
+  withBoardPage,
+  type BoardSnapshot,
+} from '@opsis/schema';
 import { mergeBoardSnapshots } from './board-sync';
 const base: BoardSnapshot = {
   board: { ...EMAIL_DEMO, version: 2, agent: 'demo', positions: { sender: { x: 1, y: 2 } } },
@@ -7,6 +15,38 @@ const base: BoardSnapshot = {
   future: [],
 };
 describe('board reconciliation', () => {
+  it('merges edits on different pages, and edits to a page another view added pages around', () => {
+    const paged: BoardSnapshot = {
+      ...base,
+      board: addBoardPage(
+        base.board!,
+        { id: 'second-page-0001', title: 'Second' },
+        { firstPage: { id: 'first-page-00001', title: 'First' } },
+      ),
+    };
+    const mine = structuredClone(paged),
+      theirs = structuredClone(paged);
+    const second = boardPage(mine.board!, 'second-page-0001');
+    mine.board = withBoardPage(mine.board!, 'second-page-0001', {
+      ...second,
+      nodes: [{ ...EMAIL_DEMO.nodes[0]!, id: 'mine' }],
+    });
+    theirs.board!.nodes[0]!.label = 'Their label';
+    theirs.board = updateBoardPage(theirs.board!, 'second-page-0001', { hidden: true });
+    const merged = mergeBoardSnapshots(paged, mine, theirs).board!;
+    expect(merged.nodes[0]!.label).toBe('Their label');
+    expect(boardPage(merged, 'second-page-0001').nodes.map((n) => n.id)).toEqual(['mine']);
+    expect(boardPages(merged)[1]!.hidden).toBe(true);
+    // Another view turned the board into pages while this one edited it as one page.
+    const single = structuredClone(base);
+    single.board!.nodes[0]!.summary = 'My summary';
+    const both = mergeBoardSnapshots(base, single, paged).board!;
+    expect(boardPages(both).map((page) => page.id)).toEqual([
+      'first-page-00001',
+      'second-page-0001',
+    ]);
+    expect(both.nodes[0]!.summary).toBe('My summary');
+  });
   it('merges independent edits, including separate fields on the same concept', () => {
     const mine = structuredClone(base),
       theirs = structuredClone(base);

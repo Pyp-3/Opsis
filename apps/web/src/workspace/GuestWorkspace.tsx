@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Background, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
-import type { BoardDocument } from '@opsis/schema';
+import { boardPage, resolvePageId, type BoardDocument } from '@opsis/schema';
+import { BoardPages } from './BoardPages';
 import { apiFetch } from '../app-url';
 import { navigate } from '../router';
 import { AUTH_EXPIRED, BoardEntrySchema, BoardListSchema } from './board-library-api';
@@ -64,7 +65,12 @@ function PublicCanvas({ board }: { board: BoardDocument }) {
 export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }) {
   const [id, setId] = useState(() => new URLSearchParams(location.search).get('board'));
   const [entries, setEntries] = useState<ReturnType<typeof BoardListSchema.parse>>([]);
-  const [board, setBoard] = useState<BoardDocument | null>(null);
+  const [fullBoard, setBoard] = useState<BoardDocument | null>(null);
+  // A page link (`&page=`) opens that page, even one hidden from viewers.
+  const [linkedPage] = useState(() => new URLSearchParams(location.search).get('page'));
+  const [requestedPage, setRequestedPage] = useState(linkedPage);
+  const pageId = resolvePageId(fullBoard, requestedPage);
+  const board = fullBoard ? boardPage(fullBoard, pageId) : null;
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -79,7 +85,9 @@ export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }
     const refresh = async () => {
       try {
         const response = await apiFetch(
-          id ? `/v1/boards/${encodeURIComponent(id)}` : '/v1/boards/public',
+          id
+            ? `/v1/boards/${encodeURIComponent(id)}${linkedPage ? `?page=${encodeURIComponent(linkedPage)}` : ''}`
+            : '/v1/boards/public',
           { signal: controller.signal },
         );
         if (response.status === 401) window.dispatchEvent(new Event(AUTH_EXPIRED));
@@ -109,7 +117,7 @@ export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }
       controller.abort();
       clearTimeout(timer);
     };
-  }, [id]);
+  }, [id, linkedPage]);
   const open = (next: string | null) => {
     setLoading(true);
     setBoard(null);
@@ -146,9 +154,21 @@ export function GuestWorkspace({ onSignOut }: { onSignOut: () => Promise<void> }
           <>
             <h1>{board.title}</h1>
             <p>{board.description}</p>
-            <ReactFlowProvider key={id}>
+            <ReactFlowProvider key={`${id}:${pageId ?? ''}`}>
               <PublicCanvas board={board} />
             </ReactFlowProvider>
+            {fullBoard?.pages && id && (
+              <div className="guest-pages">
+                <BoardPages
+                  document={fullBoard}
+                  pageId={pageId}
+                  boardId={id}
+                  editable={false}
+                  onOpen={setRequestedPage}
+                  onChange={() => undefined}
+                />
+              </div>
+            )}
             <section aria-label="Board explanations" className="guest-explanations">
               {board.nodes.map((node) => (
                 <article key={node.id}>

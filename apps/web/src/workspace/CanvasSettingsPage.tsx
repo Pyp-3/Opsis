@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   Globe,
+  Link2,
   Lock,
   Palette,
   RotateCcw,
@@ -12,7 +13,7 @@ import {
   Share2,
   Type,
 } from 'lucide-react';
-import type { BoardDocument } from '@opsis/schema';
+import type { BoardDocument, BoardVisibility } from '@opsis/schema';
 import {
   CANVAS_PALETTES,
   DEFAULT_LOOK,
@@ -23,6 +24,12 @@ import {
 } from './canvas-theme';
 import { NodeIcon } from './NodeIcon';
 import { navigate } from '../router';
+
+const VISIBILITY_NAMES: Record<BoardVisibility, string> = {
+  private: 'Private',
+  link: 'Anyone with the link',
+  public: 'Public',
+};
 
 /**
  * One canvas's own control page: its name and description, and the colours it is painted in.
@@ -39,12 +46,12 @@ export function CanvasSettingsPage({
   board: BoardDocument;
   busy: boolean;
   commit: (board: BoardDocument) => void;
-  visibility?: 'private' | 'public';
+  visibility?: BoardVisibility;
   /** Resolves true once the change is saved. */
-  onVisibility?: (visibility: 'private' | 'public') => Promise<boolean>;
+  onVisibility?: (visibility: BoardVisibility) => Promise<boolean>;
   boardId?: string;
 }) {
-  const [sharing, setSharing] = useState<'private' | 'public' | null>(null);
+  const [sharing, setSharing] = useState<BoardVisibility | null>(null);
   const [copied, setCopied] = useState(false);
   const shown = sharing ?? visibility;
   const link = boardId ? `${location.origin}${appUrl('/canvas')}?board=${boardId}` : '';
@@ -79,8 +86,14 @@ export function CanvasSettingsPage({
         <p>These settings belong to this canvas only. Other canvases keep their own.</p>
         {onVisibility && (
           <span className={`visibility-badge is-${visibility}`}>
-            {visibility === 'public' ? <Globe size={12} /> : <Lock size={12} />}
-            {visibility === 'public' ? 'Public' : 'Private'}
+            {visibility === 'public' ? (
+              <Globe size={12} />
+            ) : visibility === 'link' ? (
+              <Link2 size={12} />
+            ) : (
+              <Lock size={12} />
+            )}
+            {VISIBILITY_NAMES[visibility]}
           </span>
         )}
       </header>
@@ -126,8 +139,19 @@ export function CanvasSettingsPage({
               <div className="share-options" role="radiogroup" aria-label="Who can see this canvas">
                 {(
                   [
-                    ['private', Lock, 'Private', 'Only you can open it.'],
-                    ['public', Globe, 'Public', 'Anyone signed in can open, play and copy it.'],
+                    ['private', Lock, VISIBILITY_NAMES.private, 'Only you and invited editors.'],
+                    [
+                      'link',
+                      Link2,
+                      VISIBILITY_NAMES.link,
+                      'Anyone with the link can view and play it, even without an account.',
+                    ],
+                    [
+                      'public',
+                      Globe,
+                      VISIBILITY_NAMES.public,
+                      'Also listed for everyone signed in here, who can save a copy.',
+                    ],
                   ] as const
                 ).map(([value, Icon, title, note]) => (
                   <button
@@ -153,22 +177,28 @@ export function CanvasSettingsPage({
                   </button>
                 ))}
               </div>
-              <div className={`share-link ${shown === 'public' && link ? 'is-open' : ''}`}>
+              <div className={`share-link ${shown !== 'private' && link ? 'is-open' : ''}`}>
                 <div>
-                  <code>{link}</code>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(link).then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1600);
-                      });
-                    }}
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}{' '}
-                    {copied ? 'Copied' : 'Copy link'}
-                  </button>
+                  <div className="share-link-row">
+                    <code>{link}</code>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(link).then(() => {
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1600);
+                        });
+                      }}
+                    >
+                      {copied ? <Check size={14} /> : <Copy size={14} />}{' '}
+                      {copied ? 'Copied' : 'Copy link'}
+                    </button>
+                  </div>
+                  <small>
+                    Viewers never see hidden pages. To show one, send that page’s own link from the
+                    page list on the canvas.
+                  </small>
                 </div>
               </div>
             </fieldset>

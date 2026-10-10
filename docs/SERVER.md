@@ -24,6 +24,12 @@ is the usual loopback-only local application.
   `OPSIS_CLAUDE_BIN`, `OPSIS_CODEX_BIN`, `OPSIS_KIMI_BIN`, `OPSIS_GROK_BIN` or
   `OPSIS_ANTIGRAVITY_BIN`, or leave them unset to use `PATH`. API keys are per instance, as
   on a local install (Settings → API keys, or `OPSIS_<PROVIDER>_API_KEY`).
+- **Shared links.** A board an owner shares with **Anyone with the link** (or makes Public)
+  opens read-only for people without an account, through `GET /v1/guest/boards/<id>`. It is
+  the only board route that needs no sign-in. It answers 404 for private and archived boards,
+  never sends hidden pages unless the request names that page's ID, never sends undo history,
+  and shares the board-read rate limit. A board's ID (a random UUID) is what grants access, as
+  in Google Docs' link sharing: making the board private again closes the link.
 - **MCP agent keys** still work only for agents on the server itself, talking to the API
   directly on loopback. A key sent through the proxy is ignored.
 
@@ -225,8 +231,10 @@ member permissions again. Sign-up remains closed in server mode.
 
 Guests get a separate read-only diagram gallery. They cannot generate, copy, edit, manage
 credentials, view private/archived boards, or use editor invitations to bypass the restriction.
-Only current public snapshots are returned, without undo history; polling removes a board
-when its owner makes it private or archives it. This cannot erase copies a viewer already saw.
+Only current public snapshots are returned, without undo history or pages hidden from viewers;
+polling removes a board when its owner makes it private or archives it. Like anyone else, a
+guest can also open a board shared by link, and a hidden page through that page's own link,
+and turn its pages. This cannot erase copies a viewer already saw.
 The guest gallery supports pan/zoom and concept explanations, not the member editing/chat UI.
 This restriction is specific to the Fastify personal server; native/local accounts are unchanged.
 

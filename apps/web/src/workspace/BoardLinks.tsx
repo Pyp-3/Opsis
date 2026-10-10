@@ -2,14 +2,14 @@ import { apiFetch as fetch } from '../app-url';
 import { Link2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type Backlink = { id: string; title: string; conceptId: string; label: string };
+type Backlink = { id: string; title: string; conceptId: string; label: string; pageId?: string };
 export function BoardLinks({
   id,
   onOpen,
   onBack,
 }: {
   id: string;
-  onOpen(id: string, concept?: string): void;
+  onOpen(id: string, concept?: string, page?: string): void;
   onBack?: (() => void) | undefined;
 }) {
   const [links, setLinks] = useState<Backlink[]>([]);
@@ -47,7 +47,7 @@ export function BoardLinks({
             links.map((link) => (
               <button
                 key={`${link.id}:${link.conceptId}`}
-                onClick={() => onOpen(link.id, link.conceptId)}
+                onClick={() => onOpen(link.id, link.conceptId, link.pageId)}
               >
                 {link.title} · {link.label}
               </button>

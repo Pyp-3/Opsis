@@ -46,3 +46,10 @@
     padding: 12px;
   }
 }
+
+/* The page bar sits below the canvas here, not over it. */
+.guest-pages .board-pages {
+  position: static;
+  width: fit-content;
+  margin: 8px auto 0;
+}

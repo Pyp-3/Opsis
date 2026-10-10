@@ -9,6 +9,7 @@ const HitSchema = z.object({
   boardTitle: z.string(),
   access: z.enum(['owner', 'editor']),
   conceptId: z.string().optional(),
+  pageId: z.string().optional(),
   label: z.string(),
   field: z.string(),
   snippet: z.string(),
@@ -31,7 +32,7 @@ const FIELD_LABELS: Record<SearchField, string> = {
 export function SearchPage({
   onOpen,
 }: {
-  onOpen: (boardId: string, conceptId?: string) => Promise<void>;
+  onOpen: (boardId: string, conceptId?: string, pageId?: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState(() => new URLSearchParams(location.search).get('q') ?? '');
   const [results, setResults] = useState<Hit[] | null>(null);
@@ -112,7 +113,7 @@ export function SearchPage({
             <li key={`${hit.boardId}:${hit.conceptId ?? ''}`}>
               <button
                 aria-label={`Open ${hit.label} in ${hit.boardTitle}`}
-                onClick={() => void onOpen(hit.boardId, hit.conceptId)}
+                onClick={() => void onOpen(hit.boardId, hit.conceptId, hit.pageId)}
               >
                 <span className="search-result-board">
                   {hit.boardTitle}

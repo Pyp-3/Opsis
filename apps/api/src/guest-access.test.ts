@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { createEmptyBoard } from '@opsis/schema';
+import { addBoardPage, createEmptyBoard, updateBoardPage } from '@opsis/schema';
 import { ApiStore } from './storage.js';
 import { createAccount } from './accounts.js';
 import { buildApp } from './app.js';
@@ -33,6 +33,19 @@ it('enforces a persistent, default-deny public-view-only guest boundary', async 
   store.saveBoard(privateId, snapshot, 0, owner.id);
   store.saveBoard(ownedId, snapshot, 0, guest.id);
   store.setVisibility(publicId, 'public');
+  // Shared by link, with a hidden second page.
+  const pagedId = randomUUID();
+  const paged = updateBoardPage(
+    addBoardPage(
+      createEmptyBoard('Pitch'),
+      { id: 'hidden-page-0001', title: 'Secret pricing' },
+      { firstPage: { id: 'cover-page-00001', title: 'Cover' } },
+    ),
+    'hidden-page-0001',
+    { hidden: true },
+  );
+  store.saveBoard(pagedId, { board: paged, past: [], future: [] }, 0, owner.id);
+  store.setVisibility(pagedId, 'link');
   store.setEditor(privateId, owner.id, guest.email, true, 1);
   const oldKey = 'opsis_agent_fixture';
   store.createAgentKey({
@@ -73,6 +86,13 @@ it('enforces a persistent, default-deny public-view-only guest boundary', async 
     expect(viewed).toMatchObject({ access: 'viewer', snapshot: { board, past: [], future: [] } });
     for (const id of [privateId, ownedId, randomUUID()])
       expect((await get(`/v1/boards/${id}`)).statusCode).toBe(404);
+    // A link opens for guests too, never with hidden pages unless the link names one.
+    for (const url of [`/v1/boards/${pagedId}`, `/v1/guest/boards/${pagedId}`]) {
+      const linked = await get(url);
+      expect(linked.statusCode).toBe(200);
+      expect(linked.body).not.toContain('Secret pricing');
+      expect((await get(`${url}?page=hidden-page-0001`)).body).toContain('Secret pricing');
+    }
     for (const url of [
       '/v1/agents',
       '/v1/boards',

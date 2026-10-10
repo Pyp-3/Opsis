@@ -1,0 +1,180 @@
+/* A shared board for someone who is not signed in: the picture of each page, then its concepts. */
+.shared-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: var(--ink);
+  background: var(--canvas, var(--surface));
+}
+.shared-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.shared-brand {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+.shared-title {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.shared-title h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-title small {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.shared-header .secondary-button {
+  flex: none;
+  gap: 6px;
+}
+.shared-message {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  width: min(560px, calc(100% - 32px));
+  margin: 64px auto;
+}
+.shared-message h2,
+.shared-message p {
+  margin: 0;
+}
+.shared-message button {
+  gap: 6px;
+}
+.shared-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  flex: 1;
+  min-height: 0;
+}
+.shared-canvas {
+  position: relative;
+  container-type: inline-size;
+  min-height: 0;
+  background: var(--bp-deep);
+}
+.shared-picture {
+  --picture-height: calc(100dvh - 61px);
+  display: grid;
+  place-items: center;
+  height: var(--picture-height);
+  padding: 16px;
+  overflow: auto;
+}
+.shared-picture:focus-visible {
+  outline: 2px solid var(--bp-gold);
+  outline-offset: -4px;
+}
+.shared-picture img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(var(--picture-height) - 32px);
+}
+.shared-picture.is-zoomed {
+  place-items: start;
+}
+.shared-picture.is-zoomed img {
+  max-width: none;
+  max-height: none;
+}
+.shared-canvas-tools {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  color: var(--bp-ink);
+  background: var(--bp-panel);
+  border: 1px solid var(--bp-line);
+  border-radius: var(--radius-lg);
+}
+.shared-canvas-tools button {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+}
+.shared-canvas-tools button:hover:not(:disabled),
+.shared-canvas-tools button[aria-pressed='true'] {
+  background: var(--bp-panel-hover);
+}
+.shared-concepts {
+  max-height: calc(100dvh - 61px);
+  overflow: auto;
+  padding: 16px;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+}
+.shared-description {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.shared-concepts ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shared-concepts details {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.shared-concepts summary {
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+.shared-concepts summary span {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.shared-concepts details p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .shared-main {
+    grid-template-columns: 1fr;
+  }
+  .shared-picture {
+    --picture-height: 60vh;
+  }
+  .shared-concepts {
+    max-height: none;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .shared-header .secondary-button {
+    padding: 0 10px;
+  }
+}
+/* On a phone the page bar sits below the picture rather than over it. */
+@media (max-width: 760px) {
+  .shared-canvas .board-pages {
+    position: static;
+    width: fit-content;
+    margin: 0 auto 12px;
+  }
+}

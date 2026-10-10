@@ -210,7 +210,7 @@ func (s *Server) allow(r *http.Request) bool {
 	if strings.HasPrefix(r.URL.Path, "/v1/auth/") {
 		bucket = "auth"
 	}
-	if r.Method == "GET" && (r.URL.Path == "/v1/boards" || (strings.HasPrefix(r.URL.Path, "/v1/boards/") && s.validID(strings.TrimPrefix(r.URL.Path, "/v1/boards/")))) {
+	if r.Method == "GET" && (r.URL.Path == "/v1/boards" || (strings.HasPrefix(r.URL.Path, "/v1/boards/") && s.validID(strings.TrimPrefix(r.URL.Path, "/v1/boards/"))) || (strings.HasPrefix(r.URL.Path, "/v1/guest/boards/") && s.validID(strings.TrimPrefix(r.URL.Path, "/v1/guest/boards/")))) {
 		bucket = "board-read"
 		allowance *= 10
 	}

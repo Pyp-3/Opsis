@@ -171,7 +171,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const now = Date.now();
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
-      request.method === 'GET' && (route === '/v1/boards' || route === '/v1/boards/:id');
+      request.method === 'GET' &&
+      (route === '/v1/boards' || route === '/v1/boards/:id' || route === '/v1/guest/boards/:id');
     // Sign-in attempts have their own budget: guessing passwords cannot also starve real work,
     // and real work cannot lock someone out of signing in.
     const bucket = boardRead ? 'board-read' : route.startsWith('/v1/auth/') ? 'auth' : 'work';

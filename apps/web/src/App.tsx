@@ -5,6 +5,9 @@ const Workspace = lazy(() =>
 const GuestWorkspace = lazy(() =>
   import('./workspace/GuestWorkspace').then((module) => ({ default: module.GuestWorkspace })),
 );
+const GuestBoard = lazy(() =>
+  import('./workspace/GuestBoard').then((module) => ({ default: module.GuestBoard })),
+);
 import './workspace/styles/foundation.css';
 import { BrandMark } from './workspace/BrandMark';
 import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
@@ -20,6 +23,14 @@ import { adoptAccountAppearance } from './workspace/app-theme';
 type Session =
   { status: 'loading' } | { status: 'out' } | { status: 'in'; user: User; settingsError?: string };
 const AUTH_PATHS = new Set(['/login', '/signup']);
+
+/** A board link (`/canvas?board=…&page=…`), which signed-out visitors may open if it is shared. */
+function boardLink(path: string) {
+  if (path !== '/canvas') return null;
+  const params = new URLSearchParams(location.search);
+  const board = params.get('board');
+  return board ? { board, page: params.get('page') } : null;
+}
 
 /** Where to go after signing in: the `next` the sign-in page was opened with, if it is ours. */
 function returnPath() {
@@ -84,16 +95,35 @@ function Shell() {
   // Keep the URL in step with the session: sign-in pages only when signed out, and back.
   const out = session.status === 'out';
   const onAuthPage = AUTH_PATHS.has(path);
+  const guestLink = out ? boardLink(path) : null;
+  const guest = !!guestLink;
+  // A link that is not shared by link may be the reader's own board: sign in, then open it.
+  const toSignIn = useCallback(() => {
+    const here = appPath() + location.search;
+    navigate(`/login?next=${encodeURIComponent(here)}`, true);
+  }, []);
   useEffect(() => {
-    if (out && !onAuthPage) {
+    if (out && !onAuthPage && !guest) {
       const here = appPath() + location.search;
       navigate(here === '/' ? '/login' : `/login?next=${encodeURIComponent(here)}`, true);
     }
     if (session.status === 'in' && onAuthPage) navigate(returnPath(), true);
     if (out && path === '/signup' && instance?.signup === false)
       navigate(`/login${location.search}`, true);
-  }, [out, onAuthPage, session.status, path, instance]);
+  }, [out, onAuthPage, guest, session.status, path, instance]);
 
+  if (guestLink)
+    return (
+      <Suspense
+        fallback={
+          <div className="auth-splash" role="status">
+            Opening the shared board…
+          </div>
+        }
+      >
+        <GuestBoard boardId={guestLink.board} pageId={guestLink.page} onUnavailable={toSignIn} />
+      </Suspense>
+    );
   if (
     session.status === 'loading' ||
     (session.status === 'in' && onAuthPage) ||

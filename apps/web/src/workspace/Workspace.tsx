@@ -88,6 +88,8 @@ import { layoutBoard, NODE_WIDTH, removeNode } from './model';
 import { connectBoard } from './connections';
 import { readModelPreferences } from './model-settings';
 import { useBoardHistory } from './useBoardHistory';
+import { useBoardPages } from './useBoardPages';
+import { BoardPages } from './BoardPages';
 import { restoreLibrary, useBoardLibrary } from './useBoardLibrary';
 import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
@@ -133,8 +135,11 @@ type WorkspaceProps = {
 
 function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const [initial] = useState(restoreLibrary);
-  const { board, boardRef, setBoard, commit, history, snapshot, replace, travel, begin, end } =
-    useBoardHistory(initial.snapshot);
+  const boardHistory = useBoardHistory(initial.snapshot);
+  const { history, snapshot, replace, begin } = boardHistory;
+  // Everything below edits the open page; `pages.document` is the whole board.
+  const pages = useBoardPages(boardHistory);
+  const { board, boardRef, setBoard, commit, travel, end, pageId, openPage } = pages;
   // Usage is recorded against the board open when a generation starts.
   const usageBoardRef = useRef<string | undefined>(undefined);
   const generation = useBoardGeneration(commit, usageBoardRef);
@@ -148,7 +153,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     initial,
     snapshot,
     replace,
-    board !== snapshot.board ||
+    pages.document !== snapshot.board ||
       generation.busy ||
       chatSending ||
       !!generation.review ||
@@ -207,7 +212,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 ? 'canvas'
                 : 'home';
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
-  const [boardTrail, setBoardTrail] = useState<{ id: string; concept?: string | undefined }[]>([]);
+  const [boardTrail, setBoardTrail] = useState<
+    { id: string; concept?: string | undefined; page?: string | null }[]
+  >([]);
   const [canvasTab, setCanvasTabState] = useState<CanvasTab>('canvas');
   // A reply that lands while Chat is out of view marks the Chat tab until it is opened.
   const [chatUnread, setChatUnread] = useState(false);
@@ -265,9 +272,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     reviewThread.current = null;
     if (pending) void chat.settle(pending.thread, outcome, pending.boardId).catch(() => undefined);
   };
-  // A board with only drawings is a sketch in progress, not an empty canvas.
+  // A board with only drawings is a sketch in progress, not an empty canvas; nor is a new page
+  // of a board that has others.
   const showWelcome =
-    (!board || (board.nodes.length === 0 && !board.drawings?.length)) && !drawing.active;
+    (!board || (board.nodes.length === 0 && !board.drawings?.length)) &&
+    !pages.document?.pages &&
+    !drawing.active;
   const [showIcons, setShowIcons] = useState(false);
   const [railOpen, setRailOpen] = useState(() => window.innerWidth > 760);
   // Whether clicking a concept icon opens its explanation. Off = drawing only.
@@ -424,7 +434,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     const timer = setTimeout(readingView, 100);
     readingTimer.current = timer;
     return () => clearTimeout(timer);
-  }, [hasBoard, library.activeId, readingView, onCanvas]);
+  }, [hasBoard, library.activeId, pageId, readingView, onCanvas]);
   async function arrangeDownward() {
     if (!board || busy || arranging) return;
     setArranging(true);
@@ -622,6 +632,18 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     },
     [flow, boardRef],
   );
+  const [pageTurn, setPageTurn] = useState<{ key: number; direction: 'next' | 'previous' } | null>(
+    null,
+  );
+  /** Turns to another page of this board: a fresh view, with nothing selected. */
+  const goToPage = (id: string | null, direction?: 'next' | 'previous') => {
+    openPage(id);
+    setSelected(null);
+    setSelectedEdge(null);
+    drawing.select([]);
+    closePlayer();
+    if (direction) setPageTurn((turn) => ({ key: (turn?.key ?? 0) + 1, direction }));
+  };
   // Links an agent shares through the MCP server open that board: /canvas?board=<id>.
   const { open: openLibraryBoard, activeId: startingId } = library;
   const linkHandled = useRef(false);
@@ -633,28 +655,30 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     if (!linked || linkHandled.current) return;
     linkHandled.current = true;
     pendingFocus.current = params.get('concept');
+    // A page link opens that page; for a hidden page it is what lets a viewer see it.
+    const linkedPage = params.get('page');
     window.history.replaceState(null, '', location.pathname);
-    if (linked !== startingId) void openLibraryBoard(linked);
-  }, [openLibraryBoard, startingId]);
-  const openBoard = async (id: string, conceptId?: string) => {
+    if (linkedPage) openPage(linkedPage);
+    if (linked !== startingId || linkedPage) void openLibraryBoard(linked, linkedPage);
+  }, [openLibraryBoard, openPage, startingId]);
+  const openBoard = async (id: string, conceptId?: string, page?: string) => {
     if (id !== library.activeId && !(await library.open(id))) return false;
+    goToPage(page ?? null);
     setCanvasTab('canvas');
-    setSelected(null);
-    setSelectedEdge(null);
     setAgent(boardRef.current?.agent ?? agent);
     pendingFocus.current = conceptId ?? null;
     return true;
   };
-  const followBoardLink = async (id: string, conceptId?: string) => {
-    const previous = { id: library.activeId, concept: selected ?? undefined };
-    if (await openBoard(id, conceptId)) {
+  const followBoardLink = async (id: string, conceptId?: string, page?: string) => {
+    const previous = { id: library.activeId, concept: selected ?? undefined, page: pageId };
+    if (await openBoard(id, conceptId, page)) {
       setBoardTrail((trail) => [...trail, previous].slice(-40));
       navigate('/canvas');
     }
   };
   const backToBoard = async () => {
     const previous = boardTrail.at(-1);
-    if (previous && (await openBoard(previous.id, previous.concept)))
+    if (previous && (await openBoard(previous.id, previous.concept, previous.page ?? undefined)))
       setBoardTrail((trail) => trail.slice(0, -1));
   };
   useEffect(() => {
@@ -864,8 +888,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             </Suspense>
           ) : page === 'search' ? (
             <SearchPage
-              onOpen={async (id, conceptId) => {
-                if (await openBoard(id, conceptId)) navigate('/canvas');
+              onOpen={async (id, conceptId, pageId) => {
+                if (await openBoard(id, conceptId, pageId)) navigate('/canvas');
               }}
             />
           ) : page === 'boards' ? (
@@ -923,6 +947,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
       <main className="workspace-main">
         <BoardHeader
           board={board}
+          document={pages.document}
           busy={busy}
           working={working}
           saved={saved}
@@ -945,7 +970,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   <BoardLinks
                     key={`links:${library.activeId}`}
                     id={library.activeId}
-                    onOpen={(id, concept) => void followBoardLink(id, concept)}
+                    onOpen={(id, concept, page) => void followBoardLink(id, concept, page)}
                     onBack={boardTrail.length ? () => void backToBoard() : undefined}
                   />
                 )}
@@ -1247,6 +1272,24 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                     </button>
                   )}
                 </div>
+              )}
+              {pages.document && !playerOpen && (
+                <BoardPages
+                  document={pages.document}
+                  pageId={pageId}
+                  boardId={library.activeId}
+                  editable={!busy && !playerOpen}
+                  onOpen={goToPage}
+                  onChange={(next) => boardHistory.commit(next)}
+                />
+              )}
+              {pageTurn && (
+                <div
+                  key={pageTurn.key}
+                  className={`page-turn is-${pageTurn.direction}`}
+                  aria-hidden
+                  onAnimationEnd={() => setPageTurn(null)}
+                />
               )}
               <div
                 className={`canvas-tools ${toolsOpen ? '' : 'is-collapsed'}`}

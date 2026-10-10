@@ -12,6 +12,8 @@ import {
   TemplateCreateRequestSchema,
   BoardDuplicateRequestSchema,
   BoardRevisionQuerySchema,
+  BoardPageIdSchema,
+  readerSnapshot,
 } from '@opsis/schema';
 import { randomUUID } from 'node:crypto';
 import type { ApiStore, User } from './storage.js';
@@ -30,28 +32,46 @@ export function registerBoardLibrary(
 ) {
   const idSchema = BoardIdSchema;
   const notFound = (reply: FastifyReply) => reply.code(404).send({ message: 'Board not found.' });
-  /** The board, if `user` may read it. */
+  /** The board, if `user` may read it: link and public boards open for anyone with the ID. */
   const readable = (id: string, user: User) => {
     const board = store.getBoard(id);
     return board &&
       (board.ownerId === user.id ||
-        (!board.archived && (board.visibility === 'public' || store.isEditor(id, user.id))))
+        (!board.archived && (board.visibility !== 'private' || store.isEditor(id, user.id))))
       ? board
       : null;
   };
-  const view = (board: NonNullable<ReturnType<ApiStore['getBoard']>>, user: User) => ({
-    id: board.id,
-    revision: board.revision,
-    snapshot: board.snapshot,
-    visibility: board.visibility,
-    archived: board.archived,
-    access:
-      board.ownerId === user.id
+  type StoredBoard = NonNullable<ReturnType<ApiStore['getBoard']>>;
+  /** Viewers never receive hidden pages, except the one whose link (`page`) they opened. */
+  const view = (board: StoredBoard, user: User | null, page?: string) => {
+    const access =
+      user && board.ownerId === user.id
         ? ('owner' as const)
-        : !board.archived && store.isEditor(board.id, user.id)
+        : user && !board.archived && store.isEditor(board.id, user.id)
           ? ('editor' as const)
-          : ('viewer' as const),
-    owner: { name: board.ownerName ?? 'Unknown' },
+          : ('viewer' as const);
+    return {
+      id: board.id,
+      revision: board.revision,
+      snapshot: access === 'viewer' ? readerSnapshot(board.snapshot, page) : board.snapshot,
+      visibility: board.visibility,
+      archived: board.archived,
+      access,
+      owner: { name: board.ownerName ?? 'Unknown' },
+    };
+  };
+  const pageQuery = (query: unknown) => {
+    const page = (query as { page?: unknown } | undefined)?.page;
+    return BoardPageIdSchema.safeParse(page).success ? (page as string) : undefined;
+  };
+
+  // Anyone with a link or public board's address may read it, signed in or not.
+  app.get('/v1/guest/boards/:id', async (request, reply) => {
+    const params = idSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ message: 'Invalid board ID.' });
+    const board = store.getBoard(params.data.id);
+    if (!board || board.archived || board.visibility === 'private') return notFound(reply);
+    return view(board, null, pageQuery(request.query));
   });
 
   app.get('/v1/boards', async (request, reply) => {
@@ -262,7 +282,7 @@ export function registerBoardLibrary(
     const params = idSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ message: 'Invalid board ID.' });
     const board = readable(params.data.id, user);
-    return board ? view(board, user) : notFound(reply);
+    return board ? view(board, user, pageQuery(request.query)) : notFound(reply);
   });
   app.put('/v1/boards/:id', { bodyLimit: 20_000_000 }, async (request, reply) => {
     const user = requireUser(request, reply);

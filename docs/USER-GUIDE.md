@@ -280,15 +280,61 @@ selected. Search covers boards you own or were invited to edit; archived boards 
 other people's public boards are not searched. Agents can use the same search with
 the `opsis_search_boards` MCP tool. Search matches words, not meanings.
 
-## Share with another local account
+## Turn a board into pages
 
-A board is private by default. Make it public from the board library or its
-sharing controls so other signed-in accounts using the same API can view it.
-Viewers can play a board or save their own copy; they cannot edit your original.
+A board can hold up to 30 pages, each its own canvas with its own concepts, arrows and
+drawings, like the pages of a book or the slides of a pitch. The board's name, look and
+scale are shared by every page.
 
-“Public” here means visible within that Opsis instance. It does not publish a board
-to GitHub, create a hosted website, or make a localhost link reachable from another
-computer. See [accounts and sharing](P2-WORKFLOWS.md#shared-editing-on-one-server).
+- **Add page** in the canvas's bottom-right corner turns a one-page board into a book and
+  opens the new page after the current one.
+- Turn pages with the arrows beside the page number, or press **Page Down** and **Page Up**.
+- Open the page list (the page number and title) to go to any page. Owners and editors can
+  also rename, reorder and delete pages there.
+- Every edit, including adding, moving or deleting a page, is one undoable step. Undo turns
+  back to the page it changes, so the change is always in view.
+
+Search and **Linked from** look at every page and open the page that matched. Image and
+Markdown exports show the page on screen. The editable `.json` file holds every page.
+Chat agents and MCP tools work on the open page and the first page respectively; the
+MCP tool `opsis_get_board` lists all of the board's pages.
+
+### Hide pages from viewers
+
+In the page list, the crossed-out eye **hides a page from viewers**. You and invited editors
+still see it, marked with the same eye. People who only view the board do not see it at all:
+the server never sends them the page, its title or its link, and page numbers count only
+the pages they see (1 / 3, not 1 / 4). This lets you pitch an idea while keeping pricing
+or follow-up pages to yourself. At least one page stays visible.
+
+To show a hidden page to someone, copy **that page's link** from the page list
+(`…/canvas?board=<board>&page=<page>`) and send it. Anyone who can view the board and opens
+that link sees the hidden page as well, and it opens at that page. **New link** changes the
+page's link, so links you sent earlier stop showing it.
+
+## Share a board
+
+A board is private by default: only you and editors you invite can open it. Choose who
+else can open it under **Sharing** on the canvas's **Look & details** page. In the board
+library, the sharing button steps through the same three choices.
+
+| Sharing                  | Who can open it                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Private**              | You and invited editors.                                                                                                           |
+| **Anyone with the link** | Anyone who has its link, including people without an account. It is not listed anywhere. Like Google Docs' “anyone with the link”. |
+| **Public**               | Anyone with the link, and every account on this Opsis server, where it is listed under **Boards → Public boards**.                 |
+
+**Copy link** gives the board's address. Someone who is not signed in sees a read-only
+view: the picture of each page, which they can zoom, its concepts and explanations, and
+the pages to turn. Signed-in viewers open it in the full canvas, where they can play the
+process or save their own copy. Nobody but you and invited editors can change your
+original, and viewers never receive hidden pages or your undo history. Making the board
+private again closes the link at once: it then leads to sign-in.
+
+On a desktop install or a local development server, the link only works on your own
+computer. To share with people elsewhere, run Opsis as a
+[personal server](SERVER.md) behind HTTPS. See also
+[accounts and sharing](P2-WORKFLOWS.md#shared-editing-on-one-server).
 
 ## Play a process
 
@@ -333,7 +379,7 @@ layout. Add personal notes and HTTP/HTTPS sources in concept details.
 
 Owners grant/revoke editing to existing accounts under **Share** in the board header. Invitees
 open boards from **Boards → Shared with you**. This works on one local Opsis server;
-public visibility alone remains read-only. Idle views synchronize revisions, and
+link and public sharing alone remain read-only. Idle views synchronize revisions, and
 conflict recovery preserves unsaved edits. **Compare boards or saved revisions**
 in Boards compares content and layout without changing either version.
 

@@ -16,7 +16,10 @@ import { navigate } from '../router';
 import { boardFileJson, collectionNameOf } from './board-file';
 
 type BoardHeaderProps = {
+  /** The open page: images and notes show what is on screen. */
   board: BoardDocument | null;
+  /** The whole board with every page, for the editable JSON file. */
+  document: BoardDocument | null;
   busy: boolean;
   working: boolean;
   saved: string;
@@ -33,6 +36,7 @@ type BoardHeaderProps = {
 
 export function BoardHeader({
   board,
+  document: wholeBoard,
   busy,
   working,
   saved,
@@ -173,9 +177,9 @@ export function BoardHeader({
             <button
               disabled={!board}
               onClick={() =>
-                board &&
+                wholeBoard &&
                 exportAs(
-                  boardFileJson(board, collectionName),
+                  boardFileJson(wholeBoard, collectionName),
                   'opsis-board.json',
                   'application/json',
                 )

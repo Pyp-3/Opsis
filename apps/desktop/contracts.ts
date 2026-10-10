@@ -31,6 +31,10 @@ import {
   createEmptyBoard,
   recordBoardEdit,
   copyBoardSnapshot,
+  readerSnapshot,
+  boardBacklinks,
+  BoardPageIdSchema,
+  type LinkingBoard,
 } from '../../packages/schema/src/index';
 import { SignUpSchema, LogInSchema, AgentKeyNameSchema } from '../api/src/auth-contract';
 import { z } from 'zod';
@@ -89,6 +93,21 @@ export function apply(operation: string, json: string): string {
           board: BoardSnapshotSchema.shape.board.parse(board.board),
         })),
         z.string().parse(query),
+      );
+    } else if (operation === 'readerSnapshot') {
+      // What a viewer receives: no hidden pages except the linked one, and no undo history.
+      const { snapshot, page } = z
+        .object({ snapshot: BoardSnapshotSchema, page: z.string() })
+        .parse(input);
+      value = readerSnapshot(snapshot, BoardPageIdSchema.safeParse(page).success ? page : null);
+    } else if (operation === 'backlinks') {
+      const { targetId, boards } = input as { targetId: string; boards: LinkingBoard[] };
+      value = boardBacklinks(
+        z.string().uuid().parse(targetId),
+        boards.map((board) => ({
+          ...board,
+          board: BoardSnapshotSchema.shape.board.parse(board.board),
+        })),
       );
     } else if (operation === 'searchRank') {
       value = rankSearchHits((input as { hits: SearchHit[] }).hits);

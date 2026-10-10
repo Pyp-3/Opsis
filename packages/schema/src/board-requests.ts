@@ -22,10 +22,18 @@ export const BoardCollectionRequestSchema = z
 export const BoardCollectionAssignmentSchema = z
   .object({ collectionId: z.string().uuid().nullable() })
   .strict();
+/**
+ * Who can open a board besides its owner and invited editors: nobody (private), anyone who has
+ * its link, including people without an account (link), or that and every account on this
+ * server, where it is also listed (public). Viewers never receive hidden pages.
+ */
+export const BOARD_VISIBILITIES = ['private', 'link', 'public'] as const;
+export const BoardVisibilitySchema = z.enum(BOARD_VISIBILITIES);
+export type BoardVisibility = z.infer<typeof BoardVisibilitySchema>;
 export const BoardUpdateRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(100).optional(),
-    visibility: z.enum(['private', 'public']).optional(),
+    visibility: BoardVisibilitySchema.optional(),
     archived: z.boolean().optional(),
     revision: z.number().int().positive(),
   })

@@ -363,6 +363,70 @@ Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call) and the interactive save-dialog/clipboard check. (`.cmd` launcher
 parity and macOS packaging have since shipped; see above.)
 
+## In progress: board pages and link sharing (requested 2026-10-10)
+
+The user asked for three things: pages a canvas can be flipped through like a book (or opened
+at a specific page); pages an editor can hide so viewers do not even know they exist (handy for
+pitching), shown only to someone sent that page's own link; and Google-style "anyone with the
+link" access for private boards. Confirmed choices: each page is a separate canvas; a link
+opens without sign-in; link access is view-only.
+
+- [x] Pages in board document v2 (optional `pages`, up to 30): the first page's content stays
+      in the board's own fields, so boards without pages and every first-page reader (MCP,
+      review, chat, search) are unchanged; later pages carry their own concepts, arrows,
+      positions, groups, drawings and layers. Title, description, look, agent and scale are
+      board-level. Every page is validated like a board. Shared pure rules in
+      `board-pages.ts` (view/write back, add, remove, move, rename, hide, renew link, reader
+      filter); no migration.
+- [x] Canvas: a page bar (bottom right; above the chat button on narrow canvases; hidden while
+      the process plays) with previous/next, Page Up/Page Down and a page list to go to any page;
+      owners and editors add, rename, reorder, delete, hide and copy or renew a page's link.
+      The canvas edits the open page through the existing single-page document, so every edit,
+      drag and page change stays one undoable step; undo turns to the page it changes. A page
+      turn sweeps across the canvas (instant with reduced motion). Concurrent edits merge page
+      by page. Empty new pages do not show the welcome screen.
+- [x] Hidden pages: owners and editors see everything; every viewer's copy (signed in or not)
+      comes from one shared rule on both hosts that drops hidden pages (titles and IDs too) and
+      the undo history, except the page named by `?page=` in the link. Page IDs are random
+      (32 hex characters); **New link** changes one. At least one page stays visible.
+- [x] Link sharing: visibility `private | link | public` (shared enum, no migration). `link`
+      boards open by ID for any signed-in account and, without sign-in, through
+      `GET /v1/guest/boards/:id` (Fastify and Go; board-read rate bucket; 404 for private or
+      archived boards). They are not listed; public boards are listed and also open by link.
+      Canvas settings offer the three choices with the link; the library button steps through
+      them; collections can share all boards by link. Signed-out visitors get a read-only guest
+      view (page picture with zoom, page bar, concepts and explanations, sign-in); a link to a
+      board not shared by link goes to sign-in as before.
+- [x] Search, backlinks (a shared rule over readable pages on both hosts), collection import
+      link remapping and the editable JSON export cover every page. `opsis_get_board` lists pages.
+- [ ] Not yet: MCP tools and chat generation change only the first or open page respectively;
+      there is no MCP page parameter. Image and Markdown exports and board comparison show one
+      page. Collection HTML/print exports show each board's first page only, even if hidden. A guest
+      view is a picture plus text, not the interactive canvas or process player. Revealing a
+      hidden page lasts while the board stays open; reloading the workspace drops it unless the
+      link is opened again. Not verified on a real Nginx host.
+
+Verified 2026-10-10 on Arch Linux: schema tests (views and write-back, add/move/rename/remove,
+renewed links, the visible-page rule, per-page validation, the reader filter with a hidden first
+page and a revealed page, search, backlinks and import remapping on every page), a page-by-page
+merge test, shell tests (a link-shared board opens for a signed-out visitor; any other board link
+still goes to sign-in), and Fastify and Go API tests of the same story: private boards refuse
+guests, viewers and guessed page links; `link` boards open without sign-in, are not listed and
+stay read-only; viewers (guest or signed in) never receive a hidden page, its ID or the undo
+history unless they send its ID; owners and editors get everything; backlinks from a hidden page
+are the editors' only; making the board private closes the link. A new browser scenario covers
+adding a page, Page Up/Down, undo turning back a page, naming and hiding a page, link sharing,
+the guest view and the hidden page's link, a signed-in viewer, closing the link and reload, with
+accessibility scans; a second checks the page bar and list on a phone. Lint, typecheck, Rust
+check/24 tests, desktop check and full race suite, 512 unit tests and all 70 Fastify browser
+scenarios (including the unchanged Linux pixel baseline) pass. The rebuilt Linux binary passes
+packaged integration, all 70 browser scenarios and all 24 hidden WebView checks. Desktop and
+phone screenshots of the page bar, page list, sharing settings and guest view were reviewed.
+Rebased onto the restricted-guest and path-hosting work: guest accounts' public board reads now
+use the same reader rule (a test proves they get no hidden page unless the link names it), guests
+may also open link boards and turn pages in their gallery, and the new code uses the app's base
+path for API calls and links. No paid model calls were made.
+
 ## Completed: release retention (requested 2026-10-08)
 
 - [x] CI keeps only the 5 newest build prereleases: after each publication a reusable

@@ -22,6 +22,8 @@
 - Nested collapsible groups with optional boundaries, persistent concept notes and source links.
 - Reviewed text/Markdown, JSON and legacy OSG import; a read-only legacy database exporter produces reviewable bulk-import bundles. JSON, SVG, PNG, JPEG and Markdown export remain supported.
 - Named-account shared editing on one server, with owner-controlled invitations/revocation, revision checks and conflict recovery. Public visibility alone stays read-only.
+- **Pages**: a board can hold up to 30 canvases, turned like a book (arrows or Page Up/Down) or opened from a page list. Owners and editors can hide pages from viewers; the server never sends a hidden page to a viewer unless they open that page's own link.
+- **Anyone with the link**: a board can be opened read-only by anyone with its link, without an account, and without being listed. Public boards are also listed for every account on the server.
 - Board/revision comparison, reusable templates and four no-call examples. Validated draft concepts appear as supported CLI output arrives, before full graph review.
 - An email-flow demo that works without an agent subscription or model call.
 

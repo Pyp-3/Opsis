@@ -43,7 +43,7 @@ func (s *Server) chatRoutes() {
 		if err != nil {
 			return "", "", err
 		}
-		if board == nil || (board.OwnerID.String != who.User.ID && (board.Archived || (board.Visibility != "public" && !editor))) {
+		if board == nil || (board.OwnerID.String != who.User.ID && (board.Archived || (board.Visibility == "private" && !editor))) {
 			return "", "", boardMissing()
 		}
 		return who.User.ID, id, nil

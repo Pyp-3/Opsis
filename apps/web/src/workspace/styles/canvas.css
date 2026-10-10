@@ -142,6 +142,7 @@
   }
 }
 .canvas-tools,
+.board-pages,
 .next-steps-toggle,
 .next-steps-panel {
   background: var(--bp-panel);
@@ -519,5 +520,215 @@
 @container (max-width: 1120px) {
   .canvas-coordinate {
     display: none;
+  }
+}
+
+/* Pages: a book's worth of canvases. The page bar sits in the bottom-right corner, and its list
+   opens upward. */
+.board-pages {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 48px);
+  padding: 4px;
+  color: var(--bp-ink);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgb(var(--bp-shade) / 0.3);
+}
+.board-pages > button,
+.board-pages summary {
+  height: 32px;
+  border-radius: 999px;
+}
+.board-pages > button {
+  width: 32px;
+}
+.board-pages.is-single > button {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 12px;
+}
+.board-pages > button:hover:not(:disabled),
+.board-pages summary:hover {
+  background: var(--bp-panel-hover);
+}
+.board-pages-menu {
+  position: relative;
+  min-width: 0;
+}
+.board-pages summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.board-pages summary::-webkit-details-marker {
+  display: none;
+}
+.board-pages-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--bp-gold);
+}
+.board-pages-title {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-pages-panel {
+  position: absolute;
+  right: -40px;
+  bottom: calc(100% + 10px);
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(64vh, 520px);
+  overflow: auto;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.board-pages-panel > p {
+  margin: 0 0 10px;
+}
+.board-pages-help {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.board-pages-panel ol {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.board-pages-panel li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius);
+}
+.board-pages-panel li.is-current {
+  background: var(--accent-soft);
+}
+.board-pages-panel li input {
+  flex: 1 1 140px;
+  min-width: 0;
+  order: 1;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.board-pages-go {
+  flex: none;
+  gap: 6px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--ink-2);
+  border-radius: var(--radius);
+}
+.board-pages-panel li:not(:has(input)) .board-pages-go {
+  flex: 1;
+  justify-content: flex-start;
+  color: var(--ink);
+}
+.board-pages-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.board-pages-go:hover,
+.board-pages-actions button:hover:not(:disabled) {
+  background: var(--sunken);
+}
+.board-pages-actions {
+  display: flex;
+  order: 2;
+  gap: 1px;
+  margin-left: auto;
+}
+.board-pages-actions button {
+  width: 28px;
+  height: 28px;
+  color: var(--ink-2);
+  border-radius: var(--radius);
+}
+.board-pages-actions button[aria-pressed='true'] {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.board-pages-actions .danger-button {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* Turning a page: a sheet sweeps across the canvas in the reading direction. */
+.page-turn {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--bp-shade) / 0.55) 46%,
+    rgb(255 255 255 / 0.08) 50%,
+    rgb(var(--bp-shade) / 0.35) 54%,
+    transparent
+  );
+  animation: page-turn-next 420ms var(--ease-out) both;
+}
+.page-turn.is-previous {
+  animation-name: page-turn-previous;
+}
+@keyframes page-turn-next {
+  from {
+    transform: translateX(70%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-70%);
+    opacity: 0;
+  }
+}
+@keyframes page-turn-previous {
+  from {
+    transform: translateX(-70%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(70%);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-turn {
+    animation-duration: 1ms;
+  }
+}
+/* Narrow canvases keep the bottom row for the chat button. */
+@container (max-width: 720px) {
+  .board-pages {
+    right: 12px;
+    bottom: 72px;
+  }
+  .board-pages-title {
+    max-width: 12ch;
   }
 }

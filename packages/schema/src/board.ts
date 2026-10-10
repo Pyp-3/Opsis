@@ -13,6 +13,7 @@ import {
   drawingProblems,
 } from './board-drawings';
 import { ProcessStepSchema, processProblems } from './process';
+import { boardPage, MAX_BOARD_PAGES, pageListProblems } from './board-pages';
 
 import { BOARD_ICONS } from './board-icons';
 import { BoardAgentSchema, BoardModelSettingsSchema } from './model-settings';
@@ -193,7 +194,7 @@ export const BoardLookSchema = z
   })
   .strict();
 export type BoardLook = z.infer<typeof BoardLookSchema>;
-export const BoardDocumentSchema = BoardContentSchema.extend({
+const BoardDocumentObject = BoardContentSchema.extend({
   nodes: z.array(BoardNodeSchema).max(50),
   version: z.literal(2),
   positions: z.record(z.object({ x: z.number().finite(), y: z.number().finite() }).strict()),
@@ -214,7 +215,40 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
   drawingLayers: z.array(DrawingLayerSchema).max(MAX_DRAWING_LAYERS).optional(),
   /** What one grid square measures, for dimension lines. */
   drawingScale: DrawingScaleSchema.optional(),
-}).superRefine((board, context) => {
+});
+/**
+ * What one page holds. The first page's content is the board's own fields (so a board without
+ * pages is simply a one-page board); every later page carries its own; see board-pages.ts.
+ */
+export const BoardPageContentSchema = BoardDocumentObject.pick({
+  nodes: true,
+  edges: true,
+  positions: true,
+  edgePorts: true,
+  pinnedNodeIds: true,
+  groups: true,
+  drawings: true,
+  drawingLayers: true,
+  suggestions: true,
+  narration: true,
+}).strict();
+export type BoardPageContent = z.infer<typeof BoardPageContentSchema>;
+/** Page IDs are random and unguessable: a hidden page's link is its ID. */
+export const BoardPageIdSchema = z.string().regex(/^[A-Za-z0-9_-]{12,40}$/u);
+export const BoardPageSchema = z
+  .object({
+    id: BoardPageIdSchema,
+    title: z.string().trim().min(1).max(60),
+    /** Kept from people who only view the board, unless they open this page's own link. */
+    hidden: z.literal(true).optional(),
+    /** Absent only on the first page, whose content is the board's own fields. */
+    content: BoardPageContentSchema.optional(),
+  })
+  .strict();
+export type BoardPage = z.infer<typeof BoardPageSchema>;
+
+type DocumentShape = z.infer<typeof BoardDocumentObject>;
+function documentProblems(board: DocumentShape, context: z.RefinementCtx) {
   validateBoardReferences(board, context);
   for (const message of drawingProblems(
     board.drawings ?? [],
@@ -253,6 +287,16 @@ export const BoardDocumentSchema = BoardContentSchema.extend({
       code: 'custom',
       message: 'Pinned positions must reference existing concepts.',
     });
+}
+export const BoardDocumentSchema = BoardDocumentObject.extend({
+  pages: z.array(BoardPageSchema).min(1).max(MAX_BOARD_PAGES).optional(),
+}).superRefine((board, context) => {
+  documentProblems(board, context);
+  if (!board.pages) return;
+  for (const message of pageListProblems(board.pages))
+    context.addIssue({ code: 'custom', message });
+  for (const page of board.pages.slice(1))
+    if (page.content) documentProblems(boardPage(board, page.id), context);
 });
 /** Largest single upload, in bytes; base64 inflates it by a third on the wire. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;

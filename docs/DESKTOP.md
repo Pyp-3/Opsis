@@ -69,7 +69,7 @@ OPSIS_MODEL_DIR="$PWD/apps/api/data/models" ./output/desktop/opsis
 
 One desktop/server process may use a profile at a time. Its session is stored in
 a private native file; it is not exposed to JavaScript. Browser sessions are
-separate. Public boards remain read-only to other accounts on the same local API.
+separate. Link and public boards remain read-only to other accounts on the same local API.
 
 For whole-database backups, run `./opsis --backup-database /absolute/path/new-backup.sqlite`.
 Restore with `--import-database` into a new profile. See [Persistence and recovery](PERSISTENCE.md)

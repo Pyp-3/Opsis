@@ -4,6 +4,7 @@ import {
   BoardEdgeKindSchema,
   EDGE_COLORS,
   createEmptyBoard,
+  boardPages,
   detachDrawings,
   recordBoardEdit,
   removeBoardNode,
@@ -49,6 +50,15 @@ export function describeBoard(id: string, revision: number, board: BoardDocument
     title: board.title,
     description: board.description,
     look: board.look ?? null,
+    // The tools read and change the first page; the reader turns to the others on the canvas.
+    ...(board.pages
+      ? {
+          pages: boardPages(board).map((page, index) => ({
+            ...page,
+            ...(index === 0 ? { shownHere: true } : {}),
+          })),
+        }
+      : {}),
     concepts: board.nodes.map((node) => ({
       id: node.id,
       label: node.label,

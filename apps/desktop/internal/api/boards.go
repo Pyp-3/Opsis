@@ -63,12 +63,36 @@ func (s *Server) boardRoutes() {
 		if err != nil {
 			return err
 		}
-		if board == nil || (board.OwnerID.String != user.ID && (board.Archived || (board.Visibility != "public" && !editor))) {
+		if board == nil || (board.OwnerID.String != user.ID && (board.Archived || (board.Visibility == "private" && !editor))) {
 			return boardMissing()
 		}
 		view := board.view(user)
-		if board.OwnerID.String != user.ID && editor && !board.Archived {
-			view["access"] = "editor"
+		if board.OwnerID.String != user.ID {
+			if editor && !board.Archived {
+				view["access"] = "editor"
+			} else if err := s.asReader(view, board, r.URL.Query().Get("page")); err != nil {
+				return err
+			}
+		}
+		writeJSON(w, 200, view)
+		return nil
+	})
+	// Anyone with a link or public board's address may read it, signed in or not.
+	s.handle("GET /v1/guest/boards/{id}", func(w http.ResponseWriter, r *http.Request) error {
+		id := r.PathValue("id")
+		if !s.validID(id) {
+			return failure(400, "Invalid board ID.")
+		}
+		board, err := s.readBoard(s.db, id)
+		if err != nil {
+			return err
+		}
+		if board == nil || board.Archived || board.Visibility == "private" {
+			return boardMissing()
+		}
+		view := board.view(&User{})
+		if err := s.asReader(view, board, r.URL.Query().Get("page")); err != nil {
+			return err
 		}
 		writeJSON(w, 200, view)
 		return nil
@@ -156,7 +180,7 @@ func (s *Server) boardRoutes() {
 			if err != nil {
 				return err
 			}
-			if board != nil && board.Visibility == "public" && !board.Archived {
+			if board != nil && board.Visibility != "private" && !board.Archived {
 				return failure(403, "This board belongs to someone else. Save a copy to edit it.")
 			}
 			return boardMissing()
@@ -286,6 +310,18 @@ func (s *Server) boardRoutes() {
 	s.collectionRoutes()
 	s.organizationRoutes()
 	s.searchRoutes()
+}
+
+// asReader turns a board view into what a viewer receives: no hidden pages except the one
+// whose link (`page`) they opened, and none of the editors' undo history.
+func (s *Server) asReader(view map[string]any, board *Board, page string) error {
+	snapshot, err := s.contracts.Apply("readerSnapshot", map[string]any{"snapshot": board.Snapshot, "page": page})
+	if err != nil {
+		return err
+	}
+	view["snapshot"] = snapshot
+	view["access"] = "viewer"
+	return nil
 }
 
 func (s *Server) templateRoutes() {

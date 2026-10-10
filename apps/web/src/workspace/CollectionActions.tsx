@@ -117,6 +117,12 @@ export function CollectionActions({
             </button>
             <button
               disabled={busy || !members.length}
+              onClick={() => void share({ kind: 'visibility', visibility: 'link' })}
+            >
+              Share all by link
+            </button>
+            <button
+              disabled={busy || !members.length}
               onClick={() => void share({ kind: 'visibility', visibility: 'private' })}
             >
               Make all private

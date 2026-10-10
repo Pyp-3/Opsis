@@ -23,6 +23,9 @@ function stubApi() {
       return Response.json({ signup: signupOpen, accountExecutablePaths: signupOpen });
     if (url === '/v1/auth/me')
       return signedIn ? Response.json({ user: ada }) : Response.json({}, { status: 401 });
+    // Boards here are private: not shared by link.
+    if (url.startsWith('/v1/guest/boards/'))
+      return Response.json({ message: 'Board not found.' }, { status: 404 });
     if (url === '/v1/auth/signup') {
       if (body.email === 'taken@example.com')
         return Response.json(

@@ -23,6 +23,18 @@ vi.mock('./workspace/Workspace', () => ({
 vi.mock('./workspace/GuestWorkspace', () => ({
   GuestWorkspace: () => <h1>Public guest gallery</h1>,
 }));
+// A board shared by link opens for signed-out visitors; any other board sends them to sign in.
+vi.mock('./workspace/GuestBoard', async () => {
+  const { useEffect } = await import('react');
+  return {
+    GuestBoard: ({ boardId, onUnavailable }: { boardId: string; onUnavailable: () => void }) => {
+      useEffect(() => {
+        if (boardId !== 'link-board') onUnavailable();
+      }, [boardId, onUnavailable]);
+      return <h1>Guest view of {boardId}</h1>;
+    },
+  };
+});
 vi.mock('./auth/AuthPage', () => ({
   AuthPage: ({ mode, onSignedIn }: { mode: string; onSignedIn: (user: User) => void }) => (
     <div>
@@ -70,6 +82,15 @@ it('preserves a board deep link through login', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
   await screen.findByRole('heading', { name: "Reader's workspace" });
   expect(location.pathname + location.search).toBe('/canvas?board=shared-board');
+});
+
+it('shows a board shared by link to a signed-out visitor without asking them to sign in', async () => {
+  history.replaceState(null, '', '/canvas?board=link-board&page=secret-page-0001');
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Guest view of link-board' });
+  expect(location.pathname + location.search).toBe(
+    '/canvas?board=link-board&page=secret-page-0001',
+  );
 });
 
 it('returns an existing session from an auth page to its local destination', async () => {

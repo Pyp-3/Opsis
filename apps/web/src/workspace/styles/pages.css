@@ -1555,13 +1555,14 @@
   background: var(--sunken);
   border-radius: 999px;
 }
-.visibility-badge.is-public {
+.visibility-badge.is-public,
+.visibility-badge.is-link {
   color: var(--accent-text);
   background: var(--accent-soft);
 }
 .share-options {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 .share-options button {
@@ -1610,11 +1611,21 @@
   opacity: 1;
 }
 .share-link > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
+}
+.share-link-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 0;
-  overflow: hidden;
+}
+.share-link small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-2);
 }
 .share-link code,
 .account-secret code {

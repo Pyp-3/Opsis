@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   Globe,
+  Link2,
   Grid2X2,
   Lock,
   LayoutGrid,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
+import type { BoardVisibility } from '@opsis/schema';
 import { HomeBackdrop } from './HomeBackdrop';
 import { BoardRevisionPanel } from './BoardRevisionPanel';
 import { useBoardCollections } from './useBoardCollections';
@@ -53,6 +55,21 @@ export async function fetchPublicBoards(): Promise<PublicBoard[]> {
 }
 
 const relative = new Intl.RelativeTimeFormat('en-GB', { numeric: 'auto' });
+/** The library's sharing button steps through who can open a board, one click at a time. */
+const SHARING: Record<BoardVisibility, { next: BoardVisibility; change: string; title: string }> = {
+  private: {
+    next: 'link',
+    change: 'Share with anyone who has the link:',
+    title: 'Private · share by link',
+  },
+  link: {
+    next: 'public',
+    change: 'Make public:',
+    title: 'Anyone with the link · make public',
+  },
+  public: { next: 'private', change: 'Make private:', title: 'Public · make private' },
+};
+
 export function updatedLabel(updatedAt: number, now = Date.now()) {
   const seconds = Math.round((updatedAt - now) / 1000);
   for (const [unit, size] of [
@@ -510,7 +527,11 @@ export function BoardsPage({
                         <small>
                           {current ? 'Open now · ' : ''}
                           {entry.archived ? 'Archived · ' : ''}
-                          {entry.visibility === 'public' ? 'Public · ' : ''}
+                          {entry.visibility === 'public'
+                            ? 'Public · '
+                            : entry.visibility === 'link'
+                              ? 'Anyone with the link · '
+                              : ''}
                           {activeFilter === 'all' && collectionName(entry.collectionId)
                             ? `${collectionName(entry.collectionId)} · `
                             : ''}
@@ -609,28 +630,28 @@ export function BoardsPage({
                           <Copy size={15} />
                         </button>
                         <button
-                          aria-label={
-                            entry.visibility === 'public'
-                              ? `Make ${entry.title} private`
-                              : `Make ${entry.title} public`
+                          aria-label={`${SHARING[entry.visibility ?? 'private'].change} ${entry.title}`}
+                          title={SHARING[entry.visibility ?? 'private'].title}
+                          className={
+                            (entry.visibility ?? 'private') === 'private' ? '' : 'is-public'
                           }
-                          title={
-                            entry.visibility === 'public'
-                              ? 'Public · make private'
-                              : 'Private · make public'
-                          }
-                          className={entry.visibility === 'public' ? 'is-public' : ''}
                           disabled={library.switching}
                           onClick={() =>
                             void library.manage(
                               'share',
                               entry,
                               undefined,
-                              entry.visibility === 'public' ? 'private' : 'public',
+                              SHARING[entry.visibility ?? 'private'].next,
                             )
                           }
                         >
-                          {entry.visibility === 'public' ? <Globe size={15} /> : <Lock size={15} />}
+                          {entry.visibility === 'public' ? (
+                            <Globe size={15} />
+                          ) : entry.visibility === 'link' ? (
+                            <Link2 size={15} />
+                          ) : (
+                            <Lock size={15} />
+                          )}
                         </button>
                         <button
                           aria-label={`Rename ${entry.title}`}
