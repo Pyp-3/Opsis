@@ -238,6 +238,12 @@ func (s *Server) routes() {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
 		return nil
 	})
+	// The desktop app is always a local install: open sign-up and account-chosen CLI paths.
+	// Only the Fastify host's personal server mode (docs/SERVER.md) narrows these.
+	s.handle("GET /v1/instance", func(w http.ResponseWriter, _ *http.Request) error {
+		writeJSON(w, 200, map[string]bool{"signup": true, "accountExecutablePaths": true})
+		return nil
+	})
 	s.authRoutes()
 	s.boardRoutes()
 	s.accountSettingsRoutes()

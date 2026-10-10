@@ -15,9 +15,12 @@ vi.mock('../workspace/Workspace', () => ({
 
 const ada = { id: 'u1', email: 'ada@example.com', name: 'Ada' };
 let signedIn = false;
+let signupOpen = true;
 function stubApi() {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const body = init?.body ? (JSON.parse(init.body as string) as Record<string, string>) : {};
+    if (url === '/v1/instance')
+      return Response.json({ signup: signupOpen, accountExecutablePaths: signupOpen });
     if (url === '/v1/auth/me')
       return signedIn ? Response.json({ user: ada }) : Response.json({}, { status: 401 });
     if (url === '/v1/auth/signup') {
@@ -47,6 +50,7 @@ function stubApi() {
 
 beforeEach(() => {
   signedIn = false;
+  signupOpen = true;
   // Skip the exit animation's delay.
   vi.stubGlobal('matchMedia', () => ({ matches: true }));
   stubApi();
@@ -108,6 +112,24 @@ describe('signing in', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
     await waitFor(() => expect(location.pathname).toBe('/login'));
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeDefined();
+  });
+
+  it('offers only logging in on a server whose operator creates the accounts', async () => {
+    signupOpen = false;
+    history.replaceState(null, '', '/signup?next=%2Fboards');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeDefined();
+    await waitFor(() => expect(location.pathname + location.search).toBe('/login?next=%2Fboards'));
+    expect(screen.queryByRole('tab', { name: 'Sign up' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create an account' })).toBeNull();
+    expect(
+      screen.getByText('New here? Ask the person who runs this Opsis server for an account.'),
+    ).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Log in/ }));
+    expect(await screen.findByText('Workspace for Ada')).toBeDefined();
+    expect(location.pathname).toBe('/boards');
   });
 
   it('rates passwords by length and variety', () => {

@@ -194,3 +194,11 @@ func TestRenameNullBoardCreatesDocumentEvenWithDefaultTitle(t *testing.T) {
 	}
 	owner.request("PATCH", path, map[string]any{"title": "Invalid revision", "revision": 1e30}, 400)
 }
+
+func TestDesktopIsALocalInstance(t *testing.T) {
+	c := &testClient{t: t, server: newTestServer(t)}
+	got := c.request("GET", "/v1/instance", nil, 200)
+	if got["signup"] != true || got["accountExecutablePaths"] != true || len(got) != 2 {
+		t.Fatalf("desktop instance = %v, want open sign-up and account CLI paths", got)
+	}
+}

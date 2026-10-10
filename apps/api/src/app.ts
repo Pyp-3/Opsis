@@ -1,7 +1,9 @@
 import { fileURLToPath } from 'node:url';
+import { sep } from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { ZodError } from 'zod';
-import { ErrorResponseSchema } from '@opsis/schema';
+import { ErrorResponseSchema, LOCAL_INSTANCE, type InstanceInfo } from '@opsis/schema';
 import { ApiStore } from './storage.js';
 import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 import { registerBoardLibrary } from './board-library.js';
@@ -9,7 +11,8 @@ import { registerBoardCollections } from './board-collections.js';
 import { registerAccountSettings } from './account-settings.js';
 import { registerBoardChat } from './board-chat.js';
 import { registerBoardSearch } from './board-search.js';
-import { registerAuth } from './auth.js';
+import { isInternalRequest, registerAuth } from './auth.js';
+import { serverModeFromEnv, WEB_APP_CSP, type ServerMode } from './server-mode.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
 import { ProviderKeys, registerProviderKeys } from './provider-keys';
 import { localBoardClient } from './boards/client';
@@ -27,10 +30,71 @@ export type BuildAppOptions = FastifyServerOptions & {
   speech?: SpeechEngine | null;
   /** Removes deleted chat threads' native CLI sessions; defaults to the shared session root. */
   removeThreadSessions?: ThreadSessionCleaner;
+  /** A personal server behind an HTTPS proxy; defaults to `OPSIS_PUBLIC_ORIGIN`, else local. */
+  serverMode?: ServerMode | null;
 };
 
 function errorResponse(code: string, message: string, stage: string, retryable = false) {
   return ErrorResponseSchema.parse({ code, message, stage, retryable });
+}
+
+/** On a server the agent CLIs are the server's own: an account cannot point at another program. */
+function serverExecutables(factory: BoardClientFactory): BoardClientFactory {
+  return (agent, settings, ...rest) => {
+    if (!settings?.executablePath) return factory(agent, settings, ...rest);
+    const serverSettings = { ...settings };
+    delete serverSettings.executablePath;
+    return factory(agent, serverSettings, ...rest);
+  };
+}
+
+/**
+ * Behind the proxy, every browser request must arrive over HTTPS for the public origin, and
+ * writes must come from pages on that origin. Agents on the server itself (the MCP server)
+ * still reach the API directly over loopback.
+ */
+function registerServerBoundary(app: FastifyInstance, serverMode: ServerMode) {
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('Strict-Transport-Security', 'max-age=31536000');
+    reply.header('Content-Security-Policy', WEB_APP_CSP);
+    reply.header('X-Frame-Options', 'DENY');
+    // Cross-origin isolation lets the narrator's speech model use several CPU threads.
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Cross-Origin-Embedder-Policy', 'credentialless');
+    if (isInternalRequest(request)) return;
+    if (request.protocol !== 'https' || request.host !== serverMode.publicHost)
+      return reply.code(421).send({ message: `Open Opsis at ${serverMode.publicOrigin}.` });
+    if (
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
+      request.headers.origin !== serverMode.publicOrigin
+    )
+      return reply.code(403).send({ message: 'Cross-site writes are not allowed.' });
+  });
+}
+
+/** The built web app, with page routes such as /boards falling back to its index. */
+function registerWebApp(app: FastifyInstance, webRoot: string) {
+  void app.register(fastifyStatic, {
+    root: webRoot,
+    wildcard: true,
+    cacheControl: false,
+    // Vite fingerprints everything under assets/; the index must be revalidated to pick them up.
+    setHeaders: (response, path) =>
+      response.setHeader(
+        'Cache-Control',
+        path.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
+      ),
+  });
+  app.setNotFoundHandler((request, reply) => {
+    const path = request.url.split('?')[0] ?? '';
+    if (request.method === 'GET' && !path.startsWith('/v1/') && !/\.[\w]+$/u.test(path))
+      return reply.sendFile('index.html');
+    return reply.code(404).send({
+      message: `Route ${request.method}:${path} not found`,
+      error: 'Not Found',
+      statusCode: 404,
+    });
+  });
 }
 
 /** Builds the Fastify app with all routes registered, without binding a port. */
@@ -42,9 +106,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     rateWindowMs = Number(process.env.OPSIS_RATE_WINDOW_MS ?? 60_000),
     speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine(),
     removeThreadSessions = fileThreadSessionCleaner(DEFAULT_SESSION_ROOT),
+    serverMode = serverModeFromEnv(),
     ...fastifyOptions
   } = options;
-  const app = Fastify(fastifyOptions);
+  const app = Fastify({
+    ...fastifyOptions,
+    ...(serverMode ? { trustProxy: serverMode.trustedProxy } : {}),
+  });
+  if (serverMode) registerServerBoundary(app, serverMode);
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
@@ -56,14 +125,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return reply.code(403).send({ message: 'Cross-site writes are not allowed.' });
   });
   const providerKeys = new ProviderKeys(databasePath);
-  registerBoardRoutes(
-    app,
+  const factory: BoardClientFactory =
     boardClientFactory ??
-      ((agent, settings, schema) =>
-        localBoardClient(agent, settings, schema, providerKeys.get(agent))),
-  );
+    ((agent, settings, schema) =>
+      localBoardClient(agent, settings, schema, providerKeys.get(agent)));
+  registerBoardRoutes(app, serverMode ? serverExecutables(factory) : factory);
   const store = new ApiStore(databasePath);
-  registerAuth(app, store);
+  registerAuth(app, store, { signup: !serverMode, secureCookies: !!serverMode });
   registerProviderKeys(app, providerKeys);
   // Generation spends the instance's API/CLI quota: only signed-in people may start it.
   app.addHook('onRequest', async (request, reply) => {
@@ -84,7 +152,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.addHook('onClose', async () => store.close());
   app.addHook('onRequest', async (request, reply) => {
     // Speech is local work with its own bounded queue; a narrated board makes many requests.
-    if (request.url === '/v1/health' || request.url.startsWith('/v1/speech')) return;
+    // The served web app's files (a personal server) are static and never count.
+    if (
+      !request.url.startsWith('/v1/') ||
+      request.url === '/v1/health' ||
+      request.url.startsWith('/v1/speech')
+    )
+      return;
     const now = Date.now();
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
@@ -131,6 +205,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.get('/v1/health', async () => ({ status: 'ok' }));
+  const instance: InstanceInfo = serverMode
+    ? { signup: false, accountExecutablePaths: false }
+    : LOCAL_INSTANCE;
+  app.get('/v1/instance', async () => instance);
+  if (serverMode) registerWebApp(app, serverMode.webRoot);
 
   return app;
 }

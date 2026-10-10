@@ -7,7 +7,8 @@ Run from the repository root with `pnpm --filter api dev`. The default address i
 
 ## Routes and ownership
 
-- `GET /v1/health` reports availability.
+- `GET /v1/health` reports availability; `GET /v1/instance` says whether sign-up is open
+  and whether accounts may choose CLI executable paths.
 - `/v1/auth/*` manages accounts, cookie sessions and revocable agent keys.
 - `GET /v1/agents` reports local Claude/Codex availability and the built-in demo.
 - `POST /v1/boards/generate` and `POST /v1/boards/illustrate` run the selected local agent.
@@ -60,19 +61,25 @@ Keep prompt edits separate from structural refactors so changes in agent output 
 
 ## Configuration
 
-| Variable                              | Default                      | Purpose                                   |
-| ------------------------------------- | ---------------------------- | ----------------------------------------- |
-| `HOST`                                | `127.0.0.1`                  | Listen address                            |
-| `PORT`                                | `8000`                       | Listen port                               |
-| `OPSIS_DB_PATH`                       | `apps/api/data/opsis.sqlite` | Account and board database                |
-| `OPSIS_RATE_LIMIT`                    | `60`                         | Requests per client per budget window     |
-| `OPSIS_RATE_WINDOW_MS`                | `60000`                      | Budget window in milliseconds             |
-| `OPSIS_CLAUDE_BIN`, `OPSIS_CODEX_BIN` | PATH lookup                  | Explicit CLI executable                   |
-| `OPSIS_SPEECH`                        | enabled                      | Set to `off` to disable natural narration |
-| `OPSIS_MODEL_DIR`                     | application model cache      | Speech model cache directory              |
+| Variable                              | Default                      | Purpose                                    |
+| ------------------------------------- | ---------------------------- | ------------------------------------------ |
+| `HOST`                                | `127.0.0.1`                  | Listen address                             |
+| `PORT`                                | `8000`                       | Listen port                                |
+| `OPSIS_DB_PATH`                       | `apps/api/data/opsis.sqlite` | Account and board database                 |
+| `OPSIS_RATE_LIMIT`                    | `60`                         | Requests per client per budget window      |
+| `OPSIS_RATE_WINDOW_MS`                | `60000`                      | Budget window in milliseconds              |
+| `OPSIS_CLAUDE_BIN`, `OPSIS_CODEX_BIN` | PATH lookup                  | Explicit CLI executable                    |
+| `OPSIS_SPEECH`                        | enabled                      | Set to `off` to disable natural narration  |
+| `OPSIS_MODEL_DIR`                     | application model cache      | Speech model cache directory               |
+| `OPSIS_PUBLIC_ORIGIN`                 | unset (local)                | HTTPS origin; enables personal server mode |
+| `OPSIS_TRUSTED_PROXY`                 | `loopback`                   | Peers allowed to set `X-Forwarded-*`       |
+| `OPSIS_WEB_ROOT`                      | `apps/web/dist`              | Built web app served in server mode        |
 
 Board polling has a separate allowance ten times the normal budget. Authentication
-has its own budget. Health and speech do not consume these budgets.
+has its own budget. Health, speech and the served web app's files do not consume these
+budgets. Server mode (closed sign-up, proxy checks, served web app, server-chosen CLIs) is
+described in [the personal server guide](../../docs/SERVER.md); `pnpm accounts` manages its
+accounts.
 
 Models and reasoning effort come from the board request and its defaults. Agent runs use
 the CLI's existing login; no HTTP provider key or legacy startup LLM adapter is needed.

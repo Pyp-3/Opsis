@@ -48,6 +48,6 @@ cd Opsis
 
 Open **http://localhost:3000**. For native Windows and troubleshooting, see [Getting started](docs/GETTING-STARTED.md).
 
-Your boards stay on your machine. Agent generation sends your prompt and supplied context through the selected provider and may consume its quota. Keep the server on loopback; public hosting is not supported.
+Your boards stay on your machine. Agent generation sends your prompt and supplied context through the selected provider and may consume its quota. The development server stays on loopback. To open your own Opsis from anywhere, run it as a [personal server](docs/SERVER.md) behind an HTTPS proxy such as Nginx, with accounts you create.
 
 [User guide](docs/USER-GUIDE.md) · [Agent settings](docs/AGENT-CONFIGURATION.md) · [Contributing](CONTRIBUTING.md) · [Release notes and packaging](docs/RELEASES.md)

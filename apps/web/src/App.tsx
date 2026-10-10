@@ -8,6 +8,7 @@ import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
 import { AuthPage } from './auth/AuthPage';
 import { currentUser, logOut, type User } from './auth/session';
 import { navigate, usePath } from './router';
+import { useInstance } from './instance';
 import { UpdateNotice } from './workspace/UpdateNotice';
 import { loadAccountSettings, resetAccountSettings } from './workspace/account-settings';
 
@@ -33,6 +34,8 @@ export function App() {
 function Shell() {
   const [session, setSession] = useState<Session>({ status: 'loading' });
   const path = usePath();
+  // Whether this host offers sign-up; known before the sign-in page shows its choices.
+  const instance = useInstance();
 
   const signedIn = useCallback(async (user: User) => {
     // Before the workspace mounts, so it restores this account's own recovery copy.
@@ -75,9 +78,15 @@ function Shell() {
       navigate(here === '/' ? '/login' : `/login?next=${encodeURIComponent(here)}`, true);
     }
     if (session.status === 'in' && onAuthPage) navigate(returnPath(), true);
-  }, [out, onAuthPage, session.status]);
+    if (out && path === '/signup' && instance?.signup === false)
+      navigate(`/login${location.search}`, true);
+  }, [out, onAuthPage, session.status, path, instance]);
 
-  if (session.status === 'loading' || (session.status === 'in' && onAuthPage))
+  if (
+    session.status === 'loading' ||
+    (session.status === 'in' && onAuthPage) ||
+    (session.status === 'out' && !instance)
+  )
     return (
       <div className="auth-splash" aria-busy="true" aria-label="Loading Opsis">
         <BrandMark size={48} />
@@ -86,7 +95,8 @@ function Shell() {
   if (session.status === 'out')
     return (
       <AuthPage
-        mode={path === '/signup' ? 'signup' : 'login'}
+        mode={path === '/signup' && instance?.signup ? 'signup' : 'login'}
+        signup={!!instance?.signup}
         onSignedIn={async (user) => {
           const next = returnPath();
           await signedIn(user);

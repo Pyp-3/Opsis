@@ -56,8 +56,13 @@ function cookie(request: FastifyRequest, name: string) {
   return undefined;
 }
 
-function sessionCookie(request: FastifyRequest, value: string, maxAge: number) {
-  const secure = request.protocol === 'https' ? '; Secure' : '';
+function sessionCookie(
+  request: FastifyRequest,
+  value: string,
+  maxAge: number,
+  alwaysSecure: boolean,
+) {
+  const secure = alwaysSecure || request.protocol === 'https' ? '; Secure' : '';
   return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
@@ -83,7 +88,18 @@ export function isInternalRequest(request: FastifyRequest) {
 /** Same work whether or not the email exists, so timing does not reveal accounts. */
 const DUMMY_HASH = hashPassword(randomUUID());
 
-export function registerAuth(app: FastifyInstance, store: ApiStore) {
+export type AuthOptions = {
+  /** False on a personal server: its operator creates accounts (`pnpm --filter api accounts`). */
+  signup?: boolean;
+  /** Mark the session cookie Secure even when this hop is plain HTTP (behind a TLS proxy). */
+  secureCookies?: boolean;
+};
+
+export function registerAuth(
+  app: FastifyInstance,
+  store: ApiStore,
+  { signup = true, secureCookies = false }: AuthOptions = {},
+) {
   app.decorateRequest('user', null);
   app.decorateRequest('viaAgent', false);
   app.addHook('onRequest', async (request) => {
@@ -102,7 +118,7 @@ export function registerAuth(app: FastifyInstance, store: ApiStore) {
   const startSession = (request: FastifyRequest, reply: FastifyReply, user: User) => {
     const token = randomBytes(32).toString('base64url');
     store.createSession(digest(token), user.id, Date.now() + SESSION_DAYS * 86_400_000);
-    reply.header('set-cookie', sessionCookie(request, token, SESSION_DAYS * 86_400));
+    reply.header('set-cookie', sessionCookie(request, token, SESSION_DAYS * 86_400, secureCookies));
     return { user };
   };
   const invalid = (reply: FastifyReply, error: z.ZodError) =>
@@ -112,6 +128,10 @@ export function registerAuth(app: FastifyInstance, store: ApiStore) {
     });
 
   app.post('/v1/auth/signup', async (request, reply) => {
+    if (!signup)
+      return reply.code(403).send({
+        message: 'Sign-up is closed on this server. Ask its operator for an account.',
+      });
     const body = SignUpSchema.safeParse(request.body);
     if (!body.success) return invalid(reply, body.error);
     const user = store.createUser({
@@ -145,7 +165,7 @@ export function registerAuth(app: FastifyInstance, store: ApiStore) {
   app.post('/v1/auth/logout', async (request, reply) => {
     const session = cookie(request, SESSION_COOKIE);
     if (session) store.deleteSession(digest(session));
-    reply.header('set-cookie', sessionCookie(request, '', 0));
+    reply.header('set-cookie', sessionCookie(request, '', 0, secureCookies));
     return reply.code(204).send();
   });
 

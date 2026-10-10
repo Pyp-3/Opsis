@@ -732,6 +732,21 @@ export class ApiStore {
       User | undefined;
   }
 
+  /** Accounts for the operator's `pnpm accounts list`; never includes password hashes. */
+  listUsers() {
+    return this.sqlite
+      .prepare('SELECT id, email, name, created_at AS createdAt FROM users ORDER BY created_at')
+      .all() as (User & { createdAt: number })[];
+  }
+
+  /** Replaces a password and signs the account out everywhere; agent keys are kept. */
+  resetPassword(userId: string, password: string) {
+    this.sqlite.transaction(() => {
+      this.sqlite.prepare('UPDATE users SET password = ? WHERE id = ?').run(password, userId);
+      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+    })();
+  }
+
   createSession(tokenHash: string, userId: string, expiresAt: number) {
     const now = Date.now();
     this.sqlite.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now);

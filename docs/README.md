@@ -10,6 +10,8 @@ examples before connecting an agent.
   release downloads, and startup troubleshooting.
 - [User guide](USER-GUIDE.md): editing, templates, saving, sharing, playback, and exports.
 - [Canvas and generation features](FEATURES.md): diagrams, playback, uploads and proposal review.
+- [Personal server](SERVER.md): host your own Opsis behind Nginx or another HTTPS proxy,
+  with operator-created accounts.
 - [Agent and model settings](AGENT-CONFIGURATION.md): CLI setup,
   model choice, effort, and environment configuration.
 - [Release downloads](https://github.com/Pyp-3/Opsis/releases): Linux desktop builds

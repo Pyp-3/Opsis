@@ -13,6 +13,7 @@ import { readModelProfiles, writeModelProfiles, type ModelProfile } from './mode
 import { readReportedUsage, clearReportedUsage } from './reported-usage';
 import { UsageByCollection } from './UsageByCollection';
 import { accountSetting, saveAccountSetting } from './account-settings';
+import { useInstance } from '../instance';
 
 export function ModelSettingsPanel({
   preferences,
@@ -31,6 +32,8 @@ export function ModelSettingsPanel({
   const [fallbacks, setFallbacks] = useState(() => accountSetting('model-fallbacks') ?? {});
   const [savingFallback, setSavingFallback] = useState(false);
   const fallback = fallbacks[agent];
+  // A personal server runs the CLIs its operator installed; account paths are ignored there.
+  const serverExecutables = useInstance()?.accountExecutablePaths === false;
   async function saveFallback(profile?: ModelProfile) {
     const next = { ...fallbacks };
     if (profile) next[agent] = structuredClone(profile);
@@ -134,16 +137,17 @@ export function ModelSettingsPanel({
         <label>
           Executable path
           <input
-            value={value.executablePath ?? ''}
-            disabled={value.connection === 'api'}
+            value={serverExecutables ? '' : (value.executablePath ?? '')}
+            disabled={value.connection === 'api' || serverExecutables}
             maxLength={1024}
-            placeholder="Automatic discovery"
+            placeholder={serverExecutables ? 'Set by this server' : 'Automatic discovery'}
             onChange={(event) => set({ ...value, executablePath: event.target.value })}
           />
         </label>
         <small>
-          Absolute path on the machine running Opsis. Leave blank to use PATH or the host’s
-          configured override. No shell arguments.
+          {serverExecutables
+            ? 'This server runs the agent CLIs its operator installed and signed in to. Paths saved for your account are not used here.'
+            : 'Absolute path on the machine running Opsis. Leave blank to use PATH or the host’s configured override. No shell arguments.'}
         </small>
         <ModelControls agent={agent} value={value} disabled={checking} onChange={set} />
         {value.connection !== 'api' && ['kimi', 'grok', 'antigravity'].includes(agent) && (

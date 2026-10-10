@@ -25,9 +25,12 @@ const STRENGTH = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
  */
 export function AuthPage({
   mode,
+  signup,
   onSignedIn,
 }: {
   mode: AuthMode;
+  /** False on a server whose operator creates the accounts: only logging in is offered. */
+  signup: boolean;
   onSignedIn: (user: User) => void;
 }) {
   const signingUp = mode === 'signup';
@@ -144,20 +147,22 @@ export function AuthPage({
 
       <main className="auth-panel">
         <div className="auth-card">
-          <div className="auth-switch" role="tablist" aria-label="Account">
-            <span className="auth-switch-thumb" data-mode={mode} aria-hidden />
-            {(['login', 'signup'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={mode === option}
-                onClick={() => switchTo(option)}
-              >
-                {option === 'login' ? 'Log in' : 'Sign up'}
-              </button>
-            ))}
-          </div>
+          {signup && (
+            <div className="auth-switch" role="tablist" aria-label="Account">
+              <span className="auth-switch-thumb" data-mode={mode} aria-hidden />
+              {(['login', 'signup'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === option}
+                  onClick={() => switchTo(option)}
+                >
+                  {option === 'login' ? 'Log in' : 'Sign up'}
+                </button>
+              ))}
+            </div>
+          )}
 
           <header className="auth-head" key={mode}>
             <h1>{signingUp ? 'Create your account' : 'Welcome back'}</h1>
@@ -275,12 +280,18 @@ export function AuthPage({
             </button>
           </form>
 
-          <p className="auth-alt">
-            {signingUp ? 'Already have an account?' : 'New to Opsis?'}{' '}
-            <button type="button" onClick={() => switchTo(signingUp ? 'login' : 'signup')}>
-              {signingUp ? 'Log in' : 'Create an account'}
-            </button>
-          </p>
+          {signup ? (
+            <p className="auth-alt">
+              {signingUp ? 'Already have an account?' : 'New to Opsis?'}{' '}
+              <button type="button" onClick={() => switchTo(signingUp ? 'login' : 'signup')}>
+                {signingUp ? 'Log in' : 'Create an account'}
+              </button>
+            </p>
+          ) : (
+            <p className="auth-alt">
+              New here? Ask the person who runs this Opsis server for an account.
+            </p>
+          )}
         </div>
         <p className="auth-footnote">
           <Lock size={12} /> Passwords are stored as salted hashes on your Opsis server.

@@ -40,6 +40,18 @@ primary guidance: [OWASP session management](https://cheatsheetseries.owasp.org/
 and [OWASP CSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
 No external-system probing or paid provider calls were part of this review.
 
+### Personal server mode (2026-10-10)
+
+`OPSIS_PUBLIC_ORIGIN` now enables a bounded [personal server](SERVER.md) on the Fastify
+host. It addresses the blockers above for an operator-trusted group, not for public
+multi-tenant hosting. Sign-up is closed, and the operator creates accounts and resets
+passwords. Browser requests must arrive over HTTPS for the configured origin through a
+trusted proxy, and writes must carry that origin. Cookies are always Secure, with HSTS and
+CSP. Accounts cannot choose CLI executables. Still open: per-user provider credentials,
+quotas and worker isolation (every account shares the server's CLI logins and keys), an
+audit log, distributed rate limits and multi-host storage. The Go desktop host remains
+loopback-only.
+
 ## Loading and layout
 
 The pre-P2 production entry was approximately 782 kB minified (249 kB gzip). The

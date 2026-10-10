@@ -1,14 +1,15 @@
 # Opsis goals
 
-Last reviewed: 2026-10-09.
+Last reviewed: 2026-10-10.
 
 ## Current delivery
 
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.
 Remote mode remains opt-in; instance API keys remain server-wide. Signing and
-manual platform checks remain separate. #3 and #6 are implemented and verified below;
-#4 remote server/device sync is still outstanding.
+manual platform checks remain separate. #3 and #6 are implemented and verified below.
+For #4 the user chose a personal server first (2026-10-10, see below); device sync remains
+outstanding.
 
 Additional authorized scope: Canvas workspace tabs for Canvas, Chat and a future
 placeholder. Move prompting into provider-specific per-board chat threads; retain
@@ -576,15 +577,48 @@ page fade-ins. Those fixes are verified in CI: later runs, most recently 3792047
 
 ### Remote Opsis server and device sync (#4)
 
-- [ ] Opt-in server mode for the Fastify host: non-loopback binding only with an HTTPS public
-      origin (direct TLS or an explicitly trusted proxy), strict origin checks, Secure cookies,
-      CSP/HSTS, invite-only enrollment and operator-issued password resets, local CLI generation
-      disabled, serving the built web app, and an audit log with retention. Loopback mode unchanged.
-- [ ] Per-device sync tokens (shown once, revocable, limited to sync routes).
-- [ ] Local hosts (Fastify and Go desktop) connect to a server and sync owned boards with a shared
-      pure planner: pushes, pulls, three-way merges; true conflicts and edit-vs-delete keep a
-      separate copy. Collections and tags travel by name. Tokens are never returned or logged.
+Scope decision (2026-10-10, user): the user will deploy Opsis on their own server behind
+Nginx for personal use, opened from a browser, so a **personal server mode** comes first and
+device sync is deferred until needed. The chosen option left out invite links and the
+audit log as unnecessary for one person. The user also decided that agent CLIs are a server concern, not an account
+one: the server runs its own installed and signed-in CLIs (instead of disabling local CLI
+generation), and the executable path an account saves is ignored there.
+
+- [x] Personal server mode for the Fastify host (`OPSIS_PUBLIC_ORIGIN`, HTTPS only; see
+      `docs/SERVER.md`). Requests through the trusted proxy (`OPSIS_TRUSTED_PROXY`, default
+      loopback) must be HTTPS for the public host, or they get 421; writes need the public
+      `Origin`. Secure cookies, HSTS, CSP, frame denial and isolation headers are set. The
+      built web app is served with page-route fallback, and its files are exempt from API rate
+      limits. A non-loopback `HOST` is allowed only in this mode. MCP agent keys stay
+      loopback-only. Loopback mode is unchanged.
+- [x] Closed sign-up with operator accounts: `pnpm accounts list|create|reset-password`
+      (generated or stdin password; a reset signs the account out everywhere). `GET
+/v1/instance` reports sign-up and CLI-path capability, and the Go desktop reports a local
+      instance. The sign-in page then offers only logging in, and Settings shows that the
+      server sets CLI paths.
+- [x] Server-run CLIs: an account's saved executable path is dropped before any agent check,
+      generation or illustration; `OPSIS_<AGENT>_BIN` or PATH on the server decide.
+- [ ] Not in this delivery: an audit log with retention, invite links and self-service
+      password recovery (operator resets instead).
+- [ ] Deferred until requested: per-device sync tokens and syncing local hosts (Fastify and
+      Go desktop) with a server through a shared pure planner (push, pull, three-way merges,
+      conflict and edit-vs-delete copies, collections and tags by name).
 - [ ] Not in this delivery: live presence/cursors, multi-server scaling, hosted backups.
+
+Verified 2026-10-10 on Arch Linux: server-mode API tests (origin validation; closed sign-up
+and Secure cookie; refusal of plain HTTP, other hosts, other origins and spoofed headers from
+an untrusted peer; loopback MCP access; web app fallback, cache headers and path traversal;
+rate limits not spent by app files; account executable paths dropped; operator create/reset
+signing sessions out) and a Go test of the desktop's local instance. Web unit tests cover the
+login-only page and the `/signup` redirect. End to end, the built app ran in server mode behind
+a local TLS proxy that forwards like the documented Nginx configuration (Nginx is not installed
+here). Chromium checked the redirect to login, the operator note, logging in, the Secure
+cookie, the disabled CLI path field and board creation, with no CSP violations. This run found
+the rate-limit bug fixed above: app files had exhausted the API budget (429). The documented
+`pnpm --filter api start` serves the app, and an `http://` origin is refused at startup.
+Not yet verified
+on a real Nginx/Let's Encrypt host; the browser narrator's model download
+under the CSP was not exercised (speech off in tests).
 
 ## Product goal
 

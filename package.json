@@ -7,6 +7,7 @@
     "node": ">=20.19"
   },
   "scripts": {
+    "accounts": "pnpm --filter api exec tsx src/accounts-cli.ts",
     "database": "pnpm --filter api exec tsx src/persistence/database-cli.ts",
     "dev": "pnpm engine:build && pnpm --parallel --filter web --filter api dev",
     "engine:build": "pnpm --filter @opsis/engine build",
