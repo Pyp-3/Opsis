@@ -23,8 +23,17 @@ health and prefixed asset URLs pass. Release download digest/metadata/source che
 were exercised against a published successful CI release. This caught and fixed
 the deployment recipe's workspace-local Vite executable path. The updater also handles
 successful partial CI reruns and restarts the old service if a backup fails before
-migration. Final CI, live account creation, browser/persistence checks and enabling
-the `/opsis/` proxy remain pending. No OS packages or dependency versions were upgraded.
+migration. CI run 38032958052 for `0abe7bf` passed every job: 499 unit tests,
+67 web browser scenarios, all four desktop platform jobs, and release publication.
+That exact commit was deployed through the installed updater. The live `/opsis/`
+proxy is enabled; HTTPS HTML/health and secure HttpOnly `/opsis/` cookies pass,
+unrelated routes return 404, unauthenticated account access returns 401, and public
+sign-up returns 403. The requested operator account was created; the board library
+is empty and no local data was copied. Account/session persistence across a real
+container restart passed. Chrome verified the live login screen; the local prefixed
+browser smoke covered login, board creation/edit/save/reload and logout. Update and
+certificate-renewal timers are enabled. Provider CLIs/credentials remain unconfigured
+and speech is disabled. No OS packages or dependency versions were upgraded.
 
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.
