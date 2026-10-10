@@ -16,11 +16,20 @@ candidate smoke containers receive none. CLI packages are exact-version/integrit
 locked and installed without lifecycle scripts; Claude self-updates are disabled.
 Progress: 501 unit tests, typecheck/lint, Rust check/24 tests, native check/race tests,
 five updater tests and the targeted guest browser scenario pass. Credentials were
-copied privately and both login status checks pass. One authorized live Claude/Haiku
-request passed. Codex 0.162.1 was rejected by the existing compatibility allowlist
+copied privately and both login status checks pass. One authorized live request each
+passed for Claude/Haiku and Codex/gpt-6-luna inside the restricted server container.
+Codex 0.162.1 was rejected by the existing compatibility allowlist
 before a model call; the server pins supported 0.159.0 instead, leaving local tools
-unchanged. Full browser QA, CI-gated rollout, Codex's live check, guest creation and
-live verification are pending.
+unchanged. All 68 browser scenarios pass across the full run and one isolated rerun
+after a concurrent test-artifact collision. CI run 38035564939 passed all jobs,
+including all four desktop platforms and release publication; `ce72cdb` was deployed
+through the installed updater with a database backup and previous container retained.
+The guest account was created after the server policy became active. Live HTTPS
+checks confirm member CLI discovery, guest public listing, denied writes/provider
+access, closed sign-up, and persistent guest sessions/restrictions across restart.
+Unrelated subdomain routes still return 404 and the main website remains healthy.
+The runtime remains non-root/read-only with all capabilities dropped and no published
+ports. Update and certificate timers remain enabled. No further model calls were made.
 
 VPS deployment scope (2026-10-10): serve only `/opsis/` on
 `tools.pypsnotes.cloud`, returning 404 elsewhere; use the existing Docker/Nginx
@@ -50,8 +59,9 @@ sign-up returns 403. The requested operator account was created; the board libra
 is empty and no local data was copied. Account/session persistence across a real
 container restart passed. Chrome verified the live login screen; the local prefixed
 browser smoke covered login, board creation/edit/save/reload and logout. Update and
-certificate-renewal timers are enabled. Provider CLIs/credentials remain unconfigured
-and speech is disabled. Cloudflare's own `/cdn-cgi/trace` still returns 200 independently
+certificate-renewal timers are enabled. Provider CLIs/credentials were subsequently
+configured under the shared-server scope above; speech remains disabled. Cloudflare's
+own `/cdn-cgi/trace` still returns 200 independently
 of Nginx; the 404 boundary applies to application routes, not hostname concealment.
 No OS packages or dependency versions were upgraded.
 
