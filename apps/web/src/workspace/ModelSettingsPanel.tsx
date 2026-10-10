@@ -153,7 +153,7 @@ export function ModelSettingsPanel({
         {value.connection !== 'api' && ['kimi', 'grok', 'antigravity'].includes(agent) && (
           <p>
             Use a model ID from your installed CLI’s catalogue. Kimi 1.52 requires no installed
-            plugins. Grok 1.0.46 requires its default configuration and accepts at most 24,000
+            plugins. Grok 1.0.46 requires its default configuration and accepts at most 30,000
             characters including Opsis instructions and schema. Antigravity 1.3 uses isolated
             settings and the operating system’s saved login; choose an explicit CLI slug such as
             gemini-3.8-flash-medium. These CLI connections accept text and extracted PDF text; use

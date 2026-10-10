@@ -1,6 +1,9 @@
 import type { HarnessConfig, HarnessFile } from './types.js';
 import { HarnessError } from './errors';
 
+/** Grok's escaped prompt plus schema, in characters. */
+export const GROK_PROMPT_LIMIT = 30_000;
+
 export function harnessArguments(
   config: HarnessConfig,
   schemaPath: string,
@@ -10,11 +13,14 @@ export function harnessArguments(
   prompt = '',
 ): string[] {
   if (config.provider === 'grok') {
-    // The official headless interface takes argv. Bound it below Windows' command-line ceiling.
+    // The official headless interface takes argv, so bound it below Windows' 32,767-character
+    // command line. The JSON-escaped length is never shorter than the quoted argument, and the
+    // other arguments take about 300 characters, which leaves over 2,000 to spare.
     const input = prompt.includes(schema)
       ? prompt
       : `${prompt}\nReturn only JSON matching this schema:\n${schema}`;
-    if (JSON.stringify(input).length > 24000) throw new HarnessError('harness_request_limit');
+    if (JSON.stringify(input).length > GROK_PROMPT_LIMIT)
+      throw new HarnessError('harness_request_limit');
     return [
       '--no-auto-update',
       '-p',

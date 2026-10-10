@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it } from 'vitest';
 import { HarnessLLMClient } from './client';
-import { harnessArguments } from './arguments';
+import { boardOutputSchema } from '@opsis/schema';
+import { GROK_PROMPT_LIMIT, harnessArguments } from './arguments';
+import { SYSTEM } from '../boards/prompts';
 import { parseVersion } from './version';
 import { extractHarnessResult } from './envelope';
 import type { HarnessProvider, ProcessRunRequest } from './types';
@@ -101,6 +103,23 @@ it('rejects inherited Kimi plugins and Grok configuration before launching a pro
   }
 });
 it('bounds Grok argv and rejects failed Antigravity results without trying output repair', () => {
+  const grok = {
+    provider: 'grok',
+    model: 'grok-4.7',
+    executable: '/fake',
+    timeoutMs: 1000,
+  } as const;
+  // Opsis's own instructions and schema for a short request fit, with room for the request.
+  expect(
+    harnessArguments(
+      grok,
+      'schema',
+      boardOutputSchema,
+      [],
+      [],
+      `${SYSTEM}\nSchema: ${boardOutputSchema}\nExplain email`,
+    ),
+  ).toContain('--no-auto-update');
   expect(() =>
     harnessArguments(
       { provider: 'grok', model: 'grok-4.7', executable: '/fake', timeoutMs: 1000 },
@@ -108,7 +127,7 @@ it('bounds Grok argv and rejects failed Antigravity results without trying outpu
       '{}',
       [],
       [],
-      'x'.repeat(24000),
+      'x'.repeat(GROK_PROMPT_LIMIT),
     ),
   ).toThrow('harness_request_limit');
   expect(() =>

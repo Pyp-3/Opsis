@@ -91,7 +91,7 @@ by a recorded session id are removed. The CLIs' own indexes and prompt histories
 (such as Codex's state database) are not edited, and a CLI home set only in an agent's
 custom environment is not searched. A resumed turn sends a short continuation instruction rather than the
 full instructions again. Requests without a thread (and every other CLI) remain
-ephemeral. Grok's CLI receives the whole request as one argument bounded at 24,000
+ephemeral. Grok's CLI receives the whole request as one argument bounded at 30,000
 characters, so long chat requests on large boards may need its API connection.
 
 Antigravity uses the OS keyring login with a disposable home/configuration rather
@@ -103,7 +103,7 @@ Kimi uses model names from its local configuration; Grok lists them with `grok m
 The new CLI adapters accept text and extracted PDF text. Binary images are rejected
 before launching them; use their API connection for images. Grok's official
 headless prompt is an argv value, so Opsis caps the escaped prompt plus schema at
-24,000 characters for Windows portability. It can appear in OS process inspection;
+30,000 characters, below Windows' 32,767-character command line. It can appear in OS process inspection;
 Opsis never logs it. Use the API for larger boards. CLI runs have bounded output,
 cancellation and disposable working directories. Their internal billing and
 provider retry behavior still belong to the installed tool.
