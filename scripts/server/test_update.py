@@ -1,5 +1,5 @@
 import unittest
-from update import eligible_run, protected_path
+from update import eligible_run, protected_path, select_release
 
 
 class UpdatePolicyTests(unittest.TestCase):
@@ -33,6 +33,14 @@ class UpdatePolicyTests(unittest.TestCase):
                      '.github/workflows/ci.yml', 'scripts/server/update.py']:
             self.assertTrue(protected_path(path), path)
         self.assertFalse(protected_path('apps/web/src/App.tsx'))
+
+    def test_rerun_can_reuse_its_original_successful_check_job_bundle(self):
+        run = {'run_number': 42, 'run_attempt': 2}
+        original = {'tag_name': 'v0.1.0-build.42.1.gaaaaaaaaaaaa', 'draft': False}
+        unrelated = {'tag_name': 'v0.1.0-build.43.1.gaaaaaaaaaaaa', 'draft': False}
+        self.assertEqual(select_release([unrelated, original], '0.1.0', run, 'a' * 40), original)
+        self.assertIsNone(select_release([original | {'draft': True}], '0.1.0', run, 'a' * 40))
+        self.assertIsNone(select_release([original], '0.1.0', run, 'b' * 40))
 
 
 if __name__ == '__main__':

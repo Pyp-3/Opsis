@@ -11,9 +11,20 @@ support and a separately installed updater gated on successful CI for the exact
 main commit. The user prioritizes supply-chain risk: freeze dependency images,
 lockfiles/manifests, CI workflows and deployment recipes; no automatic package
 updates. Routine builds have no network and reuse the frozen dependency image.
-Progress: implementation and local validation underway in an isolated checkout;
-live DNS/TLS, account creation, prefix browser/persistence verification and updater
-installation remain pending. Existing local uncommitted drawing work is excluded.
+Progress: mount-path support and updater are implemented in an isolated checkout,
+rebased onto the separately delivered drawing work. Cloudflare DNS, tools-only strict
+origin TLS and a Let's Encrypt certificate/renewal timer are configured on the VPS;
+the main website is unchanged. The update timer correctly waits for successful CI.
+Local checks: lint/typecheck, Rust check/24 tests, native check/race tests, 492 unit
+tests and 66 browser scenarios pass before that rebase; 28 relevant tests plus
+lint/typecheck pass after it. Four updater policy tests pass. A real VPS image builds
+with networking disabled and starts as non-root with a read-only root filesystem;
+health and prefixed asset URLs pass. Release download digest/metadata/source checks
+were exercised against a published successful CI release. This caught and fixed
+the deployment recipe's workspace-local Vite executable path. The updater also handles
+successful partial CI reruns and restarts the old service if a backup fails before
+migration. Final CI, live account creation, browser/persistence checks and enabling
+the `/opsis/` proxy remain pending. No OS packages or dependency versions were upgraded.
 
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.

@@ -7,7 +7,7 @@ USER node
 WORKDIR /app/apps/web
 ENV OPSIS_BASE_PATH=/opsis/
 # No dependency installation, package lifecycle scripts, or build-time network.
-RUN /app/node_modules/.bin/tsc -p tsconfig.json && /app/node_modules/.bin/vite build
+RUN /app/node_modules/.bin/tsc -p tsconfig.json && /app/apps/web/node_modules/.bin/vite build
 WORKDIR /app/apps/api
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8000 OPSIS_SPEECH=off
 CMD ["node", "--import", "tsx", "dist/main.js"]

@@ -77,10 +77,12 @@ def write_state(state):
 
 
 def download_bundle(run, sha, destination):
-    # The release tag is deterministic and tied to this successful workflow attempt.
-    version = git('show', f'{sha}:VERSION').strip()
-    version += f"-build.{run['run_number']}.{run['run_attempt']}.g{sha[:12]}"
-    release = github(f'/releases/tags/v{version}')
+    # A successful rerun of only failed jobs can publish the original check job's bundle.
+    base = git('show', f'{sha}:VERSION').strip()
+    release = select_release(github('/releases?per_page=30'), base, run, sha)
+    if release is None:
+        raise RuntimeError('No published release matches this successful CI run')
+    version = release['tag_name'].removeprefix('v')
     asset = next(a for a in release['assets'] if a['name'] == f'opsis-{version}.zip')
     digest = asset.get('digest', '')
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
@@ -117,6 +119,16 @@ def download_bundle(run, sha, destination):
             if actual != expected:
                 raise RuntimeError(f'Release source differs from Git: {path}')
     return context
+
+
+def select_release(releases, base, run, sha):
+    pattern = re.compile(rf'v{re.escape(base)}-build\.{run["run_number"]}\.([1-9][0-9]*)\.g{sha[:12]}')
+    candidates = []
+    for release in releases:
+        match = pattern.fullmatch(release.get('tag_name', ''))
+        if match and not release.get('draft') and int(match[1]) <= run['run_attempt']:
+            candidates.append((int(match[1]), release))
+    return max(candidates, key=lambda pair: pair[0])[1] if candidates else None
 
 
 def container_exists(name):
@@ -174,13 +186,19 @@ def deploy(config, state, sha, context):
         previous = f"opsis-previous-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
         command('docker', 'stop', '--time', '45', 'opsis-server')
     # Take the snapshot with the writer stopped. Keep it even on successful deployment.
-    if (data / 'opsis.sqlite').exists():
-        backups = ROOT / 'backups'
-        backups.mkdir(exist_ok=True, mode=0o700)
-        backup = backups / f'{sha}-{time.time_ns()}.sqlite'
-        with sqlite3.connect(data / 'opsis.sqlite') as source, sqlite3.connect(backup) as target:
-            source.backup(target)
-        LOG.info('Pre-deployment database backup: %s', backup)
+    try:
+        if (data / 'opsis.sqlite').exists():
+            backups = ROOT / 'backups'
+            backups.mkdir(exist_ok=True, mode=0o700)
+            backup = backups / f'{sha}-{time.time_ns()}.sqlite'
+            with sqlite3.connect(data / 'opsis.sqlite') as source, sqlite3.connect(backup) as target:
+                source.backup(target)
+            LOG.info('Pre-deployment database backup: %s', backup)
+    except Exception:
+        # No migration has run yet, so restarting the previous writer is safe.
+        if previous:
+            command('docker', 'start', 'opsis-server')
+        raise
     if previous:
         command('docker', 'rename', 'opsis-server', previous)
         command('docker', 'update', '--restart=no', previous)
