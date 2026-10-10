@@ -8,6 +8,7 @@ import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
 import { AuthPage } from './auth/AuthPage';
 import { currentUser, logOut, type User } from './auth/session';
 import { navigate, usePath } from './router';
+import { appPath } from './app-url';
 import { useInstance } from './instance';
 import { UpdateNotice } from './workspace/UpdateNotice';
 import { loadAccountSettings, resetAccountSettings } from './workspace/account-settings';
@@ -76,7 +77,7 @@ function Shell() {
   const onAuthPage = AUTH_PATHS.has(path);
   useEffect(() => {
     if (out && !onAuthPage) {
-      const here = location.pathname + location.search;
+      const here = appPath() + location.search;
       navigate(here === '/' ? '/login' : `/login?next=${encodeURIComponent(here)}`, true);
     }
     if (session.status === 'in' && onAuthPage) navigate(returnPath(), true);

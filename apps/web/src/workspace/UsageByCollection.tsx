@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useEffect, useState } from 'react';
 import type { UsageRecord } from '@opsis/schema';
 import { measuredLabel, usageByCollection, type UsageGroup } from './usage-summary';

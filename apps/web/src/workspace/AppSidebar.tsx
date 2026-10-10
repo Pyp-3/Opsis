@@ -1,3 +1,4 @@
+import { appUrl } from '../app-url';
 import {
   useCallback,
   useState,
@@ -51,7 +52,7 @@ function NavLink({
 }) {
   return (
     <a
-      href={to}
+      href={appUrl(to)}
       className="rail-link"
       aria-label={label}
       aria-current={current ? 'page' : undefined}
@@ -100,7 +101,7 @@ export function AppSidebar({
     <aside className={`workspace-rail is-${mode}`} aria-label="Workspace">
       <div className="rail-head">
         <a
-          href="/"
+          href={appUrl('/')}
           className="brand"
           aria-label="Opsis home"
           onClick={(event) => {

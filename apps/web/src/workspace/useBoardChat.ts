@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useEffect, useRef, useState } from 'react';
 import {
   BoardChatEntrySchema,

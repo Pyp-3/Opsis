@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import type { NarratorRequest, NarratorResponse } from './narrator.worker';
 
 /**

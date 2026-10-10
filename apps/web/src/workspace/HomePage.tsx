@@ -1,3 +1,4 @@
+import { appUrl } from '../app-url';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -148,7 +149,7 @@ export function HomePage({
             <Clock size={14} /> Continue where you left off
           </h2>
           <a
-            href="/canvas"
+            href={appUrl('/canvas')}
             className="home-continue"
             onClick={(event) => {
               event.preventDefault();
@@ -181,7 +182,7 @@ export function HomePage({
               <FolderOpen size={14} /> Recent boards
             </h2>
             <a
-              href={allBoardsPath}
+              href={appUrl(allBoardsPath)}
               onClick={(event) => {
                 event.preventDefault();
                 navigate(allBoardsPath);
@@ -249,7 +250,7 @@ export function HomePage({
               <Globe size={14} /> Shared by others
             </h2>
             <a
-              href="/boards"
+              href={appUrl('/boards')}
               onClick={(event) => {
                 event.preventDefault();
                 navigate('/boards');

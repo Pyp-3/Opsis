@@ -131,6 +131,64 @@ refused. If the public address has a port, use `Host $http_host` so the port is 
 
 ## Updating and backups
 
+### Hosting under a path
+
+Build the browser with `OPSIS_BASE_PATH=/opsis/ pnpm --filter web build`. The API still
+uses its usual root-relative routes internally; the proxy removes `/opsis/` when forwarding.
+Keep `OPSIS_PUBLIC_ORIGIN=https://tools.example.com` without a path. Navigation, API calls,
+assets and copied board links use the build's prefix. The default `/` build keeps local and
+desktop behavior unchanged.
+
+On a dedicated tools host, use an exact `/opsis` redirect to `/opsis/`, proxy only
+`/opsis/` (with buffering off for generation), and return 404 from `location /`.
+Rewrite the session cookie path from `/` to `/opsis/`. This limits exposed routes;
+DNS and certificate transparency can still reveal the hostname.
+
+### Frozen-dependency VPS updater
+
+`scripts/server/` contains the Docker recipes and a systemd timer for an operator-managed
+deployment. It is deliberately installed separately from the Git checkout: pulling a commit
+cannot change the privileged updater. The root-owned `/opt/opsis/config.json` specifies the
+approved baseline commit, frozen dependency image tag and immutable image ID, public origin,
+Docker network and trusted proxy address. Bootstrap that dependency image once with the
+reviewed lockfile and a pinned official Node image digest. Keep all configuration and state
+root-only; data belongs to container UID 1000.
+
+Every five minutes the updater fetches `main` and checks the latest matching push run of
+`.github/workflows/ci.yml` for that exact SHA. Pending, failed, cancelled, skipped, foreign
+repository and other-branch runs cannot deploy. Dependency manifests, lockfiles, package-manager
+configuration, workflows and deployment files are frozen against the baseline. A change to
+any of them logs "Review required" and leaves the service running. Updating the baseline or
+dependency image is a separate manual review, never an automatic package upgrade.
+
+An eligible update downloads the matching CI release, verifies GitHub's SHA-256 digest and
+release metadata, checks included source against Git, and fast-forwards to the approved SHA.
+It reuses the frozen dependency image and builds the browser with networking disabled. Runtime
+containers run as non-root, with a read-only root filesystem, no added capabilities, no host
+ports or Docker socket, bounded resources, a private writable data directory and temporary
+storage. No GitHub credential is needed for the public repository. CI success is not a code
+review or a guarantee against a compromised maintainer account or malicious application code.
+
+The candidate is tested before replacing the service. A database snapshot and previous
+container are retained. If startup fails, logs identify the failed commit and automatic
+retries of it stop. Database rollback is intentionally manual, because migrations may make
+the previous executable incompatible with the changed database. Inspect the logs and backup
+before restoring; do not simply point an old image at a migrated database.
+
+```sh
+systemctl list-timers opsis-update.timer
+journalctl -u opsis-update.service --since today
+docker logs --tail 100 opsis-server
+systemctl stop opsis-update.timer       # pause deployments
+systemctl start opsis-update.service   # check now
+```
+
+Container logs rotate at 10 MB × 5 files. systemd captures updater/build failures in the
+journal. Retained database snapshots and previous images/containers need operator-managed
+retention; they are never deleted incidentally. A failed SHA stays in `state.json` until the
+operator investigates and clears its `failed` field. No packages are installed during routine
+updates, and no OS package upgrade is part of this workflow.
+
 ```sh
 git pull && pnpm install --frozen-lockfile && pnpm build && sudo systemctl restart opsis
 pnpm database backup /var/lib/opsis/opsis.sqlite /var/backups/opsis-$(date +%F).sqlite

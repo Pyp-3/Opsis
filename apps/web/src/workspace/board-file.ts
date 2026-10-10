@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { z } from 'zod';
 import type { BoardDocument } from '@opsis/schema';
 import { AUTH_EXPIRED } from './board-library-api';

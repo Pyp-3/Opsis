@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
+import { appPath, appUrl } from './app-url';
 
 const CHANGE = 'opsis:navigate';
 
 /** Client-side navigation that keeps browser back/forward working. */
 export function navigate(path: string, replace = false) {
-  if (path === location.pathname) return;
-  history[replace ? 'replaceState' : 'pushState'](null, '', path);
+  const target = appUrl(path);
+  if (target === location.pathname + location.search + location.hash) return;
+  history[replace ? 'replaceState' : 'pushState'](null, '', target);
   window.dispatchEvent(new Event(CHANGE));
 }
 
 export function usePath() {
-  const [path, setPath] = useState(() => location.pathname);
+  const [path, setPath] = useState(() => appPath());
   useEffect(() => {
-    const update = () => setPath(location.pathname);
+    const update = () => setPath(appPath());
     window.addEventListener('popstate', update);
     window.addEventListener(CHANGE, update);
     return () => {

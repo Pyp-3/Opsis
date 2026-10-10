@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useEffect, useState } from 'react';
 import { ArrowRight, Search, TextSearch } from 'lucide-react';
 import { z } from 'zod';

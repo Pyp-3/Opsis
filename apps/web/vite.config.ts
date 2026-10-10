@@ -9,6 +9,7 @@ const isolation = {
 };
 
 export default defineConfig({
+  base: process.env.OPSIS_BASE_PATH || '/',
   plugins: [react()],
   worker: { format: 'es' },
   // Only the narrator's worker imports it; pre-bundling avoids a dev reload on first use.

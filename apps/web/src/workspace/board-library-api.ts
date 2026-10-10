@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { z } from 'zod';
 import { BoardSnapshotSchema, type BoardSnapshot } from '@opsis/schema';
 

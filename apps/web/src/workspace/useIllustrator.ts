@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
 import { recordReportedUsage } from './reported-usage';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';

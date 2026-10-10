@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { z } from 'zod';
 
 export const UserSchema = z.object({ id: z.string(), email: z.string(), name: z.string() });

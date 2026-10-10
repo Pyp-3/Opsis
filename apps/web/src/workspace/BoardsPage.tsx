@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { SharedBoards } from './BoardSharing';
 import { CollectionActions } from './CollectionActions';
 import { BoardComparison } from './BoardComparison';

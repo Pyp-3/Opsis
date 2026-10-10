@@ -1,0 +1,12 @@
+# Bootstrap once from an explicitly reviewed base-image digest and frozen lockfile.
+ARG NODE_IMAGE
+FROM ${NODE_IMAGE}
+RUN npm install --global pnpm@10.34.5
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY apps/mcp/package.json apps/mcp/package.json
+COPY packages/schema/package.json packages/schema/package.json
+COPY packages/engine/package.json packages/engine/package.json
+RUN pnpm install --frozen-lockfile

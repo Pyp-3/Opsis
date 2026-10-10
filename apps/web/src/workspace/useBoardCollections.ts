@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { SmartCollectionRuleSchema, type SmartCollectionRule } from '@opsis/schema';

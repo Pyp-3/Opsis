@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import {
   ACCOUNT_SETTING_KEYS,
   ACCOUNT_SETTING_SCHEMAS,

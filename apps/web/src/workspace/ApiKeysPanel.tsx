@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useEffect, useState } from 'react';
 import { PROVIDER_LABELS, type ProviderAgent } from '@opsis/schema';
 

@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { LegacyBatchReview } from './LegacyBatchReview';
 import { PROVIDER_LABELS } from '@opsis/schema';
 import { BoardSharing } from './BoardSharing';

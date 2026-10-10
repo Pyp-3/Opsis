@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useState } from 'react';
 import { z } from 'zod';
 import { LegacyBundleSchema } from '@opsis/schema';

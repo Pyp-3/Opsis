@@ -50,6 +50,8 @@ jobs:
         run: pnpm lint
       - name: Test release packaging
         run: pnpm release:test
+      - name: Test server deployment policy
+        run: python3 -m unittest discover -s scripts/server -p 'test_*.py'
       - name: Typecheck
         run: pnpm typecheck
       - name: QA gate

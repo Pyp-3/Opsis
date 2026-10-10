@@ -1,3 +1,4 @@
+import { appUrl } from '../app-url';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
@@ -94,7 +95,7 @@ export function BoardHeader({
       <div className="header-breadcrumb">
         {railToggle}
         <a
-          href="/boards"
+          href={appUrl('/boards')}
           className="crumb-root"
           onClick={(event) => {
             event.preventDefault();

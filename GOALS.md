@@ -4,6 +4,17 @@ Last reviewed: 2026-10-10.
 
 ## Current delivery
 
+VPS deployment scope (2026-10-10): serve only `/opsis/` on
+`tools.pypsnotes.cloud`, returning 404 elsewhere; use the existing Docker/Nginx
+host and Cloudflare DNS. Start with an empty server database. Add mount-path
+support and a separately installed updater gated on successful CI for the exact
+main commit. The user prioritizes supply-chain risk: freeze dependency images,
+lockfiles/manifests, CI workflows and deployment recipes; no automatic package
+updates. Routine builds have no network and reuse the frozen dependency image.
+Progress: implementation and local validation underway in an isolated checkout;
+live DNS/TLS, account creation, prefix browser/persistence verification and updater
+installation remain pending. Existing local uncommitted drawing work is excluded.
+
 Scope update: the user has now authorized #3 board links, #6 collection sharing/
 export and #4 remote server/device sync. Implement and validate in that order.
 Remote mode remains opt-in; instance API keys remain server-wide. Signing and

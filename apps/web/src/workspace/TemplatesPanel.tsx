@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Trash2 } from 'lucide-react';

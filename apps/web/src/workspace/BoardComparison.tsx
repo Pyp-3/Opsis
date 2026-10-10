@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useState } from 'react';
 import { BoardDocumentSchema, compareBoards, type BoardDifference } from '@opsis/schema';
 export function BoardComparison({ entries }: { entries: { id: string; title: string }[] }) {

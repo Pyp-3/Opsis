@@ -1,3 +1,4 @@
+import { appUrl } from '../app-url';
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
@@ -46,7 +47,7 @@ export function CanvasSettingsPage({
   const [sharing, setSharing] = useState<'private' | 'public' | null>(null);
   const [copied, setCopied] = useState(false);
   const shown = sharing ?? visibility;
-  const link = boardId ? `${location.origin}/canvas?board=${boardId}` : '';
+  const link = boardId ? `${location.origin}${appUrl('/canvas')}?board=${boardId}` : '';
   const look = lookOf(board);
   const setLook = (next: CanvasLook) => {
     if (!sameLook(next, look) || !board.look) commit({ ...board, look: next });
@@ -62,7 +63,7 @@ export function CanvasSettingsPage({
     <main className="page-main settings-page">
       <header className="page-head">
         <a
-          href="/canvas"
+          href={appUrl('/canvas')}
           className="header-button"
           onClick={(event) => {
             event.preventDefault();

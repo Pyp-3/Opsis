@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../app-url';
 import { useCallback, useEffect, useState } from 'react';
 import { Bot, Check, Copy, KeyRound, LogOut, Plus, Trash2, UserRound } from 'lucide-react';
 import type { User } from '../auth/session';
