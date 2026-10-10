@@ -17,6 +17,8 @@ export type ServerMode = {
   trustedProxy: string;
   /** The built web application (`apps/web/dist`) this host serves. */
   webRoot: string;
+  /** Operator-managed, public-view-only accounts. Never accepted from a browser. */
+  guestEmails?: string[];
 };
 
 const defaultWebRoot = fileURLToPath(new URL('../../web/dist', import.meta.url));
@@ -47,7 +49,16 @@ export function serverModeFromEnv(env: NodeJS.ProcessEnv = process.env): ServerM
     throw new Error(
       `No built web app at ${webRoot}. Run "pnpm --filter web build" or set OPSIS_WEB_ROOT.`,
     );
-  return { publicOrigin: url.origin, publicHost: url.host, trustedProxy, webRoot };
+  const guestEmails = env.OPSIS_GUEST_EMAILS?.split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  return {
+    publicOrigin: url.origin,
+    publicHost: url.host,
+    trustedProxy,
+    webRoot,
+    ...(guestEmails?.length ? { guestEmails } : {}),
+  };
 }
 
 /**

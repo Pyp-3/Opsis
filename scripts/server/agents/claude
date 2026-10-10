@@ -1,0 +1,4 @@
+#!/bin/sh
+# Keep these flags at the executable boundary: the harness sanitizes its environment.
+export DISABLE_AUTOUPDATER=1 DISABLE_UPDATES=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+exec /opt/opsis-clis/node_modules/@anthropic-ai/claude-code-linux-x64/claude "$@"

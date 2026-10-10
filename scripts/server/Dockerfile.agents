@@ -1,0 +1,9 @@
+ARG DEPENDENCIES_IMAGE
+FROM ${DEPENDENCIES_IMAGE}
+USER root
+COPY agents/package.json agents/package-lock.json /opt/opsis-clis/
+# Exact CLI versions and transitive archive integrity, with lifecycle scripts disabled.
+RUN cd /opt/opsis-clis && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+COPY agents/claude /usr/local/bin/claude
+RUN chmod 755 /usr/local/bin/claude && ln -s /opt/opsis-clis/node_modules/.bin/codex /usr/local/bin/codex \
+    && claude --version && codex --version

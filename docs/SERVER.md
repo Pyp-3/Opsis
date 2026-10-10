@@ -201,6 +201,37 @@ records, so keep them private. Instance API keys live beside the database in
 
 ## Limits
 
+### Restricted server guests and shared CLI logins
+
+Set `OPSIS_GUEST_EMAILS` to comma-separated operator-created account emails to restrict
+them to public-board viewing. This is server configuration, not a browser-editable role;
+keep it with the database when restoring or moving the service. Configure the restriction
+before creating or sharing the guest login. Removing an email grants that account normal
+member permissions again. Sign-up remains closed in server mode.
+
+Guests get a separate read-only diagram gallery. They cannot generate, copy, edit, manage
+credentials, view private/archived boards, or use editor invitations to bypass the restriction.
+Only current public snapshots are returned, without undo history; polling removes a board
+when its owner makes it private or archives it. This cannot erase copies a viewer already saw.
+The guest gallery supports pan/zoom and concept explanations, not the member editing/chat UI.
+This restriction is specific to the Fastify personal server; native/local accounts are unchanged.
+
+`scripts/server/Dockerfile.agents` layers Codex 0.159.0 and Claude Code 2.1.296 over
+the existing frozen dependency image. Its separate npm lockfile pins archive integrity;
+installation scripts are disabled. The Linux x64 Claude launcher executes the packaged
+native binary directly and disables updates. No existing application dependencies change.
+Use this recipe only for Linux x64, as on the VPS.
+
+The updater's optional `agent_home` points to private persistent storage mounted at
+`/home/node` only for the live container. It contains `.codex/auth.json` and
+`.claude/.credentials.json`, not the operator's whole home/configuration/history. Directories
+are mode 0700, files 0600, owned by container UID 1000. Logins can refresh there across
+container replacements. The optional `guest_emails` array sets `OPSIS_GUEST_EMAILS`.
+Never put credentials in Git, build contexts, images or logs. A compromised runtime can
+read its mounted credentials; CI and file permissions do not eliminate that risk. All
+normal member accounts share the operator's provider usage; guests cannot start provider work.
+
 There is no self-service sign-up, password reset by email or audit log. Rate limits are per
-process, and the server is a single SQLite instance. Every account can use the server's CLI
-logins and API keys, so give accounts only to people you would lend those to.
+process, and the server is a single SQLite instance. Every unrestricted member account can
+use the server's CLI logins and API keys, so give member accounts only to people you would
+lend those to. Configure guests explicitly as described above before sharing their login.

@@ -1,8 +1,22 @@
 import unittest
-from update import eligible_run, protected_path, select_release
+from unittest.mock import patch
+from update import eligible_run, protected_path, select_release, launch
 
 
 class UpdatePolicyTests(unittest.TestCase):
+    def test_only_live_container_receives_credentials_and_guest_policy_is_explicit(self):
+        config = {'network': 'test-network', 'origin': 'https://example.test',
+                  'proxy_address': '127.0.0.1', 'agent_home': '/private/agent-home',
+                  'guest_emails': ['guest@example.test']}
+        for name in ['opsis-server', 'opsis-smoke']:
+            with patch('update.command') as run:
+                launch(name, 'test-image', '/private/data', config)
+                args = run.call_args.args
+                self.assertIn('OPSIS_GUEST_EMAILS=guest@example.test', args)
+                self.assertEqual('type=bind,src=/private/agent-home,dst=/home/node' in args,
+                                 name == 'opsis-server')
+                self.assertIn('--read-only', args)
+
     def run_record(self, **changes):
         return dict(id=10, run_attempt=1, head_sha='a' * 40, head_branch='main',
                     event='push', path='.github/workflows/ci.yml',

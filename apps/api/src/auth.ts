@@ -93,24 +93,30 @@ export type AuthOptions = {
   signup?: boolean;
   /** Mark the session cookie Secure even when this hop is plain HTTP (behind a TLS proxy). */
   secureCookies?: boolean;
+  guestEmails?: readonly string[];
 };
 
 export function registerAuth(
   app: FastifyInstance,
   store: ApiStore,
-  { signup = true, secureCookies = false }: AuthOptions = {},
+  { signup = true, secureCookies = false, guestEmails = [] }: AuthOptions = {},
 ) {
+  const guests = new Set(guestEmails.map((email) => email.toLowerCase()));
+  const publicUser = (user: User): User =>
+    guests.has(user.email.toLowerCase()) ? { ...user, role: 'guest' } : user;
   app.decorateRequest('user', null);
   app.decorateRequest('viaAgent', false);
   app.addHook('onRequest', async (request) => {
     const session = cookie(request, SESSION_COOKIE);
     if (session) {
-      request.user = store.sessionUser(digest(session)) ?? null;
+      const user = store.sessionUser(digest(session));
+      request.user = user ? publicUser(user) : null;
       if (request.user) return;
     }
     const bearer = /^Bearer (\S+)$/u.exec(request.headers.authorization ?? '')?.[1];
     if (bearer?.startsWith(AGENT_KEY_PREFIX) && isInternalRequest(request)) {
-      request.user = store.agentKeyUser(digest(bearer)) ?? null;
+      const user = store.agentKeyUser(digest(bearer));
+      request.user = user ? publicUser(user) : null;
       request.viaAgent = !!request.user;
     }
   });
@@ -119,7 +125,7 @@ export function registerAuth(
     const token = randomBytes(32).toString('base64url');
     store.createSession(digest(token), user.id, Date.now() + SESSION_DAYS * 86_400_000);
     reply.header('set-cookie', sessionCookie(request, token, SESSION_DAYS * 86_400, secureCookies));
-    return { user };
+    return { user: publicUser(user) };
   };
   const invalid = (reply: FastifyReply, error: z.ZodError) =>
     reply.code(400).send({

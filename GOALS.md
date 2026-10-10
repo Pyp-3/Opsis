@@ -4,6 +4,24 @@ Last reviewed: 2026-10-10.
 
 ## Current delivery
 
+Shared server CLI / guest scope (2026-10-10): user authorized copying only local Claude
+and Codex login files to the VPS, installing compatible pinned binaries, and a
+public-view-only guest account while sign-up stays disabled. Implemented an
+operator-configured `OPSIS_GUEST_EMAILS` policy: default-deny API authorization even
+for owner/invited boards and existing agent keys; only current public, non-archived
+board snapshots are readable. Guests mount a separate read-only gallery with no
+chat, autosave, account settings, or recovery hooks. Desktop/local mode is unchanged.
+Credentials live outside Git/images/build contexts in a private persistent mount;
+candidate smoke containers receive none. CLI packages are exact-version/integrity
+locked and installed without lifecycle scripts; Claude self-updates are disabled.
+Progress: 501 unit tests, typecheck/lint, Rust check/24 tests, native check/race tests,
+five updater tests and the targeted guest browser scenario pass. Credentials were
+copied privately and both login status checks pass. One authorized live Claude/Haiku
+request passed. Codex 0.162.1 was rejected by the existing compatibility allowlist
+before a model call; the server pins supported 0.159.0 instead, leaving local tools
+unchanged. Full browser QA, CI-gated rollout, Codex's live check, guest creation and
+live verification are pending.
+
 VPS deployment scope (2026-10-10): serve only `/opsis/` on
 `tools.pypsnotes.cloud`, returning 404 elsewhere; use the existing Docker/Nginx
 host and Cloudflare DNS. Start with an empty server database. Add mount-path

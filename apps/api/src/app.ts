@@ -12,6 +12,7 @@ import { registerAccountSettings } from './account-settings.js';
 import { registerBoardChat } from './board-chat.js';
 import { registerBoardSearch } from './board-search.js';
 import { isInternalRequest, registerAuth, requireUser } from './auth.js';
+import { registerGuestAccess } from './guest-access.js';
 import { registerRender } from './render.js';
 import { serverModeFromEnv, WEB_APP_CSP, type ServerMode } from './server-mode.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
@@ -132,7 +133,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       localBoardClient(agent, settings, schema, providerKeys.get(agent)));
   registerBoardRoutes(app, serverMode ? serverExecutables(factory) : factory);
   const store = new ApiStore(databasePath);
-  registerAuth(app, store, { signup: !serverMode, secureCookies: !!serverMode });
+  registerAuth(app, store, {
+    signup: !serverMode,
+    secureCookies: !!serverMode,
+    ...(serverMode?.guestEmails ? { guestEmails: serverMode.guestEmails } : {}),
+  });
+  registerGuestAccess(app, store);
   registerProviderKeys(app, providerKeys);
   // Generation spends the instance's API/CLI quota: only signed-in people may start it.
   // Checks use the matched route: the router decodes paths, so `/v1/boards/%67enerate` is

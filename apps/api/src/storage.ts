@@ -15,7 +15,7 @@ import {
   type BoardChatThread,
 } from '@opsis/schema';
 
-export type User = { id: string; email: string; name: string };
+export type User = { id: string; email: string; name: string; role?: 'guest' };
 export type Visibility = 'private' | 'public';
 export type BoardListing = {
   id: string;

@@ -2,6 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 const Workspace = lazy(() =>
   import('./workspace/Workspace').then((module) => ({ default: module.Workspace })),
 );
+const GuestWorkspace = lazy(() =>
+  import('./workspace/GuestWorkspace').then((module) => ({ default: module.GuestWorkspace })),
+);
 import './workspace/styles/foundation.css';
 import { BrandMark } from './workspace/BrandMark';
 import { AUTH_EXPIRED, setRecoveryScope } from './workspace/useBoardLibrary';
@@ -40,6 +43,12 @@ function Shell() {
   const instance = useInstance();
 
   const signedIn = useCallback(async (user: User) => {
+    if (user.role === 'guest') {
+      resetAccountSettings();
+      setRecoveryScope(user.id);
+      setSession({ status: 'in', user });
+      return;
+    }
     // Before the workspace mounts, so it restores this account's own recovery copy.
     setRecoveryScope(user.id);
     // Account settings load first so the workspace starts with this account's models.
@@ -115,18 +124,30 @@ function Shell() {
         </div>
       }
     >
-      <Workspace
-        // A different account starts from a clean workspace.
-        key={session.user.id}
-        user={session.user}
-        {...(session.settingsError ? { settingsError: session.settingsError } : {})}
-        onSignOut={async () => {
-          await logOut();
-          resetAccountSettings();
-          setSession({ status: 'out' });
-          navigate('/login', true);
-        }}
-      />
+      {session.user.role === 'guest' ? (
+        <GuestWorkspace
+          key={session.user.id}
+          onSignOut={async () => {
+            await logOut();
+            resetAccountSettings();
+            setSession({ status: 'out' });
+            navigate('/login', true);
+          }}
+        />
+      ) : (
+        <Workspace
+          // A different account starts from a clean workspace.
+          key={session.user.id}
+          user={session.user}
+          {...(session.settingsError ? { settingsError: session.settingsError } : {})}
+          onSignOut={async () => {
+            await logOut();
+            resetAccountSettings();
+            setSession({ status: 'out' });
+            navigate('/login', true);
+          }}
+        />
+      )}
     </Suspense>
   );
 }

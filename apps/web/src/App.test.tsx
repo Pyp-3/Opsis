@@ -20,6 +20,9 @@ vi.mock('./workspace/Workspace', () => ({
     </div>
   ),
 }));
+vi.mock('./workspace/GuestWorkspace', () => ({
+  GuestWorkspace: () => <h1>Public guest gallery</h1>,
+}));
 vi.mock('./auth/AuthPage', () => ({
   AuthPage: ({ mode, onSignedIn }: { mode: string; onSignedIn: (user: User) => void }) => (
     <div>
@@ -36,6 +39,13 @@ beforeEach(() => {
   vi.mocked(logOut).mockResolvedValue(undefined);
 });
 afterEach(cleanup);
+
+it('mounts only the public guest gallery for a restricted account', async () => {
+  vi.mocked(currentUser).mockResolvedValue({ ...user, role: 'guest' });
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Public guest gallery' });
+  expect(screen.queryByRole('heading', { name: "Reader's workspace" })).toBeNull();
+});
 
 it('shows the loading state until the current session resolves', async () => {
   let resolve!: (value: User | null) => void;

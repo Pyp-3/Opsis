@@ -148,6 +148,9 @@ def healthy(name):
 
 
 def launch(name, image, data, config):
+    # Only the live service receives credentials. Candidate startup needs no provider access.
+    credentials = (['--mount', f'type=bind,src={config["agent_home"]},dst=/home/node']
+                   if name == 'opsis-server' and config.get('agent_home') else [])
     command('docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
             '--network', config['network'], '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges:true', '--pids-limit', '256',
@@ -156,6 +159,8 @@ def launch(name, image, data, config):
             '--mount', f'type=bind,src={data},dst=/data',
             '--env', f"OPSIS_PUBLIC_ORIGIN={config['origin']}",
             '--env', f"OPSIS_TRUSTED_PROXY={config['proxy_address']}",
+            '--env', f"OPSIS_GUEST_EMAILS={','.join(config.get('guest_emails', []))}",
+            *credentials,
             '--env', 'OPSIS_DB_PATH=/data/opsis.sqlite', image)
 
 

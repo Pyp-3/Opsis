@@ -1,7 +1,12 @@
 import { apiFetch as fetch } from '../app-url';
 import { z } from 'zod';
 
-export const UserSchema = z.object({ id: z.string(), email: z.string(), name: z.string() });
+export const UserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  role: z.literal('guest').optional(),
+});
 export type User = z.infer<typeof UserSchema>;
 
 /** A message for the person, and the form field it is about when there is one. */

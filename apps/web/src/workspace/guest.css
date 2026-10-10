@@ -1,0 +1,48 @@
+.guest-workspace {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.guest-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.guest-header > div {
+  flex: 1;
+}
+.guest-workspace button {
+  padding: 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.guest-board-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.guest-board-list button {
+  width: 100%;
+  text-align: left;
+}
+.guest-workspace .guest-canvas {
+  position: relative;
+  height: 65vh;
+  min-height: 320px;
+  border-radius: 12px;
+}
+.guest-explanations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 600px) {
+  .guest-workspace {
+    padding: 12px;
+  }
+}
