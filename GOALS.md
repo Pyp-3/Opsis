@@ -616,7 +616,11 @@ here). Chromium checked the redirect to login, the operator note, logging in, th
 cookie, the disabled CLI path field and board creation, with no CSP violations. This run found
 the rate-limit bug fixed above: app files had exhausted the API budget (429). The documented
 `pnpm --filter api start` serves the app, and an `http://` origin is refused at startup.
-Not yet verified
+Review also found a
+pre-existing bug. The rule that only signed-in people may check agents, generate or illustrate
+matched the raw URL, but the router decodes paths. An unauthenticated
+`POST /v1/boards/%63heck-agent` therefore reached the agent check. That rule and the rate-limit
+buckets now use the matched route, and regression tests cover encoded paths. Not yet verified
 on a real Nginx/Let's Encrypt host; the browser narrator's model download
 under the CSP was not exercised (speech off in tests).
 

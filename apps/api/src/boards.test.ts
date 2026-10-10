@@ -36,6 +36,32 @@ describe('2D board API', () => {
     return { app, complete, factory };
   }
 
+  it('refuses agent work to signed-out requests, however the path is encoded', async () => {
+    const factory = vi.fn(async () => ({ model: 'test', complete: async () => '{}' }));
+    const app = buildApp({ databasePath: ':memory:', speech: null, boardClientFactory: factory });
+    apps.push(app);
+    const settings = { agent: 'claude', settings: { model: 'haiku', effort: 'low' } };
+    for (const url of [
+      '/v1/boards/check-agent',
+      '/v1/boards/%63heck-agent',
+      '/v1/boards/%67enerate',
+      '/v1/boards/%69llustrate',
+    ])
+      expect((await app.inject({ method: 'POST', url, payload: settings })).statusCode).toBe(401);
+    expect((await app.inject({ url: '/v1/%61gents' })).statusCode).not.toBe(200);
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it('counts encoded sign-in paths against the sign-in budget', async () => {
+    const app = buildApp({ databasePath: ':memory:', speech: null, rateLimit: 2 });
+    apps.push(app);
+    const attempt = (url: string) =>
+      app.inject({ method: 'POST', url, payload: { email: 'a@example.com', password: 'guess' } });
+    expect((await attempt('/v1/auth/login')).statusCode).toBe(401);
+    expect((await attempt('/%761/auth/login')).statusCode).toBe(401);
+    expect((await attempt('/v1/%61uth/login')).statusCode).toBe(429);
+  });
+
   it('checks configuration without a completion and rejects invalid model/effort combinations', async () => {
     const { app, complete, factory } = setup();
     const result = await app.inject({

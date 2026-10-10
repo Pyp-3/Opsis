@@ -134,10 +134,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerAuth(app, store, { signup: !serverMode, secureCookies: !!serverMode });
   registerProviderKeys(app, providerKeys);
   // Generation spends the instance's API/CLI quota: only signed-in people may start it.
+  // Checks use the matched route: the router decodes paths, so `/v1/boards/%67enerate` is
+  // `/v1/boards/generate` too.
   app.addHook('onRequest', async (request, reply) => {
     if (
       !request.user &&
-      /^\/v1\/(?:agents|boards\/(?:generate|illustrate|check-agent))(?:[/?]|$)/u.test(request.url)
+      /^\/v1\/(?:agents|boards\/(?:generate|illustrate|check-agent))$/u.test(
+        request.routeOptions.url ?? '',
+      )
     )
       return reply.code(401).send({ message: 'Sign in to continue.' });
   });
@@ -152,20 +156,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.addHook('onClose', async () => store.close());
   app.addHook('onRequest', async (request, reply) => {
     // Speech is local work with its own bounded queue; a narrated board makes many requests.
-    // The served web app's files (a personal server) are static and never count.
-    if (
-      !request.url.startsWith('/v1/') ||
-      request.url === '/v1/health' ||
-      request.url.startsWith('/v1/speech')
-    )
+    // Only API routes count, never the files of the web app a personal server serves.
+    const route = request.routeOptions.url ?? '';
+    if (!route.startsWith('/v1/') || route === '/v1/health' || route.startsWith('/v1/speech'))
       return;
     const now = Date.now();
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
-      request.method === 'GET' && /^\/v1\/boards(?:\/[a-f\d-]{36})?(?:\?|$)/i.test(request.url);
+      request.method === 'GET' && (route === '/v1/boards' || route === '/v1/boards/:id');
     // Sign-in attempts have their own budget: guessing passwords cannot also starve real work,
     // and real work cannot lock someone out of signing in.
-    const bucket = boardRead ? 'board-read' : request.url.startsWith('/v1/auth/') ? 'auth' : 'work';
+    const bucket = boardRead ? 'board-read' : route.startsWith('/v1/auth/') ? 'auth' : 'work';
     const key = `${request.ip}:${bucket}`;
     const allowance = boardRead ? rateLimit * 10 : rateLimit;
     const recent = (requests.get(key) ?? []).filter((time) => now - time < rateWindowMs);
