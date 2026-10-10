@@ -190,6 +190,20 @@ retention; they are never deleted incidentally. A failed SHA stays in `state.jso
 operator investigates and clears its `failed` field. No packages are installed during routine
 updates, and no OS package upgrade is part of this workflow.
 
+For natural narration, provision a complete Kokoro cache (the existing
+`apps/api/data/models/onnx-community/Kokoro-82M-v1.0-ONNX/` tree) in a private directory
+owned by UID 1000, then set `model_dir` in the installed updater configuration to that
+directory. Only the live container mounts it at `/models`, read-only, and receives
+`OPSIS_SPEECH=on` and `OPSIS_MODEL_DIR=/models`. Candidates keep speech disabled. The
+model persists across releases and cannot be silently replaced by the runtime; missing
+or incompatible cached files fail with the speech status message. Verify `/v1/speech`
+reports `ready` and a short `POST /v1/speech` returns `audio/wav` after deployment.
+Server narration uses the same-origin API and avoids browser model/runtime downloads.
+
+Opsis's HTML uses external module scripts. An inline-script CSP warning needs the
+blocked script's source to identify its owner (for example, an injected proxy or extension
+script); do not enable `unsafe-inline` or allow an unidentified hash to hide the warning.
+
 ```sh
 git pull && pnpm install --frozen-lockfile && pnpm build && sudo systemctl restart opsis
 pnpm database backup /var/lib/opsis/opsis.sqlite /var/backups/opsis-$(date +%F).sqlite

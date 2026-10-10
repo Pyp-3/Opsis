@@ -17,6 +17,23 @@ class UpdatePolicyTests(unittest.TestCase):
                                  name == 'opsis-server')
                 self.assertIn('--read-only', args)
 
+    def test_only_live_service_receives_the_frozen_speech_model_cache(self):
+        config = {'network': 'test-network', 'origin': 'https://example.test',
+                  'proxy_address': '127.0.0.1', 'model_dir': '/private/models'}
+        for name in ['opsis-server', 'opsis-smoke']:
+            with patch('update.command') as run:
+                launch(name, 'test-image', '/private/data', config)
+                args = run.call_args.args
+                live = name == 'opsis-server'
+                self.assertEqual('type=bind,src=/private/models,dst=/models,readonly' in args,
+                                 live)
+                self.assertIn('OPSIS_SPEECH=on' if live else 'OPSIS_SPEECH=off', args)
+                self.assertEqual('OPSIS_MODEL_DIR=/models' in args, live)
+        del config['model_dir']
+        with patch('update.command') as run:
+            launch('opsis-server', 'test-image', '/private/data', config)
+            self.assertIn('OPSIS_SPEECH=off', run.call_args.args)
+
     def run_record(self, **changes):
         return dict(id=10, run_attempt=1, head_sha='a' * 40, head_branch='main',
                     event='push', path='.github/workflows/ci.yml',

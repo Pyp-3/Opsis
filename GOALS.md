@@ -4,6 +4,16 @@ Last reviewed: 2026-10-10.
 
 ## Current delivery
 
+Server narration scope (2026-10-10): user requested enabling the natural voice and
+investigating an inline-script CSP warning. Add an operator-provisioned, persistent,
+read-only model cache to the live container; candidates keep speech disabled. Reuse
+the existing local Kokoro model and frozen application packages. Opsis HTML contains
+only an external module script; the supplied inline hash has no identified source, so
+keep the existing script policy. Server narration avoids the browser fallback's runtime
+downloads. Progress: six updater tests and lint pass. The restricted non-root/read-only
+container generated a valid WAV from the existing model with networking disabled.
+Deployment, live WAV verification and final validation remain pending.
+
 Shared server CLI / guest scope (2026-10-10): user authorized copying only local Claude
 and Codex login files to the VPS, installing compatible pinned binaries, and a
 public-view-only guest account while sign-up stays disabled. Implemented an

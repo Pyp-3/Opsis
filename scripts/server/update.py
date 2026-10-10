@@ -151,6 +151,12 @@ def launch(name, image, data, config):
     # Only the live service receives credentials. Candidate startup needs no provider access.
     credentials = (['--mount', f'type=bind,src={config["agent_home"]},dst=/home/node']
                    if name == 'opsis-server' and config.get('agent_home') else [])
+    # The live service reuses an operator-provisioned model cache. Read-only storage
+    # prevents silent model replacements; candidates never download or warm speech.
+    speech = (['--mount', f'type=bind,src={config["model_dir"]},dst=/models,readonly',
+               '--env', 'OPSIS_SPEECH=on', '--env', 'OPSIS_MODEL_DIR=/models']
+              if name == 'opsis-server' and config.get('model_dir') else
+              ['--env', 'OPSIS_SPEECH=off'])
     command('docker', 'run', '-d', '--name', name, '--restart', 'unless-stopped',
             '--network', config['network'], '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges:true', '--pids-limit', '256',
@@ -161,6 +167,7 @@ def launch(name, image, data, config):
             '--env', f"OPSIS_TRUSTED_PROXY={config['proxy_address']}",
             '--env', f"OPSIS_GUEST_EMAILS={','.join(config.get('guest_emails', []))}",
             *credentials,
+            *speech,
             '--env', 'OPSIS_DB_PATH=/data/opsis.sqlite', image)
 
 
