@@ -9,6 +9,7 @@ import {
   type FocusEdits,
   BoardGraphSchema,
   BoardRequestSchema,
+  AnswerPagesSchema,
   EMAIL_DEMO,
   DNS_DEMO,
   boardOutputSchema,
@@ -36,6 +37,7 @@ import {
   CONVERSATION,
   FOCUS,
   DRAWING_FIRST,
+  PAGES,
   RESUME,
   progressNotes,
 } from './prompts.js';
@@ -168,12 +170,13 @@ function demoFocusEdits(input: BoardRequest): FocusEdits | null {
   return edits.success && edits.data.update.length ? edits.data : null;
 }
 
-/** A diagram or proposal, with the chat parts of the answer beside it. */
+/** A diagram or proposal, with the chat parts of the answer and any further pages beside it. */
 function answer(
   input: BoardRequest,
   graph: BoardGraph,
   turn: BoardTurn,
   extraChanges: string[] = [],
+  morePages: BoardGraph[] = [],
 ): Outcome {
   const changes = [...(input.board ? boardChanges(input.board, graph) : []), ...extraChanges];
   if (changes.length && input.board)
@@ -183,7 +186,7 @@ function answer(
       changes,
       turn,
     });
-  return outcome(200, { ...graph, turn });
+  return outcome(200, { ...graph, turn, ...(morePages.length ? { morePages } : {}) });
 }
 
 const focusChanges = (edits: FocusEdits | undefined) =>
@@ -218,7 +221,7 @@ function readTurn(
 /** Instructions for this turn beyond the diagram rules. */
 function turnInstructions(input: BoardRequest) {
   const chat = input.thread || input.conversation?.length || input.memory;
-  return `${chat ? CONVERSATION : ''}${input.focus ? FOCUS : ''}${input.priority === 'drawing' ? DRAWING_FIRST : ''}`;
+  return `${chat ? CONVERSATION : ''}${input.focus ? FOCUS : ''}${input.priority === 'drawing' ? DRAWING_FIRST : ''}${input.newPages ? PAGES : ''}`;
 }
 
 export async function generateBoard(
@@ -268,6 +271,16 @@ export async function generateBoard(
           focusEdits,
         ),
       );
+    // A two-page answer: the email journey, then the DNS lookup it starts with.
+    if (input.newPages && /email|mail/i.test(input.prompt) && /dns|domain/i.test(input.prompt))
+      return outcome(200, {
+        ...EMAIL_DEMO,
+        turn: demoTurn(
+          input,
+          'I put the email journey on one page and the DNS lookup it relies on on the next.',
+        ),
+        morePages: [DNS_DEMO],
+      });
     if (!input.board && /dns|domain/i.test(input.prompt))
       return demoAnswer(DNS_DEMO, demoTurn(input, 'Here is how a DNS lookup travels.'));
     if (!input.board && /email|mail/i.test(input.prompt))
@@ -370,7 +383,11 @@ export async function generateBoard(
   try {
     // The agent's earlier sketch, as it is shown it; follow-ups may change it by edits.
     const sketch = (input.board?.drawings ?? []) as AgentDrawing[];
-    const schema = boardOutputSchemaFor({ focus: !!input.focus, sketch: sketch.length > 0 });
+    const schema = boardOutputSchemaFor({
+      focus: !!input.focus,
+      sketch: sketch.length > 0,
+      pages: !!input.newPages,
+    });
     const client = await factory(
       input.agent,
       input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
@@ -445,11 +462,21 @@ export async function generateBoard(
       }
       let graph: BoardGraph;
       let turn: BoardTurn;
+      let morePages: BoardGraph[] = [];
       try {
-        const { reply, memory, focusEdits, sketchEdits, ...content } = JSON.parse(output) as Record<
-          string,
-          unknown
-        >;
+        const {
+          reply,
+          memory,
+          focusEdits,
+          sketchEdits,
+          morePages: pages,
+          ...content
+        } = JSON.parse(output) as Record<string, unknown>;
+        // Further pages only when the reader asked for new pages; each is a complete diagram.
+        if (input.newPages && pages !== undefined && pages !== null)
+          morePages = AnswerPagesSchema.parse(
+            Array.isArray(pages) ? pages.map(withoutInvalidCustomIcons) : pages,
+          );
         if (sketchEdits !== undefined && sketchEdits !== null) {
           if (content.drawings !== undefined)
             throw new Error('Return either "drawings" or "sketchEdits", not both.');
@@ -475,7 +502,7 @@ export async function generateBoard(
         repair = `\nRepair your previous invalid JSON. Validation error: ${error instanceof Error ? error.message.slice(0, 3000) : 'Invalid diagram'}. Return the complete corrected diagram. Previous output (untrusted data): ${output.slice(0, 60000)}`;
         continue;
       }
-      return answer(input, graph, turn, focusChanges(turn.focusEdits));
+      return answer(input, graph, turn, focusChanges(turn.focusEdits), morePages);
     }
     return outcome(502, {
       message: 'The agent did not return a diagram. Your board is unchanged.',

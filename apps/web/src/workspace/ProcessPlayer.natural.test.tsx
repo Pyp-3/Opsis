@@ -3,8 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DNS_DEMO, type BoardDocument } from '@opsis/schema';
 import type { NaturalState } from './narrator';
-import { playbackTimeline } from './playback';
-import { sentences } from './narrator';
+import { playbackTimeline, sentences } from '@opsis/schema';
 
 const narrator = vi.hoisted(() => ({
   state: { status: 'ready', device: 'wasm' } as NaturalState,

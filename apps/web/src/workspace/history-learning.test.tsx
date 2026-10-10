@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BoardSnapshotSchema, EMAIL_DEMO, type BoardDocument } from '@opsis/schema';
 import { useBoardHistory } from './useBoardHistory';
-import { walkthroughOrder } from './Walkthrough';
+import { walkthroughOrder } from '@opsis/schema';
 import { boardMarkdown, boardSvg } from './export';
 import { importBoard } from './migration';
 import legacy from '../../../../fixtures/osg/sun-east.osg.json';

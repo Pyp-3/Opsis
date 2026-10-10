@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it } from 'vitest';
 import { HarnessLLMClient } from './client';
-import { boardOutputSchema } from '@opsis/schema';
+import { boardOutputSchema, boardOutputSchemaFor } from '@opsis/schema';
 import { GROK_PROMPT_LIMIT, harnessArguments } from './arguments';
-import { SYSTEM } from '../boards/prompts';
+import { CONVERSATION, PAGES, SYSTEM } from '../boards/prompts';
 import { parseVersion } from './version';
 import { extractHarnessResult } from './envelope';
 import type { HarnessProvider, ProcessRunRequest } from './types';
@@ -118,6 +118,18 @@ it('bounds Grok argv and rejects failed Antigravity results without trying outpu
       [],
       [],
       `${SYSTEM}\nSchema: ${boardOutputSchema}\nExplain email`,
+    ),
+  ).toContain('--no-auto-update');
+  // So does a chat request for new pages, whose schema adds further pages.
+  const deck = boardOutputSchemaFor({ pages: true });
+  expect(
+    harnessArguments(
+      grok,
+      'schema',
+      deck,
+      [],
+      [],
+      `${SYSTEM}${CONVERSATION}${PAGES}\nSchema: ${deck}\nExplain email as a short deck`,
     ),
   ).toContain('--no-auto-update');
   expect(() =>

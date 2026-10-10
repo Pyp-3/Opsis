@@ -32,6 +32,7 @@ import {
   recordBoardEdit,
   copyBoardSnapshot,
   readerSnapshot,
+  narrationLines,
   boardBacklinks,
   BoardPageIdSchema,
   type LinkingBoard,
@@ -100,6 +101,16 @@ export function apply(operation: string, json: string): string {
         .object({ snapshot: BoardSnapshotSchema, page: z.string() })
         .parse(input);
       value = readerSnapshot(snapshot, BoardPageIdSchema.safeParse(page).success ? page : null);
+    } else if (operation === 'narrationAllowed') {
+      // Whether a line belongs to the script of a board someone without an account may hear.
+      const { board, page, text } = z
+        .object({
+          board: BoardDocumentSchema,
+          page: BoardPageIdSchema.optional(),
+          text: z.string().trim().min(1).max(600),
+        })
+        .parse(input);
+      value = narrationLines(board, page).has(text);
     } else if (operation === 'backlinks') {
       const { targetId, boards } = input as { targetId: string; boards: LinkingBoard[] };
       value = boardBacklinks(

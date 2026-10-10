@@ -1,6 +1,6 @@
 # Opsis goals
 
-Last reviewed: 2026-10-10.
+Last reviewed: 2026-10-11.
 
 ## Current delivery
 
@@ -422,10 +422,34 @@ opens without sign-in; link access is view-only.
       mode).
 - [x] A revealed hidden page is kept in the tab's recovery copy, so reloads and polling keep it;
       the open page is remembered per tab, so a reload returns to it.
-- [ ] Not yet: a single chat answer cannot create several pages at once (one page per message);
-      not verified on a real Nginx host. Narration (`/v1/speech`) has never required sign-in, so on
-      a personal server anonymous visitors can use the server's speech model; it is outside the
-      rate limit by design (its own bounded queue).
+- [x] One chat answer can write a deck (2026-10-10, user request): with **New pages**, the
+      request sets `newPages`, the agent's schema gains `morePages` (up to 8 further pages; their
+      node, connection and drawing definitions are shared through `$defs`, adding under 1 kB),
+      the instructions explain when to use it, every extra page is validated like a diagram with
+      the usual single repair, and the app lays each out and adds them after the first, all one
+      undoable step. Without `newPages` none are offered and any returned are ignored. The demo
+      answers "a deck on email and DNS" with two pages.
+- [x] Narration for people without a member account (2026-10-10, user request): the server's
+      narrator reads link visitors and restricted guest accounts only the script of the board
+      being played. The player's script moved to the shared schema (`narration-script.ts`); both
+      hosts check each line against the sentences of a link or public board's readable pages (a
+      hidden page with its link), refuse anything else with 403, and Fastify gives their requests
+      their own rate limit. Members are unchanged.
+- [ ] Not yet: not verified on a real Nginx host. A guest who keeps a board open while its owner
+      edits it hears the captions only for lines the owner changed until the guest reloads, because
+      the narrator reads the saved script.
+
+Verified 2026-10-11 on Arch Linux: API tests for deck answers (pages instructions and the `$defs`
+schema sent, an invalid extra page repaired once, nothing offered or returned without `newPages`,
+the demo's two pages), Grok's argument bound with the deck schema and chat instructions (about
+26.5k of 30k characters), Fastify narration tests (private board refused, a link board's script
+read, other text and a missing board refused, a hidden page's line only with its link, members
+unchanged) and a Go test of the same through the desktop's speech passthrough. The pages browser
+scenario now asks the demo for a two-page deck in one message. Lint, typecheck, Rust check/24
+tests, desktop check and full race suite, 518 unit tests and all 71 Fastify browser scenarios
+pass. The rebuilt Linux binary passes packaged integration, all 71 browser scenarios and all 24
+hidden WebView checks. No paid model calls were made; real agents' use of `morePages` is covered
+by the schema, instructions and fake answers, not a live model.
 
 Follow-up verified 2026-10-10 on Arch Linux: MCP round trip through the real Fastify API (add
 pages hidden or not, write and add concepts and drawings on pages by number and id, move,

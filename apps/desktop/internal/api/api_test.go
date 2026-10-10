@@ -175,8 +175,12 @@ func TestFallbackPreservesStreaming(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	// As a member: everyone else may only have a shared board's own script read (pages_test.go).
+	member := signup(t, s, "member@example.com")
 	w := httptest.NewRecorder()
-	s.ServeHTTP(w, httptest.NewRequest("POST", "/v1/speech", nil))
+	r := httptest.NewRequest("POST", "/v1/speech", nil)
+	r.AddCookie(member.cookie)
+	s.ServeHTTP(w, r)
 	if w.Code != 200 || w.Header().Get("Content-Type") != "application/x-ndjson" {
 		t.Fatal(w.Code, w.Body.String())
 	}

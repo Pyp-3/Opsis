@@ -17,7 +17,9 @@ import { useProcessEngine } from './useProcessEngine';
 import { DrawingLayer, useCanvasDrawing } from './CanvasDrawing';
 import { applyLook, lookOf } from './canvas-theme';
 import { NODE_WIDTH } from './model';
-import { revealed, type Beat } from './playback';
+import type { Beat } from '@opsis/schema';
+import { revealed } from './playback';
+import { setNarrationSource } from './narrator';
 import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
@@ -152,6 +154,11 @@ function ReadOnlyPage({
     setPlayerOpen(false);
     setPlayback(null);
   }, []);
+  // The narrator only reads people without a member account this board's own script.
+  useEffect(() => {
+    setNarrationSource({ id: boardId, ...(pageId ? { page: pageId } : {}) });
+    return () => setNarrationSource(null);
+  }, [boardId, pageId]);
   return (
     <PublicCanvas
       board={board}

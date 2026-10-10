@@ -119,7 +119,8 @@ const SettingsPage = lazy(() =>
   import('./SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
 import { navigate, usePath } from '../router';
-import { revealed, type Beat } from './playback';
+import type { Beat } from '@opsis/schema';
+import { revealed } from './playback';
 import { AppSidebar, applySavedRailWidth, CLOSE_RAIL, type SidebarMode } from './AppSidebar';
 import { RoutedConnection } from './RoutedConnection';
 import { ROW_GAP, nodeHeight } from './geometry';
@@ -494,20 +495,31 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [undo, editing]);
 
-  /** A chat answer on its own new page: the page takes the answer's title; the board keeps its. */
-  const placeOnNewPage = (page: string, candidate: BoardDocument) => {
+  /**
+   * A chat answer on its own new page, and any further pages it wrote after that one, in one
+   * undoable step. Each page takes its answer's title; the board keeps its own.
+   */
+  const placeOnNewPage = (page: string, candidate: BoardDocument, more: BoardDocument[] = []) => {
     let whole = pages.documentRef.current;
     if (!whole) return;
     if (!boardPages(whole).some((entry) => entry.id === page))
       whole = addBoardPage(whole, { id: page, title: 'New page' });
-    const titled = updateBoardPage(whole, page, { title: candidate.title.slice(0, 60) });
-    boardHistory.commit(
-      withBoardPage(titled, page, {
-        ...candidate,
-        title: whole.title,
-        description: whole.description,
-      }),
-    );
+    const { title, description } = whole;
+    const fill = (board: BoardDocument, id: string, answer: BoardDocument) =>
+      withBoardPage(updateBoardPage(board, id, { title: answer.title.slice(0, 60) }), id, {
+        ...answer,
+        title,
+        description,
+      });
+    let next = fill(whole, page, candidate);
+    let after = page;
+    for (const answer of more) {
+      if (boardPages(next).length >= MAX_BOARD_PAGES) break;
+      const id = newPageId();
+      next = fill(addBoardPage(next, { id, title: 'New page' }, { after }), id, answer);
+      after = id;
+    }
+    boardHistory.commit(next);
   };
 
   async function generate(event?: FormEvent, text = prompt, freshCanvas = false) {
@@ -560,12 +572,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         // Like a new canvas: the agent writes a fresh diagram rather than a follow-up.
         previous = null;
       }
-      const place = (candidate: BoardDocument) => {
+      const place = (candidate: BoardDocument, more: BoardDocument[]) => {
         const current = pages.documentRef.current;
         // Someone else removed the page meanwhile: the answer gets a page of its own again.
         const gone =
           !!sourcePage && !!current && !boardPages(current).some((page) => page.id === sourcePage);
-        if (newPage || gone) placeOnNewPage(newPage ?? sourcePage!, candidate);
+        if (newPage || gone) placeOnNewPage(newPage ?? sourcePage!, candidate, more);
         else pages.commitTo(sourcePage, candidate);
       };
       const focus = freshCanvas || newPage ? undefined : sentFocus;
@@ -578,6 +590,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         agent === 'demo' || freshCanvas ? [] : attachments,
         {
           place,
+          ...(newPage ? { newPages: true } : {}),
           conversation: chatConversation(thread.messages),
           memory: thread.memory,
           thread: thread.id,
@@ -877,12 +890,12 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
               disabled={busy || (pages.document?.pages?.length ?? 1) >= MAX_BOARD_PAGES}
               title={
                 answerOnNewPage
-                  ? 'The answer goes on a new page after this one. Click to answer on this page.'
-                  : 'The answer changes this page. Click to put it on a new page instead.'
+                  ? 'The answer goes on new pages after this one: one, or several for a deck. Click to answer on this page.'
+                  : 'The answer changes this page. Click to put it on new pages instead, such as a deck.'
               }
               onClick={() => setAnswerOnNewPage((value) => !value)}
             >
-              <FilePlus size={13} aria-hidden /> New page
+              <FilePlus size={13} aria-hidden /> New pages
             </button>
           )}
         </ChatFocusBar>

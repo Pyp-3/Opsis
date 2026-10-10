@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DNS_DEMO,
   EMAIL_DEMO,
+  playbackTimeline,
+  spokenName,
   withoutNarration,
   type BoardDocument,
   type BoardGraph,
 } from '@opsis/schema';
-import { beatDuration, britishVoice, playbackTimeline, revealed, spokenName } from './playback';
+import { beatDuration, britishVoice, revealed } from './playback';
 
 const doc = (graph: BoardGraph): BoardDocument => ({
   ...graph,

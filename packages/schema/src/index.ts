@@ -3,6 +3,7 @@ export * from './errors';
 export * from './board';
 export * from './board-links';
 export * from './board-pages';
+export * from './narration-script';
 export * from './collection-bundle';
 export * from './board-drawings';
 export * from './board-operations';

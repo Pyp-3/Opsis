@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { BoardDocument } from '@opsis/schema';
-import { beatDuration, britishVoice, PACE, playbackTimeline, type Beat } from './playback';
+import { playbackTimeline, sentences, type Beat, type BoardDocument } from '@opsis/schema';
+import { beatDuration, britishVoice, PACE } from './playback';
 import {
   NATURAL_VOICES,
   naturalNarrator,
   naturalVoicesSupported,
-  sentences,
   type NaturalState,
 } from './narrator';
 

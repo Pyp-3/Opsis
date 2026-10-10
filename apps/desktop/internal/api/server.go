@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -263,9 +264,68 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Kokoro inference is the only remaining Node service.
 		if s.fallback != nil && (r.URL.Path == "/v1/speech" || strings.HasPrefix(r.URL.Path, "/v1/speech/")) {
+			if r.Method == "POST" && r.URL.Path == "/v1/speech" && current(r).User == nil {
+				if err := s.allowGuestNarration(w, r); err != nil {
+					var response *httpError
+					if errors.As(err, &response) {
+						writeJSON(w, response.status, response.body)
+					} else {
+						writeJSON(w, 500, map[string]string{"message": "Opsis could not check this narration."})
+					}
+					return
+				}
+			}
 			s.fallback.ServeHTTP(w, r)
 			return
 		}
 		writeJSON(w, 404, map[string]string{"message": "Route not found."})
 	})
+}
+
+// allowGuestNarration lets someone who is not signed in hear only the script of a board shared
+// with them by link (or public): the line must be one the player speaks for that board, on the
+// pages they may see. The body is read once and restored for the speech service.
+func (s *Server) allowGuestNarration(w http.ResponseWriter, r *http.Request) error {
+	data, err := rawBody(w, r, 65_536)
+	if err != nil {
+		return err
+	}
+	r.Body = io.NopCloser(bytes.NewReader(data))
+	var body struct {
+		Text  string `json:"text"`
+		Board *struct {
+			ID   string `json:"id"`
+			Page string `json:"page"`
+		} `json:"board"`
+	}
+	refused := failure(403, "The narrator only reads the script of a board you can open.")
+	if err := json.Unmarshal(data, &body); err != nil || body.Board == nil || !s.validID(body.Board.ID) {
+		return refused
+	}
+	board, err := s.readBoard(s.db, body.Board.ID)
+	if err != nil {
+		return err
+	}
+	if board == nil || board.Archived || board.Visibility == "private" {
+		return refused
+	}
+	document, _, err := snapshotBoard(board.Snapshot)
+	if err != nil {
+		return err
+	}
+	if string(document) == "null" {
+		return refused
+	}
+	input := map[string]any{"board": document, "text": body.Text}
+	if body.Board.Page != "" {
+		input["page"] = body.Board.Page
+	}
+	allowed, err := s.contracts.Apply("narrationAllowed", input)
+	if err != nil {
+		return refused
+	}
+	if string(allowed) != "true" {
+		return refused
+	}
+	return nil
 }

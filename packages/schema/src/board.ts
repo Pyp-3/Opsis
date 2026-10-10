@@ -330,8 +330,26 @@ export const BoardRequestSchema = z
     /** Whether the agent should work drawing-first. */
     priority: z.enum(CHAT_PRIORITIES).optional(),
     attachments: z.array(BoardAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
+    /**
+     * The answer goes on new pages after the open one: the agent writes a fresh diagram for the
+     * first and may add up to `MAX_ANSWER_PAGES` more in `morePages`, for a deck in one answer.
+     */
+    newPages: z.literal(true).optional(),
   })
   .strict();
+/** Extra pages one answer may add beside its main diagram, so it holds at most nine pages. */
+export const MAX_ANSWER_PAGES = 8;
+/** One extra page of an answer: a complete diagram of its own, titled for the page. */
+export const AnswerPageSchema = z
+  .object({ description: z.string().max(500).default('') })
+  .passthrough()
+  .transform((page, context) => {
+    const parsed = BoardGraphSchema.safeParse(page);
+    if (parsed.success) return parsed.data;
+    for (const issue of parsed.error.issues) context.addIssue(issue);
+    return z.NEVER;
+  });
+export const AnswerPagesSchema = z.array(AnswerPageSchema).max(MAX_ANSWER_PAGES);
 /** The chat parts of an agent's answer, returned beside the diagram as `turn`. */
 export const BoardTurnSchema = z
   .object({
@@ -399,8 +417,12 @@ const BoardOutputSchema = BoardContentSchema.extend({
  * argument): edits to focused drawings when the reader puts drawings in focus, and edits to the
  * agent's own sketch when the board already has one.
  */
-export function boardOutputSchemaFor(parts: { focus?: boolean; sketch?: boolean }): string {
-  const key = `${parts.focus ? 'focus' : ''}:${parts.sketch ? 'sketch' : ''}`;
+export function boardOutputSchemaFor(parts: {
+  focus?: boolean;
+  sketch?: boolean;
+  pages?: boolean;
+}): string {
+  const key = `${parts.focus ? 'focus' : ''}:${parts.sketch ? 'sketch' : ''}:${parts.pages ? 'pages' : ''}`;
   const cached = outputSchemas.get(key);
   if (cached) return cached;
   let schema: z.ZodTypeAny = BoardOutputSchema;
@@ -416,11 +438,58 @@ export function boardOutputSchemaFor(parts: { focus?: boolean; sketch?: boolean 
         'Changes to your existing sketch instead of returning "drawings" whole; see the Drawings instructions.',
       ),
     });
-  const json = JSON.stringify(zodToJsonSchema(schema, { $refStrategy: 'none' }));
+  const generated = zodToJsonSchema(schema, { $refStrategy: 'none' }) as JsonObject;
+  const json = JSON.stringify(parts.pages ? withMorePages(generated) : generated);
   outputSchemas.set(key, json);
   return json;
 }
 const outputSchemas = new Map<string, string>();
+type JsonObject = Record<string, unknown> & { properties: Record<string, JsonObject> };
+/**
+ * Adds `morePages`, extra pages that reuse the diagram's own node, connection and drawing
+ * definitions. They move into `$defs` and are referenced from both places, so the schema grows by
+ * about a kilobyte rather than doubling (Grok's CLI takes it as one bounded argument).
+ */
+function withMorePages(schema: JsonObject): JsonObject {
+  const { properties } = schema;
+  const $defs: Record<string, unknown> = {};
+  const shared = (name: string, key: 'nodes' | 'edges' | 'drawings') => {
+    const list = properties[key]! as JsonObject & { items: unknown };
+    $defs[name] = list.items;
+    list.items = { $ref: `#/$defs/${name}` };
+    return { ...list };
+  };
+  const nodes = shared('node', 'nodes');
+  const edges = shared('edge', 'edges');
+  const drawings = shared('drawing', 'drawings');
+  const page = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['title', 'description', 'nodes', 'edges', 'narration'],
+    properties: {
+      title: { ...properties.title, description: 'This page’s title, shown in the page list.' },
+      description: properties.description,
+      narration: properties.narration,
+      nodes,
+      edges,
+      drawings,
+    },
+  };
+  return {
+    ...schema,
+    $defs,
+    properties: {
+      ...properties,
+      morePages: {
+        type: 'array',
+        maxItems: MAX_ANSWER_PAGES,
+        items: page,
+        description:
+          'Further pages after the first, in reading order, when the request calls for several; see the Pages instructions.',
+      } as unknown as JsonObject,
+    },
+  };
+}
 export const boardOutputSchema = boardOutputSchemaFor({});
 export const boardFocusOutputSchema = boardOutputSchemaFor({ focus: true });
 export type BoardGraph = z.infer<typeof BoardGraphSchema>;

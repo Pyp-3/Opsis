@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app';
 import type { SpeechEngine, SpeechStatus, SpeechVoice } from './speech';
+import { signIn } from './test-session';
 
 /** Records generations and lets the test decide when each one finishes. */
 function fakeEngine() {
@@ -20,8 +21,10 @@ function fakeEngine() {
 }
 
 const apps: ReturnType<typeof buildApp>[] = [];
+/** A member's narrator: any line may be spoken. narration-access.test.ts covers everyone else. */
 const start = (speech: SpeechEngine | null) => {
   const app = buildApp({ databasePath: ':memory:', speech, rateLimit: 2 });
+  void signIn(app);
   apps.push(app);
   return app;
 };

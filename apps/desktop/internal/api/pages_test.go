@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -90,4 +92,47 @@ func TestLinkSharingAndHiddenPages(t *testing.T) {
 	owner.request("PATCH", path, map[string]any{"revision": 2, "visibility": "private"}, 200)
 	guest.request("GET", guestPath, nil, 404)
 	viewer.request("GET", path, nil, 404)
+}
+
+// Someone without an account hears only the script of a board shared with them by link.
+func TestGuestNarrationReadsOnlyTheBoardsScript(t *testing.T) {
+	t.Setenv("OPSIS_RATE_LIMIT", "10000")
+	var spoken []string
+	speech := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Text string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		spoken = append(spoken, body.Text)
+		w.WriteHeader(200)
+	})
+	s, err := New(filepath.Join(t.TempDir(), "opsis.sqlite"), speech)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	owner := signup(t, s, "owner@example.com")
+	guest := &testClient{t: t, server: s}
+	created := owner.request("POST", "/v1/boards", map[string]any{"title": "Pitch"}, 201)
+	path := "/v1/boards/" + created["id"].(string)
+	board := map[string]any{
+		"version": 2, "title": "Pitch", "description": "", "agent": "claude",
+		"narration": "Here is how it works.",
+		"nodes":     []any{map[string]any{"id": "idea", "label": "Idea", "icon": "server", "summary": "An idea.", "explanation": "An idea.", "kind": "step", "narration": "It starts with an idea."}},
+		"edges":     []any{}, "positions": map[string]any{"idea": map[string]any{"x": 0, "y": 0}},
+	}
+	owner.request("PUT", path, map[string]any{"snapshot": map[string]any{"board": board, "past": []any{}, "future": []any{}}, "revision": 1}, 200)
+	line := func(text string) map[string]any {
+		return map[string]any{"text": text, "voice": "bf_emma", "board": map[string]any{"id": created["id"]}}
+	}
+	guest.request("POST", "/v1/speech", line("Here is how it works."), 403)
+	owner.request("PATCH", path, map[string]any{"revision": 2, "visibility": "link"}, 200)
+	guest.request("POST", "/v1/speech", line("Here is how it works."), 200)
+	guest.request("POST", "/v1/speech", line("It starts with an idea."), 200)
+	guest.request("POST", "/v1/speech", line("Read out anything at all."), 403)
+	guest.request("POST", "/v1/speech", map[string]any{"text": "Here is how it works.", "voice": "bf_emma"}, 403)
+	owner.request("POST", "/v1/speech", map[string]any{"text": "Read out anything at all.", "voice": "bf_emma"}, 200)
+	if strings.Join(spoken, "|") != "Here is how it works.|It starts with an idea.|Read out anything at all." {
+		t.Fatal("unexpected lines reached the speech service", spoken)
+	}
 }

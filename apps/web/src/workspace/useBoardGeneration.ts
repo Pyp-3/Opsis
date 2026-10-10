@@ -13,6 +13,7 @@ import { recordReportedUsage } from './reported-usage';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   BoardGraphSchema,
+  AnswerPagesSchema,
   boardChanges,
   terminalExampleFor,
   type BoardAgent,
@@ -42,7 +43,7 @@ export function useBoardGeneration(
     candidate: BoardDocument;
     before: BoardDocument;
     changes: string[];
-    place?: ((board: BoardDocument) => void) | undefined;
+    place?: ((board: BoardDocument, morePages: BoardDocument[]) => void) | undefined;
   } | null>(null);
   const request = useRef<AbortController | null>(null);
   const responseText = useRef('');
@@ -72,10 +73,12 @@ export function useBoardGeneration(
        * Where the result goes, decided when the request starts: the page it was asked from, or
        * a new page. Defaults to `commit`.
        */
-      place?: ((board: BoardDocument) => void) | undefined;
+      place?: ((board: BoardDocument, morePages: BoardDocument[]) => void) | undefined;
+      /** The answer goes on new pages, and may hold several. */
+      newPages?: boolean;
     } = {},
   ) {
-    const place = chat.place ?? commit;
+    const place = chat.place ?? ((board: BoardDocument) => commit(board));
     const conversation = chat.conversation ?? [];
     if (request.current || review) return false;
     const usages: ReportedUsage[] = [];
@@ -99,7 +102,7 @@ export function useBoardGeneration(
           document.querySelector('.blueprint')?.clientWidth || 900,
         );
         if (controller.signal.aborted) return false;
-        place(candidate);
+        place(candidate, []);
         responseText.current = `${candidate.title}\n${candidate.description}`;
         return 'applied' as const;
       }
@@ -120,6 +123,7 @@ export function useBoardGeneration(
           ...(previous ? { board: withoutIllustrations(previous) } : {}),
           ...(selected ? { selectedId: selected } : {}),
           ...(attachments.length ? { attachments } : {}),
+          ...(chat.newPages ? { newPages: true } : {}),
         }),
       });
       const {
@@ -142,14 +146,16 @@ export function useBoardGeneration(
         ...((needsReview ? payload.candidate : payload) as Record<string, unknown>),
       };
       const parsedTurn = BoardTurnSchema.safeParse(payload.turn ?? answer.turn);
+      const extra = chat.newPages ? AnswerPagesSchema.safeParse(answer.morePages ?? []) : null;
       delete answer.turn;
+      delete answer.morePages;
       const graph = BoardGraphSchema.parse(answer);
-      const laidOut = await layoutBoard(
-        graph,
-        agent,
-        previous ?? undefined,
-        document.querySelector('.blueprint')?.clientWidth || 900,
-      );
+      const width = document.querySelector('.blueprint')?.clientWidth || 900;
+      const laidOut = await layoutBoard(graph, agent, previous ?? undefined, width);
+      // Each further page is laid out like a new diagram of its own.
+      const morePages = extra?.success
+        ? await Promise.all(extra.data.map((page) => layoutBoard(page, agent, undefined, width)))
+        : [];
       if (controller.signal.aborted) return false;
       turn.current = parsedTurn.success ? parsedTurn.data : null;
       // Edits to the reader's focused drawings always go through review.
@@ -165,7 +171,7 @@ export function useBoardGeneration(
         !!focusEdits && (focusEdits.update.length > 0 || focusEdits.remove.length > 0);
       const reviewing = !!previous && (previous.nodes.length > 0 || editsFocus);
       // The agent's own reply when it gave one, then where to find the result.
-      responseText.current = `${turn.current?.reply ?? `${candidate.title}\n${candidate.description}`}\n${reviewing ? 'A proposal is ready for review on Canvas.' : 'The diagram is ready on Canvas.'}`;
+      responseText.current = `${turn.current?.reply ?? `${candidate.title}\n${candidate.description}`}\n${reviewing ? 'A proposal is ready for review on Canvas.' : morePages.length ? `${morePages.length + 1} new pages are ready on Canvas.` : 'The diagram is ready on Canvas.'}`;
       if (reviewing && previous) {
         const changes = boardChanges(previous, candidate);
         for (const node of graph.nodes) {
@@ -179,7 +185,7 @@ export function useBoardGeneration(
         setReview({ candidate, before: previous, changes, place: chat.place });
         return 'review' as const;
       }
-      place(candidate);
+      place(candidate, morePages);
       return 'applied' as const;
     } catch (e) {
       if (!controller.signal.aborted)
@@ -220,7 +226,8 @@ export function useBoardGeneration(
     discard: () => setReview(null),
     apply: (accepted: BoardDocument) => {
       if (review) {
-        (review.place ?? commit)(accepted);
+        if (review.place) review.place(accepted, []);
+        else commit(accepted);
         setReview(null);
       }
     },

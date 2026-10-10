@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { EMAIL_DEMO, TERMINAL_PIPELINE_EXAMPLE, type BoardDocument } from '@opsis/schema';
 import { Workspace } from './Workspace';
-import { playbackTimeline } from './playback';
+import { playbackTimeline } from '@opsis/schema';
 
 vi.mock('@xyflow/react', async (original) => {
   const actual = await original<typeof import('@xyflow/react')>();

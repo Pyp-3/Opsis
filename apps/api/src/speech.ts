@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { BoardPageIdSchema } from '@opsis/schema';
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
@@ -89,13 +90,32 @@ const SpeechRequestSchema = z
     voice: z.enum(SPEECH_VOICES),
     /** Lines the listener is waiting for jump ahead of lines prepared in advance. */
     urgent: z.boolean().default(true),
+    /**
+     * The board being played, and the page on screen (which may be a hidden page opened by its
+     * link). People who are not signed in as members may only hear that board's own script.
+     */
+    board: z
+      .object({ id: z.string().uuid(), page: BoardPageIdSchema.optional() })
+      .strict()
+      .optional(),
   })
   .strict();
+export type NarrationSource = { id: string; page?: string | undefined };
+/** Whether this request may have `text` spoken; see narration-access.ts. */
+export type NarrationCheck = (
+  request: FastifyRequest,
+  text: string,
+  source: NarrationSource | undefined,
+) => boolean;
 
 /** Waiting lines beyond this are refused, so a runaway client cannot queue unbounded work. */
 const QUEUE_LIMIT = 80;
 
-export function registerSpeech(app: FastifyInstance, engine: SpeechEngine | null) {
+export function registerSpeech(
+  app: FastifyInstance,
+  engine: SpeechEngine | null,
+  mayNarrate: NarrationCheck = () => true,
+) {
   app.get('/v1/speech', async () => (engine ? engine.status() : { state: 'off' }));
   if (!engine) {
     app.post('/v1/speech', async (_, reply) =>
@@ -125,7 +145,11 @@ export function registerSpeech(app: FastifyInstance, engine: SpeechEngine | null
   app.post('/v1/speech', async (request, reply) => {
     const body = SpeechRequestSchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ message: 'Invalid speech request.' });
-    const { text, voice, urgent: isUrgent } = body.data;
+    const { text, voice, urgent: isUrgent, board } = body.data;
+    if (!mayNarrate(request, text, board))
+      return reply.code(403).send({
+        message: 'The narrator only reads the script of a board you can open.',
+      });
     const key = `${voice}\n${text}`;
     let recording = recordings.get(key);
     if (recording && isUrgent) {

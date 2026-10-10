@@ -305,9 +305,11 @@ every page, each titled, in one PNG, JPEG or SVG picture, and gives Markdown not
 page. The editable `.json` file always holds every page.
 
 Chat answers on the page you asked from, even if you turn the page while it works; turning
-pages waits while an answer is in progress or under review. To build a deck, choose **New page**
-beside **Drawing first** before you send: the answer goes on a new page after the current one,
-named after the answer, and the board keeps its name. Agents connected over MCP can read, fill,
+pages waits while an answer is in progress or under review. To build a deck, choose **New pages**
+beside **Drawing first** before you send: the answer goes on new pages after the current one,
+each named for its content, and the board keeps its name. One answer can write several pages
+(up to nine) when the request calls for them, such as "a five-page pitch" or "an overview, then
+each stage on its own page"; otherwise it writes one. Agents connected over MCP can read, fill,
 add, rename, reorder, hide and remove any page (see the [MCP guide](../apps/mcp/README.md)).
 
 ### Hide pages from viewers

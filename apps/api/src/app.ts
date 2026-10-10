@@ -16,6 +16,7 @@ import { registerGuestAccess } from './guest-access.js';
 import { registerRender } from './render.js';
 import { serverModeFromEnv, WEB_APP_CSP, type ServerMode } from './server-mode.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
+import { narrationAccess } from './narration-access.js';
 import { ProviderKeys, registerProviderKeys } from './provider-keys';
 import { localBoardClient } from './boards/client';
 import { fileThreadSessionCleaner, type ThreadSessionCleaner } from './cli-sessions.js';
@@ -157,17 +158,19 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerAccountSettings(app, store);
   registerBoardChat(app, store, removeThreadSessions);
   registerBoardSearch(app, store);
-  registerSpeech(app, speech);
+  registerSpeech(app, speech, narrationAccess(store));
   registerRender(app, { requireUser });
   const requests = new Map<string, number[]>();
 
   app.addHook('onClose', async () => store.close());
   app.addHook('onRequest', async (request, reply) => {
-    // Speech is local work with its own bounded queue; a narrated board makes many requests.
-    // Only API routes count, never the files of the web app a personal server serves.
+    // Speech is local work with its own bounded queue; a narrated board makes many requests, so
+    // members are not counted. Others (shared links, guest accounts) get a generous budget of
+    // their own. Only API routes count, never the files of the web app a personal server serves.
     const route = request.routeOptions.url ?? '';
-    if (!route.startsWith('/v1/') || route === '/v1/health' || route.startsWith('/v1/speech'))
-      return;
+    const speech = route.startsWith('/v1/speech');
+    const member = !!request.user && request.user.role !== 'guest';
+    if (!route.startsWith('/v1/') || route === '/v1/health' || (speech && member)) return;
     const now = Date.now();
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
@@ -175,9 +178,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       (route === '/v1/boards' || route === '/v1/boards/:id' || route === '/v1/guest/boards/:id');
     // Sign-in attempts have their own budget: guessing passwords cannot also starve real work,
     // and real work cannot lock someone out of signing in.
-    const bucket = boardRead ? 'board-read' : route.startsWith('/v1/auth/') ? 'auth' : 'work';
+    const bucket = speech
+      ? 'speech'
+      : boardRead
+        ? 'board-read'
+        : route.startsWith('/v1/auth/')
+          ? 'auth'
+          : 'work';
     const key = `${request.ip}:${bucket}`;
-    const allowance = boardRead ? rateLimit * 10 : rateLimit;
+    const allowance = boardRead || speech ? rateLimit * 10 : rateLimit;
     const recent = (requests.get(key) ?? []).filter((time) => now - time < rateWindowMs);
     if (recent.length >= allowance) {
       return reply

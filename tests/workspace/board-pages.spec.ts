@@ -153,17 +153,18 @@ test('chat answers on a new page, exports cover every page, and guests explore a
   await expect(page.locator('.save-status')).toHaveText('Saved');
   const cover = await concepts(page).count();
 
-  // Chat puts its answer on a new page after this one; the first page and the board's name stay.
+  // One chat answer writes a two-page deck after this page; the first page and the board's
+  // name stay.
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  const newPage = page.getByRole('button', { name: 'New page', exact: true });
+  const newPage = page.getByRole('button', { name: 'New pages', exact: true });
   await newPage.click();
   await expect(newPage).toHaveAttribute('aria-pressed', 'true');
-  await page.getByLabel('What would you like to understand?').fill('Explain email delivery');
+  await page.getByLabel('What would you like to understand?').fill('A deck on email and DNS');
   await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
-  await expect(page.getByRole('log')).toContainText('The diagram is ready on Canvas.');
+  await expect(page.getByRole('log')).toContainText('2 new pages are ready on Canvas.');
   await expect(newPage).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('tab', { name: /Canvas/ }).click();
-  await expect(pager(page)).toContainText('2 / 2');
+  await expect(pager(page)).toContainText('2 / 3');
   await expect(concepts(page)).not.toHaveCount(0);
   const [entry] = await (await page.request.get('/v1/boards')).json();
   const read = async () =>
@@ -172,12 +173,13 @@ test('chat answers on a new page, exports cover every page, and guests explore a
   await expect.poll(async () => (await read()).pages?.[1]?.title).toBe('An email’s journey');
   const saved = await read();
   expect(saved.title).toBe('An email’s journey');
+  expect(saved.pages[2].title).toBe('DNS: requests and responses');
   expect(saved.nodes).toHaveLength(cover);
   expect(saved.pages[1].content.nodes.length).toBeGreaterThan(0);
 
   // A reload returns to the page this tab was on.
   await page.reload();
-  await expect(pager(page)).toContainText('2 / 2');
+  await expect(pager(page)).toContainText('2 / 3');
 
   // Notes for every page, each under its own heading.
   await page.locator('.export-menu summary').click();
@@ -188,6 +190,7 @@ test('chat answers on a new page, exports cover every page, and guests explore a
   expect(notes).toMatch(/^# An email’s journey/);
   expect(notes).toContain('## Page 1: Page 1');
   expect(notes).toContain(`## Page 2: ${saved.pages[1].title}`);
+  expect(notes).toContain('## Page 3: DNS: requests and responses');
 
   // Hide page 2, then share the board by link.
   await page.keyboard.press('Escape');
@@ -205,7 +208,8 @@ test('chat answers on a new page, exports cover every page, and guests explore a
     // A guest explores the live canvas and plays the process.
     const guest = await guestContext.newPage();
     await guest.goto(`/canvas?board=${entry.id}`);
-    await expect(pager(guest)).toContainText('1 / 1');
+    // Page 2 is hidden, so the guest's book has two pages: 1 and 3.
+    await expect(pager(guest)).toContainText('1 / 2');
     await expect(concepts(guest)).toHaveCount(cover);
     await expect(guest.locator('.react-flow__edge')).toHaveCount(cover - 1);
     await guest.getByRole('button', { name: 'Play the process' }).click();
@@ -218,11 +222,11 @@ test('chat answers on a new page, exports cover every page, and guests explore a
     const viewer = await viewerContext.newPage();
     await signUp(viewer, 'Deck viewer');
     await viewer.goto(`/canvas?board=${entry.id}&page=${saved.pages[1].id}`);
-    await expect(pager(viewer)).toContainText('2 / 2');
+    await expect(pager(viewer)).toContainText('2 / 3');
     await viewer.reload();
-    await expect(pager(viewer)).toContainText('2 / 2');
+    await expect(pager(viewer)).toContainText('2 / 3');
     await viewer.waitForTimeout(2_000);
-    await expect(pager(viewer)).toContainText('2 / 2');
+    await expect(pager(viewer)).toContainText('2 / 3');
   } finally {
     await guestContext.close();
     await viewerContext.close();

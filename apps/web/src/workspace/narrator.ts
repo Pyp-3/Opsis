@@ -30,14 +30,13 @@ export const naturalVoicesSupported = () =>
   typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined' && typeof URL !== 'undefined';
 
 /**
- * A narration split into sentences. Each is generated on its own, so the first can play
- * while the rest are still being made (on the CPU generation runs at about real time).
+ * The board being played and the page on screen, sent with each line. The server's narrator reads
+ * people who are not signed in as members only the script of a board they can open.
  */
-export const sentences = (text: string) =>
-  text
-    .split(/(?<=[.!?])\s+(?=\S)/)
-    .map((part) => part.trim())
-    .filter(Boolean);
+let source: { id: string; page?: string } | null = null;
+export function setNarrationSource(next: { id: string; page?: string } | null) {
+  source = next;
+}
 
 /** About 20 minutes of speech; older lines are released first. */
 const CACHE_LIMIT = 150;
@@ -146,7 +145,7 @@ class NaturalNarrator {
     const response = await fetch('/v1/speech', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text, voice, urgent }),
+      body: JSON.stringify({ text, voice, urgent, ...(source ? { board: source } : {}) }),
     });
     if (!response.ok) throw new Error('The speech service could not speak this line.');
     return URL.createObjectURL(await response.blob());

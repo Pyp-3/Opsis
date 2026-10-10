@@ -15,7 +15,7 @@ import { AgentActivity } from './AgentActivityView';
 import type { AgentActivity as AgentActivityState } from './agentActivity';
 import { ProcessDataView } from './ProcessDataView';
 import type { ProcessState } from './useProcessEngine';
-import type { Beat } from './playback';
+import type { Beat } from '@opsis/schema';
 import { NATURAL_VOICES } from './narrator';
 
 const MAX_TICKS = 40;

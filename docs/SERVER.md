@@ -30,6 +30,12 @@ is the usual loopback-only local application.
   never sends hidden pages unless the request names that page's ID, never sends undo history,
   and shares the board-read rate limit. A board's ID (a random UUID) is what grants access, as
   in Google Docs' link sharing: making the board private again closes the link.
+- **Narration.** Signed-in members may have the server's narrator read any line. Everyone else
+  (people opening a shared link without an account, and restricted guest accounts) only hears
+  the script of the board they are playing: each line must be a sentence the process player
+  speaks for a link or public board, on the pages they may see (a hidden page only with its own
+  link). Other text is refused with 403, and their narration requests have a rate limit of their
+  own (ten times `OPSIS_RATE_LIMIT` per window).
 - **MCP agent keys** still work only for agents on the server itself, talking to the API
   directly on loopback. A key sent through the proxy is ignored.
 

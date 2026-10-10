@@ -11,6 +11,9 @@ export function registerGuestAccess(app: FastifyInstance, store: ApiStore) {
     if (request.user?.role !== 'guest') return;
     const route = request.routeOptions.url;
     if (request.method === 'POST' && route === '/v1/auth/logout') return;
+    // The narrator reads guests only the script of a board they can open; see narration-access.ts.
+    if (request.method === 'POST' && (route === '/v1/speech' || route === '/v1/speech/warm'))
+      return;
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (!route || route === '/*') return; // Static web assets / SPA shell only.
       // A board's link opens for anyone, so for guests too.
@@ -21,6 +24,7 @@ export function registerGuestAccess(app: FastifyInstance, store: ApiStore) {
           '/v1/instance',
           '/v1/boards/public',
           '/v1/guest/boards/:id',
+          '/v1/speech',
         ].includes(route)
       )
         return;

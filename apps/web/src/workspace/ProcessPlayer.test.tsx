@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DNS_DEMO, EMAIL_DEMO, type BoardDocument, type BoardGraph } from '@opsis/schema';
 import { ProcessPlayer } from './ProcessPlayer';
-import { playbackTimeline } from './playback';
+import { playbackTimeline } from '@opsis/schema';
 
 const doc = (graph: BoardGraph): BoardDocument => ({
   ...graph,
