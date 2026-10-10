@@ -116,7 +116,7 @@ try {
   await mcp.connect(
     new StdioClientTransport({ command: binary, args: ['--mcp'], env: mcpEnv, stderr: 'inherit' }),
   );
-  assert.equal((await mcp.listTools()).tools.length, 18);
+  assert.equal((await mcp.listTools()).tools.length, 24);
   const call = async (name, args) => {
     const result = await mcp.callTool({ name, arguments: args });
     assert.ok(!result.isError, `MCP ${name} failed`);
@@ -135,13 +135,18 @@ try {
   assert.equal(edited.revision, 3);
   assert.equal(edited.snapshot.past.length, 2);
   assert.equal(edited.snapshot.board.nodes.length, 1);
+  // Board previews: the packaged Node service rasterises with its bundled sharp.
+  const preview = await mcp.callTool({ name: 'opsis_render_board', arguments: { boardId: id } });
+  assert.ok(!preview.isError, 'MCP opsis_render_board failed');
+  assert.equal(preview.content[0].type, 'image', 'packaged runtime renders a PNG preview');
+  assert.equal(Buffer.from(preview.content[0].data, 'base64').subarray(1, 4).toString(), 'PNG');
   assert.equal((await request('DELETE', `/v1/auth/agent-keys/${key.id}`)).status, 204);
   assert.ok(
     (await mcp.callTool({ name: 'opsis_list_boards', arguments: {} })).isError,
     'revoked imported key rejected',
   );
   console.log(
-    'Native integration passed: live database import, accounts, sessions, history, templates, stdio MCP, endpoint discovery and revocation.',
+    'Native integration passed: live database import, accounts, sessions, history, templates, stdio MCP, board previews, endpoint discovery and revocation.',
   );
 } finally {
   await mcp?.close();

@@ -1,23 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { createEmptyBoard, EMAIL_DEMO, type BoardDrawing } from '@opsis/schema';
+import {
+  createEmptyBoard,
+  EMAIL_DEMO,
+  type BoardDrawing,
+  groupRotationCentre,
+  rotateDrawing,
+  rotateDrawingAbout,
+  strokePath,
+} from '@opsis/schema';
 import { layoutBoard, withoutIllustrations } from './model';
 import {
   drawingAt,
   drawingClipboard,
   drawingContains,
   drawingsInBox,
+  groupOf,
   handleAt,
   pasteDrawings,
   readDrawingClipboard,
   resizeDrawing,
   resizeHandles,
-  rotateDrawing,
-  rotateDrawingAbout,
-  groupRotationCentre,
   simplifyStroke,
-  strokePath,
 } from './canvas-drawing';
 import { DrawingShape } from './DrawingShape';
 import { boardSvg } from './export';
@@ -26,6 +31,60 @@ const ink = { ink: 'mint', line: 'solid', strokeWidth: 2 } as const;
 const box: BoardDrawing = { id: 'box', shape: 'rect', x: 0, y: 0, width: 100, height: 60, ...ink };
 
 describe('canvas drawing geometry', () => {
+  it('picks filled polygons inside, paths along their curve and grouped drawings together', () => {
+    const zone: BoardDrawing = {
+      id: 'zone',
+      shape: 'polygon',
+      points: [
+        [0, 0],
+        [100, 0],
+        [50, 80],
+      ],
+      ...ink,
+    };
+    // An unfilled polygon is picked on its outline only; a filled or hatched one anywhere inside.
+    expect(drawingContains(zone, [50, 30], 4)).toBe(false);
+    expect(drawingContains(zone, [75, 40], 4)).toBe(true);
+    expect(drawingContains({ ...zone, hatch: 'cross' }, [50, 30], 4)).toBe(true);
+    const curve: BoardDrawing = { id: 'c', shape: 'path', d: 'M0 0Q50 100 100 0', ...ink };
+    expect(drawingContains(curve, [50, 50], 4)).toBe(true);
+    expect(drawingContains(curve, [50, 10], 4)).toBe(false);
+    const board = {
+      ...createEmptyBoard(),
+      drawings: [
+        { ...box, id: 'valve-1-1', groupId: 'valve-1' },
+        { ...box, id: 'valve-1-2', x: 200, groupId: 'valve-1' },
+        { ...box, id: 'alone', x: 400 },
+      ],
+    };
+    expect(groupOf(board, board.drawings[0]!)).toEqual(['valve-1-1', 'valve-1-2']);
+    expect(groupOf(board, board.drawings[2]!)).toEqual(['alone']);
+  });
+
+  it('resizes and turns paths, polygons and arcs point by point', () => {
+    const curve: BoardDrawing = { id: 'c', shape: 'path', d: 'M0 0L100 50', ...ink };
+    // Paths have frame handles, not line ends, and scale within their outline.
+    expect(resizeHandles(curve).map((item) => item.handle)).toContain('se');
+    expect(resizeDrawing(curve, 'se', [200, 100]).d).toBe('M0 0L200 100');
+    expect(rotateDrawing(curve, 180).d).toBe('M100 50L0 0');
+    const arc: BoardDrawing = {
+      id: 'a',
+      shape: 'arc',
+      points: [
+        [0, 0],
+        [50, -50],
+        [100, 0],
+      ],
+      ...ink,
+    };
+    expect(resizeHandles(arc).map((item) => item.handle)).not.toContain('start');
+    expect(rotateDrawingAbout(arc, 90, [0, 0]).points).toEqual([
+      [0, 0],
+      [50, 50],
+      [0, 100],
+    ]);
+  });
+
   it('keeps sketches and explicit board links when chat regenerates the diagram', async () => {
     const destination = '00000000-0000-4000-8000-000000000001';
     const previous = await layoutBoard(EMAIL_DEMO, 'demo');

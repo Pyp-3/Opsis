@@ -53,25 +53,31 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 
 ## Tools
 
-| Tool                      | What it does                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `opsis_list_boards`       | Saved boards, most recent first, with each board's collection                  |
-| `opsis_search_boards`     | Concepts matching words, across boards you own or edit; best first             |
-| `opsis_get_board`         | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale |
-| `opsis_create_board`      | A new empty board, optionally filed in a collection                            |
-| `opsis_list_collections`  | Your private collections, with how many boards each holds                      |
-| `opsis_create_collection` | A new private collection                                                       |
-| `opsis_file_board`        | Moves an owned board into a collection, or out of every collection             |
-| `opsis_update_board`      | Title, summary, background palette, icon tint and drawing scale                |
-| `opsis_add_concept`       | Adds a concept; `after` places it below another and draws the arrow            |
-| `opsis_update_concept`    | Label, summary, explanation, icon or kind                                      |
-| `opsis_remove_concept`    | Removes a concept and its arrows                                               |
-| `opsis_connect`           | Draws a labelled arrow (flow, request, response, feedback or retry)            |
-| `opsis_disconnect`        | Removes an arrow                                                               |
-| `opsis_write_diagram`     | Replaces a whole diagram in one step, or creates a board for it                |
-| `opsis_add_drawings`      | Draws shapes, text and dimension lines beside the diagram, in one step         |
-| `opsis_update_drawing`    | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer  |
-| `opsis_remove_drawings`   | Removes drawings in one step                                                   |
+| Tool                       | What it does                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `opsis_list_boards`        | Saved boards, most recent first, with each board's collection                   |
+| `opsis_search_boards`      | Concepts matching words, across boards you own or edit; best first              |
+| `opsis_get_board`          | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale  |
+| `opsis_create_board`       | A new empty board, optionally filed in a collection                             |
+| `opsis_list_collections`   | Your private collections, with how many boards each holds                       |
+| `opsis_create_collection`  | A new private collection                                                        |
+| `opsis_file_board`         | Moves an owned board into a collection, or out of every collection              |
+| `opsis_update_board`       | Title, summary, background palette, icon tint and drawing scale                 |
+| `opsis_add_concept`        | Adds a concept; `after` places it below another and draws the arrow             |
+| `opsis_update_concept`     | Label, summary, explanation, icon or kind                                       |
+| `opsis_remove_concept`     | Removes a concept and its arrows                                                |
+| `opsis_connect`            | Draws a labelled arrow (flow, request, response, feedback or retry)             |
+| `opsis_disconnect`         | Removes an arrow                                                                |
+| `opsis_write_diagram`      | Replaces a whole diagram in one step, or creates a board for it                 |
+| `opsis_add_drawings`       | Draws shapes, text and dimension lines beside the diagram, in one step          |
+| `opsis_update_drawing`     | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer   |
+| `opsis_remove_drawings`    | Removes drawings in one step                                                    |
+| `opsis_list_symbols`       | The ready-made symbols, by category, with their natural size                    |
+| `opsis_place_symbols`      | Draws symbols (doors, resistors, valves, pumps, people…) as groups, in one step |
+| `opsis_transform_drawings` | Moves, scales, mirrors, rotates, aligns or spaces drawings and groups           |
+| `opsis_repeat_drawings`    | Copies drawings or groups in a row, each a step further on                      |
+| `opsis_group_drawings`     | Puts drawings in a named group, or takes them out                               |
+| `opsis_render_board`       | A PNG picture of the board or a region, with rulers, to check the drawing       |
 
 Filing a board in a collection is organization, not an edit: it adds no revision or undo step,
 and only the board's owner can file it.
@@ -79,7 +85,14 @@ and only the board's owner can file it.
 Drawings use canvas coordinates, where one grid square is 24 units. `opsis_get_board`
 returns each concept's position, so a sketch can be placed around the diagram. A drawing
 added with `movesWith` follows that concept when it is moved. A `layer` name puts it on that
-layer, creating the layer if needed. Boxes, ellipses and text take a `rotation` in degrees. Agents cannot change drawings the reader has locked, or
+layer, creating the layer if needed. Boxes, ellipses and text take a `rotation` in degrees.
+Beyond boxes, lines and text, a drawing can be a closed `polygon`, an `arc` through three
+points, or a `path` of SVG path data (curves, pipes, plots and outlines). Shapes with an inside
+take a fill ink, fill opacity and hatching; open shapes end in arrows, dots or bars; text can
+be centred, bold or on a backdrop. Placed symbols are groups of ordinary drawings, so they
+transform as one and stay editable. `opsis_render_board` rasterises a schematic preview on
+the Opsis host (concepts as labelled circles, drawings exactly as painted); a desktop app
+without its local Node service answers with SVG markup instead. Agents cannot change drawings the reader has locked, or
 drawings on locked or hidden layers, and cannot lock, hide or unlock anything themselves.
 
 New concepts are placed clear of existing ones; **Arrange downward** on the canvas tidies a

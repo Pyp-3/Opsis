@@ -3,6 +3,7 @@ package mcpbridge
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -156,7 +157,10 @@ func (b *Bridge) call(ctx context.Context, name string, args json.RawMessage) (*
 	var result struct {
 		IsError bool `json:"isError"`
 		Content []struct {
-			Text string `json:"text"`
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			Data     string `json:"data"`
+			MIMEType string `json:"mimeType"`
 		} `json:"content"`
 	}
 	if err := json.Unmarshal([]byte(promise.Result().String()), &result); err != nil {
@@ -164,6 +168,15 @@ func (b *Bridge) call(ctx context.Context, name string, args json.RawMessage) (*
 	}
 	content := []mcp.Content{}
 	for _, item := range result.Content {
+		// Board previews are PNG images; everything else is text.
+		if item.Type == "image" {
+			data, err := base64.StdEncoding.DecodeString(item.Data)
+			if err != nil || item.MIMEType != "image/png" {
+				return nil, errors.New("Opsis tool returned an invalid image")
+			}
+			content = append(content, &mcp.ImageContent{Data: data, MIMEType: item.MIMEType})
+			continue
+		}
 		content = append(content, &mcp.TextContent{Text: item.Text})
 	}
 	return &mcp.CallToolResult{IsError: result.IsError, Content: content}, nil

@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import { ILLUSTRATION_INKS } from './illustration';
+import {
+  arcThrough,
+  mapPath,
+  MAX_PATH_DATA,
+  pathDataProblem,
+  samplePath,
+  type PathPoint,
+} from './drawing-path';
 
 /**
  * Canvas drawings are freehand and illustrative marks a reader draws directly on a board:
@@ -11,6 +19,11 @@ import { ILLUSTRATION_INKS } from './illustration';
  * canvas coordinates. A drawing attached to a concept (`anchorId`) stores its coordinates
  * relative to that concept's position, so it moves with the concept when the concept is dragged
  * or rearranged.
+ *
+ * Beyond the simple shapes, a drawing can be a polygon (closed, fillable), an arc through three
+ * points, or any SVG path (`d`, in canvas coordinates), so curves, pipes, plots and outlines are
+ * drawn exactly. Fills may use their own ink, opacity and a hatch pattern; open shapes may end
+ * in arrows, dots or bars; and drawings may share a `groupId` so they move as one piece.
  *
  * Drawings may sit on named layers that can be reordered, hidden or locked, and a single drawing
  * can be locked too. A board-level scale says what one grid square measures, so dimension lines
@@ -27,10 +40,13 @@ export const DRAWING_SHAPES = [
   'ellipse',
   'text',
   'dimension',
+  'polygon',
+  'arc',
+  'path',
 ] as const;
 export type DrawingShape = (typeof DRAWING_SHAPES)[number];
-/** Solid outlines, dashed hidden/proposed lines, and dash-dot centre lines. */
-export const DRAWING_LINE_STYLES = ['solid', 'dashed', 'center'] as const;
+/** Solid outlines, dashed hidden/proposed lines, dash-dot centre lines and dotted lines. */
+export const DRAWING_LINE_STYLES = ['solid', 'dashed', 'center', 'dotted'] as const;
 export type DrawingLineStyle = (typeof DRAWING_LINE_STYLES)[number];
 
 export const MAX_BOARD_DRAWINGS = 200;
@@ -39,6 +55,35 @@ export const MAX_DRAWING_POINTS = 400;
 export const DRAWING_GRID_UNIT = 24;
 
 export const MAX_DRAWING_LAYERS = 12;
+
+/** Hatching drawn over a fill: section cuts, materials and zones. */
+export const DRAWING_HATCHES = ['diagonal', 'cross', 'horizontal', 'vertical', 'dots'] as const;
+export type DrawingHatch = (typeof DRAWING_HATCHES)[number];
+/** What an open shape ends in. */
+export const DRAWING_MARKERS = ['none', 'arrow', 'dot', 'bar'] as const;
+export type DrawingMarker = (typeof DRAWING_MARKERS)[number];
+export const DRAWING_TEXT_ALIGNS = ['start', 'middle', 'end'] as const;
+export type DrawingTextAlign = (typeof DRAWING_TEXT_ALIGNS)[number];
+
+/** Shapes with an inside, which can be filled and hatched. */
+export const FILLABLE_SHAPES: readonly DrawingShape[] = [
+  'rect',
+  'ellipse',
+  'polygon',
+  'arc',
+  'path',
+];
+/** Shapes with two free ends, which can end in markers. */
+export const OPEN_SHAPES: readonly DrawingShape[] = ['stroke', 'line', 'arrow', 'arc', 'path'];
+/** Shapes stored as a list of points that are moved, turned and scaled one by one. */
+export const POINT_SHAPES: readonly DrawingShape[] = [
+  'stroke',
+  'line',
+  'arrow',
+  'dimension',
+  'polygon',
+  'arc',
+];
 
 const coordinate = z.number().finite().min(-100_000).max(100_000);
 const point = z.tuple([coordinate, coordinate]);
@@ -79,7 +124,10 @@ const BoardDrawingObject = z
   .object({
     id: drawingId,
     shape: z.enum(DRAWING_SHAPES),
-    /** A freehand stroke's samples, or the two ends of a line, arrow or dimension. */
+    /**
+     * A freehand stroke's samples; the two ends of a line, arrow or dimension; a polygon's
+     * corners; or an arc's start, a point it passes through, and its end.
+     */
     points: z.array(point).min(2).max(MAX_DRAWING_POINTS).optional(),
     /** The top-left corner of a box or ellipse, or where a text begins. */
     x: coordinate.optional(),
@@ -90,10 +138,30 @@ const BoardDrawingObject = z
     text: z.string().max(500).optional(),
     fontSize: z.number().finite().min(8).max(96).optional(),
     ink: z.enum(ILLUSTRATION_INKS),
-    /** A translucent fill in the same ink, for boxes and ellipses. */
+    /** SVG path data in canvas coordinates, for a path. */
+    d: z.string().max(MAX_PATH_DATA).optional(),
+    /** A translucent fill in the same ink, for shapes with an inside. */
     fill: z.boolean().optional(),
+    /** Fill in this ink instead (implies a fill). */
+    fillInk: z.enum(ILLUSTRATION_INKS).optional(),
+    /** How opaque the fill is; 0.16 when not given. */
+    fillOpacity: z.number().finite().min(0.05).max(1).optional(),
+    /** Hatching over the inside, in the fill's ink. */
+    hatch: z.enum(DRAWING_HATCHES).optional(),
+    /** How opaque the whole drawing is. */
+    opacity: z.number().finite().min(0.1).max(1).optional(),
     strokeWidth: z.number().finite().min(0.5).max(16),
     line: z.enum(DRAWING_LINE_STYLES),
+    /** What an open shape's first and last points end in; an arrow ends in an arrowhead. */
+    startMarker: z.enum(DRAWING_MARKERS).optional(),
+    endMarker: z.enum(DRAWING_MARKERS).optional(),
+    /** Where a text's x is: its start (default), middle or end. */
+    align: z.enum(DRAWING_TEXT_ALIGNS).optional(),
+    bold: z.boolean().optional(),
+    /** A paper-coloured box behind a text, so it reads over busy drawings. */
+    background: z.boolean().optional(),
+    /** Drawings with the same group move, turn and are selected together. */
+    groupId: drawingId.optional(),
     /** The concept this drawing moves with; its coordinates are then relative to it. */
     anchorId: drawingId.optional(),
     /** The layer this drawing is on; the base layer when absent. */
@@ -134,9 +202,23 @@ export type FocusDrawing = z.infer<typeof FocusDrawingSchema>;
 function drawingShapeProblem(drawing: z.infer<typeof BoardDrawingObject>): string | null {
   if (drawing.rotation && !ROTATABLE_SHAPES.includes(drawing.shape))
     return `A ${drawing.shape} is rotated by moving its points, not with rotation.`;
+  if (drawing.shape === 'path' ? drawing.points : drawing.d !== undefined)
+    return drawing.shape === 'path'
+      ? 'A path uses d (SVG path data), not points.'
+      : `Only a path has d (SVG path data); a ${drawing.shape} does not.`;
   switch (drawing.shape) {
     case 'stroke':
       return drawing.points ? null : 'A stroke needs points.';
+    case 'polygon':
+      return (drawing.points?.length ?? 0) >= 3 ? null : 'A polygon needs at least three points.';
+    case 'arc':
+      return drawing.points?.length === 3
+        ? null
+        : 'An arc needs three points: its start, a point it passes through, and its end.';
+    case 'path':
+      return drawing.d === undefined
+        ? 'A path needs d (SVG path data).'
+        : pathDataProblem(drawing.d);
     case 'line':
     case 'arrow':
     case 'dimension':
@@ -242,16 +324,51 @@ export function drawingOrigin(drawing: BoardDrawing, positions: Positions): Posi
   return (drawing.anchorId && positions[drawing.anchorId]) || { x: 0, y: 0 };
 }
 
-/** Moves a drawing's coordinates by an offset, keeping every other property. */
-export function translateDrawing(drawing: BoardDrawing, dx: number, dy: number): BoardDrawing {
+/**
+ * The drawing with its points, path and corner (x, y) mapped, keeping every other property.
+ * Sizes and rotations are unchanged, so for boxes, ellipses and text only the corner moves.
+ */
+export function mapDrawingPoints<T extends BoardDrawing>(
+  drawing: T,
+  map: (point: PathPoint) => PathPoint,
+): T {
+  const corner =
+    drawing.x !== undefined && drawing.y !== undefined ? map([drawing.x, drawing.y]) : null;
   return {
     ...drawing,
-    ...(drawing.points
-      ? { points: drawing.points.map(([x, y]) => [x + dx, y + dy] as [number, number]) }
-      : {}),
-    ...(drawing.x !== undefined ? { x: drawing.x + dx } : {}),
-    ...(drawing.y !== undefined ? { y: drawing.y + dy } : {}),
+    ...(drawing.points ? { points: drawing.points.map((point) => map([point[0], point[1]])) } : {}),
+    ...(drawing.d !== undefined ? { d: mapPath(drawing.d, map) } : {}),
+    ...(corner ? { x: corner[0], y: corner[1] } : {}),
   };
+}
+
+/** Moves a drawing's coordinates by an offset, keeping every other property. */
+export function translateDrawing<T extends BoardDrawing>(drawing: T, dx: number, dy: number): T {
+  return mapDrawingPoints(drawing, ([x, y]) => [x + dx, y + dy]);
+}
+
+/** The points a path or arc is drawn through, as polylines for outlines and hit-testing. */
+export function drawingPolylines(drawing: BoardDrawing): PathPoint[][] {
+  if (drawing.shape === 'path' && drawing.d) return samplePath(drawing.d);
+  if (drawing.shape === 'arc' && drawing.points?.length === 3) {
+    const [start, through, end] = drawing.points as [PathPoint, PathPoint, PathPoint];
+    const arc = arcThrough([start, through, end]);
+    if (!arc) return [[start, end]];
+    const direction = arc.sweep ? 1 : -1;
+    const steps = Math.max(8, Math.ceil((arc.span / Math.PI) * 24));
+    return [
+      Array.from({ length: steps + 1 }, (_, n): PathPoint => {
+        const angle = arc.start + (direction * arc.span * n) / steps;
+        return [
+          arc.centre[0] + arc.radius * Math.cos(angle),
+          arc.centre[1] + arc.radius * Math.sin(angle),
+        ];
+      }),
+    ];
+  }
+  if (drawing.shape === 'polygon' && drawing.points)
+    return [[...drawing.points.map(([x, y]): PathPoint => [x, y]), [...drawing.points[0]!]]];
+  return drawing.points ? [drawing.points.map(([x, y]): PathPoint => [x, y])] : [];
 }
 
 /** The drawing in canvas coordinates, without an anchor. */
@@ -300,7 +417,7 @@ export function drawingTextSize(drawing: BoardDrawing) {
   const lines = (drawing.text ?? '').split('\n');
   const size = drawing.fontSize ?? 16;
   return {
-    width: Math.max(...lines.map((line) => line.length)) * size * 0.6,
+    width: Math.max(...lines.map((line) => line.length)) * size * (drawing.bold ? 0.64 : 0.6),
     height: lines.length * size * 1.25,
   };
 }
@@ -333,7 +450,12 @@ export function drawingFrame(drawing: BoardDrawing) {
     drawing.shape === 'text'
       ? drawingTextSize(drawing)
       : { width: drawing.width ?? 0, height: drawing.height ?? 0 };
-  const x = drawing.x ?? 0;
+  // Aligned text is anchored at its middle or end, so its box starts left of x.
+  const shift =
+    drawing.shape === 'text' && drawing.align && drawing.align !== 'start'
+      ? size.width / (drawing.align === 'middle' ? 2 : 1)
+      : 0;
+  const x = (drawing.x ?? 0) - shift;
   const y = drawing.y ?? 0;
   return {
     x,
@@ -345,6 +467,7 @@ export function drawingFrame(drawing: BoardDrawing) {
 
 /** The points that outline a drawing as painted: its samples, or a box's rotated corners. */
 export function drawingOutlinePoints(drawing: BoardDrawing): [number, number][] {
+  if (drawing.shape === 'path' || drawing.shape === 'arc') return drawingPolylines(drawing).flat();
   if (drawing.points) return drawing.points.map(([x, y]) => [x, y]);
   const frame = drawingFrame(drawing);
   const corners: [number, number][] = [

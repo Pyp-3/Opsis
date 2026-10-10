@@ -126,6 +126,14 @@ a translucent fill. With a drawing selected, the same controls restyle it, and
 or rearrange it. Lines and shapes are painted beneath icons and arrows; text and
 dimension labels stay on top so they remain legible.
 
+With a drawing selected, the panel also sets its **Opacity**; shapes with an inside take a
+**Fill ink** and **Hatch** (diagonal, cross, horizontal, vertical or dots, for section cuts
+and materials); lines, arrows, arcs and paths take **Start** and **End** markers (arrow, dot
+or bar); and text can be aligned left, centre or right, made **Bold** or given a
+**Backdrop**. Agents can also draw closed polygons, arcs through three points, curved paths and
+ready-made symbols such as doors, resistors, valves and pumps. Drawings an agent grouped (a
+placed symbol, say) are picked, dragged and restyled together.
+
 With several drawings selected, the panel restyles, attaches, moves to a layer, locks or
 deletes them together. **Lock** keeps a drawing from being moved, resized, restyled, erased
 or deleted. A locked drawing can still be picked, so you can unlock it.

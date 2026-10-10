@@ -325,7 +325,7 @@ describe('2D board API', () => {
     expect(fresh.statusCode).toBe(200);
     expect(fresh.json().drawings).toEqual(sketch);
     const [request] = complete.mock.calls[0] as unknown as [{ system: string }];
-    expect(request.system).toMatch(/Drawings: for spatial or physical subjects/);
+    expect(request.system).toMatch(/Drawings: for spatial, physical or graphical subjects/);
     expect(JSON.parse(boardOutputSchema).properties.drawings.type).toBe('array');
 
     // A sketch attached to a concept that does not exist is repaired once like any other error.

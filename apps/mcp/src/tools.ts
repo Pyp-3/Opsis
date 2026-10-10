@@ -2,8 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
+  boardPreviewSvg,
   BoardEdgeKindSchema,
   CANVAS_BACKGROUNDS,
+  DRAWING_SYMBOLS,
   DrawingScaleSchema,
   CANVAS_ICON_TINTS,
   EDGE_COLORS,
@@ -13,6 +15,7 @@ import {
   ConceptFieldsSchema,
   ConceptIdSchema,
   addConcept,
+  boardOf,
   connect,
   describeBoard,
   disconnect,
@@ -25,9 +28,15 @@ import type { OpsisClient } from './client.js';
 import {
   DrawingInputSchema,
   DrawingPatchSchema,
+  SymbolPlacementSchema,
+  TransformSchema,
   addDrawings,
   describeDrawings,
+  groupBoardDrawings,
+  placeSymbols,
   removeDrawings,
+  repeatBoardDrawings,
+  transformDrawings,
   updateDrawing,
 } from './drawings.js';
 
@@ -39,7 +48,7 @@ Agents act as the account whose agent key they hold: they edit that account's bo
 
 Work like this: list, search (opsis_search_boards) or create a board, read it with opsis_get_board, then make small edits (add, update, connect) or rewrite it in one step with opsis_write_diagram. Keep labels short (2–4 words), summaries to one or two sentences, and order concepts in reading order. Share the returned "open" link so the reader can jump to the canvas.
 
-Boards can also hold drawings beside the diagram: floor plans, walls, equipment outlines, zones, labels and dimension lines, for engineering and architecture sketches. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.
+Boards can also hold drawings beside the diagram, so any 2D subject can be shown: floor plans, site layouts, circuits, piping and process diagrams, mechanisms, charts and plots, maps and illustrations. Use opsis_add_drawings, opsis_update_drawing and opsis_remove_drawings with canvas coordinates (one grid square is 24 units; opsis_get_board gives each concept's position). Shapes: stroke, line, arrow, rect, ellipse, text, dimension, polygon, arc (through three points) and path (any SVG path data, for curves and plots), with fill inks, opacity, hatching, line ends (arrow, dot, bar) and text alignment. Place ready-made symbols (doors, windows, resistors, valves, pumps, people, databases and more) with opsis_place_symbols; each becomes a group. Move, scale, mirror, rotate, align and space drawings or groups with opsis_transform_drawings, copy them in rows with opsis_repeat_drawings, and group them with opsis_group_drawings. Check your work with opsis_render_board, which returns a picture of the board with rulers, then fix what looks wrong. Set the board's scale with opsis_update_board so dimension lines read in real units. Drawings the reader has locked cannot be changed.
 
 The account's own boards can be filed into private collections (folders): opsis_list_collections, opsis_create_collection and opsis_file_board, or pass collectionId to opsis_create_board. Filing is organization, not an edit, so it adds no undo step.`;
 
@@ -375,7 +384,7 @@ export function registerTools(
     {
       title: 'Add drawings',
       description:
-        'Draws shapes on the canvas beside the diagram in one undoable step: stroke (freehand), line, arrow, rect (box), ellipse, text and dimension lines. Coordinates are canvas units; one grid square is 24. Returns the new drawing ids.',
+        'Draws shapes on the canvas beside the diagram in one undoable step: stroke (freehand), line, arrow, rect (box), ellipse, text, dimension lines, polygon (closed), arc (start, through, end) and path (SVG path data). Coordinates are canvas units; one grid square is 24. Returns the new drawing ids.',
       inputSchema: {
         boardId,
         drawings: z.array(DrawingInputSchema).min(1).max(100),
@@ -423,6 +432,176 @@ export function registerTools(
       }));
       return saved(id, revision);
     }),
+  );
+
+  server.registerTool(
+    'opsis_list_symbols',
+    {
+      title: 'List drawing symbols',
+      description:
+        'Lists the ready-made symbols opsis_place_symbols can draw, with their category, what they show and their natural size in canvas units.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async () =>
+      DRAWING_SYMBOLS.map(({ name, category, description, width, height }) => ({
+        name,
+        category,
+        description,
+        width,
+        height,
+      })),
+    ),
+  );
+
+  server.registerTool(
+    'opsis_place_symbols',
+    {
+      title: 'Place symbols',
+      description:
+        'Draws ready-made symbols (doors, windows, stairs, furniture, resistors, capacitors, switches, valves, pumps, tanks, instruments, people, clouds, databases and more) in one undoable step. Each symbol becomes a group of ordinary drawings that moves and transforms as one; returns each group and its drawing ids.',
+      inputSchema: { boardId, symbols: z.array(SymbolPlacementSchema).min(1).max(40) },
+    },
+    guarded(async ({ boardId: id, symbols }) => {
+      const { revision, result } = await client.edit(id, (snapshot) => {
+        const placed = placeSymbols(snapshot, symbols);
+        return { snapshot: placed.snapshot, result: placed.placed };
+      });
+      return saved(id, revision, { symbols: result });
+    }),
+  );
+
+  server.registerTool(
+    'opsis_transform_drawings',
+    {
+      title: 'Transform drawings',
+      description:
+        'Moves, scales, mirrors, rotates, aligns or evenly spaces several drawings and groups in one undoable step (applied in that order). Locked drawings cannot be changed.',
+      inputSchema: { boardId, ...TransformSchema },
+    },
+    guarded(async ({ boardId: id, ...input }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: transformDrawings(snapshot, input),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_repeat_drawings',
+    {
+      title: 'Repeat drawings',
+      description:
+        'Copies drawings and groups count times, each copy step further on (rows of columns, stair treads, fence posts, chart bars), in one undoable step. Returns the new drawing ids.',
+      inputSchema: {
+        boardId,
+        drawingIds: z.array(ConceptIdSchema).max(200).optional(),
+        groups: z.array(z.string().min(1).max(80)).max(50).optional(),
+        count: z.number().int().min(1).max(50),
+        step: z
+          .tuple([z.number().finite(), z.number().finite()])
+          .describe('[dx, dy] between one copy and the next.'),
+      },
+    },
+    guarded(async ({ boardId: id, drawingIds, groups, count, step }) => {
+      const { revision, result } = await client.edit(id, (snapshot) => {
+        const repeated = repeatBoardDrawings(snapshot, {
+          ...(drawingIds ? { drawingIds } : {}),
+          ...(groups ? { groups } : {}),
+          count,
+          step,
+        });
+        return { snapshot: repeated.snapshot, result: repeated.drawingIds };
+      });
+      return saved(id, revision, { drawingIds: result });
+    }),
+  );
+
+  server.registerTool(
+    'opsis_group_drawings',
+    {
+      title: 'Group drawings',
+      description:
+        'Puts drawings in a named group, so the reader selects and drags them as one and transforms can target the group; group null takes them out of any group.',
+      inputSchema: {
+        boardId,
+        drawingIds: z.array(ConceptIdSchema).min(1).max(200),
+        group: z
+          .string()
+          .min(1)
+          .max(80)
+          .regex(/^[a-zA-Z0-9_-]+$/)
+          .nullable(),
+      },
+    },
+    guarded(async ({ boardId: id, drawingIds, group }) => {
+      const { revision } = await client.edit(id, (snapshot) => ({
+        snapshot: groupBoardDrawings(snapshot, drawingIds, group),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_render_board',
+    {
+      title: 'Render a board preview',
+      description:
+        'Returns a PNG picture of the board, or of a region of it, to check your work: every visible drawing as the canvas paints it, concepts as labelled circles where their icons sit, connections as straight arrows, and rulers marked in canvas coordinates. Icons and arrow routing are simplified.',
+      inputSchema: {
+        boardId,
+        region: z
+          .object({
+            x: z.number().finite(),
+            y: z.number().finite(),
+            width: z.number().finite().min(24).max(100_000),
+            height: z.number().finite().min(24).max(100_000),
+          })
+          .optional()
+          .describe('Canvas area to show; the whole board by default.'),
+        maxSize: z
+          .number()
+          .int()
+          .min(200)
+          .max(2000)
+          .optional()
+          .describe('Longest side in pixels; default 1400.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ boardId: id, region, maxSize }): Promise<CallToolResult> => {
+      try {
+        const entry = await client.get(id);
+        const preview = boardPreviewSvg(boardOf(entry.snapshot), {
+          ...(region ? { region } : {}),
+          ...(maxSize ? { maxSize } : {}),
+        });
+        const summary = {
+          region: preview.region,
+          pixels: { width: preview.width, height: preview.height },
+          gridSquare: preview.gridSquare,
+        };
+        const image = await client.render(preview.svg);
+        if (!image)
+          return reply({
+            ...summary,
+            note: 'This Opsis host cannot make images, so the preview is SVG markup.',
+            svg: preview.svg,
+          });
+        return {
+          content: [
+            { type: 'image', data: image.data, mimeType: image.mimeType },
+            { type: 'text', text: JSON.stringify(summary) },
+          ],
+        };
+      } catch (error) {
+        if (error instanceof CanvasError)
+          return { isError: true, content: [{ type: 'text', text: error.message }] };
+        throw error;
+      }
+    },
   );
 
   server.registerTool(

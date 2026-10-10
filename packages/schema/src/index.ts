@@ -32,3 +32,8 @@ export * from './cost-projection';
 export * from './board-chat';
 export * from './chat-focus';
 export * from './instance';
+export * from './drawing-path';
+export * from './drawing-svg';
+export * from './drawing-transform';
+export * from './drawing-symbols';
+export * from './board-preview';

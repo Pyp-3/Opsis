@@ -409,3 +409,162 @@ test('chat sketches beside the diagram after review, and sketches rotate and res
   expect(await drawings(page)).toEqual(before);
   expect((await accessibilityScan(page)).violations).toEqual([]);
 });
+
+test('paints paths, polygons, arcs and hatching, and picks and restyles groups as one', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  // An agent's drawings arrive through the saved-board API, as MCP tools save them.
+  const style = { ink: 'sky', line: 'solid', strokeWidth: 2 };
+  await page.evaluate(async (style) => {
+    const [entry] = (await (await fetch('/v1/boards')).json()) as { id: string }[];
+    const current = await (await fetch('/v1/boards/' + entry!.id)).json();
+    const board = current.snapshot.board;
+    const first = Object.values(board.positions as Record<string, { x: number; y: number }>)[0]!;
+    // To the right of the diagram, clear of the drawing panel on the left.
+    const x = first.x + 720;
+    const y = first.y;
+    board.drawings = [
+      {
+        id: 'zone',
+        shape: 'polygon',
+        points: [
+          [x - 300, y],
+          [x - 120, y],
+          [x - 210, y + 140],
+        ],
+        ...style,
+        fillInk: 'coral',
+        fillOpacity: 0.3,
+        hatch: 'diagonal',
+      },
+      {
+        id: 'pipe',
+        shape: 'path',
+        d: `M${x - 300} ${y + 200}C${x - 240} ${y + 140} ${x - 180} ${y + 260} ${x - 120} ${y + 200}`,
+        ...style,
+        line: 'dotted',
+        startMarker: 'dot',
+        endMarker: 'arrow',
+      },
+      {
+        id: 'swing',
+        shape: 'arc',
+        points: [
+          [x - 300, y + 320],
+          [x - 210, y + 260],
+          [x - 120, y + 320],
+        ],
+        ...style,
+      },
+      {
+        id: 'pair-a',
+        shape: 'rect',
+        x: x - 300,
+        y: y + 380,
+        width: 60,
+        height: 40,
+        ...style,
+        fill: true,
+        groupId: 'pair',
+      },
+      {
+        id: 'pair-b',
+        shape: 'rect',
+        x: x - 200,
+        y: y + 380,
+        width: 60,
+        height: 40,
+        ...style,
+        fill: true,
+        groupId: 'pair',
+      },
+      {
+        id: 'title',
+        shape: 'text',
+        x: x - 210,
+        y: y - 60,
+        text: 'Plant room',
+        align: 'middle',
+        bold: true,
+        background: true,
+        ...style,
+      },
+    ];
+    await fetch('/v1/boards/' + entry!.id, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ snapshot: current.snapshot, revision: current.revision }),
+    });
+  }, style);
+  await page.reload();
+  await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(6);
+  await expect(page.locator('#opsis-hatch-zone')).toHaveCount(1);
+  await expect(page.locator('[data-drawing="pipe"] path').first()).toHaveAttribute(
+    'stroke-dasharray',
+    '0.1 7',
+  );
+  // The arc is drawn as a circular arc, and the text is centred and bold.
+  await expect(page.locator('[data-drawing="swing"] path')).toHaveAttribute('d', /A/);
+  await expect(page.locator('[data-drawing-label="title"] text')).toHaveAttribute(
+    'font-weight',
+    '700',
+  );
+
+  // Clicking one drawing of a group selects the whole group.
+  await page.getByRole('button', { name: 'Hide the big picture' }).click();
+  await page.getByRole('button', { name: 'Show drawing tools' }).click();
+  await page
+    .getByRole('toolbar', { name: 'Drawing tools' })
+    .getByRole('button', { name: 'Select drawings' })
+    .click();
+  const pair = (await page.locator('[data-drawing="pair-a"]').boundingBox())!;
+  await page.mouse.click(pair.x + pair.width / 2, pair.y + pair.height / 2);
+  const panel = page.getByRole('region', { name: 'Selected drawings' });
+  await expect(panel).toContainText('2 drawings selected');
+  await panel.getByLabel('Hatch').selectOption('dots');
+  await panel.getByLabel('Fill ink').selectOption('mint');
+  await expect
+    .poll(async () =>
+      (await drawings(page))
+        .filter((item) => item.id.startsWith('pair'))
+        .map((item) => [
+          (item as { hatch?: string }).hatch,
+          (item as { fillInk?: string }).fillInk,
+        ]),
+    )
+    .toEqual([
+      ['dots', 'mint'],
+      ['dots', 'mint'],
+    ]);
+  expect((await accessibilityScan(page)).violations).toEqual([]);
+
+  // Dragging the group moves both as one undoable edit.
+  const before = (await drawings(page)).filter((item) => item.id.startsWith('pair'));
+  const centre = (await page.locator('[data-drawing="pair-a"]').boundingBox())!;
+  await page.mouse.move(centre.x + centre.width / 2, centre.y + centre.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + centre.width / 2 + 60, centre.y + centre.height / 2 + 30, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await drawings(page)).find((item) => item.id === 'pair-b')!.x)
+    .not.toBe(before[1]!.x);
+  const after = (await drawings(page)).filter((item) => item.id.startsWith('pair'));
+  expect(after[0]!.x! - before[0]!.x!).toBe(after[1]!.x! - before[1]!.x!);
+  expect(after[0]!.y! - before[0]!.y!).toBe(after[1]!.y! - before[1]!.y!);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect
+    .poll(async () => (await drawings(page)).find((item) => item.id === 'pair-b')!.x)
+    .toBe(before[1]!.x);
+
+  // Everything survives a reload.
+  await page.reload();
+  await expect(page.locator('#opsis-hatch-pair-a')).toHaveCount(1);
+  await expect(page.locator('#opsis-hatch-zone')).toHaveCount(1);
+});

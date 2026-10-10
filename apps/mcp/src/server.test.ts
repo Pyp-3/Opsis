@@ -78,12 +78,18 @@ describe('Opsis MCP server', () => {
       'opsis_disconnect',
       'opsis_file_board',
       'opsis_get_board',
+      'opsis_group_drawings',
       'opsis_list_boards',
       'opsis_list_collections',
       'opsis_list_public_boards',
+      'opsis_list_symbols',
+      'opsis_place_symbols',
       'opsis_remove_concept',
       'opsis_remove_drawings',
+      'opsis_render_board',
+      'opsis_repeat_drawings',
       'opsis_search_boards',
+      'opsis_transform_drawings',
       'opsis_update_board',
       'opsis_update_concept',
       'opsis_update_drawing',
@@ -91,6 +97,48 @@ describe('Opsis MCP server', () => {
     ]);
     const add = tools.find((tool) => tool.name === 'opsis_add_concept')!;
     expect(add.inputSchema.required).toEqual(['boardId', 'label', 'summary']);
+  });
+
+  it('places symbols, transforms them and renders a picture of the board', async () => {
+    const board = (await call('opsis_create_board', { title: 'Plant room' })).json();
+    const symbols = (await call('opsis_list_symbols')).json();
+    expect(symbols.map((symbol: { name: string }) => symbol.name)).toContain('pump');
+    const placed = (
+      await call('opsis_place_symbols', {
+        boardId: board.id,
+        symbols: [
+          { symbol: 'pump', x: 100, y: 100, label: 'P-1' },
+          { symbol: 'valve', x: 220, y: 100 },
+        ],
+      })
+    ).json();
+    expect(placed.symbols.map((item: { group: string }) => item.group)).toEqual([
+      'pump-1',
+      'valve-1',
+    ]);
+    const moved = await call('opsis_transform_drawings', {
+      boardId: board.id,
+      groups: ['valve-1'],
+      rotate: 90,
+      about: 'each',
+    });
+    expect(moved.isError).toBe(false);
+    await call('opsis_add_drawings', {
+      boardId: board.id,
+      drawings: [{ shape: 'path', d: 'M60 100C80 60 180 60 196 100', endMarker: 'arrow' }],
+    });
+    const result = await client.callTool({
+      name: 'opsis_render_board',
+      arguments: { boardId: board.id, maxSize: 600 },
+    });
+    const [image, summary] = result.content as [
+      { type: string; data: string; mimeType: string },
+      { type: string; text: string },
+    ];
+    expect(image).toMatchObject({ type: 'image', mimeType: 'image/png' });
+    // A real PNG, rasterised by the API host.
+    expect(Buffer.from(image.data, 'base64').subarray(1, 4).toString()).toBe('PNG');
+    expect(JSON.parse(summary.text)).toMatchObject({ gridSquare: 24, pixels: { width: 600 } });
   });
 
   it('builds a canvas step by step through the saved-board API', async () => {

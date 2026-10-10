@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { EMAIL_DEMO, type BoardDocument, type BoardSnapshot } from '@opsis/schema';
 import { CanvasError, updateDetails } from './canvas.js';
-import { addDrawings, describeDrawings, removeDrawings, updateDrawing } from './drawings.js';
+import {
+  addDrawings,
+  describeDrawings,
+  groupBoardDrawings,
+  placeSymbols,
+  removeDrawings,
+  repeatBoardDrawings,
+  transformDrawings,
+  updateDrawing,
+} from './drawings.js';
 
 const board: BoardDocument = {
   ...EMAIL_DEMO,
@@ -122,5 +131,123 @@ describe('agent drawing tools', () => {
       gridValue: 0.5,
       unit: 'm',
     });
+  });
+});
+
+describe('agent shapes, symbols and transforms', () => {
+  it('adds paths, polygons and arcs with styles, and clears a style with null', () => {
+    const { snapshot, ids } = addDrawings(start, [
+      { shape: 'path', d: 'M0 0C40 -40 80 40 120 0', endMarker: 'arrow', line: 'dotted' },
+      {
+        shape: 'polygon',
+        points: [
+          [0, 100],
+          [80, 100],
+          [40, 160],
+        ],
+        fillInk: 'coral',
+        hatch: 'cross',
+        group: 'zone',
+      },
+      {
+        shape: 'arc',
+        points: [
+          [0, 200],
+          [40, 160],
+          [80, 200],
+        ],
+      },
+    ]);
+    expect(ids).toEqual(['path-1', 'polygon-1', 'arc-1']);
+    const shown = describeDrawings(snapshot.board!).drawings;
+    expect(shown[0]).toMatchObject({
+      d: 'M0 0C40 -40 80 40 120 0',
+      endMarker: 'arrow',
+      line: 'dotted',
+    });
+    expect(shown[0]!.bounds).toMatchObject({ x: 0, width: 120 });
+    expect(shown[1]).toMatchObject({ fillInk: 'coral', hatch: 'cross', group: 'zone' });
+    expect(snapshot.board!.drawings![1]!.groupId).toBe('zone');
+    const cleared = updateDrawing(snapshot, 'polygon-1', { hatch: null, group: null });
+    expect(cleared.board!.drawings![1]).not.toHaveProperty('hatch');
+    expect(cleared.board!.drawings![1]).not.toHaveProperty('groupId');
+    expect(() => addDrawings(start, [{ shape: 'path', d: 'not a path' }])).toThrow(CanvasError);
+  });
+
+  it('places labelled symbols as uniquely named groups that follow concepts', () => {
+    const { snapshot, placed } = placeSymbols(start, [
+      { symbol: 'valve', x: 300, y: 300, label: 'V-1', layer: 'Piping' },
+      { symbol: 'valve', x: 400, y: 300, movesWith: sender },
+    ]);
+    expect(placed.map((item) => item.group)).toEqual(['valve-1', 'valve-2']);
+    const drawings = snapshot.board!.drawings!;
+    expect(drawings.filter((drawing) => drawing.groupId === 'valve-1')).toHaveLength(3);
+    expect(drawings.find((drawing) => drawing.groupId === 'valve-1')!.layerId).toBe('layer-piping');
+    expect(drawings.find((drawing) => drawing.groupId === 'valve-2')!.anchorId).toBe(sender);
+    expect(snapshot.past).toEqual([board]);
+    // A third valve does not reuse a group name already on the board.
+    const again = placeSymbols(snapshot, [{ symbol: 'valve', x: 0, y: 0 }]);
+    expect(again.placed[0]!.group).toBe('valve-3');
+  });
+
+  it('transforms groups as one piece, about their shared centre or each their own', () => {
+    const { snapshot } = placeSymbols(start, [
+      { symbol: 'resistor', x: 100, y: 100 },
+      { symbol: 'resistor', x: 300, y: 100 },
+    ]);
+    const before = describeDrawings(snapshot.board!).drawings;
+    const moved = transformDrawings(snapshot, { groups: ['resistor-1'], moveBy: [0, 48] });
+    const after = describeDrawings(moved.board!).drawings;
+    expect(after[0]!.bounds.y).toBe(before[0]!.bounds.y + 48);
+    expect(after[1]).toEqual(before[1]);
+    // Turned together, the two resistors swap from a row to a column.
+    const column = describeDrawings(
+      transformDrawings(snapshot, { groups: ['resistor-1', 'resistor-2'], rotate: 90 }).board!,
+    ).drawings;
+    expect(column[0]!.bounds.x).toBe(column[1]!.bounds.x);
+    // Turned each on its own centre, they stay in a row.
+    const each = describeDrawings(
+      transformDrawings(snapshot, {
+        groups: ['resistor-1', 'resistor-2'],
+        rotate: 90,
+        about: 'each',
+      }).board!,
+    ).drawings;
+    expect(each[0]!.bounds.y).toBe(each[1]!.bounds.y);
+    const aligned = describeDrawings(
+      transformDrawings(moved, { groups: ['resistor-1', 'resistor-2'], align: 'top' }).board!,
+    ).drawings;
+    expect(aligned[0]!.bounds.y).toBe(aligned[1]!.bounds.y);
+    expect(() => transformDrawings(snapshot, {})).toThrow('Name drawings');
+    expect(() => transformDrawings(snapshot, { groups: ['nope'] })).toThrow('No drawings in group');
+  });
+
+  it('repeats, groups and refuses locked drawings', () => {
+    const { snapshot } = addDrawings(start, [{ shape: 'rect', x: 0, y: 0, width: 24, height: 24 }]);
+    const repeated = repeatBoardDrawings(snapshot, {
+      drawingIds: ['rect-1'],
+      count: 3,
+      step: [48, 0],
+    });
+    expect(repeated.drawingIds).toEqual(['rect-2', 'rect-3', 'rect-4']);
+    expect(repeated.snapshot.board!.drawings!.map((drawing) => drawing.x)).toEqual([
+      0, 48, 96, 144,
+    ]);
+    const grouped = groupBoardDrawings(repeated.snapshot, ['rect-1', 'rect-2'], 'posts');
+    expect(grouped.board!.drawings!.filter((drawing) => drawing.groupId === 'posts')).toHaveLength(
+      2,
+    );
+    const locked: BoardSnapshot = {
+      ...grouped,
+      board: {
+        ...grouped.board!,
+        drawings: grouped.board!.drawings!.map((drawing) =>
+          drawing.id === 'rect-2' ? { ...drawing, locked: true } : drawing,
+        ),
+      },
+    };
+    expect(() => transformDrawings(locked, { groups: ['posts'], moveBy: [1, 1] })).toThrow(
+      'locked',
+    );
   });
 });

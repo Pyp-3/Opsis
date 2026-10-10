@@ -1,23 +1,11 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
-import type {
-  Illustration,
-  IllustrationInk,
-  IllustrationLayer,
-  IllustrationMotion,
+import {
+  INK_VALUES,
+  type Illustration,
+  type IllustrationLayer,
+  type IllustrationMotion,
 } from '@opsis/schema';
 
-/** Inks on the blueprint; gold matches the icons, the rest match the arrow colours. */
-export const INK_VALUES: Record<IllustrationInk, string> = {
-  ink: '#e4edfa',
-  gold: '#f4dcaa',
-  sky: '#75d9f3',
-  amber: '#f2cc79',
-  violet: '#d6b0fa',
-  coral: '#ffad8f',
-  mint: '#8fe3b4',
-  rose: '#f6a3c7',
-  ice: '#c4d7ed',
-};
 const SMOOTH = '0.45 0 0.55 1';
 
 const REDUCED = '(prefers-reduced-motion: reduce)';

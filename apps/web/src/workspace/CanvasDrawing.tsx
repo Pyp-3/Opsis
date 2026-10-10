@@ -31,39 +31,46 @@ import {
   anchorDrawing,
   drawingFrame,
   drawingOrigin,
+  drawingTextSize,
+  FILLABLE_SHAPES,
   normalizeRotation,
+  OPEN_SHAPES,
   ROTATABLE_SHAPES,
   isDrawingEditable,
   isDrawingPickable,
   translateDrawing,
   visibleDrawings,
   ILLUSTRATION_INKS,
+  INK_VALUES,
   MAX_BOARD_DRAWINGS,
   type BoardDocument,
   type BoardDrawing,
   type DrawingLayer as BoardDrawingLayer,
+  type DrawingHatch,
   type DrawingLineStyle,
+  type DrawingMarker,
   type DrawingShape as DrawingKind,
+  type DrawingTextAlign,
   type IllustrationInk,
+  groupRotationCentre,
+  rotateDrawing,
+  rotateDrawingAbout,
+  rotationCentre,
 } from '@opsis/schema';
 import { DrawingShape } from './DrawingShape';
 import { DrawingLayersPanel, useDrawingLayers } from './DrawingLayersPanel';
-import { INK_VALUES } from './Illustration';
 import {
   boxBetween,
   drawingAt,
   drawingBox,
   drawingClipboard,
   drawingsInBox,
-  groupRotationCentre,
+  groupOf,
   handleAt,
   pasteDrawings,
   readDrawingClipboard,
   resizeDrawing,
   resizeHandles,
-  rotateDrawing,
-  rotateDrawingAbout,
-  rotationCentre,
   round,
   roundDrawing,
   simplifyStroke,
@@ -110,7 +117,23 @@ const LINES: { value: DrawingLineStyle; label: string }[] = [
   { value: 'solid', label: 'Solid' },
   { value: 'dashed', label: 'Dashed' },
   { value: 'center', label: 'Centre line' },
+  { value: 'dotted', label: 'Dotted' },
 ];
+const HATCHES: { value: DrawingHatch | ''; label: string }[] = [
+  { value: '', label: 'None' },
+  { value: 'diagonal', label: 'Diagonal' },
+  { value: 'cross', label: 'Cross' },
+  { value: 'horizontal', label: 'Horizontal' },
+  { value: 'vertical', label: 'Vertical' },
+  { value: 'dots', label: 'Dots' },
+];
+const MARKERS: { value: DrawingMarker; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'arrow', label: 'Arrow' },
+  { value: 'dot', label: 'Dot' },
+  { value: 'bar', label: 'Bar' },
+];
+const OPACITIES = [1, 0.75, 0.5, 0.25];
 const FONT_SIZES = [12, 16, 24, 36];
 /** Straight shapes land on half a grid square, matching concepts that snap to whole squares. */
 const SNAP = 12;
@@ -277,8 +300,8 @@ export function useCanvasDrawing(options: {
       if (!selectedIds.length) return;
       changeDrawings(selectedIds, (drawing) => {
         const next = { ...drawing, ...patch };
-        // Only boxes and ellipses are filled.
-        if (patch.fill !== undefined && drawing.shape !== 'rect' && drawing.shape !== 'ellipse')
+        // Only shapes with an inside are filled.
+        if (patch.fill !== undefined && !FILLABLE_SHAPES.includes(drawing.shape))
           next.fill = drawing.fill;
         if (next.fill === undefined) delete next.fill;
         return next;
@@ -745,17 +768,19 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
         setMarquee({ from: point, to: point });
         return;
       }
+      // A grouped drawing is picked with the rest of its group.
+      const picked = groupOf(current, hit);
       if (event.shiftKey) {
         select(
           selectedIds.includes(hit.id)
-            ? selectedIds.filter((id) => id !== hit.id)
-            : [...selectedIds, hit.id],
+            ? selectedIds.filter((id) => !picked.includes(id))
+            : [...new Set([...selectedIds, ...picked])],
         );
         return;
       }
       // Dragging one of several selected drawings moves them all.
-      const ids = selectedIds.includes(hit.id) ? selectedIds : [hit.id];
-      if (!selectedIds.includes(hit.id)) select([hit.id]);
+      const ids = selectedIds.includes(hit.id) ? selectedIds : picked;
+      if (!selectedIds.includes(hit.id)) select(picked);
       const movable = editableIds(current, ids);
       if (movable.length) {
         begin();
@@ -885,8 +910,24 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
   const single = selected && changeable.includes(selected) ? selected : null;
   const editsText = single?.shape === 'text' || single?.shape === 'dimension';
   const filled = selection.length
-    ? selection.some((item) => item.shape === 'rect' || item.shape === 'ellipse')
+    ? selection.some((item) => FILLABLE_SHAPES.includes(item.shape))
     : tool === 'rect' || tool === 'ellipse';
+  const ended = selection.some((item) => OPEN_SHAPES.includes(item.shape));
+  /** Sets (or, with undefined, clears) a style on the editable selected drawings. */
+  const setSelected = <K extends keyof BoardDrawing>(
+    key: K,
+    value: BoardDrawing[K] | undefined,
+    applies: (item: BoardDrawing) => boolean = () => true,
+  ) =>
+    changeDrawings(
+      changeable.filter(applies).map((item) => item.id),
+      (item) => {
+        const next = { ...item };
+        if (value === undefined) delete next[key];
+        else next[key] = value;
+        return next;
+      },
+    );
   const shown = changeable[0] ?? selection[0] ?? style;
   const drawingTool = tool !== 'diagram' && tool !== 'erase' && tool !== 'select';
   const showPanel = !layers.open && (selection.length > 0 || drawingTool);
@@ -1051,6 +1092,98 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
                 </label>
               )}
             </div>
+            {changeable.length > 0 && (
+              <div className="drawing-options">
+                <label>
+                  Opacity
+                  <select
+                    aria-label="Opacity"
+                    value={changeable[0]!.opacity ?? 1}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      setSelected('opacity', value < 1 ? value : undefined);
+                    }}
+                  >
+                    {OPACITIES.map((value) => (
+                      <option key={value} value={value}>
+                        {value * 100}%
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {filled && (
+                  <>
+                    <label>
+                      Fill ink
+                      <select
+                        aria-label="Fill ink"
+                        value={changeable[0]!.fillInk ?? ''}
+                        onChange={(event) =>
+                          setSelected(
+                            'fillInk',
+                            (event.target.value || undefined) as IllustrationInk | undefined,
+                            (item) => FILLABLE_SHAPES.includes(item.shape),
+                          )
+                        }
+                      >
+                        <option value="">Outline ink</option>
+                        {ILLUSTRATION_INKS.map((ink) => (
+                          <option key={ink} value={ink}>
+                            {ink}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Hatch
+                      <select
+                        aria-label="Hatch"
+                        value={changeable[0]!.hatch ?? ''}
+                        onChange={(event) =>
+                          setSelected(
+                            'hatch',
+                            (event.target.value || undefined) as DrawingHatch | undefined,
+                            (item) => FILLABLE_SHAPES.includes(item.shape),
+                          )
+                        }
+                      >
+                        {HATCHES.map((hatch) => (
+                          <option key={hatch.value} value={hatch.value}>
+                            {hatch.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+                {ended &&
+                  (['startMarker', 'endMarker'] as const).map((key) => (
+                    <label key={key}>
+                      {key === 'startMarker' ? 'Start' : 'End'}
+                      <select
+                        aria-label={key === 'startMarker' ? 'Start marker' : 'End marker'}
+                        value={
+                          changeable[0]![key] ??
+                          (key === 'endMarker' && changeable[0]!.shape === 'arrow'
+                            ? 'arrow'
+                            : 'none')
+                        }
+                        onChange={(event) =>
+                          setSelected(key, event.target.value as DrawingMarker, (item) =>
+                            OPEN_SHAPES.includes(item.shape),
+                          )
+                        }
+                      >
+                        {MARKERS.map((marker) => (
+                          <option key={marker.value} value={marker.value}>
+                            {marker.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+              </div>
+            )}
           </fieldset>
           {single && editsText && (
             <label className="drawing-text">
@@ -1077,6 +1210,54 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
                 }}
               />
             </label>
+          )}
+          {single?.shape === 'text' && (
+            <div className="drawing-options">
+              <label>
+                Align
+                <select
+                  aria-label="Text alignment"
+                  value={single.align ?? 'start'}
+                  onChange={(event) => {
+                    // Keep the words where they are: move x to the new anchor point.
+                    const align = event.target.value as DrawingTextAlign;
+                    changeDrawing(single.id, (item) => {
+                      const left = drawingFrame(item).x;
+                      const width = drawingTextSize(item).width;
+                      const next: BoardDrawing = {
+                        ...item,
+                        x: round(
+                          left + (align === 'middle' ? width / 2 : align === 'end' ? width : 0),
+                        ),
+                        align,
+                      };
+                      if (align === 'start') delete next.align;
+                      return next;
+                    });
+                  }}
+                >
+                  <option value="start">Left</option>
+                  <option value="middle">Centre</option>
+                  <option value="end">Right</option>
+                </select>
+              </label>
+              <label className="drawing-check">
+                <input
+                  type="checkbox"
+                  checked={!!single.bold}
+                  onChange={(event) => setSelected('bold', event.target.checked || undefined)}
+                />
+                Bold
+              </label>
+              <label className="drawing-check">
+                <input
+                  type="checkbox"
+                  checked={!!single.background}
+                  onChange={(event) => setSelected('background', event.target.checked || undefined)}
+                />
+                Backdrop
+              </label>
+            </div>
           )}
           {single?.shape === 'text' && (
             <label>

@@ -202,3 +202,28 @@ func TestDesktopIsALocalInstance(t *testing.T) {
 		t.Fatalf("desktop instance = %v, want open sign-up and account CLI paths", got)
 	}
 }
+
+func TestRenderNeedsSignInAndTheNodeService(t *testing.T) {
+	s := newTestServer(t)
+	(&testClient{t: t, server: s}).request("POST", "/v1/render", map[string]string{"svg": "<svg/>"}, 401)
+	signup(t, s, "render@example.com").request("POST", "/v1/render", map[string]string{"svg": "<svg/>"}, 503)
+
+	var forwarded string
+	node := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		forwarded = string(body)
+		writeJSON(w, 200, map[string]string{"mimeType": "image/png", "data": "iVBORw=="})
+	})
+	withNode, err := New(filepath.Join(t.TempDir(), "opsis.sqlite"), node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { withNode.Close() })
+	(&testClient{t: t, server: withNode}).request("POST", "/v1/render", map[string]string{"svg": "<svg/>"}, 401)
+	got := signup(t, withNode, "render@example.com").request("POST", "/v1/render", map[string]string{"svg": "<svg/>"}, 200)
+	var sent struct{ Svg string }
+	_ = json.Unmarshal([]byte(forwarded), &sent)
+	if got["mimeType"] != "image/png" || sent.Svg != "<svg/>" {
+		t.Fatalf("render: %v, forwarded %q", got, forwarded)
+	}
+}

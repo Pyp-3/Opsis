@@ -3,7 +3,8 @@ import {
   anchorDrawing,
   drawingFrame,
   drawingOutlinePoints,
-  normalizeRotation,
+  drawingPolylines,
+  mapDrawingPoints,
   rotatePoint,
   BoardDrawingSchema,
   drawingTextSize,
@@ -15,7 +16,6 @@ import {
   visibleDrawings,
   type BoardDrawing,
   type BoardDocument,
-  type DrawingLineStyle,
 } from '@opsis/schema';
 
 /**
@@ -25,64 +25,6 @@ import {
  */
 
 export type Point = readonly [number, number];
-
-export const LINE_DASHES: Record<DrawingLineStyle, string | undefined> = {
-  solid: undefined,
-  dashed: '10 7',
-  center: '18 5 3 5',
-};
-
-/** A smooth path through freehand samples, using midpoints as quadratic curve ends. */
-export function strokePath(points: readonly Point[]): string {
-  const [first, ...rest] = points;
-  if (!first) return '';
-  if (rest.length < 2)
-    return `M${first[0]} ${first[1]}${rest.map(([x, y]) => `L${x} ${y}`).join('')}`;
-  let d = `M${first[0]} ${first[1]}`;
-  for (let i = 0; i < rest.length - 1; i++) {
-    const [x, y] = rest[i]!;
-    const [nx, ny] = rest[i + 1]!;
-    d += `Q${x} ${y} ${(x + nx) / 2} ${(y + ny) / 2}`;
-  }
-  const last = rest[rest.length - 1]!;
-  return `${d}L${last[0]} ${last[1]}`;
-}
-
-/** A filled arrowhead whose tip is `tip`, pointing away from `from`. */
-export function arrowHead(from: Point, tip: Point, size: number): string {
-  const angle = Math.atan2(tip[1] - from[1], tip[0] - from[0]);
-  const wing = (offset: number) =>
-    `${tip[0] - size * Math.cos(angle + offset)} ${tip[1] - size * Math.sin(angle + offset)}`;
-  return `M${tip[0]} ${tip[1]}L${wing(0.42)}L${wing(-0.42)}Z`;
-}
-
-/**
- * A dimension line: extension ticks at both ends, arrowheads pointing outwards to them, and
- * where its label sits (rotated to read left to right along the line).
- */
-export function dimensionGeometry([start, end]: readonly [Point, Point], strokeWidth: number) {
-  const length = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1;
-  const nx = -(end[1] - start[1]) / length;
-  const ny = (end[0] - start[0]) / length;
-  const tick = 9;
-  const ticks = [start, end]
-    .map(([x, y]) => `M${x + nx * tick} ${y + ny * tick}L${x - nx * tick} ${y - ny * tick}`)
-    .join('');
-  const head = 7 + strokeWidth * 1.5;
-  let angle = (Math.atan2(end[1] - start[1], end[0] - start[0]) * 180) / Math.PI;
-  if (angle > 90) angle -= 180;
-  if (angle <= -90) angle += 180;
-  return {
-    line: `M${start[0]} ${start[1]}L${end[0]} ${end[1]}`,
-    ticks,
-    heads: arrowHead(end, start, head) + arrowHead(start, end, head),
-    label: {
-      x: (start[0] + end[0]) / 2 + nx * 12,
-      y: (start[1] + end[1]) / 2 + ny * 12,
-      angle,
-    },
-  };
-}
 
 /** Rectangle from a drag between two corners, in any direction. */
 export function boxBetween([x1, y1]: Point, [x2, y2]: Point) {
@@ -116,14 +58,29 @@ export const round = (value: number) => Math.round(value * 10) / 10;
 
 /** The drawing with its coordinates rounded, as after a move. */
 export function roundDrawing(drawing: BoardDrawing): BoardDrawing {
-  return {
-    ...drawing,
-    ...(drawing.points
-      ? { points: drawing.points.map(([x, y]) => [round(x), round(y)] as [number, number]) }
-      : {}),
-    ...(drawing.x !== undefined ? { x: round(drawing.x) } : {}),
-    ...(drawing.y !== undefined ? { y: round(drawing.y) } : {}),
-  };
+  return mapDrawingPoints(drawing, ([x, y]) => [round(x), round(y)]);
+}
+
+/** Drawings stored as points or a path, which are scaled and turned point by point. */
+const pointBased = (drawing: BoardDrawing) => !!drawing.points || drawing.d !== undefined;
+/** Shapes resized by dragging their two ends rather than a frame. */
+const twoEnded = (drawing: BoardDrawing) =>
+  drawing.shape === 'line' || drawing.shape === 'arrow' || drawing.shape === 'dimension';
+
+/** Even-odd test of a point against closed outlines. */
+function insideOutlines(point: Point, outlines: readonly (readonly Point[])[]) {
+  let inside = false;
+  for (const outline of outlines)
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const [xi, yi] = outline[i]!;
+      const [xj, yj] = outline[j]!;
+      if (
+        yi > point[1] !== yj > point[1] &&
+        point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi
+      )
+        inside = !inside;
+    }
+  return inside;
 }
 
 function segmentDistance([px, py]: Point, [ax, ay]: Point, [bx, by]: Point) {
@@ -141,18 +98,27 @@ export function drawingContains(drawing: BoardDrawing, point: Point, tolerance: 
   // A rotated box, ellipse or text is tested in its own, unrotated frame.
   if (drawing.rotation) point = rotatePoint(point, drawingFrame(drawing).centre, -drawing.rotation);
   const reach = tolerance + drawing.strokeWidth / 2;
-  if (drawing.points) {
-    for (let i = 1; i < drawing.points.length; i++)
-      if (segmentDistance(point, drawing.points[i - 1]!, drawing.points[i]!) <= reach) return true;
-    return false;
+  if (pointBased(drawing)) {
+    const lines = drawingPolylines(drawing);
+    for (const line of lines)
+      for (let i = 1; i < line.length; i++)
+        if (segmentDistance(point, line[i - 1]!, line[i]!) <= reach) return true;
+    // A filled or hatched polygon, arc or path can be picked anywhere inside.
+    const solid = drawing.fill || drawing.fillInk || drawing.hatch;
+    return (
+      !!solid &&
+      (drawing.shape === 'polygon' || drawing.shape === 'arc' || drawing.shape === 'path') &&
+      insideOutlines(point, lines)
+    );
   }
   const x = drawing.x!;
   const y = drawing.y!;
   if (drawing.shape === 'text') {
     const size = drawingTextSize(drawing);
+    const left = drawingFrame(drawing).x;
     return (
-      point[0] >= x - reach &&
-      point[0] <= x + size.width + reach &&
+      point[0] >= left - reach &&
+      point[0] <= left + size.width + reach &&
       point[1] >= y - reach &&
       point[1] <= y + size.height + reach
     );
@@ -199,6 +165,16 @@ export function drawingAt(board: BoardDocument, point: Point, tolerance: number)
       return drawing;
   }
   return null;
+}
+
+/** A picked drawing and the other pickable drawings in its group, which select together. */
+export function groupOf(board: BoardDocument, drawing: BoardDrawing): string[] {
+  if (!drawing.groupId) return [drawing.id];
+  return visibleDrawings(board)
+    .filter(
+      (item) => item.groupId === drawing.groupId && isDrawingPickable(item, board.drawingLayers),
+    )
+    .map((item) => item.id);
 }
 
 /** The axis-aligned box around an absolute drawing as painted, without stroke padding. */
@@ -249,7 +225,7 @@ const COMPASS: Exclude<ResizeHandle, 'start' | 'end' | 'rotate'>[] = [
 
 /** The unrotated frame a drawing is resized and rotated in, with its rotation. */
 function frameOf(drawing: BoardDrawing) {
-  if (drawing.points) {
+  if (pointBased(drawing)) {
     const box = drawingBox(drawing);
     return {
       ...box,
@@ -294,10 +270,10 @@ export function resizeHandles(
   drawing: BoardDrawing,
   rotateOffset = 24,
 ): { handle: ResizeHandle; at: Point }[] {
-  if (drawing.shape !== 'stroke' && drawing.points)
+  if (twoEnded(drawing))
     return [
-      { handle: 'start', at: drawing.points[0]! },
-      { handle: 'end', at: drawing.points[1]! },
+      { handle: 'start', at: drawing.points![0]! },
+      { handle: 'end', at: drawing.points![1]! },
     ];
   const frame = frameOf(drawing);
   const turn = (at: [number, number]) =>
@@ -378,16 +354,13 @@ export function resizeDrawing(
     if (handle.includes('n')) top = bottom - height;
     else bottom = top + height;
   }
-  if (drawing.shape === 'stroke') {
-    // Each sample keeps its relative place; a flipped drag mirrors the stroke.
+  if (pointBased(drawing)) {
+    // Each point keeps its relative place; a flipped drag mirrors the shape.
     const mapX = (x: number) =>
       frame.width ? left + ((x - frame.x) / frame.width) * (right - left) : left;
     const mapY = (y: number) =>
       frame.height ? top + ((y - frame.y) / frame.height) * (bottom - top) : top;
-    return {
-      ...drawing,
-      points: drawing.points!.map(([x, y]) => [round(mapX(x)), round(mapY(y))]),
-    };
+    return mapDrawingPoints(drawing, ([x, y]) => [round(mapX(x)), round(mapY(y))]);
   }
   return placeInFrame(drawing, frame, boxBetween([left, top], [right, bottom]));
 }
@@ -411,67 +384,6 @@ function placeInFrame(
     y: round(cy - box.height / 2),
     ...(drawing.shape === 'text' ? {} : { width: round(box.width), height: round(box.height) }),
   };
-}
-
-/** The centre a drawing turns about. */
-export function rotationCentre(drawing: BoardDrawing): [number, number] {
-  return frameOf(drawing).centre;
-}
-
-/**
- * The absolute drawing turned by `degrees` about its centre. Boxes, ellipses and text record
- * the angle; strokes, lines, arrows and dimensions have their points turned.
- */
-export function rotateDrawing(drawing: BoardDrawing, degrees: number): BoardDrawing {
-  if (drawing.points) {
-    const centre = rotationCentre(drawing);
-    return {
-      ...drawing,
-      points: drawing.points.map((point) => {
-        const [x, y] = rotatePoint(point, centre, degrees);
-        return [round(x), round(y)];
-      }),
-    };
-  }
-  const rotation = normalizeRotation((drawing.rotation ?? 0) + degrees);
-  const next: BoardDrawing = { ...drawing, rotation };
-  if (!rotation) delete next.rotation;
-  return next;
-}
-
-/**
- * The centre several absolute drawings turn about together: the middle of their combined
- * painted outline, so a group rotates as one piece instead of each part about its own centre.
- */
-export function groupRotationCentre(drawings: readonly BoardDrawing[]): [number, number] {
-  const points = drawings.flatMap((drawing) => drawingOutlinePoints(drawing));
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
-}
-
-/**
- * The absolute drawing turned by `degrees` about `centre`. Its own centre travels around that
- * point and it turns by the same angle, so rotating every member of a group about the group's
- * centre keeps their arrangement.
- */
-export function rotateDrawingAbout(
-  drawing: BoardDrawing,
-  degrees: number,
-  centre: Point,
-): BoardDrawing {
-  if (drawing.points) {
-    return {
-      ...drawing,
-      points: drawing.points.map((point) => {
-        const [x, y] = rotatePoint(point, centre, degrees);
-        return [round(x), round(y)];
-      }),
-    };
-  }
-  const own = rotationCentre(drawing);
-  const [cx, cy] = rotatePoint(own, centre, degrees);
-  return rotateDrawing(translateDrawing(drawing, round(cx - own[0]), round(cy - own[1])), degrees);
 }
 
 /**

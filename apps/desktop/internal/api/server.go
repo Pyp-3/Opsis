@@ -249,6 +249,17 @@ func (s *Server) routes() {
 	s.accountSettingsRoutes()
 	s.chatRoutes()
 	s.collectionBundleRoutes()
+	// Board previews for agents are rasterised by the local Node service, after sign-in here.
+	s.handle("POST /v1/render", func(w http.ResponseWriter, r *http.Request) error {
+		if current(r).User == nil {
+			return failure(401, "Sign in to continue.")
+		}
+		if s.fallback == nil {
+			return failure(503, "Previews need the desktop's local Node service, which is not running.")
+		}
+		s.fallback.ServeHTTP(w, r)
+		return nil
+	})
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Kokoro inference is the only remaining Node service.
 		if s.fallback != nil && (r.URL.Path == "/v1/speech" || strings.HasPrefix(r.URL.Path, "/v1/speech/")) {

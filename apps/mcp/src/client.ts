@@ -45,6 +45,8 @@ const REJECTED_KEY =
  * Talks to the same local API the web app saves through, so an agent's edit is an ordinary
  * saved revision: an open canvas pulls it within a couple of seconds and can undo it.
  */
+const RenderedImage = z.object({ mimeType: z.literal('image/png'), data: z.string() });
+
 export function opsisClient(
   base: string,
   agentKey: string | undefined,
@@ -141,6 +143,16 @@ export function opsisClient(
         );
       }
       if (!response.ok) throw await failure(response, 'Could not file the board.');
+    },
+    /**
+     * Rasterises a board preview to PNG on the Opsis host. Null when this host cannot render
+     * images (an older host, or a desktop running without its local Node service).
+     */
+    async render(svg: string): Promise<{ mimeType: string; data: string } | null> {
+      const response = await call('/v1/render', { method: 'POST', body: JSON.stringify({ svg }) });
+      if (response.status === 404 || response.status === 503) return null;
+      if (!response.ok) throw await failure(response, 'Could not render the preview.');
+      return RenderedImage.parse(await response.json());
     },
     /**
      * Reads the latest revision, applies `change` and saves it. If someone saved in between

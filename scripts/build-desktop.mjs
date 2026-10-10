@@ -54,7 +54,15 @@ if (!process.argv.includes('--reuse-runtime')) {
         'api',
         'apps/api/src/desktop.ts',
         'desktop.mjs',
-        ['fastify', 'better-sqlite3', 'kokoro-js', '@huggingface/transformers', 'lru-cache', 'zod'],
+        [
+          'fastify',
+          'better-sqlite3',
+          'kokoro-js',
+          '@huggingface/transformers',
+          'lru-cache',
+          'sharp',
+          'zod',
+        ],
       ],
     ]) {
       const destination = join(runtime, name);
@@ -150,7 +158,7 @@ if (!process.argv.includes('--reuse-runtime')) {
       [
         '--input-type=module',
         '-e',
-        "await import('kokoro-js'); await import('@huggingface/transformers');",
+        "await import('kokoro-js'); await import('@huggingface/transformers'); await import('sharp');",
       ],
       join(runtime, 'api'),
     );

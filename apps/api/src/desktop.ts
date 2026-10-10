@@ -1,13 +1,17 @@
 import Fastify from 'fastify';
 import { kokoroEngine, registerSpeech } from './speech.js';
+import { registerRender } from './render.js';
 
 // The desktop host owns this process and its writable directories. It chooses a free
 // loopback port; no desktop session or agent credentials are written to stdout.
 const speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine();
 // Accounts, boards, generation and MCP run in Go. This process is only the
-// existing Kokoro/ONNX inference adapter; it never opens the application database.
+// existing Kokoro/ONNX inference adapter and the preview rasteriser; it never opens the
+// application database.
 const app = Fastify({ logger: false });
 registerSpeech(app, speech);
+// The native host signs requests in before forwarding board previews here to rasterise.
+registerRender(app, { requireUser: () => true });
 let closing = false;
 async function close() {
   if (closing) return;

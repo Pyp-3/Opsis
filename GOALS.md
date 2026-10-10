@@ -346,6 +346,63 @@ Windows attempt failed in packaged integration with the known intermittent "Nati
 startup timed out" (also seen in run 37423155398; no code change involved); the rerun of that
 job passed, and the prerelease was published. Retain this note if the timeout recurs.
 
+## In progress: agent drawing power (requested 2026-10-10)
+
+The user wants agents to be able to show any 2D subject or drawing. A gap review found four
+priorities; the user asked for all four to be tracked and for 1–3 to be built now.
+
+- [x] 1. Richer shapes and styling (2026-10-10): `polygon` (closed), `arc` (start, a point it
+      passes through, end) and `path` (validated SVG path data in canvas coordinates; arcs and
+      shorthands are normalised so paths move, turn, scale and mirror exactly). Fill ink separate
+      from the outline, fill and overall opacity, hatching (diagonal, cross, horizontal, vertical,
+      dots), a dotted line style, start/end markers (arrow, dot, bar) and text alignment, bold and a
+      backdrop. One shared SVG renderer (`drawingSvg`) now paints the canvas, exports and agent
+      previews. On the canvas the new shapes are hit-tested (filled shapes inside), selected,
+      moved, resized, rotated and erased, and the panel sets opacity, fill ink, hatch, markers and
+      text style. Chat agents get the shapes through the shared schema and prompt; MCP agents
+      through the drawing tools. No hand-drawing tools for polygons or paths yet.
+- [x] 2. Render tool (2026-10-10): `opsis_render_board` returns a PNG of the board or a region,
+      with every visible drawing as painted, concepts as labelled circles, straight connections
+      and rulers in canvas coordinates. The preview SVG is built by shared code, checked against
+      a strict tag/attribute allow-list (no links, entities, scripts or external URLs) and
+      rasterised by `POST /v1/render` with `sharp` on Fastify, and by the desktop's Node service
+      behind a signed-in Go route. The Go MCP bridge now passes image results through. Without
+      that Node service the tool returns the SVG markup. Chat agents do not get a preview loop.
+- [x] 3. Symbols, groups and bulk transforms (2026-10-10): 35 symbols (architecture, electrical,
+      process/P&ID, general) placed as grouped, ordinary drawings (`opsis_list_symbols`,
+      `opsis_place_symbols`, with size, rotation, mirror, ink and label). `groupId` makes the canvas
+      pick, drag and restyle a group as one. `opsis_transform_drawings` (move, scale, mirror,
+      rotate about the group, each piece or a point, align, distribute),
+      `opsis_repeat_drawings` and `opsis_group_drawings` work in one undoable step on shared pure
+      transforms, which now also hold the canvas's rotation helpers. `opsis_get_board` reports
+      every drawing's painted bounds. The catalogue is 24 tools on both hosts.
+- [ ] 4. Chat sketches as edit operations (add, change, remove) instead of resending the whole
+      sketch, with a larger budget, then streaming sketches as they arrive.
+
+Grok compatibility: the richer schema and instructions pushed a minimal Grok CLI request past
+the 24,000-character argv cap (it had been within about 300 characters). The cap only guards
+Windows' 32,767-character command line, so it is now 30,000, still about 2,400 below that
+limit with the other arguments. A test checks that the instructions and schema fit.
+
+Verified 2026-10-10 on Arch Linux. Schema tests cover path normalisation (relative,
+shorthand and arc commands, compact arc flags), malformed data, exact transforms, sampling,
+three-point arcs, shape validation, scale/mirror/rotate/align/distribute/repeat, every symbol
+placed centred in one group, rendered fills, hatching, markers and text styles, and the preview
+and its SVG allow-list. One bug was found and fixed while writing them: distributing drawings
+moved nothing. Canvas tests cover
+filled-shape picking, path hits, group picking and point-by-point resize/rotation. API tests cover
+sign-in, refusal and one-at-a-time rendering. MCP tests cover styles, symbols, transforms,
+repeat, grouping and locks; an MCP round trip through the real Fastify API returns a real PNG.
+Go tests cover the render route (401, 503 without Node, forwarding), image passthrough in the
+bridge and the 24-tool catalogue. A new browser scenario covers painting the new shapes,
+picking a group, restyling it from the panel, dragging it as one undoable edit and reloading,
+with an accessibility scan. Lint, typecheck, Rust check/24 tests, desktop check and full race
+suite, 481 unit tests and all 64 Fastify browser scenarios pass. The rebuilt Linux binary passes
+packaged integration (24 stdio tools and a real PNG preview from its bundled `sharp`), all 64
+browser scenarios and all 24 hidden WebView checks. Canvas and preview screenshots were
+reviewed. No paid model calls were made; chat agents' use of the new shapes is covered by the
+schema and prompt, not by a live model.
+
 ## In progress: canvas drawings (requested 2026-10-06)
 
 Add normal/illustrative drawing on the canvas beside icon diagrams, so a board can hold

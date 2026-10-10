@@ -11,7 +11,8 @@ import { registerBoardCollections } from './board-collections.js';
 import { registerAccountSettings } from './account-settings.js';
 import { registerBoardChat } from './board-chat.js';
 import { registerBoardSearch } from './board-search.js';
-import { isInternalRequest, registerAuth } from './auth.js';
+import { isInternalRequest, registerAuth, requireUser } from './auth.js';
+import { registerRender } from './render.js';
 import { serverModeFromEnv, WEB_APP_CSP, type ServerMode } from './server-mode.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
 import { ProviderKeys, registerProviderKeys } from './provider-keys';
@@ -151,6 +152,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerBoardChat(app, store, removeThreadSessions);
   registerBoardSearch(app, store);
   registerSpeech(app, speech);
+  registerRender(app, { requireUser });
   const requests = new Map<string, number[]>();
 
   app.addHook('onClose', async () => store.close());
