@@ -23,6 +23,7 @@ declare function nativePrepareClient(agent: string, executablePath: string): str
 declare function nativeProviderKey(agent: string): string;
 declare function nativeProviderHttp(request: string): string;
 declare function nativeProviderPause(): void;
+declare function nativePause(ms: number): void;
 declare function nativeComplete(
   request: string,
   argumentsFor: (schemaPath: string, paths: string) => string,
@@ -163,6 +164,7 @@ export async function run(operation: string, body: string, account = ''): Promis
       },
     } as AbortSignal,
     progress: (value: unknown) => nativeProgress(JSON.stringify(value)),
+    pause: async (ms: number) => nativePause(ms),
   };
   const outcome =
     operation === 'check-agent'

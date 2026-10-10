@@ -102,6 +102,13 @@ func (e *Engine) execute(ctx context.Context, method string, args []string, prog
 		case <-time.After(time.Second):
 		}
 	})
+	// A short wait the shared workflows use for paced demo streaming; cancellation ends it.
+	_ = vm.Set("nativePause", func(ms int64) {
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Duration(min(max(ms, 0), 1000)) * time.Millisecond):
+		}
+	})
 	approved := make(map[string]bool)
 	_ = vm.Set("nativeCancelled", func() bool { return ctx.Err() != nil })
 	_ = vm.Set("nativeProgress", func(data string) {

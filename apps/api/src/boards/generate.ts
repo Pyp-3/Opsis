@@ -12,7 +12,11 @@ import {
   EMAIL_DEMO,
   DNS_DEMO,
   boardOutputSchema,
-  boardFocusOutputSchema,
+  boardOutputSchemaFor,
+  SketchEditsSchema,
+  applySketchEdits,
+  type AgentDrawing,
+  type SketchEdits,
   DEFAULT_BOARD_MODELS,
   boardChanges,
   type BoardDocument,
@@ -91,6 +95,50 @@ function emailDemoSketch(board: BoardDocument): BoardGraph {
       },
     ],
   };
+}
+
+/**
+ * The demo's answer to "widen the zone" on its own sketch: two edits rather than the whole sketch,
+ * a wider zone and a new note, so sketch edits and their review can be tried without an agent.
+ */
+function demoSketchEdits(sketch: readonly AgentDrawing[]): SketchEdits {
+  const zone = sketch.find((drawing) => drawing.id === 'provider-zone')!;
+  return {
+    put: [
+      { ...zone, width: (zone.width ?? 272) + 96 },
+      {
+        id: 'zone-note',
+        shape: 'text',
+        anchorId: 'outgoing',
+        x: (zone.x ?? -24) + (zone.width ?? 272) + 96 - 8,
+        y: -48,
+        text: 'Room for the outgoing queue',
+        fontSize: 12,
+        align: 'end',
+        ink: 'sky',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+    ],
+    remove: [],
+  };
+}
+
+/**
+ * Sends the demo's drawings one at a time, as a real agent's sketch streams in, so the canvas's
+ * provisional drawing can be seen and tested without an agent.
+ */
+async function streamDemoDrawings(
+  drawings: readonly AgentDrawing[],
+  { progress, signal, pause }: Parameters<AgentWork>[0],
+) {
+  const wait = pause ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+  progress({ type: 'phase', phase: 'drafting' });
+  for (const drawing of drawings) {
+    await wait(300);
+    if (signal.aborted) throw new Error('Cancelled');
+    progress({ type: 'drawing', drawing });
+  }
 }
 
 /** The demo's notes: the reader's requests, newest last. */
@@ -176,7 +224,7 @@ function turnInstructions(input: BoardRequest) {
 export async function generateBoard(
   body: unknown,
   factory: BoardClientFactory,
-  { signal, progress, account }: Parameters<AgentWork>[0],
+  { signal, progress, account, pause }: Parameters<AgentWork>[0],
   prepareAttachments: AttachmentPreparer,
 ): Promise<Outcome> {
   const parsed = BoardRequestSchema.safeParse(body);
@@ -272,14 +320,41 @@ export async function generateBoard(
         demoTurn(input, 'I added what happens when delivery fails, with its retry.'),
       );
     }
+    const sketch = (input.board?.drawings ?? []) as AgentDrawing[];
+    if (
+      input.board &&
+      sketch.some((drawing) => drawing.id === 'provider-zone') &&
+      /widen/i.test(input.prompt)
+    ) {
+      const edited = applySketchEdits(sketch, demoSketchEdits(sketch));
+      await streamDemoDrawings(demoSketchEdits(sketch).put, {
+        progress,
+        signal,
+        ...(pause ? { pause } : {}),
+      });
+      return demoAnswer(
+        BoardGraphSchema.parse({ ...emailDemoSketch(input.board), drawings: edited.drawings }),
+        demoTurn(
+          input,
+          'I widened the data centre and noted the receiving side, as two small edits.',
+        ),
+      );
+    }
     if (
       input.board?.nodes.some((node) => node.id === 'outgoing') &&
       /sketch|draw|plan|layout/i.test(input.prompt)
-    )
+    ) {
+      const graph = BoardGraphSchema.parse(emailDemoSketch(input.board));
+      await streamDemoDrawings(graph.drawings ?? [], {
+        progress,
+        signal,
+        ...(pause ? { pause } : {}),
+      });
       return demoAnswer(
-        BoardGraphSchema.parse(emailDemoSketch(input.board)),
+        graph,
         demoTurn(input, 'I sketched the provider’s data centre around the sending server.'),
       );
+    }
     return outcome(400, {
       message:
         'Demo supports the email journey, its delivery-failure branch and a sketch of its mail servers, and DNS requests and responses. Select Claude or Codex for other requests.',
@@ -293,11 +368,13 @@ export async function generateBoard(
     throw error;
   }
   try {
-    const schema = input.focus ? boardFocusOutputSchema : boardOutputSchema;
+    // The agent's earlier sketch, as it is shown it; follow-ups may change it by edits.
+    const sketch = (input.board?.drawings ?? []) as AgentDrawing[];
+    const schema = boardOutputSchemaFor({ focus: !!input.focus, sketch: sketch.length > 0 });
     const client = await factory(
       input.agent,
       input.settings ?? DEFAULT_BOARD_MODELS[input.agent],
-      ...(input.focus ? [schema] : []),
+      ...(schema !== boardOutputSchema ? [schema] : []),
     );
     const turn = turnInstructions(input);
     const notes = `${attachmentInstructions(prepared, input.agent)}${progressNotes(input.agent, DIAGRAM_NOTES)}`;
@@ -315,7 +392,7 @@ export async function generateBoard(
       .find((message) => message.role === 'assistant')?.outcome;
     const modelRequest: LLMRequest = {
       promptId: 'board/v8',
-      system: `${SYSTEM}${turn}${notes}\nSchema: ${boardOutputSchema}`,
+      system: `${SYSTEM}${turn}${notes}\nSchema: ${schema}`,
       user: JSON.stringify({
         prompt: input.prompt,
         ...(input.conversation?.length ? { conversation: input.conversation } : {}),
@@ -323,7 +400,8 @@ export async function generateBoard(
       }),
       responseFormat: 'json',
       temperature: 0.3,
-      maxOutputTokens: 14000,
+      // Room for a large sketch beside the diagram; follow-ups send sketch edits, not the whole.
+      maxOutputTokens: 24000,
       ...(key
         ? {
             session: {
@@ -368,10 +446,17 @@ export async function generateBoard(
       let graph: BoardGraph;
       let turn: BoardTurn;
       try {
-        const { reply, memory, focusEdits, ...content } = JSON.parse(output) as Record<
+        const { reply, memory, focusEdits, sketchEdits, ...content } = JSON.parse(output) as Record<
           string,
           unknown
         >;
+        if (sketchEdits !== undefined && sketchEdits !== null) {
+          if (content.drawings !== undefined)
+            throw new Error('Return either "drawings" or "sketchEdits", not both.');
+          const edited = applySketchEdits(sketch, SketchEditsSchema.parse(sketchEdits));
+          if (!edited.drawings) throw new Error(edited.problems.join(' '));
+          content.drawings = edited.drawings;
+        }
         graph = preserveBoardLinks(
           BoardGraphSchema.parse(withoutInvalidCustomIcons(content)),
           input.board,

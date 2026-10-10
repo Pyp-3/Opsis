@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/harness"
 )
@@ -208,5 +209,41 @@ func TestConfiguredPathRequestLimitAndUsage(t *testing.T) {
 	})
 	if err != nil || generated.Status != 200 || len(measurements) != 1 || !strings.Contains(string(measurements[0]), "\"inputTokens\":0") {
 		t.Fatalf("reported usage: %v %s %s", err, generated.Body, measurements)
+	}
+}
+
+func TestNativeWorkflowStreamsTheDemoSketchWithPacing(t *testing.T) {
+	engine := engineFor(t, nil)
+	demo := request(t, engine, map[string]any{"prompt": "Explain email", "agent": "demo"})
+	var board map[string]any
+	_ = json.Unmarshal(demo.Body, &board)
+	board["version"] = 2
+	board["positions"] = map[string]any{}
+	board["agent"] = "demo"
+	raw, _ := json.Marshal(map[string]any{"prompt": "Sketch the mail servers", "agent": "demo", "board": board})
+	var drawings []string
+	var at []time.Time
+	started := time.Now()
+	result, err := engine.Run(context.Background(), "generate", raw, func(event json.RawMessage) {
+		var progress struct {
+			Type    string `json:"type"`
+			Drawing struct {
+				ID string `json:"id"`
+			} `json:"drawing"`
+		}
+		if json.Unmarshal(event, &progress) == nil && progress.Type == "drawing" {
+			drawings = append(drawings, progress.Drawing.ID)
+			at = append(at, time.Now())
+		}
+	})
+	if err != nil || result.Status != 200 {
+		t.Fatalf("sketch: %v %d %s", err, result.Status, result.Body)
+	}
+	if strings.Join(drawings, ",") != "provider-zone,provider-label,zone-width" {
+		t.Fatalf("streamed drawings: %v", drawings)
+	}
+	// The shared workflow's pauses run on the native timer, so drawings arrive spread out.
+	if at[0].Sub(started) < 250*time.Millisecond || at[2].Sub(at[0]) < 500*time.Millisecond {
+		t.Fatalf("drawings were not paced: %v", at)
 	}
 }

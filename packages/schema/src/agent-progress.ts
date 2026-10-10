@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { BoardNodeSchema } from './board';
+import { AgentDrawingSchema } from './board-drawings';
 import { ReportedUsageSchema } from './provider-usage';
 export const AgentProgressSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('node'), node: BoardNodeSchema }),
+  /** A sketch drawing validated as it streams in; provisional until the whole answer passes. */
+  z.object({ type: z.literal('drawing'), drawing: AgentDrawingSchema }),
   z.object({ type: z.literal('preview-reset') }),
   z.object({ type: z.literal('usage'), usage: ReportedUsageSchema }),
   z.object({

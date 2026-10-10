@@ -377,7 +377,7 @@ full race suite, 490 unit tests and all 66 Fastify browser scenarios (including 
 Linux pixel baseline) pass. The rebuilt Linux binary passes packaged integration, all 66 browser
 scenarios and all 24 hidden WebView checks. Light and dark screenshots were reviewed.
 
-## In progress: agent drawing power (requested 2026-10-10)
+## Completed: agent drawing power (requested 2026-10-10)
 
 The user wants agents to be able to show any 2D subject or drawing. A gap review found four
 priorities; the user asked for all four to be tracked and for 1–3 to be built now.
@@ -407,8 +407,27 @@ priorities; the user asked for all four to be tracked and for 1–3 to be built 
       `opsis_repeat_drawings` and `opsis_group_drawings` work in one undoable step on shared pure
       transforms, which now also hold the canvas's rotation helpers. `opsis_get_board` reports
       every drawing's painted bounds. The catalogue is 24 tools on both hosts.
-- [ ] 4. Chat sketches as edit operations (add, change, remove) instead of resending the whole
-      sketch, with a larger budget, then streaming sketches as they arrive.
+- [x] 4. Chat sketches as edits, a larger budget and streaming (2026-10-10): a follow-up on a board
+      with an agent sketch is offered `sketchEdits` (`put` adds or replaces a drawing by id,
+      `remove` deletes by id), applied by a shared pure rule to the sketch the agent was shown;
+      the result is validated and reviewed exactly like a whole sketch, and mismatched edits
+      (unknown ids, put and remove of one id, both forms at once) get the usual single repair.
+      The edits only appear in the schema when there is a sketch to change, so other requests
+      stay small. A sketch may now hold 120 drawings (was 60; the board limit stays 200) and
+      the output budget is 24,000 tokens (was 14,000). Drawings stream: each complete, valid
+      drawing (from `drawings` or `sketchEdits.put`) is sent as a provisional `drawing` event and
+      painted faintly on the canvas, with a status line, until the answer is validated; nothing is
+      saved before review. The demo streams its sketch at a measured pace on both hosts (a new
+      native `nativePause` lets the desktop's embedded workflow wait) and answers "widen the
+      zone" with two edits.
+- [x] Agents draw when a picture helps (2026-10-10, user request): the chat instructions no longer
+      say "never draw for its own sake"; the agent adds a sketch whenever a picture would make the
+      answer clearer, including charts, timelines and labelled pictures, and always when asked.
+
+Limits of item 4: Claude's CLI streams drawings one by one; Codex's CLI only reports its message
+when it is complete, and API providers return the whole answer, so their drawings appear
+together just before review. The three-minute generation deadline is unchanged, so a very large
+first sketch can still run out of time. Chat agents still cannot see a rendered preview.
 
 Grok compatibility: the richer schema and instructions pushed a minimal Grok CLI request past
 the 24,000-character argv cap (it had been within about 300 characters). The cap only guards
@@ -434,6 +453,21 @@ browser scenarios and all 24 hidden WebView checks. Canvas and preview screensho
 reviewed. CI run 38014972744 (3db7383) passed every job, including Windows and both macOS
 desktop jobs. No paid model calls were made; chat agents' use of the new shapes is covered by the
 schema and prompt, not by a live model.
+
+Item 4 verified 2026-10-10 on Arch Linux: schema tests for applying edits (order, removal,
+unknown ids, conflicts, the 120 limit) and for offering edits only with a sketch; API tests for an
+edited sketch reaching review unchanged in form, the schema and instructions sent to the agent,
+three invalid edit answers each repaired once, and the demo streaming three drawings then
+editing; scanner tests for drawings from a whole sketch and from edits across arbitrary chunk
+boundaries, ignoring look-alikes in strings and nested objects; activity tests for replacement and
+reset; and a Go test that the desktop workflow streams the demo sketch paced by `nativePause`.
+A new browser scenario watches the sketch appear faintly on the docked canvas before review,
+applies it, asks for an edit, and checks only the zone changed and the note was added, with an
+accessibility scan; it passed three repeats. Lint, typecheck, Rust check/24 tests, desktop check
+and full race suite, 497 unit tests and all 67 Fastify browser scenarios pass. The rebuilt Linux
+binary passes packaged integration, all 67 browser scenarios and all 24 hidden WebView checks.
+No paid model calls were made, so real agents' use of edits and streaming is verified with fake
+answers and the demo, not a live model.
 
 ## In progress: canvas drawings (requested 2026-10-06)
 
@@ -484,8 +518,8 @@ blueprints and hybrid flows (engineering and architecture) instead of only proce
       **Turn selection (°)** field turn them together about the centre of their combined outline,
       keeping their layout, as one undoable edit. Attached drawings stay attached; locked ones
       are left alone. One drawing still turns about its own centre.
-- [ ] Not yet: streaming an agent's sketch before the full answer arrives, and an on-canvas
-      rotation handle for a multi-selection (the panel controls turn it).
+- [ ] Not yet: an on-canvas rotation handle for a multi-selection (the panel controls turn it).
+      Streaming an agent's sketch shipped with agent drawing power item 4 (2026-10-10).
 
 Verified 2026-10-07 on Arch Linux: schema tests (layer order/visibility/locks, layer removal,
 scale labels and validation), web geometry tests (handles, resize/flip/proportion, stroke

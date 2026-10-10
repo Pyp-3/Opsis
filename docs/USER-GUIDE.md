@@ -165,10 +165,17 @@ one undoable step. Drawings, layers and the scale are saved with the board, incl
 SVG and PNG exports and JSON files, and shown read-only to public viewers. A drawing
 attached to a concept that a follow-up removes stays where it was drawn.
 
-**Sketches from chat.** For spatial subjects such as floor plans, room and site layouts or
-equipment arrangements, or when you ask it to sketch or lay something out, the chat agent
-may add a sketch beside the diagram. Its drawings go on their own **Agent sketch** layer.
-On a new diagram, a free-standing sketch is placed to the right of the concepts; parts of
+**Sketches from chat.** The chat agent adds a sketch beside the diagram whenever it judges a
+picture makes the answer clearer: floor plans, layouts and equipment arrangements, but also
+charts, timelines, cross-sections or a labelled picture of a thing. It always does when you
+ask it to sketch or lay something out. A sketch can have up to 120 drawings, which go on their
+own **Agent sketch** layer. While the agent writes its answer, each drawing appears faintly on
+the canvas as soon as it is valid. Claude's CLI streams drawings one by one; Codex's shows
+them together when its message is written; other providers send the whole answer at once. Nothing is saved until the full answer is validated and you review it.
+On a follow-up the agent changes an existing sketch by edits: it sends only the drawings it
+adds or replaces and the ones it removes, and keeps the rest exactly as they were.
+On a new diagram, a free-standing sketch is placed to the right of the concepts (while it
+streams it shows where the agent drew it); parts of
 it can follow particular concepts. On a follow-up the agent is shown its own sketch and the
 board's scale, and any change to its sketch appears as one item in the proposal review.
 Lock or hide the Agent sketch layer to keep the agent from seeing or changing it. Edit or

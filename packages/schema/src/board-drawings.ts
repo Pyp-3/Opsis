@@ -92,6 +92,7 @@ const drawingId = z
   .min(1)
   .max(80)
   .regex(/^[a-zA-Z0-9_-]+$/);
+export const DrawingIdSchema = drawingId;
 
 /**
  * A named drawing layer. Layers paint in list order above the base layer (drawings without a
@@ -179,7 +180,7 @@ const checkShape = (drawing: z.infer<typeof BoardDrawingObject>, context: z.Refi
 export const BoardDrawingSchema = BoardDrawingObject.superRefine(checkShape);
 export type BoardDrawing = z.infer<typeof BoardDrawingSchema>;
 
-export const MAX_AGENT_DRAWINGS = 60;
+export const MAX_AGENT_DRAWINGS = 120;
 /**
  * A drawing a chat agent proposes: the same declarative shapes, with fewer stroke samples. Its
  * layer and lock are the app's to set. `anchorId` names a concept whose top-left corner the

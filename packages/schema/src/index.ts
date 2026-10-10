@@ -31,6 +31,7 @@ export * from './board-search';
 export * from './cost-projection';
 export * from './board-chat';
 export * from './chat-focus';
+export * from './sketch-edits';
 export * from './instance';
 export * from './drawing-path';
 export * from './drawing-svg';

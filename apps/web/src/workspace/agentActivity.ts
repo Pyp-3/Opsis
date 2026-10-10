@@ -1,4 +1,10 @@
-import { BoardNodeSchema, type BoardDocument } from '@opsis/schema';
+import {
+  AgentDrawingSchema,
+  BoardNodeSchema,
+  MAX_AGENT_DRAWINGS,
+  type AgentDrawing,
+  type BoardDocument,
+} from '@opsis/schema';
 import { ReportedUsageSchema, type ReportedUsage } from '@opsis/schema';
 import { AgentProgressSchema, type AgentProgress } from '@opsis/schema';
 export type { AgentProgress } from '@opsis/schema';
@@ -11,6 +17,8 @@ export type AgentActivity = {
   thinking: number;
   usage: ReportedUsage[];
   nodes: BoardDocument['nodes'];
+  /** Sketch drawings validated as they streamed in; provisional until the answer passes. */
+  drawings: AgentDrawing[];
   /** Finished notes, oldest first. */
   notes: string[];
   /** The note being written now. */
@@ -39,6 +47,7 @@ export function startActivity(random = Math.random): AgentActivity {
     thinking: 0,
     usage: [],
     nodes: [],
+    drawings: [],
     notes: [],
     note: null,
     drafted: null,
@@ -51,7 +60,21 @@ export function applyProgress(activity: AgentActivity, progress: AgentProgress):
   progress = checked.data;
   switch (progress.type) {
     case 'preview-reset':
-      return { ...activity, nodes: [] };
+      return { ...activity, nodes: [], drawings: [] };
+    case 'drawing': {
+      const parsed = AgentDrawingSchema.safeParse(progress.drawing);
+      if (!parsed.success) return activity;
+      const at = activity.drawings.findIndex((drawing) => drawing.id === parsed.data.id);
+      // A drawing sent again replaces the earlier one, as a sketch edit does.
+      if (at >= 0)
+        return {
+          ...activity,
+          drawings: activity.drawings.map((drawing, i) => (i === at ? parsed.data : drawing)),
+        };
+      return activity.drawings.length < MAX_AGENT_DRAWINGS
+        ? { ...activity, drawings: [...activity.drawings, parsed.data] }
+        : activity;
+    }
     case 'node': {
       const parsed = BoardNodeSchema.safeParse(progress.node);
       return parsed.success &&

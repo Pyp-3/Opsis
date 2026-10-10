@@ -1,3 +1,4 @@
+import { SketchEditsSchema } from './sketch-edits';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CustomIconSchema, IllustrationSchema } from './illustration';
@@ -348,24 +349,36 @@ const BoardOutputSchema = BoardContentSchema.extend({
       'Terse notes for your next turn: goals, decisions, preferences; empty when there are none.',
     ),
 });
-/** The JSON schema of an agent's answer. */
-export const boardOutputSchema = JSON.stringify(
-  zodToJsonSchema(BoardOutputSchema, { $refStrategy: 'none' }),
-);
 /**
- * The same with edits to focused drawings, used only when the reader puts drawings in focus so
- * other requests stay small (Grok's CLI takes the whole request as one bounded argument).
+ * The JSON schema of an agent's answer. Optional parts are added only when a request can use
+ * them, so other requests stay small (Grok's CLI takes the whole request as one bounded
+ * argument): edits to focused drawings when the reader puts drawings in focus, and edits to the
+ * agent's own sketch when the board already has one.
  */
-export const boardFocusOutputSchema = JSON.stringify(
-  zodToJsonSchema(
-    BoardOutputSchema.extend({
+export function boardOutputSchemaFor(parts: { focus?: boolean; sketch?: boolean }): string {
+  const key = `${parts.focus ? 'focus' : ''}:${parts.sketch ? 'sketch' : ''}`;
+  const cached = outputSchemas.get(key);
+  if (cached) return cached;
+  let schema: z.ZodTypeAny = BoardOutputSchema;
+  if (parts.focus)
+    schema = (schema as typeof BoardOutputSchema).extend({
       focusEdits: FocusEditsSchema.optional().describe(
         'Changes to the focused drawings; see the Focus instructions.',
       ),
-    }),
-    { $refStrategy: 'none' },
-  ),
-);
+    });
+  if (parts.sketch)
+    schema = (schema as typeof BoardOutputSchema).extend({
+      sketchEdits: SketchEditsSchema.optional().describe(
+        'Changes to your existing sketch instead of returning "drawings" whole; see the Drawings instructions.',
+      ),
+    });
+  const json = JSON.stringify(zodToJsonSchema(schema, { $refStrategy: 'none' }));
+  outputSchemas.set(key, json);
+  return json;
+}
+const outputSchemas = new Map<string, string>();
+export const boardOutputSchema = boardOutputSchemaFor({});
+export const boardFocusOutputSchema = boardOutputSchemaFor({ focus: true });
 export type BoardGraph = z.infer<typeof BoardGraphSchema>;
 
 /** Asks an agent to draw animated illustrations for some or all of a board's objects. */

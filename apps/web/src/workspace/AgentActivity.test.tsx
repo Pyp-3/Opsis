@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentDrawing } from '@opsis/schema';
 import { AgentActivity } from './AgentActivityView';
 import { applyProgress, startActivity, VERBS, type AgentActivity as State } from './agentActivity';
 
@@ -49,4 +50,26 @@ it('ignores malformed progress and bounds accumulated notes without losing valid
     state = applyProgress(state, { type: 'note', text: `Note ${i}`, done: true });
   expect(state.notes).toHaveLength(50);
   expect(state.notes.at(-1)).toBe('Note 79');
+});
+
+it('collects streamed sketch drawings, replacing one sent again and clearing on a retry', () => {
+  const wall: AgentDrawing = {
+    id: 'wall',
+    shape: 'line',
+    points: [
+      [0, 0],
+      [96, 0],
+    ],
+    ink: 'ink',
+    line: 'solid',
+    strokeWidth: 2,
+  };
+  let state = applyProgress(
+    startActivity(() => 0),
+    { type: 'drawing', drawing: wall },
+  );
+  state = applyProgress(state, { type: 'drawing', drawing: { ...wall, ink: 'coral' } });
+  state = applyProgress(state, { type: 'drawing', drawing: { id: 'bad' } } as never);
+  expect(state.drawings).toEqual([{ ...wall, ink: 'coral' }]);
+  expect(applyProgress(state, { type: 'preview-reset' }).drawings).toEqual([]);
 });

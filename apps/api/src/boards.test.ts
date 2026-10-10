@@ -325,7 +325,9 @@ describe('2D board API', () => {
     expect(fresh.statusCode).toBe(200);
     expect(fresh.json().drawings).toEqual(sketch);
     const [request] = complete.mock.calls[0] as unknown as [{ system: string }];
-    expect(request.system).toMatch(/Drawings: for spatial, physical or graphical subjects/);
+    // Agents draw whenever a picture helps, not only for spatial subjects.
+    expect(request.system).toMatch(/whenever a picture would make the answer clearer/);
+    expect(request.system).not.toMatch(/never draw for its own sake/);
     expect(JSON.parse(boardOutputSchema).properties.drawings.type).toBe('array');
 
     // A sketch attached to a concept that does not exist is repaired once like any other error.
@@ -372,6 +374,147 @@ describe('2D board API', () => {
       payload: { agent: 'claude', prompt: 'Explain it again', board: withSketch },
     });
     expect(kept.statusCode).toBe(200);
+  });
+  it('changes an existing sketch by edits instead of the whole sketch', async () => {
+    const sketch = [
+      {
+        id: 'room',
+        shape: 'rect',
+        x: 0,
+        y: 400,
+        width: 240,
+        height: 120,
+        ink: 'ink',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+      {
+        id: 'door',
+        shape: 'arc',
+        points: [
+          [0, 400],
+          [24, 424],
+          [48, 400],
+        ],
+        ink: 'ink',
+        line: 'solid',
+        strokeWidth: 1,
+      },
+      {
+        id: 'note',
+        shape: 'text',
+        x: 0,
+        y: 380,
+        text: 'Plant room',
+        ink: 'sky',
+        line: 'solid',
+        strokeWidth: 2,
+      },
+    ];
+    const withSketch = { ...document, drawings: sketch };
+    const wider = { ...sketch[0], width: 336 };
+    const pump = {
+      id: 'pump',
+      shape: 'ellipse',
+      x: 96,
+      y: 440,
+      width: 48,
+      height: 48,
+      ink: 'coral',
+      line: 'solid',
+      strokeWidth: 2,
+    };
+    const { app, complete, factory } = setup(
+      JSON.stringify({ ...EMAIL_DEMO, sketchEdits: { put: [wider, pump], remove: ['door'] } }),
+    );
+    const edited = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Widen the room and add the pump', board: withSketch },
+    });
+    expect(edited.statusCode).toBe(409);
+    // Replacements keep their place, removals go, new drawings come last; review is unchanged.
+    expect(edited.json().candidate.drawings).toEqual([wider, sketch[2], pump]);
+    expect(edited.json().changes).toContain('Change agent sketch');
+    // Only a request with a sketch to change is offered the edits, in the prompt and the schema.
+    const [, , offered] = factory.mock.calls.at(-1) as unknown as [unknown, unknown, string];
+    expect(JSON.parse(offered).properties.sketchEdits.properties.put.type).toBe('array');
+    const [request] = complete.mock.calls.at(-1) as unknown as [{ system: string }];
+    expect(request.system).toContain('"sketchEdits"');
+    complete.mockResolvedValueOnce(JSON.stringify(EMAIL_DEMO));
+    await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: { agent: 'claude', prompt: 'Explain it', board: document },
+    });
+    expect(factory.mock.calls.at(-1)).toHaveLength(2);
+    expect(JSON.parse(boardOutputSchema).properties.sketchEdits).toBeUndefined();
+
+    // Edits that do not fit the sketch, or a whole sketch as well, are repaired once.
+    for (const invalid of [
+      { sketchEdits: { put: [], remove: ['nowhere'] } },
+      { sketchEdits: { put: [pump], remove: ['pump'] } },
+      { drawings: sketch, sketchEdits: { put: [pump], remove: [] } },
+    ]) {
+      complete
+        .mockResolvedValueOnce(JSON.stringify({ ...EMAIL_DEMO, ...invalid }))
+        .mockResolvedValueOnce(JSON.stringify(EMAIL_DEMO));
+      const repaired = await app.inject({
+        method: 'POST',
+        url: '/v1/boards/generate',
+        payload: { agent: 'claude', prompt: 'Change the sketch', board: withSketch },
+      });
+      expect(repaired.statusCode).toBe(200);
+      expect(complete).toHaveBeenLastCalledWith(
+        expect.objectContaining({ user: expect.stringContaining('Repair your previous') }),
+        expect.any(AbortSignal),
+        [],
+        expect.any(Function),
+      );
+    }
+  });
+  it('streams the demo sketch drawing by drawing, then edits it', async () => {
+    const { app } = setup();
+    const streamed = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      headers: { accept: 'application/x-ndjson' },
+      payload: { agent: 'demo', prompt: 'Sketch the mail servers', board: document },
+    });
+    const events = streamed.body
+      .trim()
+      .split('\n')
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            type: string;
+            progress?: { type: string; drawing?: { id: string } };
+          },
+      );
+    expect(
+      events.flatMap((event) =>
+        event.progress?.type === 'drawing' ? [event.progress.drawing!.id] : [],
+      ),
+    ).toEqual(['provider-zone', 'provider-label', 'zone-width']);
+    const sketch = (events.at(-1) as unknown as { body: { drawings: unknown[] } }).body.drawings;
+    const widened = await app.inject({
+      method: 'POST',
+      url: '/v1/boards/generate',
+      payload: {
+        agent: 'demo',
+        prompt: 'Widen the zone',
+        board: { ...document, drawings: sketch },
+      },
+    });
+    expect(widened.statusCode).toBe(200);
+    expect(
+      widened.json().drawings.map((item: { id: string; width?: number }) => [item.id, item.width]),
+    ).toEqual([
+      ['provider-zone', 368],
+      ['provider-label', undefined],
+      ['zone-width', undefined],
+      ['zone-note', undefined],
+    ]);
   });
   it('sketches the demo mail servers without an agent', async () => {
     const { app, complete } = setup();

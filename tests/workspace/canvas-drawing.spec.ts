@@ -568,3 +568,54 @@ test('paints paths, polygons, arcs and hatching, and picks and restyles groups a
   await expect(page.locator('#opsis-hatch-pair-a')).toHaveCount(1);
   await expect(page.locator('#opsis-hatch-zone')).toHaveCount(1);
 });
+
+test('an agent sketch streams onto the canvas, then changes by edits after review', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByLabel('Agent', { exact: true }).selectOption('demo');
+  await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+
+  // Drawings appear faintly on the docked canvas as they arrive, before any review.
+  const provisional = page.locator('.drawing-provisional [data-provisional-drawing]');
+  await expect(provisional.first()).toBeAttached();
+  await expect(
+    page.getByRole('status').filter({ hasText: /Sketching on the canvas/ }),
+  ).toBeVisible();
+  await expect(provisional).toHaveCount(3);
+  await page.screenshot({ path: testInfo.outputPath('streaming-sketch.png') });
+  expect(await drawings(page)).toEqual([]);
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  await expect(provisional).toHaveCount(0);
+  const review = page.getByRole('region', { name: 'Review proposed changes' });
+  await review.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+
+  // A follow-up changes the sketch by two edits; the rest of the sketch is kept as it was.
+  await expect.poll(async () => (await drawings(page)).length).toBe(3);
+  const before = await drawings(page);
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByLabel('What would you like to understand?').fill('Widen the zone');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await expect(provisional).toHaveCount(2);
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  await expect(review).toContainText('agent sketch');
+  await review.getByRole('button', { name: 'Apply reviewed changes' }).click();
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await expect
+    .poll(async () => (await drawings(page)).map((item) => item.id))
+    .toEqual(['provider-zone', 'provider-label', 'zone-width', 'zone-note']);
+  const after = await drawings(page);
+  expect((after[0] as { width?: number }).width).toBe(368);
+  expect(after[1]).toEqual(before[1]);
+  await expect(
+    page.locator('.drawing-labels text').filter({ hasText: 'Room for the outgoing queue' }),
+  ).toBeVisible();
+  expect((await accessibilityScan(page)).violations).toEqual([]);
+});

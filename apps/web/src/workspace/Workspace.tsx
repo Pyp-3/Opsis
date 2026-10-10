@@ -1084,23 +1084,30 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             <button onClick={() => setImportPreview(null)}>Discard import</button>
           </section>
         )}
-        {generation.busy && generation.activity.nodes.length > 0 && (
-          <section className="streamed-preview" aria-label="Draft concepts">
-            <h2>Draft concepts · not saved</h2>
-            <p>
-              Individual concepts validated as they arrive. Connections and the full diagram still
-              need validation and review.
-            </p>
-            <div>
-              {generation.activity.nodes.map((node) => (
-                <article key={node.id}>
-                  <strong>{node.label}</strong>
-                  <p>{node.summary}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
+        {generation.busy &&
+          (generation.activity.nodes.length > 0 || generation.activity.drawings.length > 0) && (
+            <section className="streamed-preview" aria-label="Draft concepts">
+              <h2>Draft concepts · not saved</h2>
+              <p>
+                Individual concepts and sketch drawings validated as they arrive. Connections and
+                the full diagram still need validation and review.
+              </p>
+              {generation.activity.drawings.length > 0 && (
+                <p role="status">
+                  Sketching on the canvas: {generation.activity.drawings.length}{' '}
+                  {generation.activity.drawings.length === 1 ? 'drawing' : 'drawings'} so far
+                </p>
+              )}
+              <div>
+                {generation.activity.nodes.map((node) => (
+                  <article key={node.id}>
+                    <strong>{node.label}</strong>
+                    <p>{node.summary}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         <div className={`workspace-stage ${chatDocked ? 'is-docked' : ''}`}>
           <div
             id="canvas-panel"
@@ -1190,7 +1197,10 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   color="var(--bp-grid-major)"
                   lineWidth={1}
                 />
-                <DrawingLayer drawing={drawing} />
+                <DrawingLayer
+                  drawing={drawing}
+                  provisional={generation.busy ? generation.activity.drawings : undefined}
+                />
                 {presentation && <GroupBoundaries board={presentation} />}
               </ReactFlow>
               <DrawingControls drawing={drawing} />

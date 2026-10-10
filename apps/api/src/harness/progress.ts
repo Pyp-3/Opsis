@@ -1,4 +1,4 @@
-import { StreamedNodes } from './streamed-nodes';
+import { StreamedPreview } from './streamed-preview';
 import { reportedUsage } from './usage';
 import type { HarnessProvider } from './types.js';
 
@@ -81,7 +81,7 @@ export function progressReader(provider: HarnessProvider) {
   let phase = '';
   let thinking = 0;
   const draft = new DraftReader();
-  const streamedNodes = new StreamedNodes();
+  const preview = new StreamedPreview();
   const enter = (next: 'starting' | 'thinking' | 'writing' | 'drafting'): HarnessProgress[] => {
     if (phase === next) return [];
     phase = next;
@@ -126,12 +126,7 @@ export function progressReader(provider: HarnessProvider) {
     }
     if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
       const drafted = draft.add(delta.partial_json);
-      return [
-        ...(drafted ? [drafted] : []),
-        ...streamedNodes
-          .add(delta.partial_json)
-          .map((node): HarnessProgress => ({ type: 'node', node })),
-      ];
+      return [...(drafted ? [drafted] : []), ...preview.add(delta.partial_json)];
     }
     return [];
   }
@@ -148,9 +143,7 @@ export function progressReader(provider: HarnessProvider) {
     if (item.type === 'agent_message')
       return [
         ...enter('drafting'),
-        ...(typeof item.text === 'string'
-          ? streamedNodes.add(item.text).map((node): HarnessProgress => ({ type: 'node', node }))
-          : []),
+        ...(typeof item.text === 'string' ? preview.add(item.text) : []),
       ];
     return [];
   }

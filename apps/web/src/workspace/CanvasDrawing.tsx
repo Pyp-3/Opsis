@@ -44,6 +44,7 @@ import {
   INK_VALUES,
   MAX_BOARD_DRAWINGS,
   type BoardDocument,
+  type AgentDrawing,
   type BoardDrawing,
   type DrawingLayer as BoardDrawingLayer,
   type DrawingHatch,
@@ -494,7 +495,17 @@ export type CanvasDrawing = ReturnType<typeof useCanvasDrawing>;
  * the selection outlines, resize handles and the shape being drawn are painted above it.
  * Hidden layers are not drawn.
  */
-export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
+export function DrawingLayer({
+  drawing,
+  provisional,
+}: {
+  drawing: CanvasDrawing;
+  /**
+   * An agent's sketch drawings as they stream in, painted faintly above the board until the
+   * answer is validated and reviewed. Ones attached to a concept not yet on the canvas wait.
+   */
+  provisional?: readonly AgentDrawing[] | undefined;
+}) {
   const { x, y, zoom } = useViewport();
   const { board, selection, selected, marquee } = drawing;
   // A shape half-drawn when the board became read-only is dropped.
@@ -506,7 +517,16 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
       (board ? visibleDrawings(board) : []).map((item) => absoluteDrawing(item, board!.positions)),
     [board],
   );
-  if (!drawings.length && !draft && !marquee) return null;
+  const streaming = useMemo(
+    () =>
+      (provisional ?? []).flatMap((item) =>
+        item.anchorId && !board?.positions[item.anchorId]
+          ? []
+          : [absoluteDrawing(item as BoardDrawing, board?.positions ?? {})],
+      ),
+    [provisional, board],
+  );
+  if (!drawings.length && !streaming.length && !draft && !marquee) return null;
   const outlines = board ? selection.map((item) => absoluteDrawing(item, board.positions)) : [];
   const resizable =
     board && selected && drawing.active && isDrawingEditable(selected, board.drawingLayers)
@@ -522,6 +542,15 @@ export function DrawingLayer({ drawing }: { drawing: CanvasDrawing }) {
               <DrawingShape drawing={item} halo={halo} part="shape" scale={scale} />
             </g>
           ))}
+          {streaming.length > 0 && (
+            <g className="drawing-provisional" opacity={0.55}>
+              {streaming.map((item) => (
+                <g key={item.id} data-provisional-drawing={item.id}>
+                  <DrawingShape drawing={item} halo={halo} scale={scale} />
+                </g>
+              ))}
+            </g>
+          )}
         </g>
       </svg>
       <ViewportPortal>

@@ -8,6 +8,8 @@ export type AgentWork = (context: {
   progress: (progress: HarnessProgress) => void;
   /** The signed-in account, which scopes chat threads' native CLI sessions. */
   account?: string;
+  /** Waits, for the demo's paced streaming; hosts without timers supply their own. */
+  pause?: (ms: number) => Promise<void>;
 }) => Promise<Outcome>;
 
 /** Agent calls end when the reader leaves or after three minutes. */
