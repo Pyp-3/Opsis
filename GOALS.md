@@ -10,9 +10,20 @@ read-only model cache to the live container; candidates keep speech disabled. Re
 the existing local Kokoro model and frozen application packages. Opsis HTML contains
 only an external module script; the supplied inline hash has no identified source, so
 keep the existing script policy. Server narration avoids the browser fallback's runtime
-downloads. Progress: six updater tests and lint pass. The restricted non-root/read-only
-container generated a valid WAV from the existing model with networking disabled.
-Deployment, live WAV verification and final validation remain pending.
+downloads. Verified: six updater tests, lint/typecheck, Rust check/24 tests, native
+check/race tests, 501 unit tests and all 68 browser scenarios pass. The restricted
+non-root/read-only container generated a valid WAV from the existing model with
+networking disabled. Reconfigured the already CI-approved `01b4d43` image with the
+new model mount, retaining a database backup and previous container; public HTTPS
+speech status reports `ready` and a short narration returns valid WAV audio. The
+model mount is read-only and update/certificate timers remain enabled. The main site
+returns 200 and the tools root returns 404. Future code deployments still wait for
+successful CI; the updater/configuration change is committed and CI is running.
+The reported content-length warning is informational. `sandbox eval code:17:34`
+indicates dynamically injected code, but the supplied hash did not match Opsis HTML
+or static payloads inspected in the active Zen extensions. Its owner remains unconfirmed;
+no unidentified inline script was allowlisted. Reload an already-failed page to choose
+the now-ready server voice. No package upgrades or paid provider requests were made.
 
 Shared server CLI / guest scope (2026-10-10): user authorized copying only local Claude
 and Codex login files to the VPS, installing compatible pinned binaries, and a
@@ -70,7 +81,8 @@ is empty and no local data was copied. Account/session persistence across a real
 container restart passed. Chrome verified the live login screen; the local prefixed
 browser smoke covered login, board creation/edit/save/reload and logout. Update and
 certificate-renewal timers are enabled. Provider CLIs/credentials were subsequently
-configured under the shared-server scope above; speech remains disabled. Cloudflare's
+configured under the shared-server scope above; speech was subsequently enabled under
+the narration scope above. Cloudflare's
 own `/cdn-cgi/trace` still returns 200 independently
 of Nginx; the 404 boundary applies to application routes, not hostname concealment.
 No OS packages or dependency versions were upgraded.
