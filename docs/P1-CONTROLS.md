@@ -68,7 +68,9 @@ account settings stored in SQLite (`account_settings` and `usage_records`,
 migration 4). They follow the account to other browsers on the same Opsis server
 and are included in full-database backups. Each key is validated by a shared
 schema on both hosts. **Clear usage history** in Settings removes the account's
-records. Appearance and canvas layout choices remain device preferences.
+records. Appearance (the `appearance` key: colour scheme, background palette, accent
+or custom colour, fonts) is an account setting too, cached in the browser so the look
+paints before sign-in. Canvas layout choices remain device preferences.
 
 The first account to sign in on a browser that has earlier localStorage values
 (`opsis:model-settings:v1`, `opsis:model-profiles:v1`, `opsis:provider:v1`,

@@ -1,14 +1,20 @@
+import { AppearanceSettingSchema, type AppearanceSetting } from '@opsis/schema';
+import { accountSetting, saveAccountSetting } from './account-settings';
+import { HEX_COLOUR, mix, shade, turnHue, untilReadable } from './theme-colour';
+
 /**
- * Application appearance: the chrome's colour scheme and fonts, chosen by the viewer and kept in
- * this browser. Separate from the per-canvas palette (canvas-theme.ts), which travels with a board.
+ * Application appearance: the chrome's colour scheme, background palette, accent and fonts. It is
+ * saved to the account, so it follows a person across browsers, and cached in this browser so the
+ * next visit paints it before anyone signs in. Separate from the per-canvas palette
+ * (canvas-theme.ts), which travels with a board.
  *
  * A choice is applied by setting `data-theme` on <html> (light / dark / follow the system) and by
- * injecting one stylesheet that overrides the accent tokens and font families. The stylesheet
- * mirrors foundation.css's own cascade, so an accent follows light, dark and system exactly the way
- * the built-in tokens do, with no JavaScript media listening.
+ * injecting one stylesheet that overrides the colour tokens and font families. The stylesheet
+ * mirrors foundation.css's own cascade, so a palette follows light, dark and system exactly the
+ * way the built-in tokens do, with no JavaScript media listening.
  */
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeMode = AppearanceSetting['mode'];
 
 /** The accent tokens one scheme sets, for one colour scheme (light or dark). */
 type AccentTokens = {
@@ -232,36 +238,308 @@ export const FONT_SCHEMES = [
   },
 ] as const satisfies readonly FontScheme[];
 
+/** The background tokens one palette sets, for one colour scheme (light or dark). */
+type SurfaceTokens = {
+  paper: string;
+  surface: string;
+  rail: string;
+  sunken: string;
+  hover: string;
+  line: string;
+  lineStrong: string;
+  ink: string;
+  ink2: string;
+  ink3: string;
+};
+
+export type SurfaceScheme = { id: string; name: string; light: SurfaceTokens; dark: SurfaceTokens };
+
+/**
+ * Background palettes: the page, panels, sidebar, lines and text. Sage is foundation.css's own
+ * palette; each keeps body text (ink to ink-3) readable on every background it sets.
+ */
+export const SURFACE_SCHEMES = [
+  {
+    id: 'sage',
+    name: 'Sage',
+    light: {
+      paper: '#fbfaf5',
+      surface: '#ffffff',
+      rail: '#f4f3ec',
+      sunken: '#eef0e7',
+      hover: '#e9ece3',
+      line: '#e3e5dc',
+      lineStrong: '#d2d8ca',
+      ink: '#1f2d27',
+      ink2: '#435047',
+      ink3: '#5f6b62',
+    },
+    dark: {
+      paper: '#111714',
+      surface: '#171f1b',
+      rail: '#131a16',
+      sunken: '#1c2520',
+      hover: '#222c26',
+      line: '#26302b',
+      lineStrong: '#334039',
+      ink: '#e8ede6',
+      ink2: '#bcc7bd',
+      ink3: '#8f9b92',
+    },
+  },
+  {
+    id: 'neutral',
+    name: 'Neutral',
+    light: {
+      paper: '#fafafa',
+      surface: '#ffffff',
+      rail: '#f3f3f4',
+      sunken: '#eeeef0',
+      hover: '#e8e8eb',
+      line: '#e2e2e6',
+      lineStrong: '#d0d0d6',
+      ink: '#1d1d21',
+      ink2: '#45454d',
+      ink3: '#5f5f68',
+    },
+    dark: {
+      paper: '#121214',
+      surface: '#18181b',
+      rail: '#141416',
+      sunken: '#1e1e22',
+      hover: '#242428',
+      line: '#2a2a2f',
+      lineStrong: '#38383f',
+      ink: '#ececef',
+      ink2: '#c2c2c9',
+      ink3: '#93939c',
+    },
+  },
+  {
+    id: 'warm',
+    name: 'Warm',
+    light: {
+      paper: '#fcf8f1',
+      surface: '#fffdf9',
+      rail: '#f6efe4',
+      sunken: '#f1e9dc',
+      hover: '#ece2d3',
+      line: '#e6dccb',
+      lineStrong: '#d8cab4',
+      ink: '#2d241b',
+      ink2: '#54473a',
+      ink3: '#6a5c4d',
+    },
+    dark: {
+      paper: '#17130f',
+      surface: '#1e1914',
+      rail: '#191510',
+      sunken: '#25201a',
+      hover: '#2b251e',
+      line: '#312a22',
+      lineStrong: '#40372c',
+      ink: '#f0e9df',
+      ink2: '#cdbfae',
+      ink3: '#9f907e',
+    },
+  },
+  {
+    id: 'cool',
+    name: 'Cool',
+    light: {
+      paper: '#f6f8fb',
+      surface: '#ffffff',
+      rail: '#eef2f7',
+      sunken: '#e8edf4',
+      hover: '#e2e8f0',
+      line: '#dce3ec',
+      lineStrong: '#c8d2df',
+      ink: '#1b2533',
+      ink2: '#414d5e',
+      ink3: '#576375',
+    },
+    dark: {
+      paper: '#0f141b',
+      surface: '#151b24',
+      rail: '#11171f',
+      sunken: '#1b222c',
+      hover: '#212935',
+      line: '#262f3b',
+      lineStrong: '#333e4d',
+      ink: '#e6ebf2',
+      ink2: '#bac4d2',
+      ink3: '#8b97a8',
+    },
+  },
+  {
+    id: 'dusk',
+    name: 'Dusk',
+    light: {
+      paper: '#faf8fc',
+      surface: '#ffffff',
+      rail: '#f3f0f7',
+      sunken: '#eeeaf3',
+      hover: '#e8e3ef',
+      line: '#e2dcea',
+      lineStrong: '#d1c8de',
+      ink: '#251f2e',
+      ink2: '#4b4357',
+      ink3: '#625a6f',
+    },
+    dark: {
+      paper: '#141118',
+      surface: '#1b1720',
+      rail: '#16131a',
+      sunken: '#221d28',
+      hover: '#28222f',
+      line: '#2e2735',
+      lineStrong: '#3c3445',
+      ink: '#ece8f1',
+      ink2: '#c6bed0',
+      ink3: '#978ea3',
+    },
+  },
+] as const satisfies readonly SurfaceScheme[];
+
+/** The picker's id for a colour the person chose themselves. */
+export const CUSTOM_ACCENT = 'custom';
+
 export type AppTheme = {
   mode: ThemeMode;
-  accent: (typeof ACCENT_SCHEMES)[number]['id'];
+  /** A preset accent's id, or `custom` with `customAccent`. */
+  accent: (typeof ACCENT_SCHEMES)[number]['id'] | typeof CUSTOM_ACCENT;
+  customAccent?: string;
+  surface: (typeof SURFACE_SCHEMES)[number]['id'];
   font: (typeof FONT_SCHEMES)[number]['id'];
 };
 
-export const DEFAULT_APP_THEME: AppTheme = { mode: 'system', accent: 'evergreen', font: 'signal' };
+export const DEFAULT_APP_THEME: AppTheme = {
+  mode: 'system',
+  accent: 'evergreen',
+  surface: 'sage',
+  font: 'signal',
+};
 
 export const APP_THEME_KEY = 'opsis:app-theme:v1';
+/** The account whose saved appearance this browser's cached copy came from. */
+const THEME_ACCOUNT_KEY = 'opsis:app-theme-account:v1';
 const MODES: readonly ThemeMode[] = ['system', 'light', 'dark'];
 
+/** Every background a custom accent's text and fills must stay readable on. */
+const LIGHT_BACKGROUNDS = SURFACE_SCHEMES.flatMap(({ light }) => [
+  light.paper,
+  light.surface,
+  light.sunken,
+]);
+const DARK_BACKGROUNDS = SURFACE_SCHEMES.flatMap(({ dark }) => [
+  dark.paper,
+  dark.surface,
+  dark.sunken,
+]);
+
+/**
+ * Builds a full accent from one picked colour. Light mode darkens it until white-ish text reads
+ * on it and it reads as text on every light background; dark mode lightens a pastel version the
+ * same way. Soft fills are tints of the result.
+ */
+export function customAccent(hex: string): AccentScheme {
+  const accent = untilReadable(hex, LIGHT_BACKGROUNDS, 4.5, -1);
+  const accentFg = mix(accent, '#ffffff', 0.04);
+  const accentSoft = mix(accent, '#ffffff', 0.13);
+  const accentText = untilReadable(accent, [...LIGHT_BACKGROUNDS, accentSoft], 4.5, -1);
+  const dark = untilReadable(shade(hex, 0.25), DARK_BACKGROUNDS, 9, 1);
+  const darkSoft = mix(dark, '#171a1c', 0.13);
+  const darkText = untilReadable(shade(dark, -0.08), [...DARK_BACKGROUNDS, darkSoft], 6, 1);
+  return {
+    id: CUSTOM_ACCENT,
+    name: 'Custom',
+    swatch: hex,
+    light: {
+      accent,
+      accentHover: hoverOf(accent, accentFg),
+      accentFg,
+      accentSoft,
+      accentText,
+      focus: accent,
+    },
+    dark: {
+      accent: dark,
+      accentHover: shade(dark, 0.06),
+      accentFg: untilReadable(mix(dark, '#000000', 0.12), [dark], 7, -1),
+      accentSoft: darkSoft,
+      accentText: darkText,
+      focus: darkText,
+    },
+  };
+}
+
+/** A slightly lighter hover that keeps the button text readable. */
+function hoverOf(accent: string, text: string): string {
+  const lighter = shade(accent, 0.05);
+  return untilReadable(lighter, [text], 4.5, -1);
+}
+
+/** The gradient on primary buttons and banners, its hover, and the text drawn on it. */
+type Blend = { stops: [string, string, string]; hover: [string, string, string]; fg: string };
+
+/**
+ * An accent's gradient (Evergreen keeps foundation.css's own): from the accent through two neighbouring hues, each kept dark enough for
+ * the button text, as Evergreen runs from green through teal to blue.
+ */
+export function blendOf(scheme: AccentScheme): Blend {
+  const fg = scheme.light.accentFg;
+  const readable = (colour: string) => untilReadable(colour, [fg], 4.5, -1);
+  const stops = [0, 30, 50].map((turn) => readable(turnHue(scheme.light.accent, turn))) as [
+    string,
+    string,
+    string,
+  ];
+  const hover = stops.map((stop) => readable(shade(stop, 0.05))) as [string, string, string];
+  return { stops, hover, fg };
+}
+
 export const accentOf = (theme: AppTheme): AccentScheme =>
-  ACCENT_SCHEMES.find((scheme) => scheme.id === theme.accent) ?? ACCENT_SCHEMES[0];
+  theme.accent === CUSTOM_ACCENT && theme.customAccent && HEX_COLOUR.test(theme.customAccent)
+    ? customAccent(theme.customAccent.toLowerCase())
+    : (ACCENT_SCHEMES.find((scheme) => scheme.id === theme.accent) ?? ACCENT_SCHEMES[0]);
+export const surfaceOf = (theme: AppTheme): SurfaceScheme =>
+  SURFACE_SCHEMES.find((scheme) => scheme.id === theme.surface) ?? SURFACE_SCHEMES[0];
 export const fontOf = (theme: AppTheme): FontScheme =>
   FONT_SCHEMES.find((scheme) => scheme.id === theme.font) ?? FONT_SCHEMES[0];
 
-/** Narrows a stored value to the modes, schemes and fonts this version knows. */
-function known(value: Partial<AppTheme> | null | undefined): AppTheme {
+/** Narrows a stored value to the modes, palettes, accents and fonts this version knows. */
+export function knownTheme(value: Partial<AppTheme> | null | undefined): AppTheme {
+  const custom =
+    value?.accent === CUSTOM_ACCENT &&
+    typeof value.customAccent === 'string' &&
+    HEX_COLOUR.test(value.customAccent);
   return {
     mode: MODES.includes(value?.mode as ThemeMode)
       ? (value!.mode as ThemeMode)
       : DEFAULT_APP_THEME.mode,
-    accent: ACCENT_SCHEMES.find((s) => s.id === value?.accent)?.id ?? DEFAULT_APP_THEME.accent,
+    ...(custom
+      ? { accent: CUSTOM_ACCENT, customAccent: value.customAccent!.toLowerCase() }
+      : {
+          accent:
+            ACCENT_SCHEMES.find((s) => s.id === value?.accent)?.id ?? DEFAULT_APP_THEME.accent,
+        }),
+    surface: SURFACE_SCHEMES.find((s) => s.id === value?.surface)?.id ?? DEFAULT_APP_THEME.surface,
     font: FONT_SCHEMES.find((s) => s.id === value?.font)?.id ?? DEFAULT_APP_THEME.font,
   };
 }
 
+export const sameTheme = (a: AppTheme, b: AppTheme) =>
+  a.mode === b.mode &&
+  a.accent === b.accent &&
+  (a.customAccent ?? '') === (b.customAccent ?? '') &&
+  a.surface === b.surface &&
+  a.font === b.font;
+
 export function readAppTheme(): AppTheme {
   try {
-    return known(JSON.parse(localStorage.getItem(APP_THEME_KEY) ?? 'null') as Partial<AppTheme>);
+    return knownTheme(
+      JSON.parse(localStorage.getItem(APP_THEME_KEY) ?? 'null') as Partial<AppTheme>,
+    );
   } catch {
     return { ...DEFAULT_APP_THEME };
   }
@@ -275,21 +553,109 @@ export function writeAppTheme(theme: AppTheme) {
   }
 }
 
+function cachedAccount(): string | null {
+  try {
+    return localStorage.getItem(THEME_ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function cacheFor(theme: AppTheme, accountId: string) {
+  writeAppTheme(theme);
+  try {
+    localStorage.setItem(THEME_ACCOUNT_KEY, accountId);
+  } catch {
+    // Without storage the account's look is still applied; it loads again next time.
+  }
+}
+
+/**
+ * Called once an account's settings have loaded. The account's saved look wins. An account with
+ * none adopts a look chosen in this browser before appearance followed accounts, but never one
+ * cached from another account; otherwise it starts from the default.
+ */
+export async function adoptAccountAppearance(accountId: string) {
+  const saved = accountSetting('appearance');
+  if (saved) {
+    const theme = knownTheme(saved as Partial<AppTheme>);
+    applyAppTheme(theme);
+    cacheFor(theme, accountId);
+    return;
+  }
+  const local = readAppTheme();
+  const owner = cachedAccount();
+  if (owner === null && !sameTheme(local, DEFAULT_APP_THEME)) {
+    cacheFor(local, accountId);
+    await saveAppearance(local).catch(() => undefined);
+    return;
+  }
+  if (owner !== accountId) {
+    applyAppTheme({ ...DEFAULT_APP_THEME });
+    cacheFor({ ...DEFAULT_APP_THEME }, accountId);
+  }
+}
+
+/** Saves the look to the signed-in account (cached here too); rejects if the account save fails. */
+export async function saveAppearance(theme: AppTheme) {
+  writeAppTheme(theme);
+  await saveAccountSetting('appearance', AppearanceSettingSchema.parse(theme));
+}
+
 const accentRule = (selector: string, t: AccentTokens) =>
   `${selector}{--accent:${t.accent};--accent-hover:${t.accentHover};--accent-fg:${t.accentFg};` +
   `--accent-soft:${t.accentSoft};--accent-text:${t.accentText};--focus:${t.focus};}`;
 
-/** The one stylesheet that carries a theme's accent and fonts, cascading like foundation.css. */
+const surfaceRule = (selector: string, t: SurfaceTokens) =>
+  `${selector}{--paper:${t.paper};--surface:${t.surface};--rail:${t.rail};--sunken:${t.sunken};` +
+  `--hover:${t.hover};--line:${t.line};--line-strong:${t.lineStrong};--ink:${t.ink};` +
+  `--ink-2:${t.ink2};--ink-3:${t.ink3};}`;
+
+const gridRule = (selector: string, [a, b]: [string, string]) =>
+  `${selector}{--grid-green:color-mix(in srgb, ${a} 13%, transparent);` +
+  `--grid-blue:color-mix(in srgb, ${b} 12%, transparent);}`;
+
+/**
+ * The workspace's stylesheets load after this one, so every selector carries an extra `html` to
+ * outrank foundation.css's matching rule rather than relying on source order.
+ */
+const ROOT = 'html:root';
+
+/** Writes one rule set for light and dark the way foundation.css cascades its own tokens. */
+function cascade<T>(rule: (selector: string, tokens: T) => string, light: T, dark: T): string[] {
+  return [
+    rule(ROOT, light),
+    `@media (prefers-color-scheme: dark){${rule(`${ROOT}:not([data-theme='light'])`, dark)}}`,
+    rule(`${ROOT}[data-theme='dark']`, dark),
+    rule(`${ROOT}[data-theme='light']`, light),
+  ];
+}
+
+/** The one stylesheet that carries a theme's colours and fonts, cascading like foundation.css. */
 export function themeStylesheet(theme: AppTheme): string {
   const accent = accentOf(theme);
+  const surface = surfaceOf(theme);
   const font = fontOf(theme);
-  return [
-    accentRule(':root', accent.light),
-    `@media (prefers-color-scheme: dark){${accentRule(":root:not([data-theme='light'])", accent.dark)}}`,
-    accentRule(":root[data-theme='dark']", accent.dark),
-    accentRule(":root[data-theme='light']", accent.light),
-    `:root{--font-ui:${font.ui};--font-display:${font.display};}`,
-  ].join('\n');
+  const rules = cascade(accentRule, accent.light, accent.dark);
+  // The defaults (Sage, Evergreen's gradient) are foundation.css's own tokens; leave them alone.
+  if (surface.id !== DEFAULT_APP_THEME.surface)
+    rules.push(...cascade(surfaceRule, surface.light, surface.dark));
+  if (accent.id !== 'evergreen') {
+    const blend = blendOf(accent);
+    const gradient = (stops: readonly string[]) =>
+      `linear-gradient(135deg, ${stops[0]} 0%, ${stops[1]} 52%, ${stops[2]} 100%)`;
+    rules.push(
+      `${ROOT}{--blend:${gradient(blend.stops)};--blend-hover:${gradient(blend.hover)};` +
+        `--blend-fg:${blend.fg};}`,
+      ...cascade(
+        gridRule,
+        [blend.stops[0], blend.stops[2]] as [string, string],
+        [accent.dark.accentText, mix(blend.stops[2], '#ffffff', 0.5)] as [string, string],
+      ),
+    );
+  }
+  rules.push(`${ROOT}{--font-ui:${font.ui};--font-display:${font.display};}`);
+  return rules.join('\n');
 }
 
 const STYLE_ID = 'opsis-app-theme';

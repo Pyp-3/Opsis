@@ -32,6 +32,7 @@ _Follow the connections, then select a concept for its explanation._
 - Import text or existing diagrams; export editable JSON, images or Markdown.
 - Share every board in a collection at once; export/import linked collection bundles, download one read-only HTML file, or print a walkthrough to PDF.
 - Plan API token costs in Settings with dated pricing presets or custom rates, explicit token assumptions and a cumulative cost chart. Assumptions follow your account; projections make no model calls.
+- Choose the interface's look in **Settings → Appearance**: light, dark or follow the system, a background palette (Sage, Neutral, Warm, Cool or Dusk), a preset or any custom accent colour (adjusted for light and dark so text stays readable, with the button gradient following it) and fonts. The look follows your account to other browsers.
 - Let your own agents work on canvases through [MCP](apps/mcp/README.md).
 
 ## Run Opsis

@@ -50,6 +50,24 @@ func TestAccountSettingsAndUsageBelongToTheAccount(t *testing.T) {
 	if len(bob.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)) != 0 {
 		t.Fatal("projection leaked to another account")
 	}
+	appearance := map[string]any{"mode": "dark", "accent": "custom", "customAccent": "#12ab9f", "surface": "warm", "font": "inter"}
+	ada.request("PUT", "/v1/account/settings/appearance", map[string]any{"value": appearance}, 204)
+	if fmt.Sprint(ada.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)["appearance"]) != fmt.Sprint(appearance) {
+		t.Fatal("appearance not kept")
+	}
+	for _, bad := range []map[string]any{{"customAccent": "url(x)"}, {"surface": "</style>"}, {"mode": "sepia"}} {
+		value := map[string]any{}
+		for k, v := range appearance {
+			value[k] = v
+		}
+		for k, v := range bad {
+			value[k] = v
+		}
+		ada.request("PUT", "/v1/account/settings/appearance", map[string]any{"value": value}, 400)
+	}
+	if len(bob.request("GET", "/v1/account/settings", nil, 200)["values"].(map[string]any)) != 0 {
+		t.Fatal("appearance leaked to another account")
+	}
 	boardID := uuid.NewString()
 	fallback := map[string]any{"claude": map[string]any{"id": "backup", "name": "Backup", "agent": "codex", "settings": map[string]any{"model": "gpt-6-luna", "effort": "low"}}}
 	ada.request("PUT", "/v1/account/settings/model-fallbacks", map[string]any{"value": fallback}, 204)

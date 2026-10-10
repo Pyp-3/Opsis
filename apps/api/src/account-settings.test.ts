@@ -80,6 +80,29 @@ it('keeps validated settings and bounded usage per account, not per browser', as
     ).toBe(400);
     expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
 
+    const appearance = {
+      mode: 'dark',
+      accent: 'custom',
+      customAccent: '#12ab9f',
+      surface: 'warm',
+      font: 'inter',
+    };
+    expect(
+      (await call(ada, 'PUT', '/v1/account/settings/appearance', { value: appearance })).statusCode,
+    ).toBe(204);
+    expect((await call(ada, 'GET', '/v1/account/settings')).json().values.appearance).toEqual(
+      appearance,
+    );
+    for (const value of [
+      { ...appearance, customAccent: 'url(x)' },
+      { ...appearance, surface: '</style>' },
+      { ...appearance, mode: 'sepia' },
+    ])
+      expect(
+        (await call(ada, 'PUT', '/v1/account/settings/appearance', { value })).statusCode,
+      ).toBe(400);
+    expect((await call(bob, 'GET', '/v1/account/settings')).json()).toEqual({ values: {} });
+
     const boardId = randomUUID();
     const fallbacks = {
       claude: {

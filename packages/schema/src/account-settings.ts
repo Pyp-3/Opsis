@@ -20,7 +20,28 @@ export const ModelProfileSchema = z
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 export const MAX_MODEL_PROFILES = 30;
 
+/**
+ * The application's look. Ids are bounded strings rather than a fixed list, so a choice made in
+ * a newer version survives an older client, which shows its default until it knows the id.
+ */
+const themeIdSchema = z.string().regex(/^[a-z][a-z0-9-]{0,23}$/);
+export const AppearanceSettingSchema = z
+  .object({
+    mode: z.enum(['system', 'light', 'dark']),
+    accent: themeIdSchema,
+    /** The colour picked when `accent` is `custom`, as six-digit hex. */
+    customAccent: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .optional(),
+    surface: themeIdSchema,
+    font: themeIdSchema,
+  })
+  .strict();
+export type AppearanceSetting = z.infer<typeof AppearanceSettingSchema>;
+
 export const ACCOUNT_SETTING_SCHEMAS = {
+  appearance: AppearanceSettingSchema,
   /** Explicit alternative settings; never an instruction to retry automatically. */
   'model-fallbacks': z
     .object({

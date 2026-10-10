@@ -1001,7 +1001,7 @@
 }
 .look-backgrounds {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 10px;
 }
 .look-backgrounds button {
@@ -1150,6 +1150,7 @@
   color: var(--ink-3);
 }
 .theme-modes button[aria-checked='true'],
+.theme-surfaces button[aria-checked='true'],
 .theme-accents button[aria-checked='true'],
 .theme-fonts button[aria-checked='true'] {
   border-color: var(--accent-text);
@@ -1187,6 +1188,92 @@
 }
 .theme-accents button[aria-checked='true'] {
   color: var(--ink);
+}
+.theme-surfaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.theme-surfaces button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 9px;
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  color: var(--ink-2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.theme-surfaces button[aria-checked='true'] {
+  color: var(--ink);
+}
+.theme-surfaces button > svg {
+  color: var(--accent-text);
+}
+/* Each palette's light and dark page, a panel and two lines of text. */
+.theme-surface-tile {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 44px;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+}
+.theme-surface-tile > span {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 6px 7px;
+  border: 0 solid;
+}
+.theme-surface-tile i {
+  height: 10px;
+  border: 1px solid;
+  border-radius: 3px;
+}
+.theme-surface-tile b {
+  width: 70%;
+  height: 3px;
+  border-radius: 2px;
+}
+.theme-surface-tile b + b {
+  width: 45%;
+}
+.theme-custom-accent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.theme-custom-accent input[type='color'] {
+  width: 40px;
+  height: 32px;
+  padding: 2px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.theme-custom-accent input:not([type='color']) {
+  width: 96px;
+  height: 32px;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.theme-custom-accent small {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ink-3);
 }
 .theme-fonts {
   display: grid;

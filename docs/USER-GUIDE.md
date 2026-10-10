@@ -80,7 +80,18 @@ Pin a concept's position in its details panel to retain it during rearrangement.
 Use **Connect to** and **Edit connection** for keyboard connection creation,
 reconnection and port editing. Add branch conditions and descriptions in connection
 details. **Settings → Agents and models** contains named profiles, CLI diagnostics,
-limits and reported usage; **Appearance** keeps the theme controls.
+limits and reported usage; **Appearance** sets the interface's look.
+
+**Settings → Appearance** chooses light, dark or System (follow your device), a
+background palette for the page, panels and sidebar (Sage, Neutral, Warm, Cool or Dusk),
+an accent colour and fonts. **Custom** accepts any colour from the picker or as hex;
+Opsis darkens or lightens it as needed so text on and in it stays readable in light and
+dark, and primary buttons' gradient follows the accent. Changes apply at once and are
+saved to your account, so other browsers open with the same look; this browser also
+keeps a copy so the look appears before you sign in. A choice made in a browser before
+appearance followed accounts is copied to the first account that signs in there and has
+none; another account never inherits it. **Reset to default** returns to System, Sage,
+Evergreen and Signal.
 See [model and canvas controls](P1-CONTROLS.md) for details and limitations.
 
 ## Draw on the canvas

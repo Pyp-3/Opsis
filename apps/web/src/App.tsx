@@ -11,6 +11,7 @@ import { navigate, usePath } from './router';
 import { useInstance } from './instance';
 import { UpdateNotice } from './workspace/UpdateNotice';
 import { loadAccountSettings, resetAccountSettings } from './workspace/account-settings';
+import { adoptAccountAppearance } from './workspace/app-theme';
 
 type Session =
   { status: 'loading' } | { status: 'out' } | { status: 'in'; user: User; settingsError?: string };
@@ -44,6 +45,7 @@ function Shell() {
     let settingsError: string | undefined;
     try {
       await loadAccountSettings();
+      await adoptAccountAppearance(user.id);
     } catch (e) {
       settingsError = e instanceof Error ? e.message : 'Could not load your account settings.';
     }

@@ -346,6 +346,37 @@ Windows attempt failed in packaged integration with the known intermittent "Nati
 startup timed out" (also seen in run 37423155398; no code change involved); the rerun of that
 job passed, and the prerelease was published. Retain this note if the timeout recurs.
 
+## Completed: interface colours on the account (requested 2026-10-10)
+
+Settings → Appearance already set light/dark/system, seven accents and fonts in one browser.
+The user asked to change the interface's colours too and chose all four additions offered.
+
+- [x] Background palettes (Sage, the existing default, plus Neutral, Warm, Cool and Dusk) set the
+      page, panels, sidebar, lines and text tones for light and dark; body text stays at least
+      4.5:1 on every background they set.
+- [x] Custom accent: any colour from a picker or hex. Light mode darkens and dark mode lightens it
+      until button text, accent text and soft fills read at 4.5:1 on every palette.
+- [x] The primary-button gradient and the library grid follow the accent (Evergreen keeps its
+      original green-to-blue gradient), and each stop keeps the button text readable.
+- [x] Appearance is an account setting (`appearance`, validated by the shared schema on both hosts,
+      no migration) and is cached in the browser so it paints before sign-in. A look chosen in a
+      browser before this change is copied to the first account there that has none; another
+      account never inherits a cached look.
+- Fixed while testing: the theme override used plain `:root` rules, but the workspace's stylesheet
+  loads after it, so in System mode the chosen accent and fonts (and any new token) lost to the
+  defaults. Its selectors now outrank foundation.css's instead of depending on load order.
+
+Verified 2026-10-10 on Arch Linux: unit tests for palette and preset contrast, custom colours
+(yellow, green, black, white, grey and others), gradients, the stylesheet, id narrowing, and
+adopting, copying and isolating the account's look; Fastify and Go API tests store, refuse
+malformed values (`url(...)`, markup, unknown modes) and keep the setting per account. Two new
+browser scenarios check the live tokens, a second browser opening with the same look, reset
+propagating, a second account in the same browser starting from the default, phone overflow and
+accessibility scans in light and dark. Lint, typecheck, Rust check/24 tests, desktop check and
+full race suite, 490 unit tests and all 66 Fastify browser scenarios (including the unchanged
+Linux pixel baseline) pass. The rebuilt Linux binary passes packaged integration, all 66 browser
+scenarios and all 24 hidden WebView checks. Light and dark screenshots were reviewed.
+
 ## In progress: agent drawing power (requested 2026-10-10)
 
 The user wants agents to be able to show any 2D subject or drawing. A gap review found four
