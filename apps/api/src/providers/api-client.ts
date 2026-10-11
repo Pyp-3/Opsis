@@ -1,4 +1,9 @@
-import { ProviderApiKeySchema, type BoardModelSettings, type ProviderAgent } from '@opsis/schema';
+import {
+  ProviderApiKeySchema,
+  type BoardModelSettings,
+  type ProviderAgent,
+  type ReportedUsage,
+} from '@opsis/schema';
 import type { BoardClient } from '../boards/client';
 import { HarnessError } from '../harness/errors';
 import type { LLMRequest, HarnessFile } from '../harness/types';
@@ -55,84 +60,9 @@ export function providerApiClient(
         throw new HarnessError('harness_request_limit');
       if (files.some((file) => file.kind !== 'image'))
         throw new HarnessError('provider_attachment');
-      const images = files.map((file) => {
-        const extension = file.name.split('.').pop()?.toLowerCase();
-        const mime =
-          extension === 'jpg' || extension === 'jpeg'
-            ? 'image/jpeg'
-            : extension === 'webp'
-              ? 'image/webp'
-              : extension === 'gif'
-                ? 'image/gif'
-                : 'image/png';
-        return { data: file.data.toString('base64'), mime };
-      });
-      const system = `${request.system}\nReturn only JSON matching this schema:\n${schema}`;
-      const limit = settings.maxOutputTokens ?? request.maxOutputTokens;
-      let path: string;
-      let body: Json;
-      if (provider === 'kimi') {
-        path = '/v1/chat/completions';
-        body = {
-          model: settings.model,
-          reasoning_effort: settings.effort,
-          max_completion_tokens: limit,
-          response_format: { type: 'json_object' },
-          tool_choice: 'none',
-          stream: false,
-          messages: [
-            { role: 'system', content: system },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: request.user },
-                ...images.map(({ data, mime }) => ({
-                  type: 'image_url',
-                  image_url: { url: `data:${mime};base64,${data}` },
-                })),
-              ],
-            },
-          ],
-        };
-      } else if (provider === 'grok') {
-        path = '/v1/responses';
-        body = {
-          model: settings.model,
-          max_output_tokens: limit,
-          store: false,
-          tools: [],
-          input: [
-            { role: 'system', content: system },
-            {
-              role: 'user',
-              content: [
-                { type: 'input_text', text: request.user },
-                ...images.map(({ data, mime }) => ({
-                  type: 'input_image',
-                  image_url: `data:${mime};base64,${data}`,
-                })),
-              ],
-            },
-          ],
-        };
-      } else {
-        path = '/v1beta/interactions';
-        body = {
-          agent: 'antigravity-preview-09-2026',
-          agent_config: { type: 'antigravity', model: settings.model },
-          background: true,
-          tools: [],
-          input: [
-            { type: 'text', text: `${system}\n\n${request.user}` },
-            ...images.map(({ data, mime }) => ({ type: 'image', data, mime_type: mime })),
-          ],
-        };
-      }
+      const { path, body } = createProviderRequest(provider, settings, schema, request, files);
       let response = object(
-        await send(
-          { provider, method: 'POST', path, key: key!, body: JSON.stringify(body) },
-          signal,
-        ),
+        await send({ provider, method: 'POST', path, key: key!, body }, signal),
       );
       let text: unknown;
       if (provider === 'antigravity') {
@@ -178,41 +108,125 @@ export function providerApiClient(
         if (choice.finish_reason !== 'stop') throw new HarnessError('provider_failed');
         text = object(choice.message).content;
       }
-      const usage = object(response.usage);
-      const cached = object(usage.prompt_tokens_details ?? usage.input_tokens_details);
-      // Interactions reports thinking separately; other providers include it in output.
-      const generated = count(usage.total_output_tokens);
-      const thoughts = count(usage.total_thought_tokens);
-      progress?.({
-        type: 'usage',
-        usage: {
-          inputTokens: count(
-            provider === 'kimi'
-              ? usage.prompt_tokens
-              : provider === 'grok'
-                ? usage.input_tokens
-                : usage.total_input_tokens,
-          ),
-          outputTokens: count(
-            provider === 'kimi'
-              ? usage.completion_tokens
-              : provider === 'grok'
-                ? usage.output_tokens
-                : generated !== null && thoughts !== null
-                  ? generated + thoughts
-                  : null,
-          ),
-          cachedInputTokens: count(
-            provider === 'antigravity'
-              ? usage.total_cached_tokens
-              : (cached.cached_tokens ?? usage.cached_tokens),
-          ),
-          cacheWriteTokens: count(cached.cache_write_tokens),
-          estimatedCostUSD: null,
-        },
-      });
+      progress?.({ type: 'usage', usage: readProviderUsage(provider, response) });
       if (typeof text !== 'string' || !text.trim()) throw new HarnessError('harness_malformed');
       return text;
     },
+  };
+}
+
+function createProviderRequest(
+  provider: ApiProvider,
+  settings: BoardModelSettings,
+  schema: string,
+  request: LLMRequest,
+  files: readonly HarnessFile[],
+): { path: string; body: string } {
+  const images = files.map((file) => {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const mime =
+      extension === 'jpg' || extension === 'jpeg'
+        ? 'image/jpeg'
+        : extension === 'webp'
+          ? 'image/webp'
+          : extension === 'gif'
+            ? 'image/gif'
+            : 'image/png';
+    return { data: file.data.toString('base64'), mime };
+  });
+  const system = `${request.system}\nReturn only JSON matching this schema:\n${schema}`;
+  const limit = settings.maxOutputTokens ?? request.maxOutputTokens;
+  let path: string;
+  let body: Json;
+  if (provider === 'kimi') {
+    path = '/v1/chat/completions';
+    body = {
+      model: settings.model,
+      reasoning_effort: settings.effort,
+      max_completion_tokens: limit,
+      response_format: { type: 'json_object' },
+      tool_choice: 'none',
+      stream: false,
+      messages: [
+        { role: 'system', content: system },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: request.user },
+            ...images.map(({ data, mime }) => ({
+              type: 'image_url',
+              image_url: { url: `data:${mime};base64,${data}` },
+            })),
+          ],
+        },
+      ],
+    };
+  } else if (provider === 'grok') {
+    path = '/v1/responses';
+    body = {
+      model: settings.model,
+      max_output_tokens: limit,
+      store: false,
+      tools: [],
+      input: [
+        { role: 'system', content: system },
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: request.user },
+            ...images.map(({ data, mime }) => ({
+              type: 'input_image',
+              image_url: `data:${mime};base64,${data}`,
+            })),
+          ],
+        },
+      ],
+    };
+  } else {
+    path = '/v1beta/interactions';
+    body = {
+      agent: 'antigravity-preview-09-2026',
+      agent_config: { type: 'antigravity', model: settings.model },
+      background: true,
+      tools: [],
+      input: [
+        { type: 'text', text: `${system}\n\n${request.user}` },
+        ...images.map(({ data, mime }) => ({ type: 'image', data, mime_type: mime })),
+      ],
+    };
+  }
+  return { path, body: JSON.stringify(body) };
+}
+
+function readProviderUsage(provider: ApiProvider, response: Json): ReportedUsage {
+  const usage = object(response.usage);
+  const cached = object(usage.prompt_tokens_details ?? usage.input_tokens_details);
+  // Interactions reports thinking separately; other providers include it in output.
+  const generated = count(usage.total_output_tokens);
+  const thoughts = count(usage.total_thought_tokens);
+  return {
+    inputTokens: count(
+      provider === 'kimi'
+        ? usage.prompt_tokens
+        : provider === 'grok'
+          ? usage.input_tokens
+          : usage.total_input_tokens,
+    ),
+    outputTokens: count(
+      provider === 'kimi'
+        ? usage.completion_tokens
+        : provider === 'grok'
+          ? usage.output_tokens
+          : generated !== null && thoughts !== null
+            ? generated + thoughts
+            : null,
+    ),
+    cachedInputTokens: count(
+      provider === 'antigravity'
+        ? usage.total_cached_tokens
+        : (cached.cached_tokens ?? usage.cached_tokens),
+    ),
+    cacheWriteTokens: count(cached.cache_write_tokens),
+    estimatedCostUSD: null,
   };
 }

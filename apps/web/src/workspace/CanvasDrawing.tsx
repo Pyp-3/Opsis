@@ -6,7 +6,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useReactFlow, useViewport, ViewportPortal } from '@xyflow/react';
+import { useReactFlow } from '@xyflow/react';
 import {
   Circle,
   Copy,
@@ -44,7 +44,6 @@ import {
   INK_VALUES,
   MAX_BOARD_DRAWINGS,
   type BoardDocument,
-  type AgentDrawing,
   type BoardDrawing,
   type DrawingLayer as BoardDrawingLayer,
   type DrawingHatch,
@@ -58,12 +57,10 @@ import {
   rotateDrawingAbout,
   rotationCentre,
 } from '@opsis/schema';
-import { DrawingShape } from './DrawingShape';
 import { DrawingLayersPanel, useDrawingLayers } from './DrawingLayersPanel';
 import {
   boxBetween,
   drawingAt,
-  drawingBox,
   drawingClipboard,
   drawingsInBox,
   groupOf,
@@ -71,14 +68,13 @@ import {
   pasteDrawings,
   readDrawingClipboard,
   resizeDrawing,
-  resizeHandles,
+  ROTATION_HANDLE_OFFSET,
   round,
   roundDrawing,
   simplifyStroke,
   type Point,
   type ResizeHandle,
 } from './canvas-drawing';
-import { lookOf, paletteOf } from './canvas-theme';
 import { useRememberedOpen } from './useRememberedOpen';
 
 /**
@@ -141,8 +137,6 @@ const SNAP = 12;
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
 /** Pasted and duplicated drawings land one grid square down and right of their source. */
 const PASTE_OFFSET = SNAP * 2;
-/** How far above a shape its rotation handle sits, in screen pixels. */
-const ROTATE_OFFSET = 24;
 /** The angle of `point` about `centre`, in degrees clockwise from the x axis. */
 const angleAbout = (centre: Point, point: Point) =>
   (Math.atan2(point[1] - centre[1], point[0] - centre[0]) * 180) / Math.PI;
@@ -489,158 +483,7 @@ export function useCanvasDrawing(options: {
 }
 export type CanvasDrawing = ReturnType<typeof useCanvasDrawing>;
 
-/**
- * The drawings, rendered as children of React Flow so they follow its pan and zoom. Lines and
- * shapes are painted between the grid and the diagram, so icons and arrows stay on top; words,
- * the selection outlines, resize handles and the shape being drawn are painted above it.
- * Hidden layers are not drawn.
- */
-export function DrawingLayer({
-  drawing,
-  provisional,
-}: {
-  drawing: CanvasDrawing;
-  /**
-   * An agent's sketch drawings as they stream in, painted faintly above the board until the
-   * answer is validated and reviewed. Ones attached to a concept not yet on the canvas wait.
-   */
-  provisional?: readonly AgentDrawing[] | undefined;
-}) {
-  const { x, y, zoom } = useViewport();
-  const { board, selection, selected, marquee } = drawing;
-  // A shape half-drawn when the board became read-only is dropped.
-  const draft = drawing.active ? drawing.draft : null;
-  const halo = paletteOf(lookOf(board)).deep;
-  const scale = board?.drawingScale;
-  const drawings = useMemo(
-    () =>
-      (board ? visibleDrawings(board) : []).map((item) => absoluteDrawing(item, board!.positions)),
-    [board],
-  );
-  const streaming = useMemo(
-    () =>
-      (provisional ?? []).flatMap((item) =>
-        item.anchorId && !board?.positions[item.anchorId]
-          ? []
-          : [absoluteDrawing(item as BoardDrawing, board?.positions ?? {})],
-      ),
-    [provisional, board],
-  );
-  if (!drawings.length && !streaming.length && !draft && !marquee) return null;
-  const outlines = board ? selection.map((item) => absoluteDrawing(item, board.positions)) : [];
-  const resizable =
-    board && selected && drawing.active && isDrawingEditable(selected, board.drawingLayers)
-      ? absoluteDrawing(selected, board.positions)
-      : null;
-  const area = marquee ? boxBetween(marquee.from, marquee.to) : null;
-  return (
-    <>
-      <svg className="drawing-layer" aria-hidden="true">
-        <g transform={`translate(${x} ${y}) scale(${zoom})`}>
-          {drawings.map((item) => (
-            <g key={item.id} data-drawing={item.id} data-shape={item.shape}>
-              <DrawingShape drawing={item} halo={halo} part="shape" scale={scale} />
-            </g>
-          ))}
-          {streaming.length > 0 && (
-            <g className="drawing-provisional" opacity={0.55}>
-              {streaming.map((item) => (
-                <g key={item.id} data-provisional-drawing={item.id}>
-                  <DrawingShape drawing={item} halo={halo} scale={scale} />
-                </g>
-              ))}
-            </g>
-          )}
-        </g>
-      </svg>
-      <ViewportPortal>
-        <svg className="drawing-labels" aria-hidden="true">
-          {drawings.map((item) => (
-            <g key={item.id} data-drawing-label={item.id} data-shape={item.shape}>
-              <DrawingShape drawing={item} halo={halo} part="label" scale={scale} />
-            </g>
-          ))}
-          {outlines.map((item) => (
-            <SelectionOutline key={item.id} drawing={item} zoom={zoom} />
-          ))}
-          {resizable &&
-            resizeHandles(resizable, ROTATE_OFFSET / zoom).map(({ handle, at }) =>
-              handle === 'rotate' ? (
-                <g key={handle} className="drawing-handle" data-handle={handle}>
-                  <circle
-                    cx={at[0]}
-                    cy={at[1]}
-                    r={5 / zoom}
-                    fill={halo}
-                    stroke="#ffffff"
-                    strokeWidth={1.5 / zoom}
-                  />
-                </g>
-              ) : (
-                <rect
-                  key={handle}
-                  className="drawing-handle"
-                  data-handle={handle}
-                  x={at[0] - 4 / zoom}
-                  y={at[1] - 4 / zoom}
-                  width={8 / zoom}
-                  height={8 / zoom}
-                  fill="#ffffff"
-                  stroke={halo}
-                  strokeWidth={1.5 / zoom}
-                />
-              ),
-            )}
-          {area && (
-            <rect
-              className="drawing-marquee"
-              x={area.x}
-              y={area.y}
-              width={area.width}
-              height={area.height}
-              fill="#ffffff"
-              fillOpacity={0.06}
-              stroke="#ffffff"
-              strokeWidth={1 / zoom}
-              strokeDasharray={`${3 / zoom} ${3 / zoom}`}
-            />
-          )}
-          {draft && (
-            <g className="drawing-draft">
-              <DrawingShape drawing={draft} halo={halo} scale={scale} />
-            </g>
-          )}
-        </svg>
-      </ViewportPortal>
-    </>
-  );
-}
-
-function SelectionOutline({ drawing, zoom }: { drawing: BoardDrawing; zoom: number }) {
-  // A rotated box, ellipse or text is outlined in its own frame, turned with it.
-  const box = drawing.points ? drawingBox(drawing) : drawingFrame(drawing);
-  const centre = rotationCentre(drawing);
-  const pad = 6 + drawing.strokeWidth;
-  return (
-    <rect
-      className="drawing-selection"
-      data-locked={drawing.locked ? 'true' : undefined}
-      transform={
-        drawing.rotation ? `rotate(${drawing.rotation} ${centre[0]} ${centre[1]})` : undefined
-      }
-      x={box.x - pad}
-      y={box.y - pad}
-      width={box.width + pad * 2}
-      height={box.height + pad * 2}
-      fill="none"
-      stroke="#ffffff"
-      strokeWidth={1 / zoom}
-      strokeDasharray={drawing.locked ? undefined : `${4 / zoom} ${4 / zoom}`}
-    />
-  );
-}
-
-/** Builds the shape a drag from `start` to `end` describes for the current tool. */
+/** Builds a shape from the pointer samples, applying snapping and Shift constraints. */
 function shapeFor(
   tool: DrawingKind,
   points: Point[],
@@ -774,7 +617,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
       if (selected && isDrawingEditable(selected, current.drawingLayers)) {
         const original = absoluteDrawing(selected, current.positions);
         const zoom = flow.getZoom();
-        const handle = handleAt(original, point, 8 / zoom, ROTATE_OFFSET / zoom);
+        const handle = handleAt(original, point, 8 / zoom, ROTATION_HANDLE_OFFSET / zoom);
         if (handle) {
           begin();
           gesture.current = {

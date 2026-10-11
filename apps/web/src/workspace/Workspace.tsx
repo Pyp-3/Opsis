@@ -17,7 +17,8 @@ import { BoardComposer } from './BoardComposer';
 import { IconNode, type DiagramNode } from './IconNode';
 import { ConceptDetails } from './ConceptDetails';
 import { ConnectionDetails } from './ConnectionDetails';
-import { DrawingControls, DrawingLayer, useCanvasDrawing } from './CanvasDrawing';
+import { DrawingControls, useCanvasDrawing } from './CanvasDrawing';
+import { DrawingLayer } from './CanvasDrawingLayer';
 import {
   lazy,
   Suspense,

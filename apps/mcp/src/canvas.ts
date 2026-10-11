@@ -50,7 +50,7 @@ export function describeBoard(id: string, revision: number, board: BoardDocument
     title: board.title,
     description: board.description,
     look: board.look ?? null,
-    // The tools read and change the first page; the reader turns to the others on the canvas.
+    // Without a page selection, concepts and connections describe the first page.
     ...(board.pages
       ? {
           pages: boardPages(board).map((page, index) => ({

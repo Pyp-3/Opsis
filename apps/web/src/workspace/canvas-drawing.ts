@@ -26,6 +26,9 @@ import {
 
 export type Point = readonly [number, number];
 
+/** Rotation-handle distance in screen pixels, shared by painting and hit-testing. */
+export const ROTATION_HANDLE_OFFSET = 24;
+
 /** Rectangle from a drag between two corners, in any direction. */
 export function boxBetween([x1, y1]: Point, [x2, y2]: Point) {
   return {

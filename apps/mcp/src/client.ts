@@ -42,12 +42,9 @@ const NO_KEY =
 const REJECTED_KEY =
   'Opsis rejected the agent key: it was revoked, or this request did not come straight from this machine. Create a new key under Account → Agent keys.';
 
-/**
- * Talks to the same local API the web app saves through, so an agent's edit is an ordinary
- * saved revision: an open canvas pulls it within a couple of seconds and can undo it.
- */
 const RenderedImage = z.object({ mimeType: z.literal('image/png'), data: z.string() });
 
+/** Agent edits use the board API so the canvas can poll and undo each saved revision. */
 export function opsisClient(
   base: string,
   agentKey: string | undefined,

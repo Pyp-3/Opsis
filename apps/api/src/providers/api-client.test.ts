@@ -119,6 +119,87 @@ describe('official provider APIs', () => {
     await expect(client.complete(request)).rejects.toThrow('harness_cancelled');
     expect(send.mock.calls[1]![0].path).toBe('/v1beta/interactions/fixture:cancel');
   });
+  it.each(['kimi', 'grok', 'antigravity'] as const)(
+    'encodes image attachments and schema instructions for %s without changing the model',
+    async (provider) => {
+      const send = vi.fn<ProviderTransport>().mockResolvedValue({
+        id: 'fixture',
+        status: 'completed',
+        choices: [{ finish_reason: 'stop', message: { content: '{}' } }],
+        output: [
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '{}' }] },
+        ],
+        steps: [{ type: 'model_output', content: [{ type: 'text', text: '{}' }] }],
+      });
+      const client = providerApiClient(
+        provider,
+        DEFAULT_BOARD_MODELS[provider],
+        '{"type":"object"}',
+        'fixture-secret',
+        send,
+        async () => {},
+      );
+      const data = Buffer.from('fixture image');
+      await client.complete(request, undefined, [{ name: 'diagram.JPEG', kind: 'image', data }]);
+      expect(send).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(send.mock.calls[0]![0].body!);
+      const system = 'JSON only\nReturn only JSON matching this schema:\n{"type":"object"}';
+      const imageUrl = `data:image/jpeg;base64,${data.toString('base64')}`;
+      if (provider === 'kimi') {
+        expect(body.model).toBe(DEFAULT_BOARD_MODELS.kimi.model);
+        expect(body.messages).toEqual([
+          { role: 'system', content: system },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'diagram' },
+              { type: 'image_url', image_url: { url: imageUrl } },
+            ],
+          },
+        ]);
+      } else if (provider === 'grok') {
+        expect(body.model).toBe(DEFAULT_BOARD_MODELS.grok.model);
+        expect(body.input).toEqual([
+          { role: 'system', content: system },
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: 'diagram' },
+              { type: 'input_image', image_url: imageUrl },
+            ],
+          },
+        ]);
+      } else {
+        expect(body.agent_config.model).toBe(DEFAULT_BOARD_MODELS.antigravity.model);
+        expect(body.input).toEqual([
+          { type: 'text', text: `${system}\n\ndiagram` },
+          { type: 'image', data: data.toString('base64'), mime_type: 'image/jpeg' },
+        ]);
+      }
+    },
+  );
+
+  it('rejects oversized requests and unsupported attachments before transport', async () => {
+    const send = vi.fn<ProviderTransport>();
+    const client = providerApiClient(
+      'kimi',
+      { ...DEFAULT_BOARD_MODELS.kimi, maxRequestCharacters: 16 },
+      '{}',
+      'fixture-secret',
+      send,
+      async () => {},
+    );
+    await expect(client.complete({ ...request, user: 'too much input' })).rejects.toThrow(
+      'harness_request_limit',
+    );
+    await expect(
+      client.complete(request, undefined, [
+        { name: 'document.pdf', kind: 'pdf', data: Buffer.from('fixture') },
+      ]),
+    ).rejects.toThrow('provider_attachment');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('never retries authentication failures and fails missing keys before I/O', async () => {
     const send = vi.fn<ProviderTransport>().mockRejectedValue(new HarnessError('provider_auth'));
     const client = providerApiClient(
