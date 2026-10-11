@@ -476,6 +476,23 @@ images inserted carefully for security. Respect the app's palettes, contrast and
       by ids the board already holds). Fixed on the way: the desktop MCP bridge had no
       `crypto.randomUUID`, so `opsis_add_page` (and the new footnotes) failed natively; the
       bridge now supplies it from Go.
+- [x] Open book (2026-10-11, user request: "like the standard book, not one thin page"): on a
+      wide enough window Info lies open as two facing book-shaped pages (about 0.76 width to
+      height, 400–660 px wide each) with a spine, running heads (board name, page title) and
+      centred folios. The page's text flows across book pages as CSS columns of page width and
+      height; figures, concepts and notes are kept whole. Turning goes spread by spread, then on
+      to the next board page (the canvas follows); turning back opens the previous board page at
+      its last spread. A real leaf turns over the spine: its front is the old page and its back
+      the new one, over the page it lands on (instant with reduced motion; clicks pass through).
+      Focus or a footnote link on another spread opens it; a press is never moved mid-click.
+      Writing, narrow windows and phones keep the single scrolling page.
+      Verified 2026-10-11 on Arch Linux: page-size unit tests; the Info browser scenarios now
+      check two facing book-shaped pages, turning back into page 1 at its last spread, turning
+      within a page with a leaf, arrow keys crossing into page 2, and clicks and footnote links on
+      other spreads (two bugs found and fixed while testing: a one-page board always opened at
+      its last spread, and a press could be moved mid-click). Lint, typecheck, Rust check and 24
+      tests, desktop checks, 569 unit tests and all 75 browser scenarios pass; light, dark,
+      mid-turn and phone screenshots were reviewed. Web-only; the desktop binary was not rebuilt.
 
 Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
 builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,

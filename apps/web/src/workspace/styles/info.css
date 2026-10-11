@@ -193,7 +193,7 @@
   inset: 0 auto 0 0;
   width: 30px;
   pointer-events: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent), transparent);
+  background: linear-gradient(90deg, var(--book-shade), transparent);
   border-radius: 4px 0 0 4px;
 }
 .info-leaf:focus {
@@ -790,4 +790,281 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ── The open book: two facing pages, a spine, and leaves that turn ───────── */
+.info-book.is-spread {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.info-book.is-spread .info-desk {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 0;
+  padding: 24px 32px;
+}
+.info-bar-where small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+/* Shadow, not ink: in dark schemes the text colour is light and would glow at the spine. */
+.info-book {
+  --book-shade: rgb(0 0 0 / 0.07);
+  --book-turn-shade: rgb(0 0 0 / 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .info-book {
+    --book-shade: rgb(0 0 0 / 0.38);
+    --book-turn-shade: rgb(0 0 0 / 0.5);
+  }
+}
+:root[data-theme='dark'] .info-book {
+  --book-shade: rgb(0 0 0 / 0.38);
+  --book-turn-shade: rgb(0 0 0 / 0.5);
+}
+.book-spread {
+  position: relative;
+  width: calc(2 * var(--page-w));
+  height: var(--page-h);
+  perspective: 2800px;
+  font-family: var(--font-reading, 'Source Serif 4', Georgia, serif);
+  font-size: var(--reading-size, 18px);
+  line-height: 1.6;
+  color: var(--ink);
+}
+/* Each page is paper that darkens toward the spine, over a few pages' edges. */
+.book-paper,
+.book-face-page {
+  position: absolute;
+  top: 0;
+  width: var(--page-w);
+  height: var(--page-h);
+  background-color: var(--surface);
+}
+.book-paper.is-left,
+.book-face-page.is-left {
+  left: 0;
+  border-radius: 14px 2px 2px 14px;
+  background-image: linear-gradient(to right, transparent 82%, var(--book-shade));
+}
+.book-paper.is-right,
+.book-face-page.is-right {
+  border-radius: 2px 14px 14px 2px;
+  background-image: linear-gradient(to left, transparent 82%, var(--book-shade));
+}
+.book-paper.is-right {
+  left: var(--page-w);
+}
+.book-face-page {
+  inset: 0;
+  overflow: hidden;
+}
+.book-paper.is-left {
+  box-shadow:
+    var(--shadow-md),
+    -3px 3px 0 -1px var(--surface),
+    -3px 3px 0 0 var(--line-strong),
+    -6px 6px 0 -1px var(--surface),
+    -6px 6px 0 0 var(--line);
+}
+.book-paper.is-right {
+  box-shadow:
+    var(--shadow-md),
+    3px 3px 0 -1px var(--surface),
+    3px 3px 0 0 var(--line-strong),
+    6px 6px 0 -1px var(--surface),
+    6px 6px 0 0 var(--line);
+}
+/* The spine's crease. */
+.book-spread::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--page-w) - 1px);
+  z-index: 2;
+  width: 2px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+.book-head {
+  position: absolute;
+  top: 24px;
+  width: var(--text-w);
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-3);
+}
+.book-head.is-left,
+.book-face-page.is-left .book-head {
+  left: var(--margin);
+  text-align: left;
+}
+.book-head.is-right {
+  left: calc(var(--page-w) + var(--margin));
+  text-align: right;
+}
+.book-face-page.is-right .book-head {
+  left: var(--margin);
+  text-align: right;
+}
+.book-folio {
+  position: absolute;
+  bottom: 18px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* Folios sit centred at the foot of each page, clear of the turning corners. */
+.book-folio.is-left,
+.book-face-page .book-folio {
+  left: 0;
+  width: var(--page-w);
+  text-align: center;
+}
+.book-folio.is-right {
+  left: var(--page-w);
+  width: var(--page-w);
+  text-align: center;
+}
+/* The text block: the board page's text, laid in page-sized columns, two in view. */
+.book-text,
+.book-face-text {
+  position: absolute;
+  top: var(--top);
+  left: var(--margin);
+  z-index: 1;
+  height: var(--text-h);
+  overflow: hidden;
+}
+.book-text {
+  width: calc(2 * var(--page-w) - 2 * var(--margin));
+}
+.book-face-text {
+  width: var(--text-w);
+}
+.info-leaf.book-flow {
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.info-leaf.book-flow::before {
+  display: none;
+}
+.book-flow .info-title {
+  font-size: 1.9em;
+}
+.book-flow .info-object,
+.book-flow .info-figure,
+.book-flow .info-notes li,
+.book-flow .info-write {
+  break-inside: avoid;
+}
+.book-flow h2,
+.book-flow h3 {
+  break-after: avoid;
+}
+.book-flow .info-figure img,
+.book-flow .info-figure-missing {
+  max-height: calc(var(--text-h) * 0.6);
+}
+.book-spread .info-corner {
+  z-index: 5;
+}
+/* A leaf turning over the spine; its back is the page it lands as. */
+/* Turning is only a picture of the change; clicks reach the page already open beneath. */
+.book-under,
+.book-turn {
+  pointer-events: none;
+}
+.book-under {
+  position: absolute;
+  top: 0;
+  z-index: 3;
+  width: var(--page-w);
+  height: var(--page-h);
+}
+.book-under.is-left {
+  left: 0;
+}
+.book-under.is-right {
+  left: var(--page-w);
+}
+.book-turn {
+  position: absolute;
+  top: 0;
+  z-index: 4;
+  width: var(--page-w);
+  height: var(--page-h);
+  transform-style: preserve-3d;
+  animation: book-turn-next 780ms cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
+}
+.book-turn.is-next {
+  left: var(--page-w);
+  transform-origin: left center;
+}
+.book-turn.is-previous {
+  left: 0;
+  transform-origin: right center;
+  animation-name: book-turn-previous;
+}
+.book-turn-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+.book-turn-face.is-back {
+  transform: rotateY(180deg);
+}
+.book-turn-face.is-front::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to right, var(--book-turn-shade), transparent 45%);
+  opacity: 0;
+  animation: book-turn-shade 780ms ease-in forwards;
+}
+.book-turn.is-previous .book-turn-face.is-front::after {
+  background: linear-gradient(to left, var(--book-turn-shade), transparent 45%);
+}
+@keyframes book-turn-next {
+  to {
+    transform: rotateY(-180deg);
+  }
+}
+@keyframes book-turn-previous {
+  to {
+    transform: rotateY(180deg);
+  }
+}
+@keyframes book-turn-shade {
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .book-turn,
+  .book-under {
+    display: none;
+  }
+}
+.book-text-extent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  pointer-events: none;
 }

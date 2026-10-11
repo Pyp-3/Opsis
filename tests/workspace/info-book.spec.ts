@@ -128,18 +128,34 @@ test('Info reads each page like a book, with the editor’s text, links, picture
     book(page).locator('.info-bar-where').filter({ hasText: 'Page 2 of 2' }),
   ).toBeVisible();
   await expect(leaf(page).locator('.info-notes li')).toHaveCount(0);
+  // On a wide screen the book lies open: two facing pages, each the size of a book's page.
+  const where = book(page).locator('.info-bar-where');
+  await expect(book(page).locator('.book-paper')).toHaveCount(2);
+  const [left, right] = await book(page)
+    .locator('.book-paper')
+    .evaluateAll((papers) => papers.map((paper) => paper.getBoundingClientRect()));
+  expect(left!.width).toBeGreaterThan(380);
+  expect(right!.x).toBeCloseTo(left!.x + left!.width, 0);
+  expect(left!.height).toBeGreaterThan(left!.width);
+  // Turning back from page 2 opens page 1 at its last spread, with a leaf turning over.
   await book(page).getByRole('button', { name: 'Previous page', exact: true }).click();
-  await expect(book(page).locator('.info-leaf.is-turning')).toHaveCount(1);
-  await expect(
-    book(page).locator('.info-bar-where').filter({ hasText: 'Page 1 of 2' }),
-  ).toBeVisible();
-  await expect(book(page).locator('.info-leaf.is-turning')).toHaveCount(0);
+  await expect(book(page).locator('.book-turn')).toHaveCount(1);
+  await expect(where).toContainText('Page 1 of 2');
+  await expect(book(page).locator('.book-turn')).toHaveCount(0);
+  const spreads = /· (\d+)(?:–(\d+))? of (\d+)/.exec(await where.innerText())!;
+  expect(Number(spreads[2] ?? spreads[1])).toBe(Number(spreads[3]));
   await expect(notes).toHaveCount(2);
+  // Within a page, the leaves turn spread by spread.
+  await book(page).getByRole('button', { name: 'Previous page', exact: true }).click();
+  await expect(book(page).locator('.book-turn')).toHaveCount(1);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: testInfo.outputPath('info-turning.png') });
+  await expect(where).not.toContainText(spreads[0]!);
+  await expect(book(page).locator('.book-turn')).toHaveCount(0);
   await leaf(page).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(
-    book(page).locator('.info-bar-where').filter({ hasText: 'Page 2 of 2' }),
-  ).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await expect(where).toContainText('Page 2 of 2');
   await page.getByRole('tab', { name: /Canvas/ }).click();
   await expect(page.getByRole('navigation', { name: 'Pages' })).toContainText('2 / 2');
   await page.keyboard.press('PageUp');

@@ -331,13 +331,21 @@ page's link, so links you sent earlier stop showing it.
 
 ## Read a page in Info
 
-The **Info** tab shows the page on the canvas as a page of a book: its title, the text you
-wrote for it, then each concept in reading order with its icon, summary and explanation,
-where it leads, and your footnotes. Info and the canvas always show the same page: turning
-a page in one turns the other. Turn pages with the arrows in the Info toolbar, the folded
-corners of the page, **←** and **→** while the page has focus, or **Page Up** and **Page
-Down**. The page flips over as it turns (it changes at once if your system asks for reduced
-motion). **Show on canvas** under a concept opens the canvas with that concept selected.
+The **Info** tab reads the page on the canvas like a book: its title, the text you wrote for
+it, then each concept in reading order with its icon, summary and explanation, where it leads,
+and your footnotes. On a wide enough window the book lies open: two facing pages either side
+of a spine, each shaped like a book's page, with the board's name and the page's title as
+running heads and page numbers at the foot. The page's text flows from one book page to the
+next; the toolbar shows which pages are open (for example **3–4 of 7**). Narrow windows and
+phones read it as one scrolling page, and writing always uses that single page.
+
+Info and the canvas always show the same page. Turn with the arrows in the Info toolbar, the
+folded corners, **←** and **→** while the book has focus, or **Page Up** and **Page Down**
+(which move a whole board page). In the open book a leaf turns over the spine; after the last
+book pages of one board page comes the next board page, and turning back from a board page
+opens the previous one at its end. Moving to a link, a button or a footnote on other book pages
+(by Tab or a footnote number) turns to them. Turns are instant if your system asks for reduced
+motion. **Show on canvas** under a concept opens the canvas with that concept selected.
 
 Owners and editors can write on the page:
 

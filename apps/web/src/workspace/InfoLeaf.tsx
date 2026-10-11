@@ -94,7 +94,13 @@ function NoteMarks({ notes, anchors }: { notes: NumberedFootnote[]; anchors: str
               onClick={(event) => {
                 event.preventDefault();
                 const target = document.getElementById(`${anchors}-note-${number}`);
-                target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                // In the open book, showing the note turns to the spread that holds it.
+                const bound = !!target?.closest('.book-text');
+                target?.scrollIntoView({
+                  block: 'center',
+                  inline: 'center',
+                  behavior: bound ? 'auto' : 'smooth',
+                });
                 target?.focus({ preventScroll: true });
               }}
             >
@@ -130,6 +136,8 @@ export type LeafProps = {
   textEditor?: ReactNode;
   /** The form for a footnote being added or changed. */
   noteEditor?: ReactNode;
+  /** Laid out as the pages of an open book, whose frame carries the running heads and folios. */
+  bound?: boolean;
 };
 
 /** One page of the book, as a printed page lays it out. */
@@ -150,6 +158,7 @@ export function InfoLeaf({
   onWrite,
   textEditor,
   noteEditor,
+  bound = false,
 }: LeafProps) {
   const notes = numberedFootnotes(page);
   const notesOn = (target: FootnoteTarget) =>
@@ -158,14 +167,16 @@ export function InfoLeaf({
   const empty = !page.nodes.length && !text.trim() && !notes.length;
   return (
     <>
-      <header className="info-running-head">
-        <span>{boardTitle}</span>
-        {total > 1 && (
-          <span>
-            Page {number} of {total}
-          </span>
-        )}
-      </header>
+      {!bound && (
+        <header className="info-running-head">
+          <span>{boardTitle}</span>
+          {total > 1 && (
+            <span>
+              Page {number} of {total}
+            </span>
+          )}
+        </header>
+      )}
       <h2 className="info-title">{title}</h2>
       {lead && <p className="info-lead">{lead}</p>}
 
@@ -311,9 +322,11 @@ export function InfoLeaf({
           )}
         </section>
       )}
-      <footer className="info-folio" aria-hidden>
-        {number}
-      </footer>
+      {!bound && (
+        <footer className="info-folio" aria-hidden>
+          {number}
+        </footer>
+      )}
     </>
   );
 }
