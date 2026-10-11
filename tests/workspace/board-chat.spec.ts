@@ -44,7 +44,7 @@ test('private model threads persist separately from a shared canvas', async ({ p
   expect(threads[0].messages).toHaveLength(2);
   await page.reload();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  await page.locator('.chat-thread-menu summary').click();
+  // The full-page chat lists its threads alongside the conversation.
   await page
     .getByRole('list', { name: 'Chat threads' })
     .getByRole('button', { name: /Show delivery failure and retry/ })
@@ -91,9 +91,7 @@ test('private model threads persist separately from a shared canvas', async ({ p
   }
 });
 
-test('chat docks beside a live canvas on wide screens and can take the full page', async ({
-  page,
-}) => {
+test('chat is its own tab and can dock beside a live canvas on wide screens', async ({ page }) => {
   await signUp(page, 'Docked chat');
   await openEmailExample(page);
   const canvas = page.getByRole('region', { name: 'Interactive diagram canvas' });
@@ -103,13 +101,30 @@ test('chat docks beside a live canvas on wide screens and can take the full page
     page.locator('.workspace-header').getByRole('tablist', { name: 'Board workspace tabs' }),
   ).toBeVisible();
 
+  // By default Chat takes its own page, with its threads alongside.
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(chat).toBeVisible();
-  await expect(canvas).toBeVisible();
-  expect((await chat.boundingBox())!.x).toBeGreaterThan((await canvas.boundingBox())!.x);
+  await expect(canvas).toBeHidden();
+  await expect(page.getByRole('list', { name: 'Chat threads' })).toBeVisible();
   await expect(page.getByLabel('What would you like to understand?')).toBeFocused();
 
-  // A proposal is reviewed beside the conversation, and the Canvas tab says one is waiting.
+  // A proposal from the full-page chat is reviewed on the Canvas tab.
+  await page
+    .getByLabel('What would you like to understand?')
+    .fill('Show delivery failure and retry');
+  await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /Canvas · Review ready/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Review on canvas' }).click();
+  await expect(page.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: 'Keep current board', exact: true }).click();
+
+  // Docking is an optional fallback: the chat then sits beside a live canvas.
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Chat beside canvas' }).click();
+  await expect(canvas).toBeVisible();
+  expect((await chat.boundingBox())!.x).toBeGreaterThan((await canvas.boundingBox())!.x);
+
+  // A proposal is then reviewed beside the conversation.
   await page
     .getByLabel('What would you like to understand?')
     .fill('Show delivery failure and retry');
@@ -123,16 +138,15 @@ test('chat docks beside a live canvas on wide screens and can take the full page
   await page.getByRole('button', { name: 'Keep current board', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Canvas', exact: true })).toBeVisible();
 
-  // Expanding takes the full page, lists threads alongside, and is remembered.
+  // The docked choice is remembered, and expanding returns to the full page.
+  await page.reload();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await expect(canvas).toBeVisible();
+  expect((await accessibilityScan(page)).violations).toEqual([]);
   await page.getByRole('button', { name: 'Expand chat' }).click();
   await expect(canvas).toBeHidden();
   await expect(page.getByRole('list', { name: 'Chat threads' })).toBeVisible();
-  await page.reload();
-  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
-  await expect(canvas).toBeHidden();
   await page.getByRole('button', { name: 'Chat beside canvas' }).click();
-  await expect(canvas).toBeVisible();
-  expect((await accessibilityScan(page)).violations).toEqual([]);
   await page.getByRole('button', { name: 'Close chat' }).click();
   await expect(chat).toHaveCount(0);
   await expect(page.getByRole('tab', { name: /Canvas/ })).toHaveAttribute('aria-selected', 'true');
@@ -146,6 +160,7 @@ test('docked chat model settings stay reachable and can be closed on a short scr
   await page.goto('/');
   await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Chat beside canvas' }).click();
   await expect(page.getByRole('region', { name: 'Interactive diagram canvas' })).toBeVisible();
   await page.getByLabel('Agent', { exact: true }).selectOption('claude');
   const toggle = page.getByRole('button', { name: /^Model settings:/ });
@@ -268,6 +283,7 @@ test('selected drawings become the chat focus, and threads keep notes and outcom
     .toEqual([['coral', 'dashed']]);
 
   // The thread records the outcome and keeps notes for the next turn.
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.chat-outcome').last()).toHaveText('Applied');
   await page.locator('.chat-memory summary').click();
   await expect(page.locator('.chat-memory pre')).toContainText(
@@ -293,5 +309,6 @@ test('selected drawings become the chat focus, and threads keep notes and outcom
   });
   await page.getByRole('button', { name: 'Review on canvas' }).click();
   await review.getByRole('button', { name: 'Keep current board' }).click();
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.chat-outcome').last()).toHaveText('Discarded');
 });

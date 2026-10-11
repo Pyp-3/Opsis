@@ -249,8 +249,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     chatVisible.current = next === 'chat';
     if (next === 'chat') setChatUnread(false);
   }, []);
-  // On wide screens Chat docks beside a live canvas unless the reader expanded it.
-  const [chatDockPreference, setChatDockPreference] = useRememberedOpen('opsis:chat-docked', true);
+  // Chat is its own tab; on wide screens the reader may dock it beside a live canvas instead.
+  // A new key, so the earlier docked-by-default choice does not carry over.
+  const [chatDockPreference, setChatDockPreference] = useRememberedOpen('opsis:chat-dock', false);
   const wide = useMediaQuery(DOCK_QUERY);
   const chatLayout = !wide ? 'narrow' : chatDockPreference ? 'docked' : 'full';
   const chatDocked = canvasTab === 'chat' && chatLayout === 'docked';

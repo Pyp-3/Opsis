@@ -424,6 +424,8 @@ test('chat sketches beside the diagram after review, and sketches rotate and res
   await signUp(page);
   await openEmailExample(page);
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  // Docked, the canvas stays in view while the sketch streams in.
+  await page.getByRole('button', { name: 'Chat beside canvas' }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('demo');
   await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
   await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
@@ -704,6 +706,8 @@ test('an agent sketch streams onto the canvas, then changes by edits after revie
   await signUp(page);
   await openEmailExample(page);
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+  // Docked, the canvas stays in view while the sketch streams in.
+  await page.getByRole('button', { name: 'Chat beside canvas' }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('demo');
   await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
   await page.getByRole('button', { name: 'Generate diagram', exact: true }).click();
