@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -107,6 +108,13 @@ func (b *Bridge) vm(ctx context.Context) (*goja.Runtime, catalog, error) {
 		encoded, _ := json.Marshal(map[string]any{"status": response.StatusCode, "body": string(body)})
 		return string(encoded)
 	})
+	// The tools name new pages and footnotes with random ids (a hidden page's id is its link),
+	// as browsers and Node do with crypto.randomUUID; the VM has no crypto of its own.
+	random := vm.NewObject()
+	_ = random.Set("randomUUID", func() string { return uuid.NewString() })
+	if err := vm.Set("crypto", random); err != nil {
+		return nil, catalog{}, err
+	}
 	if _, err := vm.RunProgram(program); err != nil {
 		return nil, catalog{}, err
 	}
