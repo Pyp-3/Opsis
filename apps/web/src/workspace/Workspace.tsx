@@ -11,6 +11,7 @@ import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
 import { BoardChat } from './BoardChat';
 import { ChatFocusBar } from './ChatFocusBar';
 import { WorkspaceTabs, type CanvasTab } from './WorkspaceTabs';
+import { InfoBook } from './InfoBook';
 import { DOCK_QUERY, useMediaQuery } from './useMediaQuery';
 import { useBoardChat } from './useBoardChat';
 import { BoardComposer } from './BoardComposer';
@@ -1773,6 +1774,35 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   chatComposer
                 )}
               </BoardChat>
+            )}
+          </div>
+          <div
+            id="info-panel"
+            role="tabpanel"
+            aria-labelledby="info-tab"
+            className="info-panel"
+            hidden={canvasTab !== 'info'}
+          >
+            {canvasTab === 'info' && (
+              <InfoBook
+                document={pages.document}
+                pageId={pageId}
+                boardId={library.activeId}
+                editable={!busy && !playerOpen}
+                locked={generation.busy || chatSending || !!generation.review}
+                onOpenPage={goToPage}
+                onCommit={commit}
+                history={{
+                  canUndo: !busy && history.past.length > 0,
+                  canRedo: !busy && history.future.length > 0,
+                  onUndo: () => undo(),
+                  onRedo: () => undo(true),
+                }}
+                onShowConcept={(id) => {
+                  setCanvasTab('canvas');
+                  requestAnimationFrame(() => selectNode(id));
+                }}
+              />
             )}
           </div>
         </div>

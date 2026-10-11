@@ -13,6 +13,7 @@ import { registerBoardChat } from './board-chat.js';
 import { registerBoardSearch } from './board-search.js';
 import { isInternalRequest, registerAuth, requireUser } from './auth.js';
 import { registerGuestAccess } from './guest-access.js';
+import { registerBoardImages } from './board-images.js';
 import { registerRender } from './render.js';
 import { serverModeFromEnv, WEB_APP_CSP, type ServerMode } from './server-mode.js';
 import { kokoroEngine, registerSpeech, type SpeechEngine } from './speech.js';
@@ -160,6 +161,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerBoardSearch(app, store);
   registerSpeech(app, speech, narrationAccess(store));
   registerRender(app, { requireUser });
+  registerBoardImages(app, store);
   const requests = new Map<string, number[]>();
 
   app.addHook('onClose', async () => store.close());
@@ -175,7 +177,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Multiple canvas views poll cheap library reads without consuming the write/model budget.
     const boardRead =
       request.method === 'GET' &&
-      (route === '/v1/boards' || route === '/v1/boards/:id' || route === '/v1/guest/boards/:id');
+      [
+        '/v1/boards',
+        '/v1/boards/:id',
+        '/v1/guest/boards/:id',
+        '/v1/boards/:id/images/:image',
+        '/v1/guest/boards/:id/images/:image',
+      ].includes(route);
     // Sign-in attempts have their own budget: guessing passwords cannot also starve real work,
     // and real work cannot lock someone out of signing in.
     const bucket = speech

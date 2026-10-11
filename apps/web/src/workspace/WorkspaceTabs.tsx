@@ -1,12 +1,13 @@
-import { MessagesSquare, Sparkles, Workflow } from 'lucide-react';
+import { BookOpen, MessagesSquare, Workflow } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
-export type CanvasTab = 'canvas' | 'chat';
+export type CanvasTab = 'canvas' | 'chat' | 'info';
+const TABS: readonly CanvasTab[] = ['canvas', 'chat', 'info'];
 
 /**
- * The board's Canvas / Chat switch, kept in the header so no row is taken from the canvas.
- * Canvas shows when an agent is drawing or a proposal awaits review; Chat shows a reply
- * that arrived while it was out of view.
+ * The board's Canvas / Chat / Info switch, kept in the header so no row is taken from the
+ * canvas. Canvas shows when an agent is drawing or a proposal awaits review; Chat shows a reply
+ * that arrived while it was out of view. Info reads the open page as a page of a book.
  */
 export function WorkspaceTabs({
   tab,
@@ -22,14 +23,13 @@ export function WorkspaceTabs({
   const move = (event: KeyboardEvent) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
+    const at = TABS.indexOf(tab);
     const next: CanvasTab =
       event.key === 'Home'
-        ? 'canvas'
+        ? TABS[0]!
         : event.key === 'End'
-          ? 'chat'
-          : tab === 'canvas'
-            ? 'chat'
-            : 'canvas';
+          ? TABS[TABS.length - 1]!
+          : TABS[(at + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]!;
     onSelect(next);
     document.getElementById(`${next}-tab`)?.focus();
   };
@@ -75,14 +75,16 @@ export function WorkspaceTabs({
         {chatUnread && <span className="tab-status is-unread" aria-hidden />}
       </button>
       <button
+        id="info-tab"
         role="tab"
-        className="tab-placeholder"
-        aria-selected={false}
-        disabled
-        title="Reserved for a future feature"
+        aria-selected={tab === 'info'}
+        tabIndex={tab === 'info' ? 0 : -1}
+        aria-controls="info-panel"
+        title="Read this page like a book"
+        onClick={() => onSelect('info')}
       >
-        <Sparkles size={14} aria-hidden />
-        <span className="tab-label">Coming soon</span>
+        <BookOpen size={15} aria-hidden />
+        <span className="tab-label">Info</span>
       </button>
     </div>
   );

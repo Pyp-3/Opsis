@@ -25,6 +25,7 @@ export const PAGE_CONTENT_KEYS = [
   'drawingLayers',
   'suggestions',
   'narration',
+  'info',
 ] as const satisfies readonly (keyof BoardPageContent)[];
 
 export type PageSummary = { id: string; title: string; hidden: boolean };

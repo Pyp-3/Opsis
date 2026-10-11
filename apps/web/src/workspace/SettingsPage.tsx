@@ -2,9 +2,11 @@ import { ModelSettingsPanel } from './ModelSettingsPanel';
 import { CostProjectionPanel } from './CostProjectionPanel';
 import { ApiKeysPanel } from './ApiKeysPanel';
 import type { ModelPreferences } from './model-settings';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAppearance } from './useAppearance';
 import {
   ArrowUpRight,
+  BookOpen,
   Check,
   Layers,
   Monitor,
@@ -20,16 +22,13 @@ import {
   CUSTOM_ACCENT,
   DEFAULT_APP_THEME,
   FONT_SCHEMES,
+  READING_FONTS,
+  READING_SIZES,
   SURFACE_SCHEMES,
   accentOf,
-  applyAppTheme,
   fontOf,
-  readAppTheme,
   sameTheme,
-  saveAppearance,
   surfaceOf,
-  writeAppTheme,
-  type AppTheme,
   type ThemeMode,
 } from './app-theme';
 import { HEX_COLOUR } from './theme-colour';
@@ -50,43 +49,13 @@ export function SettingsPage({
   onChange: (value: ModelPreferences) => void;
 }) {
   const [section, setSection] = useState<'models' | 'appearance' | 'cost' | 'keys'>('models');
-  const [theme, setThemeState] = useState<AppTheme>(() => readAppTheme());
+  const { theme, set, saved } = useAppearance();
   useEffect(() => {
     document.title = 'Settings · Opsis';
     return () => {
       document.title = 'Opsis';
     };
   }, []);
-  // The look applies at once; saving to the account waits until a picker stops moving.
-  const [saved, setSaved] = useState<'saved' | 'saving' | 'failed'>('saved');
-  const pending = useRef<{ timer: number; theme: AppTheme } | null>(null);
-  const save = (next: AppTheme) =>
-    saveAppearance(next).then(
-      () => setSaved('saved'),
-      () => setSaved('failed'),
-    );
-  useEffect(
-    () => () => {
-      if (!pending.current) return;
-      window.clearTimeout(pending.current.timer);
-      void saveAppearance(pending.current.theme).catch(() => undefined);
-    },
-    [],
-  );
-  const set = (next: AppTheme) => {
-    setThemeState(next);
-    applyAppTheme(next);
-    writeAppTheme(next);
-    setSaved('saving');
-    if (pending.current) window.clearTimeout(pending.current.timer);
-    pending.current = {
-      theme: next,
-      timer: window.setTimeout(() => {
-        pending.current = null;
-        void save(next);
-      }, 400),
-    };
-  };
   const font = fontOf(theme);
   const accent = accentOf(theme);
   const surface = surfaceOf(theme);
@@ -268,6 +237,46 @@ export function SettingsPage({
                     </span>
                     <small style={{ fontFamily: scheme.ui }}>{scheme.note}</small>
                     {theme.font === scheme.id && <Check size={15} aria-hidden />}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="settings-card">
+              <legend>
+                <BookOpen size={14} /> Reading
+              </legend>
+              <p className="settings-card-note">For long text, such as a page’s Info.</p>
+              <div className="theme-fonts" role="radiogroup" aria-label="Reading typeface">
+                {READING_FONTS.map((scheme) => (
+                  <button
+                    type="button"
+                    key={scheme.id}
+                    role="radio"
+                    aria-checked={theme.readingFont === scheme.id}
+                    onClick={() => set({ ...theme, readingFont: scheme.id })}
+                  >
+                    <span className="theme-font-name" style={{ fontFamily: scheme.display }}>
+                      {scheme.name}
+                    </span>
+                    <small style={{ fontFamily: scheme.body }}>{scheme.note}</small>
+                    {theme.readingFont === scheme.id && <Check size={15} aria-hidden />}
+                  </button>
+                ))}
+              </div>
+              <div className="theme-modes" role="radiogroup" aria-label="Reading size">
+                {READING_SIZES.map((size) => (
+                  <button
+                    type="button"
+                    key={size.id}
+                    role="radio"
+                    aria-checked={theme.readingSize === size.id}
+                    onClick={() => set({ ...theme, readingSize: size.id })}
+                  >
+                    <span style={{ fontSize: size.px * 0.8 }} aria-hidden>
+                      Aa
+                    </span>
+                    <strong>{size.name}</strong>
                   </button>
                 ))}
               </div>

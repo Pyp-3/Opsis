@@ -64,6 +64,8 @@ function comparePage(
 ) {
   for (const field of ['groups', 'pinnedNodeIds'] as const)
     add(`${prefix}${field}`, before?.[field], after?.[field]);
+  add(`${prefix}Info text`, before?.info?.text, after?.info?.text);
+  add(`${prefix}Footnotes`, before?.info?.footnotes, after?.info?.footnotes);
   for (const collection of ['nodes', 'edges'] as const) {
     const left = before?.[collection] ?? [];
     const right = after?.[collection] ?? [];

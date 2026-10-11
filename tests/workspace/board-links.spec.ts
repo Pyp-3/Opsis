@@ -24,10 +24,10 @@ test('saves concept links, follows them and returns, without exposing private ba
     .toBe(1);
   await page.getByRole('button', { name: 'Open linked board', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Back to previous board' })).toBeVisible();
-  await page.getByText('Linked from', { exact: true }).click();
-  await expect(
-    page.locator('details').filter({ has: page.getByText('Linked from', { exact: true }) }),
-  ).toContainText(source.title);
+  // Below wide screens the header shows this as an icon; its accessible name stays.
+  const linkedFrom = page.locator('details').filter({ has: page.getByLabel('Linked from') });
+  await linkedFrom.getByLabel('Linked from').click();
+  await expect(linkedFrom).toContainText(source.title);
   await page.getByRole('button', { name: 'Back to previous board' }).click();
   await expect(page.locator('.board-link-marker')).toBeVisible();
   const context = await browser.newContext();

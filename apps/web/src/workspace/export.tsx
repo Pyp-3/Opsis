@@ -1,3 +1,4 @@
+import { pageInfoMarkdown } from './info-export';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { saveBlob } from '../desktop';
 import {
@@ -130,8 +131,10 @@ export function download(content: string, name: string, type: string) {
 
 export function boardMarkdown(board: BoardDocument): string {
   const safe = (value: string) => value.replace(/[\\`*_{}[\]<>#|]/g, '\\$&');
+  const info = pageInfoMarkdown(board, safe);
   return (
     `# ${safe(board.title)}\n\n${safe(board.description)}\n\n` +
+    (info ? `${info}\n\n` : '') +
     board.nodes
       .map((node, index) => {
         const paths = board.edges

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { boardPage, resolvePageId } from '@opsis/schema';
 import { ReadOnlyBoard } from './ReadOnlyBoard';
+import { ReaderViewTabs } from './ReaderViewTabs';
+import { InfoBook } from './InfoBook';
 import { apiFetch } from '../app-url';
 import { navigate } from '../router';
 import { AUTH_EXPIRED, BoardListSchema } from './board-library-api';
@@ -98,6 +100,7 @@ function GuestPublicBoard({ id, linkedPage }: { id: string; linkedPage: string |
   const path = `/v1/boards/${encodeURIComponent(id)}${linkedPage ? `?page=${encodeURIComponent(linkedPage)}` : ''}`;
   const state = useSharedBoard(path);
   const [requestedPage, setRequestedPage] = useState(linkedPage);
+  const [readerView, setReaderView] = useState<'canvas' | 'info'>('canvas');
   if (state.status === 'loading') return <p role="status">Opening the public board…</p>;
   if (state.status === 'missing')
     return <p role="alert">This public board is no longer available.</p>;
@@ -111,22 +114,40 @@ function GuestPublicBoard({ id, linkedPage }: { id: string; linkedPage: string |
       <h1>{board.title}</h1>
       <p>{board.description}</p>
       {state.updated && <p role="status">Board updated. Play again to hear the latest version.</p>}
-      <ReadOnlyBoard
-        board={fullBoard}
-        boardId={id}
-        pageId={pageId}
-        onPage={setRequestedPage}
-        label="Read-only public diagram"
-        className="guest-canvas"
-      />
-      <section aria-label="Board explanations" className="guest-explanations">
-        {board.nodes.map((node) => (
-          <article key={node.id}>
-            <h2>{node.label}</h2>
-            <p>{node.summary}</p>
-          </article>
-        ))}
-      </section>
+      <ReaderViewTabs view={readerView} onView={setReaderView} />
+      {readerView === 'info' ? (
+        <div className="guest-info">
+          <InfoBook
+            document={fullBoard}
+            pageId={pageId}
+            boardId={id}
+            editable={false}
+            // Guest accounts read images through the board's open address, like link visitors.
+            signedOut
+            showReadingControls={false}
+            onOpenPage={setRequestedPage}
+          />
+        </div>
+      ) : (
+        <>
+          <ReadOnlyBoard
+            board={fullBoard}
+            boardId={id}
+            pageId={pageId}
+            onPage={setRequestedPage}
+            label="Read-only public diagram"
+            className="guest-canvas"
+          />
+          <section aria-label="Board explanations" className="guest-explanations">
+            {board.nodes.map((node) => (
+              <article key={node.id}>
+                <h2>{node.label}</h2>
+                <p>{node.summary}</p>
+              </article>
+            ))}
+          </section>
+        </>
+      )}
     </>
   );
 }

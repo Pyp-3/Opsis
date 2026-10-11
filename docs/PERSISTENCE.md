@@ -66,6 +66,21 @@ chips beside collections, never move or change boards, and up to 50 are kept per
 account. Like filing, tagging does not change a board's revision, update time or
 undo history. Tables: `board_tags` and `smart_collections` (migration 5).
 
+### Info pictures
+
+Pictures in a page's Info are stored once, outside the board document, named by the
+SHA-256 of their bytes (`board_images`, migration 7). `board_image_refs` records which
+boards may show each picture: an upload records it for that board, and every save, copy,
+restored revision and collection import records the pictures its document (including its
+undo history) shows, if they are already stored. References are never removed while the
+board exists, so undo and restored revisions keep their pictures; deleting a board removes
+its references and then any picture no remaining board shows and no template names. Both
+hosts accept only PNG, JPEG and WebP (checked by signature, at most 2 MB and 2,400 pixels a
+side, up to 200 per board) and serve them with their checked type, `nosniff` and a
+sandboxing content policy to anyone who may read the board. Pictures are in full-database
+backups. Collection bundles and board files hold the text that names a picture, not the
+picture, so on another server the picture is shown as unavailable.
+
 The revision archive starts with the saved state present when the migration is
 installed and records subsequent successful content saves and archive changes.
 It cannot reconstruct older saves that were never retained. Undo/redo stays

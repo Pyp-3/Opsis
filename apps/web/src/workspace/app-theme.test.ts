@@ -53,9 +53,19 @@ describe('app theme', () => {
   });
 
   it('round-trips a valid choice through storage', () => {
-    const chosen: AppTheme = { mode: 'dark', accent: 'ocean', surface: 'warm', font: 'inter' };
+    const chosen: AppTheme = {
+      mode: 'dark',
+      accent: 'ocean',
+      surface: 'warm',
+      font: 'inter',
+      readingFont: 'plain',
+      readingSize: 'large',
+    };
     writeAppTheme(chosen);
     expect(readAppTheme()).toEqual(chosen);
+    // A look saved before reading settings existed reads with the default reading text.
+    writeAppTheme({ mode: 'dark', accent: 'ocean', surface: 'warm', font: 'inter' } as AppTheme);
+    expect(readAppTheme()).toMatchObject({ readingFont: 'book', readingSize: 'medium' });
   });
 
   it('sets data-theme only for a forced scheme and clears it for system', () => {
@@ -66,7 +76,14 @@ describe('app theme', () => {
   });
 
   it('injects one override stylesheet with the accent and fonts', () => {
-    applyAppTheme({ mode: 'light', accent: 'ocean', surface: 'sage', font: 'inter' });
+    applyAppTheme({
+      ...DEFAULT_APP_THEME,
+      mode: 'light',
+      accent: 'ocean',
+      font: 'inter',
+      readingFont: 'plain',
+      readingSize: 'small',
+    });
     const style = document.getElementById('opsis-app-theme');
     expect(style).not.toBeNull();
     const ocean = ACCENT_SCHEMES.find((s) => s.id === 'ocean')!;
@@ -74,18 +91,15 @@ describe('app theme', () => {
     expect(style!.textContent).toContain(`--accent:${ocean.light.accent}`);
     expect(style!.textContent).toContain(`--accent:${ocean.dark.accent}`);
     expect(style!.textContent).toContain(`--font-ui:${inter.ui}`);
+    expect(style!.textContent).toContain(`--font-reading:'Inter', system-ui, sans-serif`);
+    expect(style!.textContent).toContain('--reading-size:16px');
     // Applying again reuses the same element rather than stacking stylesheets.
     applyAppTheme({ ...DEFAULT_APP_THEME });
     expect(document.querySelectorAll('#opsis-app-theme')).toHaveLength(1);
   });
 
   it('cascades the accent for system, forced dark and forced light', () => {
-    const css = themeStylesheet({
-      mode: 'system',
-      accent: 'rose',
-      surface: 'sage',
-      font: 'signal',
-    });
+    const css = themeStylesheet({ ...DEFAULT_APP_THEME, accent: 'rose' });
     expect(css).toContain('@media (prefers-color-scheme: dark)');
     expect(css).toContain(":root[data-theme='dark']");
     expect(css).toContain(":root[data-theme='light']");
@@ -215,6 +229,8 @@ describe('appearance on the account', () => {
       customAccent: '#c0ffee',
       surface: 'dusk',
       font: 'inter',
+      readingFont: 'interface',
+      readingSize: 'small',
     };
     account({ appearance: look });
     await loadAccountSettings();

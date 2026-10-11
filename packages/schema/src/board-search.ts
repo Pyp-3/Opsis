@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { BoardDocument } from './board';
 import { everyBoardPage } from './board-pages';
+import { parseInfoText } from './page-info';
 
 /**
  * Keyword search across saved boards, shared by both hosts so ranking cannot drift.
@@ -27,7 +28,8 @@ export type SearchField =
   | 'explanation'
   | 'notes'
   | 'source'
-  | 'connection';
+  | 'connection'
+  | 'info';
 export type SearchHit = {
   boardId: string;
   boardTitle: string;
@@ -53,6 +55,7 @@ const WEIGHT: Record<SearchField, number> = {
   explanation: 2,
   notes: 2,
   source: 2,
+  info: 2,
 };
 
 /** Lower-cased, accent-free text so “resume” finds “Résumé”. */
@@ -85,7 +88,31 @@ function units(document: BoardDocument, title: string): Unit[] {
         ]),
       ],
     },
-    ...pages.flatMap(({ page, board }) => conceptUnits(board, page?.id)),
+    ...pages.flatMap(({ page, board }) => [
+      ...infoUnit(board, page?.id, page?.title ?? title),
+      ...conceptUnits(board, page?.id),
+    ]),
+  ];
+}
+
+/** A page's Info: its text (without picture lines) and footnotes, found on that page. */
+function infoUnit(board: BoardDocument, pageId: string | undefined, label: string): Unit[] {
+  const text = parseInfoText(board.info?.text ?? '')
+    .flatMap((block) =>
+      block.kind === 'image' ? [block.description] : block.lines.flat().map((span) => span.text),
+    )
+    .join(' ');
+  const notes = (board.info?.footnotes ?? []).map((note): [SearchField, string] => [
+    'info',
+    note.text,
+  ]);
+  if (!text.trim() && !notes.length) return [];
+  return [
+    {
+      ...(pageId ? { pageId } : {}),
+      label,
+      fields: [['info', text], ...notes],
+    },
   ];
 }
 

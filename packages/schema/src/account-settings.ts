@@ -36,6 +36,9 @@ export const AppearanceSettingSchema = z
       .optional(),
     surface: themeIdSchema,
     font: themeIdSchema,
+    /** The typeface and size of long text, such as a page's Info. */
+    readingFont: themeIdSchema.optional(),
+    readingSize: z.enum(['small', 'medium', 'large']).optional(),
   })
   .strict();
 export type AppearanceSetting = z.infer<typeof AppearanceSettingSchema>;

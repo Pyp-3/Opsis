@@ -382,6 +382,20 @@
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
+/* Below wide screens the least-used header buttons become icons (their names stay for assistive
+   technology and tooltips), so the board name keeps its place beside the three tabs. */
+@media (max-width: 1440px) {
+  .header-button .button-label,
+  .board-links summary .button-label {
+    display: none;
+  }
+  .header-button,
+  .board-links summary {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+}
 @media (max-width: 1100px) {
   .workspace-rail {
     width: 232px;

@@ -15,7 +15,14 @@ import {
   type BoardChatThread,
   type BoardVisibility,
   boardBacklinks,
+  snapshotImageIds,
+  MAX_BOARD_IMAGES,
+  type ImageFileInfo,
 } from '@opsis/schema';
+
+/** Images no board shows and no template names (a template keeps its board's text). */
+const UNUSED_IMAGES = `DELETE FROM board_images WHERE id NOT IN (SELECT image_id FROM board_image_refs)
+  AND NOT EXISTS (SELECT 1 FROM board_templates t WHERE instr(t.board, board_images.id) > 0)`;
 
 export type User = { id: string; email: string; name: string; role?: 'guest' };
 export type Visibility = BoardVisibility;
@@ -306,6 +313,7 @@ export class ApiStore {
           );
         for (const tag of entry.tags)
           this.sqlite.prepare('INSERT OR IGNORE INTO board_tags VALUES(?,?)').run(entry.id, tag);
+        this.recordImages(entry.id, entry.snapshot);
       }
       return { id: collectionId, name, boards: entries.map((entry) => entry.id) };
     })();
@@ -414,8 +422,52 @@ export class ApiStore {
           Date.now(),
           ownerId,
         );
+      this.recordImages(id, snapshot);
       return { id, revision: next };
     })();
+  }
+
+  /**
+   * Lets a board read the stored images its document shows. Only images already stored are
+   * recorded, and only by their content hash, which a reader learns by seeing the image.
+   */
+  private recordImages(boardId: string, snapshot: BoardSnapshot) {
+    const insert = this.sqlite.prepare(
+      'INSERT OR IGNORE INTO board_image_refs SELECT ?, id FROM board_images WHERE id = ?',
+    );
+    for (const image of snapshotImageIds(snapshot)) insert.run(boardId, image);
+  }
+
+  /**
+   * Stores an image for a board. Returns `'full'` when the board already holds the most images
+   * allowed; an identical image is stored once and shared.
+   */
+  saveImage(boardId: string, id: string, info: ImageFileInfo, data: Buffer) {
+    return this.sqlite.transaction(() => {
+      const known = this.sqlite
+        .prepare('SELECT 1 FROM board_image_refs WHERE board_id=? AND image_id=?')
+        .get(boardId, id);
+      if (known) return 'saved' as const;
+      const { count } = this.sqlite
+        .prepare('SELECT count(*) AS count FROM board_image_refs WHERE board_id=?')
+        .get(boardId) as { count: number };
+      if (count >= MAX_BOARD_IMAGES) return 'full' as const;
+      this.sqlite
+        .prepare('INSERT OR IGNORE INTO board_images VALUES(?,?,?,?,?,?)')
+        .run(id, info.mediaType, info.width, info.height, data, Date.now());
+      this.sqlite.prepare('INSERT INTO board_image_refs VALUES(?,?)').run(boardId, id);
+      return 'saved' as const;
+    })();
+  }
+
+  /** A stored image the board may show, or undefined. */
+  getImage(boardId: string, id: string) {
+    return this.sqlite
+      .prepare(
+        `SELECT i.media_type AS mediaType, i.data FROM board_images i
+         JOIN board_image_refs r ON r.image_id = i.id WHERE r.board_id=? AND i.id=?`,
+      )
+      .get(boardId, id) as { mediaType: string; data: Buffer } | undefined;
   }
 
   isEditor(id: string, userId: string) {
@@ -716,6 +768,8 @@ export class ApiStore {
         .all(id) as { userId: string; id: string }[];
       this.sqlite.prepare('INSERT INTO deleted_boards_v2 (id) VALUES (?)').run(id);
       this.sqlite.prepare('DELETE FROM boards_v2 WHERE id = ?').run(id);
+      // Images no remaining board or template shows go with it.
+      this.sqlite.prepare(UNUSED_IMAGES).run();
       return { threads };
     })();
   }

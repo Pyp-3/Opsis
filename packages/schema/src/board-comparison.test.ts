@@ -22,10 +22,24 @@ describe('board comparison', () => {
     after.nodes[0]!.notes = 'A local note';
     after.positions.sender = { x: 12, y: 34 };
     after.groups![0]!.collapsed = false;
+    after.info = {
+      text: 'Written for the page',
+      footnotes: [{ id: 'n', target: { kind: 'concept', id: 'sender' }, text: 'A footnote' }],
+    };
     const result = compareBoards(before, after);
     expect(result.map((item) => item.label)).toEqual(
-      expect.arrayContaining(['Concept sender', 'Position sender', 'groups']),
+      expect.arrayContaining([
+        'Concept sender',
+        'Position sender',
+        'groups',
+        'Info text',
+        'Footnotes',
+      ]),
     );
+    expect(result.find((item) => item.label === 'Info text')).toMatchObject({
+      before: '(absent)',
+      after: 'Written for the page',
+    });
     expect(before.nodes[0]!.notes).toBeUndefined();
     expect(compareBoards(before, before)).toEqual([]);
   });

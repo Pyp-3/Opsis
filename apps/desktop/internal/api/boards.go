@@ -298,6 +298,10 @@ func (s *Server) boardRoutes() {
 		if _, err := tx.Exec(`DELETE FROM boards_v2 WHERE id=?`, id); err != nil {
 			return err
 		}
+		// Images no remaining board shows go with it.
+		if err := removeUnusedImages(tx); err != nil {
+			return err
+		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}
@@ -306,6 +310,7 @@ func (s *Server) boardRoutes() {
 		return nil
 	})
 	s.templateRoutes()
+	s.imageRoutes()
 	s.boardHistoryRoutes()
 	s.collectionRoutes()
 	s.organizationRoutes()

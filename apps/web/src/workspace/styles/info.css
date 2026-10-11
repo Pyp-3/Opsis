@@ -1,0 +1,737 @@
+/* ── Info: the open page read as a page of a book ─────────────────────── */
+/* Colours come from the palette tokens, so every background and accent applies; the reading
+   typeface and size come from Appearance (--font-reading, --reading-size). */
+.info-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.info-panel[hidden] {
+  display: none;
+}
+.info-book {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse at 50% -10%, var(--accent-soft), transparent 60%), var(--sunken);
+}
+/* In dark schemes the page is lighter than the desk, as paper is under a lamp. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .info-book {
+    background-color: var(--paper);
+  }
+}
+:root[data-theme='dark'] .info-book {
+  background-color: var(--paper);
+}
+.info-book.is-empty {
+  display: grid;
+  place-items: center;
+}
+
+.info-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 20px;
+  font-family: var(--font-ui);
+  background: color-mix(in srgb, var(--sunken) 86%, transparent);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+.info-bar-pages,
+.info-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.info-bar-pages button,
+.info-bar-icon,
+.info-reading summary {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink-2);
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.info-bar-pages button:hover:not(:disabled),
+.info-bar-icon:hover:not(:disabled),
+.info-reading summary:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.info-bar-pages button:disabled,
+.info-bar-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.info-bar-where {
+  min-width: 96px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink-2);
+}
+.info-bar-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+.info-bar-edit:hover {
+  border-color: var(--accent);
+}
+
+/* Reading settings, a small popover from the toolbar. */
+.info-reading {
+  position: relative;
+}
+.info-reading summary {
+  list-style: none;
+}
+.info-reading summary::-webkit-details-marker {
+  display: none;
+}
+.info-reading[open] summary {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.info-reading-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 4;
+  display: grid;
+  gap: 10px;
+  width: 248px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.info-reading-panel [role='radiogroup'] {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--sunken);
+  border-radius: 9px;
+}
+.info-reading-panel [role='radio'] {
+  flex: 1;
+  height: 32px;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: transparent;
+  border-radius: 7px;
+}
+.info-reading-panel [role='radio'][aria-checked='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--surface);
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 1px var(--line);
+}
+.info-reading-panel small {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* The desk the book lies on, and the stack of pages under the open one. */
+.info-desk {
+  display: flex;
+  justify-content: center;
+  padding: 32px 20px 72px;
+}
+.info-stack {
+  position: relative;
+  width: min(100%, 47rem);
+  perspective: 2400px;
+}
+.info-leaf {
+  position: relative;
+  min-height: min(72vh, 58rem);
+  padding: clamp(28px, 6vw, 64px) clamp(22px, 7vw, 76px) 72px;
+  font-family: var(--font-reading, 'Source Serif 4', Georgia, serif);
+  font-size: var(--reading-size, 18px);
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: 4px 12px 12px 4px;
+  box-shadow:
+    var(--shadow-md),
+    4px 4px 0 -1px var(--surface),
+    4px 4px 0 0 var(--line-strong),
+    8px 8px 0 -1px var(--surface),
+    8px 8px 0 0 var(--line);
+  overflow-wrap: anywhere;
+}
+/* The binding: a soft shade along the spine. */
+.info-leaf::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30px;
+  pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent), transparent);
+  border-radius: 4px 0 0 4px;
+}
+.info-leaf:focus {
+  outline: none;
+}
+
+.info-running-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1.8em;
+  padding-bottom: 10px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line);
+}
+.info-running-head span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.info-title {
+  margin: 0 0 0.45em;
+  font-family: var(--font-reading-display, 'Fraunces', Georgia, serif);
+  font-size: 2.05em;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.info-lead {
+  margin: 0 0 1.4em;
+  font-size: 1.14em;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.info-prose p,
+.info-object p {
+  margin: 0 0 0.9em;
+}
+.info-leaf a {
+  color: var(--accent-text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.info-leaf a:hover {
+  text-decoration-thickness: 2px;
+}
+.info-figure {
+  margin: 1.5em 0;
+}
+.info-figure img,
+.info-figure-missing {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 62vh;
+  margin: 0 auto;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.info-figure-missing {
+  display: grid;
+  place-items: center;
+  height: 8em;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.info-figure figcaption {
+  margin-top: 0.6em;
+  font-family: var(--font-ui);
+  font-size: 0.74em;
+  text-align: center;
+  color: var(--ink-2);
+}
+.info-empty {
+  font-style: italic;
+  color: var(--ink-3);
+}
+.info-write {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 1.4em;
+  padding: 10px 14px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--accent-text);
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+.info-write:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Each concept, in reading order, with its icon as the page's only ornament. */
+.info-objects {
+  display: grid;
+  gap: 1.7em;
+  margin-top: 2em;
+  padding-top: 1.7em;
+  border-top: 1px solid var(--line);
+}
+.info-object {
+  display: grid;
+  grid-template-columns: 2.3em minmax(0, 1fr);
+  gap: 0.9em;
+}
+.info-object-icon {
+  display: grid;
+  place-items: center;
+  width: 2.3em;
+  height: 2.3em;
+  margin-top: 0.1em;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 50%;
+}
+.info-object h3 {
+  margin: 0 0 0.25em;
+  font-family: var(--font-reading-display, 'Fraunces', Georgia, serif);
+  font-size: 1.24em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.info-object .info-summary {
+  font-weight: 600;
+}
+.info-caveat,
+.info-leads-to {
+  font-size: 0.9em;
+  color: var(--ink-2);
+}
+.info-object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--font-ui);
+}
+.info-object-actions button,
+.info-add-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: transparent;
+  border-radius: 999px;
+}
+.info-object-actions button:hover,
+.info-add-note:hover:not(:disabled) {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.info-add-note:disabled {
+  opacity: 0.5;
+}
+.info-note-marks {
+  margin-left: 2px;
+  font-family: var(--font-ui);
+  font-size: 0.6em;
+  font-weight: 650;
+  color: var(--accent-text);
+}
+.info-note-marks a {
+  padding: 0 2px;
+  text-decoration: none;
+}
+
+/* Footnotes, numbered as the reader meets them. */
+.info-notes {
+  margin-top: 2.4em;
+  padding-top: 1em;
+  font-size: 0.86em;
+  border-top: 1px solid var(--line);
+}
+.info-notes h3 {
+  margin: 0 0 0.8em;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.info-notes ol {
+  display: grid;
+  gap: 0.55em;
+  margin: 0 0 0.8em;
+  padding-left: 1.7em;
+}
+.info-notes li::marker {
+  font-family: var(--font-ui);
+  font-weight: 650;
+  color: var(--accent-text);
+}
+.info-notes li:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.info-note-on {
+  font-weight: 600;
+}
+.info-note-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.info-note-actions button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--ink-3);
+  background: transparent;
+  border-radius: 50%;
+}
+.info-note-actions button:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.info-folio {
+  position: absolute;
+  right: 0;
+  bottom: 22px;
+  left: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+/* Folded corners turn the page, as a reader lifts a corner of paper. */
+.info-corner {
+  position: absolute;
+  bottom: 0;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  color: var(--ink-2);
+  border: 0;
+  transition:
+    width 160ms var(--ease-out),
+    height 160ms var(--ease-out);
+}
+.info-corner.is-next {
+  right: 0;
+  place-items: end end;
+  padding: 0 8px 8px 0;
+  background: linear-gradient(
+    315deg,
+    var(--sunken) 0 49%,
+    color-mix(in srgb, var(--ink) 7%, var(--surface)) 50% 100%
+  );
+  border-radius: 10px 0 12px 0;
+}
+.info-corner.is-previous {
+  left: 0;
+  place-items: end start;
+  padding: 0 0 8px 8px;
+  background: linear-gradient(
+    45deg,
+    var(--sunken) 0 49%,
+    color-mix(in srgb, var(--ink) 7%, var(--surface)) 50% 100%
+  );
+  border-radius: 0 10px 0 4px;
+}
+.info-corner:hover:not(:disabled),
+.info-corner:focus-visible {
+  width: 58px;
+  height: 58px;
+  color: var(--accent-text);
+}
+.info-corner:disabled {
+  opacity: 0.5;
+}
+
+/* The page that turns away: it lifts from its edge and folds over, shading as it goes. */
+.info-leaf.is-turning {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  animation: info-turn-next 640ms cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
+}
+.info-leaf.is-turning.is-previous {
+  transform-origin: right center;
+  animation-name: info-turn-previous;
+}
+.info-leaf.is-turning::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ink) 22%, transparent)
+  );
+  opacity: 0;
+  animation: info-turn-shade 640ms ease-in forwards;
+}
+.info-leaf.is-turning.is-previous::after {
+  background: linear-gradient(
+    270deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ink) 22%, transparent)
+  );
+}
+@keyframes info-turn-next {
+  to {
+    transform: rotateY(-180deg);
+  }
+}
+@keyframes info-turn-previous {
+  to {
+    transform: rotateY(180deg);
+  }
+}
+@keyframes info-turn-shade {
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .info-leaf.is-turning {
+    display: none;
+  }
+  .info-corner {
+    transition: none;
+  }
+}
+
+/* Writing: the page text and footnotes, in the interface's own font. */
+.info-editor,
+.info-note-editor {
+  margin: 0 0 1.4em;
+  padding: 12px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+}
+.info-note-editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  margin: 0.4em 0 0;
+}
+.info-note-editor > label {
+  padding-top: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.info-note-editor .info-editor-actions {
+  grid-column: 1 / -1;
+}
+.info-editor textarea,
+.info-note-editor textarea,
+.info-note-editor select,
+.info-editor-panel input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.info-editor textarea {
+  min-height: 15em;
+  font-family: var(--font-reading, 'Source Serif 4', Georgia, serif);
+  font-size: 16px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.info-note-editor textarea {
+  resize: vertical;
+}
+.info-editor textarea:focus,
+.info-note-editor textarea:focus,
+.info-note-editor select:focus,
+.info-editor-panel input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.info-editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.info-editor-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.info-editor-tools button[aria-pressed='true'] {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.info-editor-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.info-editor-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+  padding: 10px;
+  background: var(--sunken);
+  border-radius: var(--radius);
+}
+.info-editor-panel label {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.info-editor-panel small {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.info-editor-message {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--error-ink);
+  background: var(--error-bg);
+  border-radius: var(--radius);
+}
+.info-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.info-editor-actions small {
+  margin-right: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+@media (max-width: 760px) {
+  .info-bar {
+    padding: 6px 12px;
+  }
+  .info-bar-where {
+    min-width: 76px;
+  }
+  .info-desk {
+    padding: 14px 16px 48px;
+  }
+  .info-leaf {
+    min-height: 0;
+    padding: 24px 20px 64px;
+    border-radius: 4px 10px 10px 4px;
+    box-shadow:
+      var(--shadow-sm),
+      3px 3px 0 -1px var(--surface),
+      3px 3px 0 0 var(--line-strong);
+  }
+  .info-title {
+    font-size: 1.7em;
+  }
+  .info-object {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .info-object-icon {
+    width: 2em;
+    height: 2em;
+  }
+  .info-note-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .info-note-editor > label {
+    padding-top: 0;
+  }
+}
+
+/* People who only view a shared board read the same book. */
+.shared-page:has(> .shared-info) {
+  height: 100vh;
+  height: 100dvh;
+}
+.shared-info {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.guest-info {
+  display: flex;
+  height: min(78vh, 920px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.shared-header .reader-view-tabs {
+  flex: none;
+}

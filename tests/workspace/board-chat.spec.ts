@@ -28,7 +28,8 @@ test('private model threads persist separately from a shared canvas', async ({ p
   await openEmailExample(page);
   const boards = await (await page.request.get('/v1/boards')).json();
   const board = boards.find((entry: { title: string }) => entry.title === 'An email’s journey');
-  await expect(page.getByRole('tab', { name: 'Coming soon' })).toBeDisabled();
+  // The third tab reads the page as a book; see info-book.spec.ts.
+  await expect(page.getByRole('tab', { name: 'Info' })).toBeEnabled();
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page
     .getByRole('textbox', { name: 'What would you like to understand?' })

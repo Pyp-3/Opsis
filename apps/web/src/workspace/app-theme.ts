@@ -238,6 +238,42 @@ export const FONT_SCHEMES = [
   },
 ] as const satisfies readonly FontScheme[];
 
+/**
+ * Typefaces for long reading, such as a page's Info. Body text uses `body`, headings `display`.
+ * Every family is already loaded for the interface fonts above.
+ */
+export const READING_FONTS = [
+  {
+    id: 'book',
+    name: 'Book',
+    note: 'Source Serif with Fraunces headings',
+    body: "'Source Serif 4', Georgia, serif",
+    display: "'Fraunces', Georgia, serif",
+  },
+  {
+    id: 'interface',
+    name: 'Interface',
+    note: 'The same fonts as the rest of Opsis',
+    body: 'var(--font-ui)',
+    display: 'var(--font-display)',
+  },
+  {
+    id: 'plain',
+    name: 'Plain',
+    note: 'Inter, compact and neutral',
+    body: "'Inter', system-ui, sans-serif",
+    display: "'Inter', system-ui, sans-serif",
+  },
+] as const;
+/** Body text sizes; headings and spacing scale with them. */
+export const READING_SIZES = [
+  { id: 'small', name: 'Small', px: 16 },
+  { id: 'medium', name: 'Medium', px: 18 },
+  { id: 'large', name: 'Large', px: 21 },
+] as const;
+export type ReadingFont = (typeof READING_FONTS)[number]['id'];
+export type ReadingSize = (typeof READING_SIZES)[number]['id'];
+
 /** The background tokens one palette sets, for one colour scheme (light or dark). */
 type SurfaceTokens = {
   paper: string;
@@ -411,6 +447,8 @@ export type AppTheme = {
   customAccent?: string;
   surface: (typeof SURFACE_SCHEMES)[number]['id'];
   font: (typeof FONT_SCHEMES)[number]['id'];
+  readingFont: ReadingFont;
+  readingSize: ReadingSize;
 };
 
 export const DEFAULT_APP_THEME: AppTheme = {
@@ -418,6 +456,8 @@ export const DEFAULT_APP_THEME: AppTheme = {
   accent: 'evergreen',
   surface: 'sage',
   font: 'signal',
+  readingFont: 'book',
+  readingSize: 'medium',
 };
 
 export const APP_THEME_KEY = 'opsis:app-theme:v1';
@@ -525,6 +565,10 @@ export function knownTheme(value: Partial<AppTheme> | null | undefined): AppThem
         }),
     surface: SURFACE_SCHEMES.find((s) => s.id === value?.surface)?.id ?? DEFAULT_APP_THEME.surface,
     font: FONT_SCHEMES.find((s) => s.id === value?.font)?.id ?? DEFAULT_APP_THEME.font,
+    readingFont:
+      READING_FONTS.find((s) => s.id === value?.readingFont)?.id ?? DEFAULT_APP_THEME.readingFont,
+    readingSize:
+      READING_SIZES.find((s) => s.id === value?.readingSize)?.id ?? DEFAULT_APP_THEME.readingSize,
   };
 }
 
@@ -533,7 +577,9 @@ export const sameTheme = (a: AppTheme, b: AppTheme) =>
   a.accent === b.accent &&
   (a.customAccent ?? '') === (b.customAccent ?? '') &&
   a.surface === b.surface &&
-  a.font === b.font;
+  a.font === b.font &&
+  a.readingFont === b.readingFont &&
+  a.readingSize === b.readingSize;
 
 export function readAppTheme(): AppTheme {
   try {
@@ -655,6 +701,12 @@ export function themeStylesheet(theme: AppTheme): string {
     );
   }
   rules.push(`${ROOT}{--font-ui:${font.ui};--font-display:${font.display};}`);
+  const reading = READING_FONTS.find((s) => s.id === theme.readingFont) ?? READING_FONTS[0];
+  const size = READING_SIZES.find((s) => s.id === theme.readingSize) ?? READING_SIZES[1];
+  rules.push(
+    `${ROOT}{--font-reading:${reading.body};--font-reading-display:${reading.display};` +
+      `--reading-size:${size.px}px;}`,
+  );
   return rules.join('\n');
 }
 

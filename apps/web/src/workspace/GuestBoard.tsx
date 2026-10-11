@@ -3,6 +3,8 @@ import { LogIn } from 'lucide-react';
 import { boardPage, resolvePageId } from '@opsis/schema';
 import { useSharedBoard } from './useSharedBoard';
 import { ReadOnlyBoard } from './ReadOnlyBoard';
+import { ReaderViewTabs } from './ReaderViewTabs';
+import { InfoBook } from './InfoBook';
 import { BrandMark } from './BrandMark';
 import { navigate } from '../router';
 import { appPath, appUrl } from '../app-url';
@@ -27,6 +29,7 @@ export function GuestBoard({
   const path = `/v1/guest/boards/${encodeURIComponent(boardId)}${pageId ? `?page=${encodeURIComponent(pageId)}` : ''}`;
   const state = useSharedBoard(path);
   const [selection, setSelection] = useState({ path, page: pageId });
+  const [readerView, setReaderView] = useState<'canvas' | 'info'>('canvas');
   const requested = selection.path === path ? selection.page : pageId;
   useEffect(() => {
     if (state.status === 'missing') onUnavailable();
@@ -62,6 +65,9 @@ export function GuestBoard({
           <small>Shared by {state.entry.owner?.name ?? 'someone'} · view only</small>
         )}
       </div>
+      {state.status === 'ready' && board && (
+        <ReaderViewTabs view={readerView} onView={setReaderView} />
+      )}
       <button type="button" className="secondary-button" onClick={signIn}>
         <LogIn size={15} aria-hidden /> Sign in
       </button>
@@ -91,6 +97,24 @@ export function GuestBoard({
           ) : (
             <p>This board is empty.</p>
           )}
+        </main>
+      </div>
+    );
+
+  if (readerView === 'info')
+    return (
+      <div className="shared-page">
+        {header}
+        <main className="shared-info">
+          <InfoBook
+            document={board}
+            pageId={currentPage}
+            boardId={boardId}
+            editable={false}
+            signedOut
+            showReadingControls={false}
+            onOpenPage={(page) => setSelection({ path, page })}
+          />
         </main>
       </div>
     );

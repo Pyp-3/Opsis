@@ -158,6 +158,9 @@ func (s *Server) boardHistoryRoutes() {
 		if _, err := tx.Exec(`INSERT INTO board_tags(board_id,tag) SELECT ?,tag FROM board_tags WHERE board_id=? ORDER BY rowid`, newID, id); err != nil {
 			return err
 		}
+		if err := s.recordImages(tx, newID, snapshot); err != nil {
+			return err
+		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}

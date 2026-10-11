@@ -40,3 +40,5 @@ export * from './drawing-svg';
 export * from './drawing-transform';
 export * from './drawing-symbols';
 export * from './board-preview';
+export * from './page-info';
+export * from './board-images';

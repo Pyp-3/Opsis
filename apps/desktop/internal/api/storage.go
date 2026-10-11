@@ -154,6 +154,9 @@ func (s *Server) saveBoard(id string, snapshot json.RawMessage, revision int64, 
 	if err != nil {
 		return "", err
 	}
+	if err := s.recordImages(tx, id, snapshot); err != nil {
+		return "", err
+	}
 	return "saved", tx.Commit()
 }
 

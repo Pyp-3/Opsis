@@ -94,4 +94,23 @@ export const PERSISTENCE_MIGRATIONS = [
     );
     `,
   },
+  {
+    version: 7,
+    name: 'board-info-images',
+    // Images are stored once, named by the SHA-256 of their bytes, and readable through the
+    // boards that show them (see board-images.ts in the schema package).
+    sql: `
+    CREATE TABLE board_images (
+      id TEXT PRIMARY KEY, media_type TEXT NOT NULL,
+      width INTEGER NOT NULL, height INTEGER NOT NULL,
+      data BLOB NOT NULL, created_at INTEGER NOT NULL
+    );
+    CREATE TABLE board_image_refs (
+      board_id TEXT NOT NULL REFERENCES boards_v2(id) ON DELETE CASCADE,
+      image_id TEXT NOT NULL REFERENCES board_images(id),
+      PRIMARY KEY(board_id, image_id)
+    );
+    CREATE INDEX board_image_refs_image ON board_image_refs(image_id);
+    `,
+  },
 ] as const;

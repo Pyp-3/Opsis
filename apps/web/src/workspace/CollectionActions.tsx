@@ -1,3 +1,4 @@
+import { collectionInfoImages } from './info-export';
 import { apiFetch as fetch } from '../app-url';
 import { useRef, useState } from 'react';
 import { CollectionBundleSchema, type CollectionSharing } from '@opsis/schema';
@@ -67,13 +68,13 @@ export function CollectionActions({
           'opsis-collection.json',
           'application/json',
         );
-      else if (format === 'html')
-        await download(
-          collectionHtml(bundle, { hiddenPages }),
-          'opsis-collection.html',
-          'text/html',
-        );
-      else printCollection(collectionHtml(bundle, { hiddenPages }));
+      else {
+        // The file is self-contained: pages' pictures are embedded.
+        const images = await collectionInfoImages(bundle, { hiddenPages });
+        const html = collectionHtml(bundle, { hiddenPages, images });
+        if (format === 'html') await download(html, 'opsis-collection.html', 'text/html');
+        else printCollection(html);
+      }
     });
   return (
     <section className="collection-actions" aria-label="Collection sharing and export">

@@ -24,6 +24,7 @@ export function registerGuestAccess(app: FastifyInstance, store: ApiStore) {
           '/v1/instance',
           '/v1/boards/public',
           '/v1/guest/boards/:id',
+          '/v1/guest/boards/:id/images/:image',
           '/v1/speech',
         ].includes(route)
       )

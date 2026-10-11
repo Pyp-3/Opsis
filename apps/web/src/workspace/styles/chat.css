@@ -1,4 +1,4 @@
-/* ── Canvas / Chat switch (in the header) ─────────────────────────────── */
+/* ── Canvas / Chat / Info switch (in the header) ─────────────────────────────── */
 .workspace-header .header-breadcrumb {
   flex: 1 1 auto;
 }
@@ -38,12 +38,6 @@
   box-shadow:
     var(--shadow-sm),
     0 0 0 1px var(--line);
-}
-.workspace-tabs .tab-placeholder {
-  padding: 0 9px;
-  color: var(--ink-3);
-  opacity: 0.6;
-  cursor: default;
 }
 .tab-status.is-working,
 .tab-status.is-unread {
@@ -617,20 +611,6 @@ body.chat-docked .generation-review {
   border-radius: 50%;
 }
 
-@media (max-width: 1100px) {
-  .workspace-tabs .tab-placeholder {
-    display: none;
-  }
-}
-/* The reserved tab is an icon with its name kept for assistive technology. */
-.workspace-tabs .tab-placeholder .tab-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
 @media (max-width: 760px) {
   .workspace-tabs button {
     padding: 0 9px;

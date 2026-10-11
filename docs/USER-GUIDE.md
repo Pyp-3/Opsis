@@ -18,18 +18,19 @@ toolbar to a single button. Board menus (**Share**, **Groups**, **Import**, **Ex
 drop down from the header and close on Escape or a click elsewhere. The toolbar
 choice is remembered on this device.
 
-The **Canvas** and **Chat** tabs sit in the header, beside the board name. Prompting
-lives in **Chat**; **Open chat** and **Explore this step** take you there. On wide
-screens (1100 px and up) Chat docks beside a live, editable canvas, so new concepts
-and proposals appear while you talk. Drag the chat's left edge to resize it, **Expand
-chat** to give it the full page with saved threads listed alongside, and **Chat beside
-canvas** to dock it again; both choices are remembered on this device. On narrower
-screens Chat takes the page. The reply in progress shows the agent's live activity and
-**Stop generation**. A ready proposal appears as a card with **Review on canvas**, and
-the review opens beside the docked chat. The Canvas tab shows a pulsing dot while an
-agent works and **Review** while a proposal waits. A reply that arrives while Chat is
-out of view marks the Chat tab and **Open chat**. The third (sparkle) tab is reserved
-for a future feature and is disabled.
+The **Canvas**, **Chat** and **Info** tabs sit in the header, beside the board name.
+Prompting lives in **Chat**; **Open chat** and **Explore this step** take you there.
+Chat has a tab of its own: it takes the full page, with your saved threads listed
+alongside. On wide screens (1100 px and up) you can instead choose **Chat beside
+canvas** to dock it next to a live, editable canvas, so new concepts and proposals appear
+while you talk; drag the chat's left edge to resize it and **Expand chat** to return to
+the full page. The choice is remembered on this device. On narrower screens Chat always
+takes the page. The reply in progress shows the agent's live activity and **Stop
+generation**. A ready proposal appears as a card with **Review on canvas**, which turns
+to the Canvas tab (or opens the review beside a docked chat). The Canvas tab shows a
+pulsing dot while an agent works and **Review** while a proposal waits. A reply that
+arrives while Chat is out of view marks the Chat tab and **Open chat**. **Info** reads
+the page as a page of a book; see [Read a page in Info](#read-a-page-in-info).
 
 Chat threads belong to your signed-in account, even on a shared board. They are
 stored with that account on this Opsis instance, separately from board documents
@@ -327,6 +328,50 @@ To show a hidden page to someone, copy **that page's link** from the page list
 (`…/canvas?board=<board>&page=<page>`) and send it. Anyone who can view the board and opens
 that link sees the hidden page as well, and it opens at that page. **New link** changes the
 page's link, so links you sent earlier stop showing it.
+
+## Read a page in Info
+
+The **Info** tab shows the page on the canvas as a page of a book: its title, the text you
+wrote for it, then each concept in reading order with its icon, summary and explanation,
+where it leads, and your footnotes. Info and the canvas always show the same page: turning
+a page in one turns the other. Turn pages with the arrows in the Info toolbar, the folded
+corners of the page, **←** and **→** while the page has focus, or **Page Up** and **Page
+Down**. The page flips over as it turns (it changes at once if your system asks for reduced
+motion). **Show on canvas** under a concept opens the canvas with that concept selected.
+
+Owners and editors can write on the page:
+
+- **Edit text** opens the page's text. It is plain text: leave a blank line between
+  paragraphs. **Link** inserts a link; only `https://`, `http://` and `mailto:` addresses are
+  accepted, and links open in a new tab without passing on where they came from. Text that
+  only looks like a link, such as `[x](javascript:…)`, stays as written. **Picture** adds a
+  PNG, JPEG, WebP or GIF picture with a description, which is read aloud by screen readers and
+  shown as its caption. **Save text** saves it (Ctrl / ⌘ Enter); Escape cancels. A page's text
+  can be up to 8,000 characters with up to 12 pictures.
+- **Add footnote** under a concept, or **Add a footnote** under **Notes**, writes a short note
+  (up to 600 characters, links allowed) on any object of the page: a concept, a connection, a
+  group, a drawing or a group of drawings. Notes are numbered as a reader meets them; the
+  small numbers beside a concept jump to its notes. If the object is later removed, its notes
+  stay under **No longer on this page** rather than being lost.
+
+Each save is one undoable step, like a canvas edit (**Undo** and **Redo** are in the Info
+toolbar too). Chat answers and agents never see or change the Info, and keep it when they
+rewrite the diagram. Search finds words in it, comparisons list its changes, Markdown exports
+include it, and a collection's web page and printout include it with its pictures.
+
+Pictures are re-drawn in your browser before they are uploaded, so only their pixels are
+kept; metadata such as a photo's location is dropped. Each is stored once with the board
+(at most 2 MB and 2,400 pixels a side), not in the board document, so undo history and saved
+revisions do not copy it. Anyone who can read the board can see its pictures, including
+people opening a shared link; copies of the board keep them. A collection bundle or editable
+board file carries the text and footnotes, and its pictures show again when it is imported on
+the same Opsis server.
+
+The **Text settings** button (the T in the Info toolbar) picks the reading typeface (Book,
+Interface or Plain) and size; they are saved with your account under **Settings →
+Appearance → Reading**. People who only view the board read the same pages, without the
+writing tools: signed-out visitors and guest accounts choose **Info** beside **Canvas** at
+the top of the shared view.
 
 ## Share a board
 

@@ -36,6 +36,11 @@ import {
   boardBacklinks,
   BoardPageIdSchema,
   type LinkingBoard,
+  imageFileInfo,
+  snapshotImageIds,
+  IMAGE_HEADER_BYTES,
+  MAX_BOARD_IMAGES,
+  MAX_IMAGE_BYTES,
 } from '../../packages/schema/src/index';
 import { SignUpSchema, LogInSchema, AgentKeyNameSchema } from '../api/src/auth-contract';
 import { z } from 'zod';
@@ -68,6 +73,27 @@ const parsers = {
   key: AgentKeyNameSchema,
 };
 
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+/** The VM has no atob; Go's standard base64 is decoded here. */
+function base64Bytes(text: string): Uint8Array {
+  const clean = text.replace(/=+$/, '');
+  const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let bits = 0;
+  let value = 0;
+  let at = 0;
+  for (const char of clean) {
+    const digit = BASE64.indexOf(char);
+    if (digit < 0) throw new Error('Invalid base64.');
+    value = (value << 6) | digit;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes[at++] = (value >> bits) & 0xff;
+    }
+  }
+  return bytes;
+}
+
 /** Fixed pure operations only. Go supplies JSON data, never executable source.
  * This keeps defaults, validation, and history rules owned by their original TS modules. */
 export function apply(operation: string, json: string): string {
@@ -95,6 +121,19 @@ export function apply(operation: string, json: string): string {
         })),
         z.string().parse(query),
       );
+    } else if (operation === 'imageLimits') {
+      value = { bytes: MAX_IMAGE_BYTES, headerBytes: IMAGE_HEADER_BYTES, board: MAX_BOARD_IMAGES };
+    } else if (operation === 'imageInfo') {
+      // Go sends an upload's leading bytes (base64) and its full size; the rule stays here.
+      const { header, size } = z
+        .object({
+          header: z.string().max(Math.ceil((IMAGE_HEADER_BYTES * 4) / 3) + 4),
+          size: z.number().int(),
+        })
+        .parse(input);
+      value = imageFileInfo(base64Bytes(header), size);
+    } else if (operation === 'snapshotImages') {
+      value = snapshotImageIds(BoardSnapshotSchema.parse(input));
     } else if (operation === 'readerSnapshot') {
       // What a viewer receives: no hidden pages except the linked one, and no undo history.
       const { snapshot, page } = z

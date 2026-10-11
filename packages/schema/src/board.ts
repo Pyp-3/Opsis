@@ -19,6 +19,7 @@ import { BOARD_ICONS } from './board-icons';
 import { BoardAgentSchema, BoardModelSettingsSchema } from './model-settings';
 import { CHAT_CONVERSATION_WINDOW, ConversationMessageSchema, MAX_CHAT_MEMORY } from './board-chat';
 import { CHAT_PRIORITIES, ChatFocusSchema, FocusEditsSchema } from './chat-focus';
+import { HTTP_LINK_PATTERN, PageInfoSchema } from './page-info';
 export * from './board-icons';
 export * from './model-settings';
 export { EMAIL_DEMO } from './email-demo';
@@ -58,10 +59,8 @@ export const ConceptReferenceSchema = z
     url: z
       .string()
       .max(2000)
-      // Go's pure contract VM has no browser URL constructor. Keep this bounded
-      // syntax check identical in the browser, Node and native host.
       .regex(
-        /^https?:\/\/(?:\[[0-9a-f:.]+\]|[^\s/?#:@\\]+)(?::\d{1,5})?(?:[/?#][^\s\\]*)?$/i,
+        HTTP_LINK_PATTERN,
         'Use an HTTP or HTTPS source link without credentials or whitespace.',
       )
       .optional(),
@@ -215,6 +214,8 @@ const BoardDocumentObject = BoardContentSchema.extend({
   drawingLayers: z.array(DrawingLayerSchema).max(MAX_DRAWING_LAYERS).optional(),
   /** What one grid square measures, for dimension lines. */
   drawingScale: DrawingScaleSchema.optional(),
+  /** The page's Info: the editor's text and footnotes on its objects; see page-info.ts. */
+  info: PageInfoSchema.optional(),
 });
 /**
  * What one page holds. The first page's content is the board's own fields (so a board without
@@ -231,6 +232,7 @@ export const BoardPageContentSchema = BoardDocumentObject.pick({
   drawingLayers: true,
   suggestions: true,
   narration: true,
+  info: true,
 }).strict();
 export type BoardPageContent = z.infer<typeof BoardPageContentSchema>;
 /** Page IDs are random and unguessable: a hidden page's link is its ID. */

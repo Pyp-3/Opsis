@@ -71,6 +71,27 @@ describe('board search', () => {
     expect(search('resume')[0]!.conceptId).toBeUndefined();
   });
 
+  it('finds a page’s Info text, picture descriptions and footnotes, but not link addresses', () => {
+    const board = tweak({
+      info: {
+        text: `Relays pass mail along. See [the spec](https://hidden-word.example).\n![Rack of relays](image:${'a'.repeat(64)})`,
+        footnotes: [
+          {
+            id: 'n',
+            target: { kind: 'concept', id: first.id },
+            text: 'Greylisting delays strangers.',
+          },
+        ],
+      },
+    });
+    const search = (q: string) =>
+      searchBoards([{ id: 'r', title: board.title, access: 'owner', board }], q);
+    expect(search('relays pass')[0]).toMatchObject({ field: 'info', label: board.title });
+    expect(search('rack')[0]).toMatchObject({ field: 'info' });
+    expect(search('greylisting')[0]).toMatchObject({ field: 'info' });
+    expect(search('hidden-word')).toEqual([]);
+  });
+
   it('skips empty boards and keeps the result limit', () => {
     const many = Array.from({ length: 80 }, (_, index) => ({
       id: `b${index}`,

@@ -200,6 +200,8 @@ export async function layoutBoard(
       : {}),
     ...(previous?.drawingLayers ? { drawingLayers: previous.drawingLayers } : {}),
     ...(previous?.drawingScale ? { drawingScale: previous.drawingScale } : {}),
+    // The page's Info is the editor's own writing; agents never see or change it.
+    ...(previous?.info ? { info: previous.info } : {}),
   });
   if (!proposedSketch) return document;
   // Without a diagram to look at, the agent could not know where concepts would land, so its
@@ -226,8 +228,8 @@ function besideDiagram(board: BoardDocument) {
 }
 
 /**
- * Illustrations are large and only matter to playback, and colours and the reader's canvas
- * sketches only to the reader, so agents are sent the board without them; `layoutBoard`
+ * Illustrations are large and only matter to playback, and colours, the reader's canvas
+ * sketches and the page's Info only to the reader, so agents are sent the board without them; `layoutBoard`
  * restores them afterwards. The agent is shown only its own sketch (unless the reader hid or
  * locked that layer) and the drawing scale, so its dimension labels use the board's units.
  */
@@ -236,6 +238,7 @@ export function withoutIllustrations(board: BoardDocument): BoardDocument {
   delete rest.look;
   delete rest.drawings;
   delete rest.drawingLayers;
+  delete rest.info;
   const sketch = sketchForAgent(board);
   if (sketch?.length) rest.drawings = sketch;
   return {

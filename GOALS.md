@@ -4,6 +4,11 @@ Last reviewed: 2026-10-11.
 
 ## Current delivery
 
+Chat tab and Info book (2026-10-11, user request): chat opens as its own tab with docking as
+an optional fallback, and a new **Info** tab reads each page like a book in step with the canvas,
+with the editor's text, safe links, stored pictures and footnotes on any object. See the goal
+section below for scope, verification and what remains.
+
 Page list polish (2026-10-11, user request): the page list now uses the canvas's
 blueprint panel style in light and dark themes instead of the generic menu surface. Page
 names edit inline, with a rename hint and placeholder. The eye button shows each page's
@@ -414,6 +419,68 @@ Downloaded installers are now removed before each download and at startup.
 Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call) and the interactive save-dialog/clipboard check. (`.cmd` launcher
 parity and macOS packaging have since shipped; see above.)
+
+## In progress: chat tab and Info book (requested 2026-10-11)
+
+The user asked to give chat its own tab for layout, and to replace the reserved tab with an
+**Info** tab: a text-first reading view of each page, kept in step with the canvas and turned
+like a book, with the editor's footnotes on the page's objects. Confirmed choices: docking chat
+beside the canvas stays as an optional fallback; Info is per page and synced with the canvas
+page (turning one turns the other), with a page-flip; footnotes attach to any object on the
+page (concepts, concept groups, drawings or drawing groups); text is plain, with links and
+images inserted carefully for security. Respect the app's palettes, contrast and fonts.
+
+- [x] Chat opens as its own full tab by default; **Chat beside canvas** remains an optional,
+      per-device fallback on wide screens (new storage key, so the old docked default does not
+      carry over). **Review on canvas** turns to the Canvas tab unless docked.
+- [x] Info tab (replacing the reserved tab): the open page as a book page (running head, title,
+      the board description on page 1, the editor's text, each concept in reading order with its
+      icon, summary, explanation and where it leads, numbered footnotes), synced with the canvas
+      page both ways, with a page-flip (instant with reduced motion), toolbar arrows, folded
+      corners, ←/→ and Page Up/Down, **Show on canvas**, and Undo/Redo in its toolbar.
+- [x] Saved data: optional per-page `info` in board document v2 (`page-info.ts`: plain text up to
+      8,000 characters with a strict `[label](address)` / `![description](image:<sha256>)`
+      syntax, up to 12 pictures; up to 60 footnotes of 600 characters on a concept, connection,
+      group, drawing or drawing group), validated by the shared schema on both hosts. No board
+      migration. Footnotes on removed objects read as unattached. Agents never receive it and
+      regeneration, review and MCP rewrites keep it; hidden pages keep it from viewers.
+- [x] Links: only `http`, `https` and `mailto` (shared pattern with source links), opened with
+      `noopener noreferrer nofollow`; text is parsed into spans and never rendered as markup.
+- [x] Images: chosen pictures are re-drawn in the browser (metadata dropped, at most 2,400 px and
+      2 MB); both hosts accept only PNG/JPEG/WebP by signature and size (`board-images.ts`), store
+      them once per content hash outside the document (migration 7: `board_images`,
+      `board_image_refs`), and serve them with their checked type, `nosniff`, a sandboxing CSP
+      and same-origin resource policy to anyone who may read the board (link/public boards also
+      without sign-in). Saves, copies, restored revisions and collection imports record the
+      pictures their documents show; deleting a board removes pictures no board shows and no
+      template names. Collection HTML/print embed them as data URLs.
+- [x] Editing: one undoable step per text save or footnote change; viewers, signed-out link
+      visitors and guest accounts read the same book (Canvas / Info switch) without editing tools.
+      Reading typeface (Book, Interface, Plain) and size are new optional appearance settings on
+      the account, set in Settings → Appearance → Reading or the book's Text settings.
+- [x] Also: search covers Info text, picture descriptions and footnotes; comparisons list Info
+      changes; Markdown exports include it. Fixed while testing: the labelled third tab pushed the
+      board name out of the header at 1280 px, so **Linked from** and **Import** are icons below
+      1440 px (accessible names unchanged).
+- [ ] Not yet: collection bundles and board files carry the text naming a picture but not the
+      picture, so pictures show as unavailable when imported on another server; no canvas marker
+      shows which objects have footnotes; MCP tools do not read or write Info.
+
+Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
+builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,
+image signatures/sizes for PNG, JPEG and lossy/lossless/extended WebP, refusal of SVG, HTML and
+oversize pictures, image ids across undo history, search and comparison), web tests (Markdown and
+HTML export escaping and embedding, reading settings in the theme), a Fastify API test with real
+`sharp` images (type detection, dedupe, strict base64, access for owner/editor/viewer/link guest
+and strangers, copies and deletion) and the same Go test on the desktop host. A new browser
+scenario covers writing text with a refused and an accepted link, uploading a picture, two
+footnotes, undo/redo, reading settings, page flips in step with the canvas, a chat regeneration
+keeping the Info, reload, a signed-in link viewer and a signed-out visitor (picture included),
+dark mode and phone widths, with accessibility scans. Lint, typecheck, Rust formatting/Clippy and
+24 tests, desktop check and full race suite, 562 unit tests and all 74 Fastify browser scenarios
+pass (one, board links, after updating it to click **Linked from** by its accessible name). The
+rebuilt Linux binary passes packaged integration, all 74 browser scenarios and all 24 hidden
+WebView checks. Desktop, dark and phone screenshots were reviewed. No paid model calls were made.
 
 ## In progress: board pages and link sharing (requested 2026-10-10)
 

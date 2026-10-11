@@ -24,6 +24,7 @@ const FIELD_LABELS: Record<SearchField, string> = {
   summary: 'Summary',
   explanation: 'Explanation',
   notes: 'Notes',
+  info: 'Info',
   source: 'Source',
   connection: 'Connection',
 };

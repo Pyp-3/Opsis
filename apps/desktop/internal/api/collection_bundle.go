@@ -158,6 +158,9 @@ func (s *Server) collectionBundleRoutes() {
 					return err
 				}
 			}
+			if err := s.recordImages(tx, entry.ID, entry.Snapshot); err != nil {
+				return err
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			return err
