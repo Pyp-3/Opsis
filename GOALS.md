@@ -4,6 +4,18 @@ Last reviewed: 2026-10-11.
 
 ## Current delivery
 
+Page list polish (2026-10-11, user request): the page list now uses the canvas's
+blueprint panel style in light and dark themes instead of the generic menu surface. Page
+names edit inline, with a rename hint and placeholder. The eye button shows each page's
+state, and deleting asks for confirmation in the same row with a Cancel button, so the
+layout no longer jumps or scrolls sideways on phones. On narrow canvases the page bar
+moved below the raised **Open chat** button, which it used to cover. On boards with
+several pages, the big picture names the page on screen. Browser assertions cover the
+heading's page name and the chat-button overlap. Verified: lint/typecheck, Rust
+check/24 tests, desktop check/race tests and `test:qa` (546 tests and all 73 browser
+scenarios). Desktop and phone screenshots were reviewed in both themes. This is
+web-only; the desktop binary was not rebuilt by hand.
+
 Drawing rotation and guest refresh (2026-10-11, user request): shipped an
 on-canvas rotation handle for multiple selected drawings, with one undoable drag,
 Shift snapping, stable attachments and locked drawings left unchanged. Anonymous

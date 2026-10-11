@@ -41,6 +41,7 @@ import {
 } from '@xyflow/react';
 import {
   ArrowUpRight,
+  BookOpen,
   FilePlus,
   ChevronUp,
   ChevronsRight,
@@ -149,6 +150,19 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   // Everything below edits the open page; `pages.document` is the whole board.
   const pages = useBoardPages(boardHistory, rememberedPage(initial.id));
   const { board, boardRef, setBoard, commit, travel, end, pageId, openPage } = pages;
+  // On a board with several pages, the heading names the page on screen.
+  const pageList = pages.document ? boardPages(pages.document) : [];
+  const openPageAt = Math.max(
+    0,
+    pageList.findIndex((page) => page.id === pageId),
+  );
+  const openPageTitle = pageList[openPageAt]?.title;
+  const openPageName =
+    pageList.length > 1
+      ? openPageTitle === `Page ${openPageAt + 1}`
+        ? openPageTitle
+        : `Page ${openPageAt + 1} · ${openPageTitle}`
+      : null;
   // Usage is recorded against the board open when a generation starts.
   const usageBoardRef = useRef<string | undefined>(undefined);
   const generation = useBoardGeneration(commit, usageBoardRef);
@@ -1344,6 +1358,11 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                   </button>
                   <div className="canvas-heading-body" id="big-picture" aria-hidden={!headingOpen}>
                     <div>
+                      {openPageName && (
+                        <span className="canvas-page-name">
+                          <BookOpen size={12} aria-hidden /> {openPageName}
+                        </span>
+                      )}
                       <h2>{board.title}</h2>
                       <p>{board.description}</p>
                     </div>

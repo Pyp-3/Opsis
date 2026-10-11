@@ -52,6 +52,7 @@ test('turns pages like a book, hides one from viewers and shares the board by li
     'true',
   );
   await expect(pageList(page)).toHaveAttribute('aria-label', /Page 2 of 2: Pricing/);
+  await expect(page.locator('.canvas-page-name')).toHaveText('Page 2 · Pricing');
   const scan = await accessibilityScan(page);
   expect(scan.violations).toEqual([]);
   await page.getByRole('button', { name: 'Go to page 1: Page 1' }).click();
@@ -130,6 +131,10 @@ test('the page bar fits a phone', async ({ page }) => {
   await openEmailExample(page);
   await page.getByRole('button', { name: 'Add page' }).click();
   await expect(pager(page)).toContainText('2 / 2');
+  // The page bar stays clear of the chat button.
+  const bar = (await pager(page).boundingBox())!;
+  const chat = (await page.getByRole('button', { name: 'Open chat' }).boundingBox())!;
+  expect(bar.y >= chat.y + chat.height || bar.y + bar.height <= chat.y).toBe(true);
   await pageList(page).click();
   const panel = page.locator('.board-pages-panel');
   await expect(panel).toBeVisible();

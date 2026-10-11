@@ -104,6 +104,18 @@
 .is-collapsed .canvas-heading-body {
   display: none;
 }
+.canvas-page-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--bp-gold);
+  font: 500 12px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .canvas-heading h2 {
   margin: 8px 0 6px;
   font-family: var(--font-display);
@@ -585,98 +597,213 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The page list is a blueprint panel like the drawing tools, since it sits on the canvas in
+   every colour scheme. */
+.board-pages-menu[open] summary {
+  background: var(--bp-panel-hover);
+}
 .board-pages-panel {
   position: absolute;
   right: -40px;
   bottom: calc(100% + 10px);
-  width: min(440px, calc(100vw - 24px));
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
   max-height: min(64vh, 520px);
-  overflow: auto;
-  padding: 12px;
+  overflow: hidden auto;
+  padding: 6px;
   font-size: 13px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  color: var(--bp-ink);
+  background: rgb(var(--bp-shade) / 0.92);
+  border: 1px solid var(--bp-line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+  animation: dock-in 200ms var(--ease-out) both;
 }
-.board-pages-panel > p {
-  margin: 0 0 10px;
+.board-pages-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 6px 8px 0 10px;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-ink-2);
 }
-.board-pages-help {
-  color: var(--ink-2);
-  font-size: 12px;
-  line-height: 1.45;
+.board-pages-limit {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--bp-muted);
 }
 .board-pages-panel ol {
   display: grid;
-  gap: 4px;
-  margin: 0 0 10px;
+  gap: 2px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 .board-pages-panel li {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 3px;
+  min-height: 38px;
+  padding: 3px 4px;
   border-radius: var(--radius);
 }
+.board-pages-panel li:hover,
+.board-pages-panel li:focus-within {
+  background: rgb(var(--bp-shade) / 0.5);
+}
 .board-pages-panel li.is-current {
-  background: var(--accent-soft);
+  background: var(--bp-panel-hover);
+}
+.board-pages-panel li.is-current::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--bp-gold);
 }
 .board-pages-panel li input {
-  flex: 1 1 140px;
+  /* A zero basis, so an input's default width never pushes the row wider than the panel. */
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   order: 1;
   height: 30px;
   padding: 0 8px;
   font-size: 13px;
+  color: var(--bp-ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.board-pages-panel li input:hover {
+  border-color: var(--bp-line);
+  cursor: text;
+}
+.board-pages-panel li input:focus {
+  background: var(--bp-deep);
+  border-color: var(--bp-gold);
+  outline: none;
+}
+.board-pages-panel li.is-hidden input:not(:focus) {
+  color: var(--bp-ink-2);
+  font-style: italic;
 }
 .board-pages-go {
   flex: none;
   gap: 6px;
   min-width: 30px;
   height: 30px;
-  padding: 0 8px;
-  color: var(--ink-2);
+  padding: 0 6px;
+  color: var(--bp-muted);
   border-radius: var(--radius);
 }
 .board-pages-panel li:not(:has(input)) .board-pages-go {
   flex: 1;
   justify-content: flex-start;
-  color: var(--ink);
+  color: var(--bp-ink);
 }
 .board-pages-number {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-.board-pages-go:hover,
+.board-pages-panel li.is-current .board-pages-number {
+  color: var(--bp-gold);
+}
+.board-pages-go:hover:not(:disabled),
 .board-pages-actions button:hover:not(:disabled) {
-  background: var(--sunken);
+  color: var(--bp-ink);
+  background: var(--bp-panel-hover);
 }
 .board-pages-actions {
   display: flex;
+  flex: none;
   order: 2;
   gap: 1px;
-  margin-left: auto;
 }
 .board-pages-actions button {
   width: 28px;
   height: 28px;
-  color: var(--ink-2);
+  color: var(--bp-muted);
   border-radius: var(--radius);
 }
-.board-pages-actions button[aria-pressed='true'] {
-  color: var(--accent-text);
-  background: var(--accent-soft);
+.board-pages-actions button:disabled {
+  opacity: 0.35;
 }
-.board-pages-actions .danger-button {
+.board-pages-actions button[aria-pressed='true'] {
+  color: var(--bp-deep);
+  background: var(--bp-gold);
+}
+.board-pages-actions button[aria-pressed='true']:hover {
+  color: var(--bp-deep);
+  background: var(--bp-icon);
+}
+.board-pages-actions .board-pages-confirm {
   width: auto;
-  padding: 0 8px;
+  gap: 6px;
+  padding: 0 10px;
   font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
+  color: #ffd2bf;
+  background: rgb(214 104 72 / 0.22);
+  border: 1px solid rgb(240 150 120 / 0.5);
+}
+.board-pages-actions .board-pages-confirm:hover:not(:disabled) {
+  color: #fff1ea;
+  background: rgb(214 104 72 / 0.4);
+}
+.board-pages-error {
+  margin: 0 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ffd2bf;
+  background: rgb(214 104 72 / 0.18);
+  border-radius: var(--radius);
+}
+.board-pages-footer {
+  display: grid;
+  gap: 8px;
+  padding: 8px 4px 4px;
+  border-top: 1px solid var(--bp-line);
+}
+.board-pages-add {
+  justify-content: flex-start;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--bp-gold);
+  border: 1px dashed var(--bp-line);
+  border-radius: var(--radius);
+}
+.board-pages-add:hover:not(:disabled) {
+  background: var(--bp-panel-hover);
+  border-color: var(--bp-gold);
+}
+.board-pages-add:disabled {
+  opacity: 0.5;
+}
+.board-pages-footer p {
+  display: flex;
+  gap: 6px;
+  margin: 0 6px;
+  color: var(--bp-ink-2);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.board-pages-footer p svg {
+  flex: none;
+  margin-top: 2px;
 }
 /* Turning a page: a sheet sweeps across the canvas in the reading direction. */
 .page-turn {
@@ -722,11 +849,12 @@
     animation-duration: 1ms;
   }
 }
-/* Narrow canvases keep the bottom row for the chat button. */
+/* Narrow canvases raise the chat button (see the responsive styles), so the page bar takes the
+   corner below it. */
 @container (max-width: 720px) {
   .board-pages {
     right: 12px;
-    bottom: 72px;
+    bottom: 12px;
   }
   .board-pages-title {
     max-width: 12ch;

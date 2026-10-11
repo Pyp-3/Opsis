@@ -6,11 +6,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Eye,
   EyeOff,
   Link2,
   Plus,
   RefreshCw,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   addBoardPage,
@@ -150,22 +152,35 @@ export function BoardPages({
           {current.hidden && <EyeOff size={13} aria-label="Hidden from viewers" />}
         </summary>
         <div className="board-pages-panel">
-          <p className="header-menu-title">Pages</p>
-          {editable && (
-            <p className="board-pages-help">
-              Hidden pages are left out for people who only view this board. To show one to someone,
-              send them that page’s link.
-            </p>
-          )}
+          <p className="board-pages-head">
+            <span>Pages</span>
+            {editable && (
+              <span className="board-pages-limit">
+                {pages.length} of {MAX_BOARD_PAGES}
+              </span>
+            )}
+          </p>
           <ol>
             {pages.map((page, at) => (
-              <li key={page.id} className={page.id === current.id ? 'is-current' : ''}>
+              <li
+                key={page.id}
+                className={[
+                  page.id === current.id && 'is-current',
+                  page.hidden && 'is-hidden',
+                  deleting === page.id && 'is-deleting',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 {editable ? (
                   <input
                     aria-label={`Name of page ${at + 1}`}
                     key={`${page.id}-${page.title}`}
                     defaultValue={page.title}
                     maxLength={60}
+                    placeholder="Name this page"
+                    title="Click to rename"
+
                     onBlur={(event) => {
                       const title = event.target.value.trim();
                       if (title && title !== page.title)
@@ -190,9 +205,30 @@ export function BoardPages({
                 >
                   <span className="board-pages-number">{at + 1}</span>
                   {!editable && <span>{page.title}</span>}
-                  {page.hidden && <EyeOff size={13} aria-hidden />}
+                  {!editable && page.hidden && <EyeOff size={13} aria-hidden />}
                 </button>
-                {editable && (
+                {editable && deleting === page.id ? (
+                  <span className="board-pages-actions">
+                    <button
+                      type="button"
+                      className="board-pages-confirm"
+                      onClick={() => {
+                        setDeleting(null);
+                        change(() => removeBoardPage(board, page.id));
+                      }}
+                    >
+                      <Trash2 size={13} aria-hidden /> Delete page {at + 1}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Keep this page"
+                      title="Keep this page"
+                      onClick={() => setDeleting(null)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ) : editable ? (
                   <span className="board-pages-actions">
                     <button
                       type="button"
@@ -203,7 +239,7 @@ export function BoardPages({
                         change(() => updateBoardPage(board, page.id, { hidden: !page.hidden }))
                       }
                     >
-                      <EyeOff size={14} />
+                      {page.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                     <button
                       type="button"
@@ -231,6 +267,7 @@ export function BoardPages({
                     <button
                       type="button"
                       aria-label={`Move page ${at + 1} up`}
+                      title="Move earlier"
                       disabled={at === 0}
                       onClick={() => change(() => moveBoardPage(board, page.id, at - 1))}
                     >
@@ -239,48 +276,47 @@ export function BoardPages({
                     <button
                       type="button"
                       aria-label={`Move page ${at + 1} down`}
+                      title="Move later"
                       disabled={at === pages.length - 1}
                       onClick={() => change(() => moveBoardPage(board, page.id, at + 1))}
                     >
                       <ArrowDown size={14} />
                     </button>
-                    {deleting === page.id ? (
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => {
-                          setDeleting(null);
-                          change(() => removeBoardPage(board, page.id));
-                        }}
-                      >
-                        Delete page {at + 1}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        aria-label={`Delete page ${at + 1}`}
-                        disabled={pages.length === 1}
-                        onClick={() => setDeleting(page.id)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      aria-label={`Delete page ${at + 1}`}
+                      title="Delete page"
+                      disabled={pages.length === 1}
+                      onClick={() => setDeleting(page.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </span>
-                )}
+                ) : null}
               </li>
             ))}
           </ol>
-          {editable && (
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={pages.length >= MAX_BOARD_PAGES}
-              onClick={add}
-            >
-              <Plus size={14} aria-hidden /> Add page
-            </button>
+          {error && (
+            <p className="board-pages-error" role="alert">
+              {error}
+            </p>
           )}
-          {error && <p role="alert">{error}</p>}
+          {editable && (
+            <div className="board-pages-footer">
+              <button
+                type="button"
+                className="board-pages-add"
+                disabled={pages.length >= MAX_BOARD_PAGES}
+                onClick={add}
+              >
+                <Plus size={14} aria-hidden /> Add page
+              </button>
+              <p>
+                <EyeOff size={12} aria-hidden /> Click a page’s name to rename it. Hidden pages are
+                left out for people who only view this board; send someone a page’s link to show it.
+              </p>
+            </div>
+          )}
         </div>
       </details>
       <button

@@ -294,7 +294,8 @@ scale are shared by every page.
   opens the new page after the current one.
 - Turn pages with the arrows beside the page number, or press **Page Down** and **Page Up**.
 - Open the page list (the page number and title) to go to any page. Owners and editors can
-  also rename, reorder and delete pages there.
+  also rename a page (click its name and type), reorder and delete pages there.
+- On a board with several pages, the big picture names the page on screen.
 - Every edit, including adding, moving or deleting a page, is one undoable step. Undo turns
   back to the page it changes, so the change is always in view.
 
@@ -316,8 +317,8 @@ add, rename, reorder, hide and remove any page (see the [MCP guide](../apps/mcp/
 
 ### Hide pages from viewers
 
-In the page list, the crossed-out eye **hides a page from viewers**. You and invited editors
-still see it, marked with the same eye. People who only view the board do not see it at all:
+In the page list, the eye button **hides a page from viewers**; a hidden page shows a
+crossed-out eye. You and invited editors still see it, marked with that eye. People who only view the board do not see it at all:
 the server never sends them the page, its title or its link, and page numbers count only
 the pages they see (1 / 3, not 1 / 4). This lets you pitch an idea while keeping pricing
 or follow-up pages to yourself. At least one page stays visible.
