@@ -37,7 +37,10 @@ pnpm typecheck
 pnpm engine:check
 pnpm engine:test
 pnpm release:test
+python3 -m unittest discover -s scripts/server -p 'test_*.py'
 pnpm test:qa
+pnpm desktop:check
+pnpm desktop:test
 ```
 
 Install the browser for local QA with `pnpm exec playwright install chromium`.
@@ -45,6 +48,9 @@ Linux may also need Playwright's system dependencies. Packaging tests require Gi
 `zip`, and `unzip`. Browser tests start isolated servers on ports 3100 and 8100 with
 an in-memory database and API speech disabled. Use demo/fake agents; live-provider
 smoke scripts require explicit authorization.
+
+Desktop changes also require a rebuilt executable, browser parity and the isolated
+hidden WebView check in [the desktop guide](docs/DESKTOP.md#build-and-verify).
 
 Report the commands you actually ran, including failures or skipped checks. Do not
 weaken assertions to get a green run. When UI text changes, update its tests and

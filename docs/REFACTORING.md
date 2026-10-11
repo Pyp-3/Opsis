@@ -137,3 +137,29 @@ model settings, proposal review, bounded repair, and cancellation. Database impo
 uses a consistent SQLite snapshot and never overwrites its destination. See
 [desktop migration coverage](DESKTOP.md#feature-ownership-and-migration-coverage)
 for verification, packaging and the remaining platform-specific limitations.
+
+## Maintainability review — 2026-10-11
+
+This pass applies the same small-change process to the current application:
+
+- Move canvas drawing rendering into its own feature component, leaving pointer
+  interactions, selection and history in their existing owner.
+- Separate pure provider request/response mapping from HTTP execution, keeping
+  explicit models, limits, cancellation and errors at the existing boundary.
+- Use page-specific names for shared board internals and correct documentation of
+  implicit single-page boards. Public exports and saved formats do not change.
+- Name schema test files for the behavior they cover instead of a roadmap milestone.
+  Share the repeated browser example-opening setup while keeping scenario assertions
+  local. Give deterministic fuzz generation test-local state and name each distinct
+  corruption case instead of repeating the same five cases 100 times.
+- Share CI toolchain setup without changing versions, checks, runner coverage,
+  signing permissions or release conditions. Consolidate desktop bundle definitions
+  in `scripts/build-desktop-code.mjs`; remove the three private build wrappers after
+  checking their callers and verifying byte-identical generated bundles.
+
+Comments explaining invariants and platform constraints remain. Comment changes
+correct misleading statements or document the boundary they actually describe.
+No current product feature or meaningful test case is retired. The existing VPS
+policy still pauses deployment when protected CI files change, pending operator
+review; it is not relaxed as part of refactoring. Local results and platform limits
+are recorded in [the current delivery](../GOALS.md#current-delivery).

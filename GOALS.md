@@ -4,6 +4,28 @@ Last reviewed: 2026-10-11.
 
 ## Current delivery
 
+Maintainability cleanup (2026-10-11, user request): review comments, dead code,
+file organization, tests and CI/CD using Refactoring Guru's behavior-preserving
+principles, with four agents including the coordinator. Preserve meaningful
+coverage while eliminating redundant checks. The cleanup separates canvas drawing
+rendering from interactions and provider payload mapping from HTTP execution, gives
+page internals descriptive domain names, organizes the
+old milestone-named schema tests by feature, and shares repeated browser setup.
+Five distinct OSG corruption cases replace 500 repeated checks without losing a
+case. CI shares toolchain setup across its four build jobs; desktop VM bundles
+share one build entrypoint, retiring three private wrappers. Contract/persistence
+formats, dependencies, release gates and platform coverage remain unchanged.
+Verified: lint/typecheck, Rust formatting/Clippy and 24 tests, native vet/race
+tests, 10 release tests, six deployment-policy tests, and `test:qa` (528 tests in
+92 files and all 71 Fastify browser scenarios). The full Linux desktop build,
+packaged database/MCP integration and all 24 hidden WebView checks pass. All 71
+browser scenarios also pass against the rebuilt Linux binary. Existing jsdom
+canvas and system Fontconfig warnings remain non-failing. No paid model calls or
+dependency upgrades were made.
+Windows/macOS execution is left to CI. The VPS updater deliberately requires
+operator review of changes under `.github/`; this cleanup does not change its
+trusted baseline. No product roadmap goal is completed by this maintenance work.
+
 Server narration scope (2026-10-10): user requested enabling the natural voice and
 investigating an inline-script CSP warning. Add an operator-provisioned, persistent,
 read-only model cache to the live container; candidates keep speech disabled. Reuse
