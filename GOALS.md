@@ -493,6 +493,16 @@ images inserted carefully for security. Respect the app's palettes, contrast and
       its last spread, and a press could be moved mid-click). Lint, typecheck, Rust check and 24
       tests, desktop checks, 569 unit tests and all 75 browser scenarios pass; light, dark,
       mid-turn and phone screenshots were reviewed. Web-only; the desktop binary was not rebuilt.
+      Fix (2026-10-11, user report: lines cut at the foot of book pages): grids inside the
+      paginated text (the concept list, each entry and the notes list) did not split across
+      pages in Firefox, which laid lines past a page's foot. The book now lays them out as plain
+      blocks with the icon positioned beside each entry; only short pieces are kept whole, and
+      headings and summaries never end a page. A new browser scenario checks every line on every
+      spread of a long page lies within the text area; with the old styles it fails in Firefox
+      (lines up to 300 px past the foot) and it passes in Firefox and Chromium now. WebKit (the
+      Linux desktop app's engine) could not be launched by Playwright on this machine, so it is
+      covered by the same block layout but not by that check. 569 unit tests and all 76 browser
+      scenarios pass.
 
 Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
 builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,

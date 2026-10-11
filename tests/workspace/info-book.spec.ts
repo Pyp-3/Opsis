@@ -361,3 +361,71 @@ test('footnotes are marked on the canvas, and exported files carry their picture
   expect(served.status()).toBe(200);
   expect(served.headers()['content-type']).toBe('image/webp');
 });
+
+test('long pages flow across book pages without cutting any line', async ({ page }) => {
+  test.setTimeout(120_000);
+  await signUp(page, 'Long reader');
+  const sentence =
+    'Gates check build and readiness, mobile admission, provenance security, legitimate functionality and historical recovery that is atomic and idempotent. ';
+  const nodes = Array.from({ length: 8 }, (_, index) => ({
+    id: `step-${index}`,
+    label: `Protected evaluation gate ${index + 1}`,
+    icon: 'server',
+    summary: 'Clean worktree, restricted build, public tests, then protected gates on fresh state.',
+    explanation: Array.from({ length: 4 }, () => sentence.repeat(3).trim()).join('\n\n'),
+    kind: 'step',
+  }));
+  const board = {
+    version: 2,
+    title: 'Hard challenge',
+    description: 'A long page that needs many book pages.',
+    agent: 'demo',
+    nodes,
+    edges: nodes.slice(1).map((node, index) => ({
+      id: `edge-${index}`,
+      source: nodes[index]!.id,
+      target: node.id,
+      label: 'queues exact commit',
+    })),
+    positions: Object.fromEntries(nodes.map((node, index) => [node.id, { x: 0, y: index * 240 }])),
+  };
+  const created = await (await page.request.post('/v1/boards', { data: { title: 'Hard' } })).json();
+  const saved = await page.request.put(`/v1/boards/${created.id}`, {
+    data: { revision: 1, snapshot: { board, past: [], future: [] } },
+  });
+  expect(saved.ok()).toBeTruthy();
+  await page.goto(`/canvas?board=${created.id}`);
+  await page.getByRole('tab', { name: 'Info' }).click();
+  await expect(book(page).locator('.book-spread')).toBeVisible();
+
+  // Every line of text on the open pages lies wholly inside a page's text area.
+  const cutLines = () =>
+    page.evaluate(() => {
+      const clip = document.querySelector('.book-text')!.getBoundingClientRect();
+      const flow = document.querySelector('article.book-flow')!;
+      const walker = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
+      const cut: string[] = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const line of range.getClientRects()) {
+          const shown = line.right > clip.left + 1 && line.left < clip.right - 1;
+          if (shown && (line.top < clip.top - 1 || line.bottom > clip.bottom + 1))
+            cut.push(`${node.textContent.slice(0, 40)} @${Math.round(line.top - clip.top)}`);
+        }
+      }
+      return cut;
+    });
+  const where = book(page).locator('.info-bar-where');
+  const total = Number(/of (\d+)$/.exec(await where.innerText())![1]);
+  expect(total).toBeGreaterThan(6);
+  for (let spread = 0; spread < Math.ceil(total / 2); spread++) {
+    expect(await cutLines(), `spread ${spread + 1}`).toEqual([]);
+    if (spread < Math.ceil(total / 2) - 1) {
+      await book(page).getByRole('button', { name: 'Next page', exact: true }).click();
+      await expect(where).toContainText(`${2 * spread + 3}`);
+      await expect(book(page).locator('.book-turn')).toHaveCount(0);
+    }
+  }
+});

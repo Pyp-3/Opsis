@@ -966,15 +966,50 @@
 .book-flow .info-title {
   font-size: 1.9em;
 }
-.book-flow .info-object,
+/* In the book, the text is plain blocks: grids and flexboxes do not split across pages in every
+   engine (Firefox and WebKit can leave half a line at the foot of a page), so entries are laid
+   out without them. Only short pieces are kept whole; a long entry runs on to the next page. */
+.book-flow .info-objects,
+.book-flow .info-notes ol {
+  display: block;
+}
+.book-flow .info-object {
+  position: relative;
+  display: block;
+  padding-left: 3.2em;
+}
+.book-flow .info-object + .info-object {
+  margin-top: 1.7em;
+}
+.book-flow .info-object-icon {
+  position: absolute;
+  top: 0.1em;
+  left: 0;
+}
+.book-flow .info-notes li + li {
+  margin-top: 0.55em;
+}
+.book-flow p,
+.book-flow li {
+  orphans: 2;
+  widows: 2;
+}
 .book-flow .info-figure,
 .book-flow .info-notes li,
-.book-flow .info-write {
+.book-flow .info-object-actions,
+.book-flow .info-write,
+.book-flow .info-add-note {
   break-inside: avoid;
 }
+/* A heading and the summary under it never end a page. */
 .book-flow h2,
-.book-flow h3 {
+.book-flow h3,
+.book-flow .info-summary {
   break-after: avoid;
+}
+/* Room above the opening title, whose tall letters would otherwise touch the page's edge. */
+.book-flow .info-title {
+  padding-top: 4px;
 }
 .book-flow .info-figure img,
 .book-flow .info-figure-missing {
