@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { accessibilityScan, signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('duplicates, archives and restores a historical private copy without changing its source', async ({
   page,
 }) => {
   await signUp(page, 'Archivist');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const source = await page.evaluate(async () => {
     const list = await (await fetch('/v1/boards')).json();
     return (await fetch(`/v1/boards/${list[0].id}`)).json();

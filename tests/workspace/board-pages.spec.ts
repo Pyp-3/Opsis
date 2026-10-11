@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 import { accessibilityScan, signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 const pager = (page: Page) => page.getByRole('navigation', { name: 'Pages' });
 const concepts = (page: Page) => page.locator('.react-flow__node');
@@ -12,9 +13,7 @@ test('turns pages like a book, hides one from viewers and shares the board by li
   browser,
 }) => {
   await signUp(page, 'Pitch owner');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const cover = await concepts(page).count();
   expect(cover).toBeGreaterThan(3);
 
@@ -128,9 +127,7 @@ test('turns pages like a book, hides one from viewers and shares the board by li
 test('the page bar fits a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signUp(page, 'Phone reader');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.getByRole('button', { name: 'Add page' }).click();
   await expect(pager(page)).toContainText('2 / 2');
   await pageList(page).click();
@@ -148,9 +145,7 @@ test('chat answers on a new page, exports cover every page, and guests explore a
   browser,
 }) => {
   await signUp(page, 'Deck author');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const cover = await concepts(page).count();
 
   // One chat answer writes a two-page deck after this page; the first page and the board's

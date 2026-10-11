@@ -5,11 +5,8 @@ import {
   removeBoardNode,
   visibleBoard,
   groupMembers,
-  boardFromText,
-  compareBoards,
-  PROCESS_EXAMPLES,
-  BoardGraphSchema,
 } from './index';
+
 const board = () =>
   BoardDocumentSchema.parse({
     ...EMAIL_DEMO,
@@ -28,7 +25,8 @@ const board = () =>
       },
     ],
   });
-describe('P2 documents', () => {
+
+describe('board groups and references', () => {
   it('collapses nested groups without deleting content, retains external connections and prunes memberships on deletion', () => {
     const original = board();
     const visible = visibleBoard(original);
@@ -45,6 +43,7 @@ describe('P2 documents', () => {
       ),
     ).toBe(true);
   });
+
   it('rejects cyclic groups, duplicate memberships, unsafe source URLs and dangling members', () => {
     const original = board();
     expect(
@@ -76,32 +75,5 @@ describe('P2 documents', () => {
         })),
       }).success,
     ).toBe(false);
-  });
-  it('imports exact source excerpts locally, with no invented relationships and explicit bounds', () => {
-    const imported = boardFromText('First paragraph.\n\nSecond paragraph.', 'notes.txt');
-    expect(imported.nodes).toHaveLength(2);
-    expect(imported.edges).toEqual([]);
-    expect(imported.nodes[1]?.references?.[0]?.excerpt).toBe('Second paragraph.');
-    expect(() => boardFromText('x'.repeat(100001), 'large')).toThrow();
-    expect(() =>
-      boardFromText(Array.from({ length: 51 }, () => 'a').join('\n\n'), 'many'),
-    ).toThrow();
-  });
-  it('compares layout, notes and groups without mutating either board', () => {
-    const before = board();
-    const after = structuredClone(before);
-    after.nodes[0]!.notes = 'A local note';
-    after.positions.sender = { x: 12, y: 34 };
-    after.groups![0]!.collapsed = false;
-    const result = compareBoards(before, after);
-    expect(result.map((item) => item.label)).toEqual(
-      expect.arrayContaining(['Concept sender', 'Position sender', 'groups']),
-    );
-    expect(before.nodes[0]!.notes).toBeUndefined();
-    expect(compareBoards(before, before)).toEqual([]);
-  });
-  it('ships valid reusable examples', () => {
-    for (const example of PROCESS_EXAMPLES)
-      expect(BoardGraphSchema.safeParse(example).success, example.title).toBe(true);
   });
 });

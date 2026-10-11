@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { accessibilityScan, signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 type Drawing = {
   id: string;
@@ -49,9 +50,7 @@ test('draws blueprint shapes beside the diagram, saves them and attaches one to 
   // One continuous scenario: drawing, persistence, undo, attachment, erasing and accessibility.
   test.setTimeout(90_000);
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.getByRole('button', { name: 'Hide the big picture' }).click();
 
   // Diagram mode stays the default: no capture surface until a drawing tool is chosen.
@@ -173,9 +172,7 @@ test('draws blueprint shapes beside the diagram, saves them and attaches one to 
 
 test('a board can be a sketch without any concepts', async ({ page }) => {
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   // Remove every concept so only the drawing remains.
   const board = await savedBoard(page);
   for (const node of board.nodes) {
@@ -200,9 +197,7 @@ test('selects several drawings, copies, resizes, locks, layers and scales them',
 }) => {
   test.setTimeout(90_000);
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.getByRole('button', { name: 'Hide the big picture' }).click();
   await page.getByRole('button', { name: 'Show drawing tools' }).click();
   const tools = page.getByRole('toolbar', { name: 'Drawing tools' });
@@ -290,9 +285,7 @@ test('chat sketches beside the diagram after review, and sketches rotate and res
 }) => {
   test.setTimeout(90_000);
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('demo');
   await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');
@@ -415,9 +408,7 @@ test('paints paths, polygons, arcs and hatching, and picks and restyles groups a
 }) => {
   test.setTimeout(90_000);
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   // An agent's drawings arrive through the saved-board API, as MCP tools save them.
   const style = { ink: 'sky', line: 'solid', strokeWidth: 2 };
   await page.evaluate(async (style) => {
@@ -574,9 +565,7 @@ test('an agent sketch streams onto the canvas, then changes by edits after revie
 }, testInfo) => {
   test.setTimeout(90_000);
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.getByRole('tab', { name: 'Chat', exact: true }).click();
   await page.getByLabel('Agent', { exact: true }).selectOption('demo');
   await page.getByLabel('What would you like to understand?').fill('Sketch the mail servers');

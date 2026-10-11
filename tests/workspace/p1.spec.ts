@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signUp, accessibilityScan } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('saves profiles, edits and removes them, checks invalid paths without a model call', async ({
   page,
@@ -66,9 +67,7 @@ test('pins, connects and reconnects with keyboard controls and saves branch meta
   page,
 }) => {
   await signUp(page, 'Connection editor');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   await page.locator('[data-id="sender"]').click();
   const details = page.getByRole('complementary', { name: /Details for/ });
   await details.getByLabel('Pin position').check();
@@ -194,9 +193,7 @@ test('selectively accepts a proposed concept change while keeping rejected chang
       },
     });
   });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const before = await page.evaluate(async () => {
     const list = await (await fetch('/v1/boards')).json();
     return await (await fetch('/v1/boards/' + list[0].id)).json();

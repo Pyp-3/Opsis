@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('saves concept links, follows them and returns, without exposing private backlinks', async ({
   page,
@@ -9,9 +10,7 @@ test('saves concept links, follows them and returns, without exposing private ba
   const destination = await (
     await page.request.post('/v1/boards', { data: { title: 'Destination' } })
   ).json();
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const entries = await (await page.request.get('/v1/boards')).json();
   const source = entries.find((entry: { id: string }) => entry.id !== destination.id);
   await page.locator('.react-flow__node').first().click();

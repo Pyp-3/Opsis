@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('collection sharing is atomic and bundles import as private linked copies', async ({
   page,
@@ -15,9 +16,7 @@ test('collection sharing is atomic and bundles import as private linked copies',
       data: { title: 'Destination', collectionId: collection.id },
     })
   ).json();
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const list = await (await page.request.get('/v1/boards')).json();
   const source = list.find((entry: { id: string }) => entry.id !== target.id);
   await page.request.put(`/v1/boards/${source.id}/collection`, {
@@ -118,9 +117,7 @@ test('a filed board’s JSON export names its collection, and importing files th
   const collection = await (
     await page.request.post('/v1/collections', { data: { name: 'Field notes' } })
   ).json();
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const [source] = await (await page.request.get('/v1/boards')).json();
   await page.request.put(`/v1/boards/${source.id}/collection`, {
     data: { collectionId: collection.id },

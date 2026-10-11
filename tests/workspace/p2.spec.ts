@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 import { EMAIL_DEMO } from '../../packages/schema/src/board';
 
 async function savedBoard(page: Page) {
@@ -11,9 +12,7 @@ async function savedBoard(page: Page) {
 }
 async function example(page: Page) {
   await signUp(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
 }
 
 test('nested groups, sources and notes survive reload and collapse without deleting concepts', async ({

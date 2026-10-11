@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signUp, accessibilityScan } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('a new canvas saves its first private thread before generation', async ({ page }) => {
   await signUp(page, 'New chat');
@@ -24,9 +25,7 @@ test('a new canvas saves its first private thread before generation', async ({ p
 
 test('private model threads persist separately from a shared canvas', async ({ page, browser }) => {
   await signUp(page, 'Chat owner');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const boards = await (await page.request.get('/v1/boards')).json();
   const board = boards.find((entry: { title: string }) => entry.title === 'An email’s journey');
   await expect(page.getByRole('tab', { name: 'Coming soon' })).toBeDisabled();
@@ -96,9 +95,7 @@ test('chat docks beside a live canvas on wide screens and can take the full page
   page,
 }) => {
   await signUp(page, 'Docked chat');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const canvas = page.getByRole('region', { name: 'Interactive diagram canvas' });
   const chat = page.getByRole('region', { name: 'Private board chat' });
   // The tabs sit in the header, so no row is taken from the canvas.
@@ -205,9 +202,7 @@ test('selected drawings become the chat focus, and threads keep notes and outcom
 }) => {
   test.setTimeout(90_000);
   await signUp(page, 'Focus reader');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   const requests: Record<string, unknown>[] = [];
   page.on('request', (request) => {
     if (request.url().endsWith('/v1/boards/generate')) requests.push(request.postDataJSON());

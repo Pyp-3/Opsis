@@ -1,11 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { signUp } from './session';
+import { openEmailExample } from './board-fixtures';
 
 test('searches across boards and opens the matching concept on the canvas', async ({ page }) => {
   await signUp(page, 'Searcher');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Open example: An email’s journey' }).click();
-  await expect(page.locator('.save-status')).toHaveText('Saved');
+  await openEmailExample(page);
   expect((await page.request.post('/v1/boards', { data: { title: 'Unrelated' } })).status()).toBe(
     201,
   );
