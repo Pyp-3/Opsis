@@ -4,6 +4,24 @@ Last reviewed: 2026-10-11.
 
 ## Current delivery
 
+Drawing rotation and guest refresh (2026-10-11, user request): shipped an
+on-canvas rotation handle for multiple selected drawings, with one undoable drag,
+Shift snapping, stable attachments and locked drawings left unchanged. Anonymous
+visitors and restricted guest accounts refresh authorized snapshots while visible;
+unchanged content preserves playback, changed content stops the old script for replay,
+and revoked access clears the board. Explicit hidden-page links remain scoped to their
+board. Navigation and late audio callbacks cannot restore stale content or narration.
+Verified on Arch Linux: lint/typecheck, Rust formatting/Clippy and 24 tests, native
+vet/race tests, and `test:qa` (546 tests in 95 files and all 73 Fastify browser
+scenarios). The full Linux desktop build, packaged database/MCP integration and all
+24 hidden WebView checks pass. All 73 browser scenarios also pass against the rebuilt
+Linux binary, including zoomed group rotation/undo/reload and guest edit/replay/revocation.
+Speech in the new browser regression uses a deterministic fixture; existing server
+script-authorization tests pass without changing the authorization policy. No paid
+provider calls or live deployment were made. Windows/macOS execution is left to CI;
+real Nginx narration/refresh verification remains open below. Existing jsdom canvas
+and system Fontconfig warnings remain non-failing.
+
 Maintainability cleanup (2026-10-11, user request): review comments, dead code,
 file organization, tests and CI/CD using Refactoring Guru's behavior-preserving
 principles, with four agents including the coordinator. Preserve meaningful
@@ -457,9 +475,14 @@ opens without sign-in; link access is view-only.
       hosts check each line against the sentences of a link or public board's readable pages (a
       hidden page with its link), refuse anything else with 403, and Fastify gives their requests
       their own rate limit. Members are unchanged.
-- [ ] Not yet: not verified on a real Nginx host. A guest who keeps a board open while its owner
-      edits it hears the captions only for lines the owner changed until the guest reloads, because
-      the narrator reads the saved script.
+- [x] Refresh open guest boards (2026-10-11): anonymous visitors and restricted guest
+      accounts receive authorized saved snapshots every two seconds while visible, and on
+      focus/resume. Unchanged documents preserve playback; changed content closes the player
+      so replay uses the latest script. Revocation clears the board and stops audio. Hidden-page
+      links remain scoped to their board, and stale navigation/audio callbacks cannot restore
+      content or continue narration. The hidden-page edit/replay/revocation browser regression
+      passes against Fastify and the Linux desktop API; speech uses a deterministic fixture.
+- [ ] Not yet: verify narration and guest refresh on a real Nginx host.
 
 Verified 2026-10-11 on Arch Linux: API tests for deck answers (pages instructions and the `$defs`
 schema sent, an invalid extra page repaired once, nothing offered or returned without `newPages`,
@@ -745,7 +768,10 @@ blueprints and hybrid flows (engineering and architecture) instead of only proce
       **Turn selection (°)** field turn them together about the centre of their combined outline,
       keeping their layout, as one undoable edit. Attached drawings stay attached; locked ones
       are left alone. One drawing still turns about its own centre.
-- [ ] Not yet: an on-canvas rotation handle for a multi-selection (the panel controls turn it).
+- [x] Multi-selection rotation handle (2026-10-11): drag the round handle above the editable
+      selection to turn it about its shared centre. Shift snaps to 15° steps; attachments remain
+      attached, locked/hidden drawings stay unchanged, and a drag is one undoable edit. Zoomed
+      dragging, undo/redo and saved reload pass against Fastify and the Linux desktop API.
       Streaming an agent's sketch shipped with agent drawing power item 4 (2026-10-10).
 
 Verified 2026-10-07 on Arch Linux: schema tests (layer order/visibility/locks, layer removal,

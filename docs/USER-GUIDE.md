@@ -119,11 +119,13 @@ canvas to show the drawing tools:
   ends of a line, arrow or dimension. Drag one to reshape it; it snaps like drawing does,
   Shift keeps a corner drag in proportion and Alt places it freely. Dragging a corner of a
   text changes its letter size, keeping the opposite corner in place.
-- **Rotate** with the round handle above a selected shape; hold Shift to turn in 15° steps.
+- **Rotate** with the round handle above a selected shape or group of selected drawings;
+  hold Shift to turn in 15° steps.
   A box, ellipse or text also has a **Rotation (°)** field for an exact angle, and
   **Rotate 90°** turns the selection by a quarter turn. With several drawings selected, they
   turn together about the centre of the whole selection, keeping their layout, and
-  **Turn selection (°)** turns them by any angle; attached drawings stay attached. A rotated
+  **Turn selection (°)** turns them by any angle; attached drawings stay attached and locked
+  drawings stay put. Each handle drag is one undoable action. A rotated
   shape keeps its handles along its own sides.
 - **Copy and paste**: Ctrl/⌘ C, X and V copy, cut and paste selected drawings, also into
   another board or browser tab. Ctrl/⌘ D, or **Duplicate**, copies them in place. Copies land
@@ -343,7 +345,12 @@ the pages to turn, and the concepts with their explanations. Signed-in viewers o
 full canvas, where they can also save their own copy. Someone who opened a hidden page's link
 keeps seeing that page in the same tab, after reloads too. Nobody but you and invited editors can change your
 original, and viewers never receive hidden pages or your undo history. Making the board
-private again closes the link at once: it then leads to sign-in.
+private again closes an open guest view on its next refresh and leads to sign-in.
+
+Anonymous visitors and restricted guest accounts receive saved changes automatically while
+the tab is visible. Unchanged refreshes preserve playback. When the document changes, the
+player closes and **Play the process** starts the updated script. Returning to a hidden tab
+refreshes access and content before the next scheduled check.
 
 On a desktop install or a local development server, the link only works on your own
 computer. To share with people elsewhere, run Opsis as a
