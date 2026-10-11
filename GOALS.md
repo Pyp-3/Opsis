@@ -112,7 +112,7 @@ The runtime remains non-root/read-only with all capabilities dropped and no publ
 ports. Update and certificate timers remain enabled. No further model calls were made.
 
 VPS deployment scope (2026-10-10): serve only `/opsis/` on
-`tools.pypsnotes.cloud`, returning 404 elsewhere; use the existing Docker/Nginx
+the personal server's tools subdomain, returning 404 elsewhere; use the existing Docker/Nginx
 host and Cloudflare DNS. Start with an empty server database. Add mount-path
 support and a separately installed updater gated on successful CI for the exact
 main commit. The user prioritizes supply-chain risk: freeze dependency images,
