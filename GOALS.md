@@ -1075,6 +1075,32 @@ generation), and the executable path an account saves is ignored there.
       server sets CLI paths.
 - [x] Server-run CLIs: an account's saved executable path is dropped before any agent check,
       generation or illustration; `OPSIS_<AGENT>_BIN` or PATH on the server decide.
+- [x] Desktop app connects to a personal server (2026-10-11, user request, option 1 of 3): on
+      the sign-in page or Account, **Change** → server address → **Connect**, then sign in with an
+      operator-created account; **Use this computer** switches back. Only the API is remote: the
+      app's bundled pages stay local, so no server code runs beside the native file/clipboard
+      bridges. The native gateway accepts HTTPS only (HTTP for loopback), no credentials, query
+      or fragment; checks `/v1/instance` without following redirects and requires the same API
+      version (new `OPSIS_API_VERSION`, reported as `api` by both hosts); keeps one private
+      session file per server and sends each session only to its own server; sends the
+      server's origin on writes and drops the Referer. The choice is remembered (`server.json`).
+      Not included: remote MCP agent keys (option 2) and offline work/device sync (option 3,
+      still deferred below); `opsis --mcp` stays local.
+
+      Verified 2026-10-11 on Arch Linux: Go tests for address rules, the server check (current,
+      older, newer, non-Opsis, redirect, unreachable), the remembered choice (a tampered one
+      falls back to this computer) and the gateway switching servers (path prefix, origin,
+      no Referer, sessions never crossing servers, both sign-ins kept across switches and
+      restarts); web tests for the picker; and, with a throwaway local HTTPS proxy on `/opsis`
+      in front of the real API in server mode, the real gateway signing in, creating and
+      listing boards, with sign-up refused (the scratch harness was not committed). The hidden
+      WebView smoke test now calls the native bindings (28 checks). Lint, typecheck, Rust
+      formatting/Clippy and 24 tests, desktop check and full race suite, 567 unit tests and all
+      75 Fastify browser scenarios pass; the rebuilt Linux binary passes packaged integration
+      and all 75 browser scenarios. The live server needs this commit deployed (it does not yet
+      report `api`) before the app will connect; connecting with a real account there is left
+      to the user.
+
 - [ ] Not in this delivery: an audit log with retention, invite links and self-service
       password recovery (operator resets instead).
 - [ ] Deferred until requested: per-device sync tokens and syncing local hosts (Fastify and

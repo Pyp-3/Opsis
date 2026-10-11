@@ -12,6 +12,7 @@ import {
   Network,
 } from 'lucide-react';
 import { BrandMark } from '../workspace/BrandMark';
+import { ServerPicker } from './ServerPicker';
 import { navigate } from '../router';
 import { AuthError, logIn, passwordStrength, signUp, type User } from './session';
 import './auth.css';
@@ -293,6 +294,7 @@ export function AuthPage({
             </p>
           )}
         </div>
+        <ServerPicker variant="sign-in" />
         <p className="auth-footnote">
           <Lock size={12} /> Passwords are stored as salted hashes on your Opsis server.
         </p>

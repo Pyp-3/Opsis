@@ -167,6 +167,20 @@ func (s *Server) body(w http.ResponseWriter, r *http.Request, operation string, 
 	return nil
 }
 
+// APIVersion is the HTTP API generation the bundled web app speaks (OPSIS_API_VERSION in the
+// shared schema); the desktop app connects only to servers that report the same.
+func (s *Server) APIVersion() (int, error) {
+	raw, err := s.contracts.Apply("localInstance", nil)
+	if err != nil {
+		return 0, err
+	}
+	var instance struct {
+		API int `json:"api"`
+	}
+	err = json.Unmarshal(raw, &instance)
+	return instance.API, err
+}
+
 func (s *Server) validID(id string) bool {
 	_, err := s.contracts.Apply("id", map[string]string{"id": id})
 	return err == nil
@@ -242,8 +256,13 @@ func (s *Server) routes() {
 	// The desktop app is always a local install: open sign-up and account-chosen CLI paths.
 	// Only the Fastify host's personal server mode (docs/SERVER.md) narrows these.
 	s.handle("GET /v1/instance", func(w http.ResponseWriter, _ *http.Request) error {
-		writeJSON(w, 200, map[string]bool{"signup": true, "accountExecutablePaths": true})
-		return nil
+		instance, err := s.contracts.Apply("localInstance", nil)
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, err = w.Write(instance)
+		return err
 	})
 	s.authRoutes()
 	s.boardRoutes()

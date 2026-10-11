@@ -1,3 +1,4 @@
+import { ServerPicker } from '../auth/ServerPicker';
 import { apiFetch as fetch } from '../app-url';
 import { useCallback, useEffect, useState } from 'react';
 import { Bot, Check, Copy, KeyRound, LogOut, Plus, Trash2, UserRound } from 'lucide-react';
@@ -175,6 +176,8 @@ export function AccountPage({
           keys && <p className="rail-empty">No agent keys yet.</p>
         )}
       </section>
+
+      <ServerPicker variant="account" />
 
       <section className="settings-card account-card">
         <h2 className="settings-title">

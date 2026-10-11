@@ -51,7 +51,7 @@ cd Opsis
 
 Open **http://localhost:3000**. For native Windows and troubleshooting, see [Getting started](docs/GETTING-STARTED.md).
 
-Your boards stay on your machine. Agent generation sends your prompt and supplied context through the selected provider and may consume its quota. The development server stays on loopback. To open your own Opsis from anywhere, run it as a [personal server](docs/SERVER.md) behind an HTTPS proxy such as Nginx, with accounts you create. Path hosting (such as `/opsis/`) and an opt-in CI-gated, frozen-dependency VPS updater are documented there.
+Your boards stay on your machine. Agent generation sends your prompt and supplied context through the selected provider and may consume its quota. The development server stays on loopback. To open your own Opsis from anywhere, run it as a [personal server](docs/SERVER.md) behind an HTTPS proxy such as Nginx, with accounts you create; the desktop app can [connect to it](docs/DESKTOP.md#connect-to-a-personal-server) as well as browsers. Path hosting (such as `/opsis/`) and an opt-in CI-gated, frozen-dependency VPS updater are documented there.
 
 Personal servers can restrict operator-created guest accounts to a read-only public-board gallery, without agent usage or editing. Open guest views refresh saved changes automatically, keep unchanged playback running, and stop narration when content changes or access is revoked. Normal member accounts share the server's configured CLI logins and API keys.
 

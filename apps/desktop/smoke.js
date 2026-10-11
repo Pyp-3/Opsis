@@ -22,6 +22,23 @@
     assert(typeof crypto.randomUUID === 'function', 'secure-context UUID available');
     await until(() => document.querySelector('.auth-form'), 'React sign-in form did not render');
     assert(true, 'React application rendered');
+    // Server choice: this computer by default; addresses are checked natively before any switch.
+    const server = await window.go.main.Desktop.ServerConnection();
+    assert(server && server.remote === false, 'native server choice is this computer');
+    await until(
+      () => document.querySelector('.server-picker')?.textContent.includes('This computer'),
+      'server picker did not render on the sign-in page',
+    );
+    assert(true, 'server picker rendered on the sign-in page');
+    const refused = await window.go.main.Desktop.ConnectServer('http://example.com').then(
+      () => '',
+      (error) => String(error),
+    );
+    assert(refused.includes('https'), 'plain-HTTP server addresses refused natively');
+    assert(
+      (await window.go.main.Desktop.ServerConnection()).remote === false,
+      'a refused address leaves this computer in use',
+    );
     const workerPath = window.__OPSIS_SMOKE_ASSETS.find(
       (path) => path.includes('/process.worker-') && path.endsWith('.js'),
     );

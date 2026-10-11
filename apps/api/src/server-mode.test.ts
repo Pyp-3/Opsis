@@ -97,7 +97,7 @@ describe('personal server mode', () => {
   it('closes sign-up, keeps logging in, and marks the session cookie Secure', async () => {
     const { app } = await serve();
     const instance = await app.inject(viaProxy({ url: '/v1/instance' }));
-    expect(instance.json()).toEqual({ signup: false, accountExecutablePaths: false });
+    expect(instance.json()).toEqual({ signup: false, accountExecutablePaths: false, api: 1 });
     const signup = await app.inject(
       viaProxy({
         method: 'POST',

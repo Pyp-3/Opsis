@@ -8,7 +8,33 @@ type DesktopBridge = {
   CheckForUpdate?(): Promise<UpdateStatus>;
   InstallUpdate?(): Promise<void>;
   OpenUpdatePage?(): Promise<void>;
+  // Desktop builds that can work with a personal Opsis server; older hosts may not provide them.
+  ServerConnection?(): Promise<ServerStatus>;
+  ConnectServer?(address: string): Promise<ServerStatus>;
+  UseThisComputer?(): Promise<ServerStatus>;
 };
+
+/** Which Opsis the desktop window works with: this computer, or a personal server. */
+export type ServerStatus = { remote: boolean; url: string; label: string };
+
+export type DesktopServers = {
+  current(): Promise<ServerStatus>;
+  /** Checks the address is a compatible Opsis server, then switches to it. Rejects with why not. */
+  connect(address: string): Promise<ServerStatus>;
+  useThisComputer(): Promise<ServerStatus>;
+};
+
+/** Server switching, when this window is a desktop build that offers it. */
+export function desktopServers(): DesktopServers | undefined {
+  const native = bridge();
+  const { ServerConnection, ConnectServer, UseThisComputer } = native ?? {};
+  if (!native || !ServerConnection || !ConnectServer || !UseThisComputer) return undefined;
+  return {
+    current: () => ServerConnection.call(native),
+    connect: (address) => ConnectServer.call(native, address),
+    useThisComputer: () => UseThisComputer.call(native),
+  };
+}
 
 export type UpdateStatus = {
   supported: boolean;

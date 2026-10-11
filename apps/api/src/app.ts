@@ -3,7 +3,12 @@ import { sep } from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { ZodError } from 'zod';
-import { ErrorResponseSchema, LOCAL_INSTANCE, type InstanceInfo } from '@opsis/schema';
+import {
+  ErrorResponseSchema,
+  LOCAL_INSTANCE,
+  OPSIS_API_VERSION,
+  type InstanceInfo,
+} from '@opsis/schema';
 import { ApiStore } from './storage.js';
 import { registerBoardRoutes, type BoardClientFactory } from './boards.js';
 import { registerBoardLibrary } from './board-library.js';
@@ -233,7 +238,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.get('/v1/health', async () => ({ status: 'ok' }));
   const instance: InstanceInfo = serverMode
-    ? { signup: false, accountExecutablePaths: false }
+    ? { signup: false, accountExecutablePaths: false, api: OPSIS_API_VERSION }
     : LOCAL_INSTANCE;
   app.get('/v1/instance', async () => instance);
   if (serverMode) registerWebApp(app, serverMode.webRoot);

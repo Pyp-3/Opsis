@@ -38,6 +38,7 @@ import {
   type LinkingBoard,
   imageFileInfo,
   snapshotImageIds,
+  LOCAL_INSTANCE,
   IMAGE_HEADER_BYTES,
   MAX_BOARD_IMAGES,
   MAX_IMAGE_BYTES,
@@ -121,6 +122,8 @@ export function apply(operation: string, json: string): string {
         })),
         z.string().parse(query),
       );
+    } else if (operation === 'localInstance') {
+      value = LOCAL_INSTANCE;
     } else if (operation === 'imageLimits') {
       value = { bytes: MAX_IMAGE_BYTES, headerBytes: IMAGE_HEADER_BYTES, board: MAX_BOARD_IMAGES };
     } else if (operation === 'imageInfo') {

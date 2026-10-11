@@ -54,11 +54,14 @@ var (
 type Desktop struct {
 	ctx     context.Context
 	gateway *desktop.Gateway
-	smoke   bool
-	result  chan string
-	updates *updater.Client
-	mu      sync.Mutex
-	pending *updater.Update
+	// Where the app keeps its settings, and the API generation its bundled pages speak.
+	data       string
+	apiVersion int
+	smoke      bool
+	result     chan string
+	updates    *updater.Client
+	mu         sync.Mutex
+	pending    *updater.Update
 }
 
 type UpdateStatus struct {
@@ -158,6 +161,52 @@ func (d *Desktop) OpenUpdatePage() {
 }
 
 func (d *Desktop) CancelRequest(id string) { d.gateway.Cancel(id) }
+
+// ServerStatus says which Opsis the window works with: this computer, or a remote server.
+type ServerStatus struct {
+	Remote bool   `json:"remote"`
+	URL    string `json:"url"`
+	Label  string `json:"label"`
+}
+
+func (d *Desktop) serverStatus() ServerStatus {
+	if remote := d.gateway.Server(); remote != nil {
+		return ServerStatus{Remote: true, URL: remote.String(), Label: desktop.ServerLabel(remote)}
+	}
+	return ServerStatus{Label: "This computer"}
+}
+
+// ServerConnection reports the server in use.
+func (d *Desktop) ServerConnection() ServerStatus { return d.serverStatus() }
+
+// ConnectServer switches the window to a personal Opsis server after checking that the address
+// is one and that it speaks the same API as the app's bundled pages. The choice is remembered.
+// The window then reloads; signing in happens on the server's own sign-in page.
+func (d *Desktop) ConnectServer(raw string) (ServerStatus, error) {
+	address, err := desktop.ServerAddress(raw)
+	if err != nil {
+		return d.serverStatus(), err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := desktop.ProbeServer(ctx, address, d.apiVersion); err != nil {
+		return d.serverStatus(), err
+	}
+	if err := desktop.SaveServerChoice(d.data, address); err != nil {
+		return d.serverStatus(), errors.New("could not remember the server")
+	}
+	d.gateway.UseServer(address)
+	return d.serverStatus(), nil
+}
+
+// UseThisComputer switches back to the app's own local Opsis; each server keeps its sign-in.
+func (d *Desktop) UseThisComputer() (ServerStatus, error) {
+	if err := desktop.SaveServerChoice(d.data, nil); err != nil {
+		return d.serverStatus(), errors.New("could not forget the server")
+	}
+	d.gateway.UseServer(nil)
+	return d.serverStatus(), nil
+}
 
 // Only a user-selected destination is writable through the frontend bridge.
 func (d *Desktop) SaveFile(name, encoded string) (bool, error) {
@@ -366,7 +415,15 @@ func run() error {
 	}
 	gateway := desktop.NewGateway(apiURL, paths.Data)
 	defer gateway.Close()
-	app := &Desktop{gateway: gateway, smoke: mode == "--smoke-test", result: make(chan string, 1)}
+	apiVersion, err := nativeAPI.APIVersion()
+	if err != nil {
+		return err
+	}
+	app := &Desktop{gateway: gateway, data: paths.Data, apiVersion: apiVersion, smoke: mode == "--smoke-test", result: make(chan string, 1)}
+	// Reopen the server the person last connected to; smoke tests always use this computer.
+	if remote := desktop.LoadServerChoice(paths.Data); remote != nil && !app.smoke {
+		gateway.UseServer(remote)
+	}
 	if updates, err := updater.New(); err == nil {
 		app.updates = updates
 	}

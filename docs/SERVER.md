@@ -39,6 +39,14 @@ is the usual loopback-only local application.
 - **MCP agent keys** still work only for agents on the server itself, talking to the API
   directly on loopback. A key sent through the proxy is ignored.
 
+### The desktop app
+
+The desktop app can connect to the server instead of using its own local data (see
+[the desktop guide](DESKTOP.md#connect-to-a-personal-server)). Nothing needs configuring here:
+it sends the server's own origin on writes, uses the same sign-in and limits as a browser, and
+connects only when the server reports the same API version (`api` in `/v1/instance`) as the
+app's bundled pages. Keep the server and the desktop app updated together.
+
 ## Configuration
 
 | Variable              | Meaning                                                                                                        |

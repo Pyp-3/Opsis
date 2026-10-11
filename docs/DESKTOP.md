@@ -75,6 +75,39 @@ For whole-database backups, run `./opsis --backup-database /absolute/path/new-ba
 Restore with `--import-database` into a new profile. See [Persistence and recovery](PERSISTENCE.md)
 for retention, revision history, and credential considerations.
 
+## Connect to a personal server
+
+The desktop app can work with a [personal Opsis server](SERVER.md) instead of its own local
+data: your boards, chats and pictures stay on the server, and the app shows and edits them in
+its own window, as the website would. On the sign-in page (or under **Account → Opsis server**
+once signed in), choose **Change**, enter the server's address, such as
+`https://opsis.example.com` or `https://example.com/opsis`, and choose **Connect**. Then sign
+in with an account the server's operator created for you (servers keep sign-up closed). The
+app remembers the server and reopens it on the next start; **Use this computer** switches back
+to local data. Each server keeps its own sign-in, so switching back and forth does not sign you
+out of either.
+
+How it works and what it protects:
+
+- Only the API goes to the server. The pages are the ones bundled with the app, so no code
+  from the server runs in the window that can save files and use the clipboard.
+- Addresses must use HTTPS (plain HTTP is allowed only for a server on this computer), without
+  a user name, password, query or fragment. Before switching, the app checks that the address
+  answers like an Opsis server and speaks the same API version as the app
+  (`OPSIS_API_VERSION` in the shared schema); it does not follow redirects. Update whichever is
+  older if they differ.
+- The session for each server is kept by the native app in a private file in the data
+  directory (`server-session-<hash>.json`, mode 0600), never in JavaScript, and is only ever
+  sent to the server that issued it. The chosen server is in `server.json`.
+- Writes carry the server's own origin, which the server requires; nothing but the app's own
+  pages can reach the app's proxy.
+
+While connected, generation, narration, provider keys and agent CLIs are the server's. Agent
+keys (MCP) still work only on the computer that runs the server, and `opsis --mcp` always
+uses this computer's local data. Offline work and syncing local boards with a server are not
+supported: when the server cannot be reached, requests fail with a message and unsaved work
+stays in the window's recovery copy.
+
 ## MCP
 
 Create a key in **Account → Agent keys** and configure your MCP client with the

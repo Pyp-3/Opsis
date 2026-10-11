@@ -1,0 +1,138 @@
+/* The desktop app's choice of Opsis: this computer, or a personal server. */
+.server-picker {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.server-picker.is-sign-in {
+  max-width: 420px;
+  margin: 14px auto 0;
+}
+.server-picker.is-account {
+  max-width: 720px;
+}
+.server-picker-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.server-picker-current > svg {
+  flex: none;
+  color: var(--accent-text);
+}
+.server-picker-current span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.server-picker-current small {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.server-picker-current strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.server-picker-current button {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--accent-text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+.server-picker-current button:hover {
+  background: var(--accent-soft);
+}
+.server-picker-form {
+  display: grid;
+  gap: 6px;
+}
+.server-picker-form label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.server-picker-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.server-picker-form input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.server-picker-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.server-picker-error {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--error-ink);
+  background: var(--error-bg);
+  border-radius: var(--radius);
+}
+.server-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.server-picker-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.server-picker-actions .primary-button:disabled {
+  opacity: 0.55;
+}
+/* The sign-in page does not load the workspace's button styles, so the picker has its own. */
+.server-picker-actions button {
+  min-height: 34px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.server-picker-actions .secondary-button {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+.server-picker-actions .secondary-button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.server-picker-actions .primary-button {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border: 1px solid transparent;
+}
+.server-picker-actions .primary-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
