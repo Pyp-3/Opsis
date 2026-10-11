@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { boardPage, resolvePageId } from '@opsis/schema';
-import { BoardEntrySchema } from './board-library-api';
+import { useSharedBoard } from './useSharedBoard';
 import { ReadOnlyBoard } from './ReadOnlyBoard';
 import { BrandMark } from './BrandMark';
 import { navigate } from '../router';
-import { apiFetch as fetch, appPath, appUrl } from '../app-url';
+import { appPath, appUrl } from '../app-url';
 import './styles/shared-board.css';
-
-type Entry = ReturnType<typeof BoardEntrySchema.parse>;
-type State =
-  | { status: 'loading' }
-  | { status: 'missing' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; entry: Entry };
 
 /**
  * A shared board for someone who is not signed in: the owner chose "Anyone with the link" (or
@@ -31,30 +24,13 @@ export function GuestBoard({
   /** The board is not shared by link: it may still be the reader's own, after signing in. */
   onUnavailable: () => void;
 }) {
-  const [state, setState] = useState<State>({ status: 'loading' });
-  const [requested, setRequested] = useState(pageId);
+  const path = `/v1/guest/boards/${encodeURIComponent(boardId)}${pageId ? `?page=${encodeURIComponent(pageId)}` : ''}`;
+  const state = useSharedBoard(path);
+  const [selection, setSelection] = useState({ path, page: pageId });
+  const requested = selection.path === path ? selection.page : pageId;
   useEffect(() => {
-    const controller = new AbortController();
-    void fetch(
-      `/v1/guest/boards/${encodeURIComponent(boardId)}${pageId ? `?page=${encodeURIComponent(pageId)}` : ''}`,
-      { signal: controller.signal },
-    )
-      .then(async (response) => {
-        if (response.status === 404 || response.status === 400)
-          return { status: 'missing' } as const;
-        if (!response.ok) throw new Error('Opsis could not open this board. Try again soon.');
-        return { status: 'ready', entry: BoardEntrySchema.parse(await response.json()) } as const;
-      })
-      .then((next) => {
-        if (controller.signal.aborted) return;
-        setState(next);
-        if (next.status === 'missing') onUnavailable();
-      })
-      .catch((reason: Error) => {
-        if (!controller.signal.aborted) setState({ status: 'error', message: reason.message });
-      });
-    return () => controller.abort();
-  }, [boardId, pageId, onUnavailable]);
+    if (state.status === 'missing') onUnavailable();
+  }, [state.status, onUnavailable]);
 
   const board = state.status === 'ready' ? state.entry.snapshot.board : null;
   const currentPage = resolvePageId(board, requested);
@@ -127,11 +103,14 @@ export function GuestBoard({
           board={board}
           boardId={boardId}
           pageId={currentPage}
-          onPage={setRequested}
+          onPage={(page) => setSelection({ path, page })}
           label="Shared diagram"
           className="shared-canvas"
         />
         <section className="shared-concepts" aria-label="Concepts">
+          {state.updated && (
+            <p role="status">Board updated. Play again to hear the latest version.</p>
+          )}
           {view.description && <p className="shared-description">{view.description}</p>}
           {view.nodes.length ? (
             <ol>

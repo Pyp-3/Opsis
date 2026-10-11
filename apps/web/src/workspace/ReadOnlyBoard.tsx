@@ -108,10 +108,12 @@ export function ReadOnlyBoard(props: {
   label?: string;
   className?: string;
 }) {
+  // A changed saved document invalidates the old script. Unmounting the player stops its
+  // audio and pending playback callbacks; identical refreshes keep the current view intact.
+  const content = useMemo(() => JSON.stringify(props.board), [props.board]);
   return (
-    // A fresh view for every page, framed to fit.
-    <ReactFlowProvider key={props.pageId ?? ''}>
-      <ReadOnlyPage {...props} />
+    <ReactFlowProvider key={`${props.boardId}:${props.pageId ?? ''}`}>
+      <ReadOnlyPage key={content} {...props} />
     </ReactFlowProvider>
   );
 }

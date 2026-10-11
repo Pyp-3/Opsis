@@ -138,6 +138,7 @@ export function useProcessPlayback(
       // Sentence by sentence: each plays as soon as it is ready while the next is made.
       const parts = sentences(beat.narration);
       const say = (part: number) => {
+        if (finished) return;
         if (part >= parts.length) return advance(SPEECH_GAP);
         setPreparing(true);
         narrator.speak(parts[part]!, naturalVoice.id).then(

@@ -124,6 +124,24 @@ describe('natural narrator', () => {
     expect(spoken).toHaveLength(0);
   });
 
+  it('stops the old audio when a refreshed shared document unmounts its player', async () => {
+    const { unmount } = render(
+      <ProcessPlayer board={board} disabled={false} onBeat={vi.fn()} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Narrator' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await flush();
+    const audio = played.at(-1)!;
+    expect(audio).toBeDefined();
+    unmount();
+    expect(audio.pause).toHaveBeenCalledTimes(1);
+    const requests = narrator.speak.mock.calls.length;
+    act(() => audio.onended?.());
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(narrator.speak).toHaveBeenCalledTimes(requests);
+    expect(played).toHaveLength(1);
+  });
+
   it('shows download progress while the voice model loads', () => {
     narrator.state = { status: 'loading', progress: 0.42 };
     render(<ProcessPlayer board={board} disabled={false} onBeat={vi.fn()} onClose={vi.fn()} />);
