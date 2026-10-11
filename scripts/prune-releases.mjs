@@ -1,13 +1,7 @@
 #!/usr/bin/env node
 /**
- * Release retention: keeps the newest published build releases and deletes older ones with their
- * tags.
- *
- * Every push publishes a prerelease, so without pruning the release list and its large desktop
- * downloads grow without bound. Drafts are never touched: a draft is a release another CI run is
- * still publishing. Stable (non-prerelease) releases are published by hand and are kept, as
- * automatic builds never replace them. Installed desktop builds update from the newest signed release, so deleting
- * older releases never strands an update.
+ * Prune older build prereleases and their tags to bound CI artifact storage.
+ * Preserve drafts that another run may be publishing and hand-published stable releases.
  *
  *   node scripts/prune-releases.mjs [--keep 5] [--dry-run]
  *
@@ -59,7 +53,7 @@ const gh = (args) =>
   execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 function listReleases() {
-  // The release API pages at 100; --limit follows pages until every release is listed.
+  // The API pages at 100; gh follows pages up to this limit.
   return JSON.parse(
     gh(['release', 'list', '--limit', '10000', '--json', 'tagName,isDraft,isPrerelease,createdAt']),
   );

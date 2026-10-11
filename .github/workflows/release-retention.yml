@@ -1,8 +1,7 @@
 name: Release retention
 
-# Keeps only the newest published releases; older releases and their tags are deleted.
-# CI calls this after publishing each build; it can also be run by hand from the Actions tab
-# (choose "Dry run" to see what would be deleted without deleting anything).
+# Prune published build prereleases and their tags; preserve drafts and stable releases.
+# Manual runs default to a dry run so the deletion plan can be reviewed first.
 on:
   workflow_call:
     inputs:
@@ -41,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Delete older releases and their tags
+      - name: Delete older build prereleases and their tags
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

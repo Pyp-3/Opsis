@@ -21,21 +21,12 @@ jobs:
       version: ${{ steps.package.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Set up build tools
+        uses: ./.github/actions/setup-build-tools
         with:
-          node-version: 22
-          cache: pnpm
+          rust-components: rustfmt, clippy
       - name: Install
         run: pnpm install --frozen-lockfile
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.89.0'
-          targets: wasm32-unknown-unknown
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/engine
       - name: Verify clean-install native SQLite
         run: node scripts/verify-install.mjs
       - name: Recorded CLI compatibility (no paid calls)
@@ -83,22 +74,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Set up build tools
+        uses: ./.github/actions/setup-build-tools
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/desktop/go.mod
-          cache-dependency-path: apps/desktop/go.sum
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.89.0'
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/engine
+          desktop: 'true'
       - name: Install native dependencies
         run: |
           sudo apt-get update
@@ -155,22 +134,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Set up build tools
+        uses: ./.github/actions/setup-build-tools
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/desktop/go.mod
-          cache-dependency-path: apps/desktop/go.sum
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.89.0'
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/engine
+          desktop: 'true'
       # cgo (SQLite and the race detector) needs a MinGW-w64 gcc.
       - uses: msys2/setup-msys2@v2
         id: msys2
@@ -268,22 +235,10 @@ jobs:
       OPSIS_QA_DESKTOP_BINARY: output/desktop/Opsis.app/Contents/MacOS/opsis
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Set up build tools
+        uses: ./.github/actions/setup-build-tools
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/desktop/go.mod
-          cache-dependency-path: apps/desktop/go.sum
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.89.0'
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/engine
+          desktop: 'true'
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Check native code
