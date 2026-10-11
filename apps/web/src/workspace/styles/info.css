@@ -828,7 +828,6 @@
   position: relative;
   width: calc(2 * var(--page-w));
   height: var(--page-h);
-  perspective: 2800px;
   font-family: var(--font-reading, 'Source Serif 4', Georgia, serif);
   font-size: var(--reading-size, 18px);
   line-height: 1.6;
@@ -877,14 +876,15 @@
     6px 6px 0 -1px var(--surface),
     6px 6px 0 0 var(--line);
 }
-/* The spine's crease. */
+/* The spine's crease. It lies over a turning leaf, which hinges on it, so the crease does not
+   blink out when a turn starts and back when it ends. */
 .book-spread::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
   left: calc(var(--page-w) - 1px);
-  z-index: 2;
+  z-index: 4;
   width: 2px;
   pointer-events: none;
   background: color-mix(in srgb, var(--ink) 14%, transparent);
@@ -1043,28 +1043,40 @@
   z-index: 4;
   width: var(--page-w);
   height: var(--page-h);
-  transform-style: preserve-3d;
-  animation: book-turn-next 780ms cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
 }
 .book-turn.is-next {
   left: var(--page-w);
-  transform-origin: left center;
 }
 .book-turn.is-previous {
   left: 0;
-  transform-origin: right center;
-  animation-name: book-turn-previous;
 }
+/* Each face turns on its own about the spine, rather than inside one preserve-3d leaf: Firefox
+   draws a preserve-3d leaf through its slow 3D plane-splitting path, which stalls a frame as the
+   leaf passes the spine, and shows a face's back unless the face has a transform of its own.
+   The back is the front's turn followed by a half turn about the page's own centre. */
 .book-turn-face {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
-  /* Firefox hides a face's back only when the face has a 3D transform of its own; without one,
-     the old page shows through mirrored over the new one once the leaf passes the spine. */
-  transform: rotateY(0deg);
+  animation: 780ms cubic-bezier(0.45, 0.05, 0.3, 1) forwards;
 }
-.book-turn-face.is-back {
-  transform: rotateY(180deg);
+.book-turn.is-next .book-turn-face {
+  transform-origin: left center;
+}
+.book-turn.is-previous .book-turn-face {
+  transform-origin: right center;
+}
+.book-turn.is-next .book-turn-face.is-front {
+  animation-name: book-leaf-front-next;
+}
+.book-turn.is-next .book-turn-face.is-back {
+  animation-name: book-leaf-back-next;
+}
+.book-turn.is-previous .book-turn-face.is-front {
+  animation-name: book-leaf-front-previous;
+}
+.book-turn.is-previous .book-turn-face.is-back {
+  animation-name: book-leaf-back-previous;
 }
 .book-turn-face.is-front::after {
   content: '';
@@ -1078,14 +1090,38 @@
 .book-turn.is-previous .book-turn-face.is-front::after {
   background: linear-gradient(to left, var(--book-turn-shade), transparent 45%);
 }
-@keyframes book-turn-next {
+@keyframes book-leaf-front-next {
+  from {
+    transform: perspective(2800px) rotateY(0deg);
+  }
   to {
-    transform: rotateY(-180deg);
+    transform: perspective(2800px) rotateY(-180deg);
   }
 }
-@keyframes book-turn-previous {
+@keyframes book-leaf-back-next {
+  from {
+    transform: perspective(2800px) rotateY(0deg) translateX(var(--page-w)) rotateY(180deg);
+  }
   to {
-    transform: rotateY(180deg);
+    transform: perspective(2800px) rotateY(-180deg) translateX(var(--page-w)) rotateY(180deg);
+  }
+}
+@keyframes book-leaf-front-previous {
+  from {
+    transform: perspective(2800px) rotateY(0deg);
+  }
+  to {
+    transform: perspective(2800px) rotateY(180deg);
+  }
+}
+@keyframes book-leaf-back-previous {
+  from {
+    transform: perspective(2800px) rotateY(0deg) translateX(calc(-1 * var(--page-w)))
+      rotateY(180deg);
+  }
+  to {
+    transform: perspective(2800px) rotateY(180deg) translateX(calc(-1 * var(--page-w)))
+      rotateY(180deg);
   }
 }
 @keyframes book-turn-shade {

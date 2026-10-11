@@ -348,7 +348,8 @@ export function BookSpread({
             className={`book-turn is-${turn.direction}`}
             aria-hidden
             onAnimationEnd={(event) => {
-              if (event.target === event.currentTarget) onTurned();
+              // The faces turn separately; the turn is over when the back has landed.
+              if (event.animationName.startsWith('book-leaf-back')) onTurned();
             }}
           >
             <div className="book-turn-face is-front">{turn.front}</div>

@@ -509,6 +509,16 @@ images inserted carefully for security. Respect the app's palettes, contrast and
       transform, which Firefox needs to hide a face's back. Frames captured mid-turn in Firefox
       and Chromium show only the correct side. CSS-only; no browser assertion can see
       mid-animation backfaces, so the frame check is not a committed test.
+      Follow-up (2026-10-11, user report: still a quick glitch): the leaf turned as one
+      preserve-3d element, which Firefox renders through a slow path. In headless Firefox nearly
+      every frame of a turn took about 50 ms, with 100–150 ms stalls as it crossed the spine. Each
+      face now turns on its own flat transform about the spine, and the spine's crease is drawn
+      over the leaf so it no longer disappears at the start of a turn and reappears at the end.
+      Measured per animation frame over six turns: slow frames (over 40 ms) fell from about 90 to
+      8–11 in Firefox (mostly the frame that builds the leaf). Chromium had 3. In both browsers the
+      leaf's first and last frames match the open pages, and frozen mid-turn frames show the
+      correct pages unmirrored. The timing harness was a scratch test and is not committed; a
+      real-GPU Firefox and the desktop WebKit were not measured.
 
 Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
 builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,
