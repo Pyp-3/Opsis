@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 import { accessibilityScan, signUp } from './session';
 import { openEmailExample } from './board-fixtures';
@@ -226,4 +227,121 @@ test('Info reads each page like a book, with the editor’s text, links, picture
     await book(page).evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
   ).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('info-phone.png'), fullPage: false });
+});
+
+test('footnotes are marked on the canvas, and exported files carry their pictures anywhere', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await signUp(page, 'Picture carrier');
+  const collection = await (
+    await page.request.post('/v1/collections', { data: { name: 'Library' } })
+  ).json();
+  await openEmailExample(page);
+  const [source] = await (await page.request.get('/v1/boards')).json();
+  await page.request.put(`/v1/boards/${source.id}/collection`, {
+    data: { collectionId: collection.id },
+  });
+  await page.reload();
+
+  // A picture and a footnote on the first concept.
+  await page.getByRole('tab', { name: 'Info' }).click();
+  await book(page).getByRole('button', { name: 'Edit text' }).click();
+  await book(page).getByRole('button', { name: 'Picture', exact: true }).click();
+  await book(page)
+    .getByLabel('Picture', { exact: true })
+    .setInputFiles({ name: 'relay.png', mimeType: 'image/png', buffer: PNG });
+  await book(page).getByLabel('Description').fill('A relay rack');
+  await book(page).getByRole('button', { name: 'Insert picture' }).click();
+  await book(page).getByRole('button', { name: 'Save text' }).click();
+  await saved(page);
+  const first = leaf(page).locator('.info-object h3').first();
+  const label = (await first.innerText()).replace(/\d+$/, '').trim();
+  await leaf(page)
+    .getByRole('button', { name: `Add a footnote to ${label}` })
+    .click();
+  await book(page).getByLabel('Note', { exact: true }).fill('Where the message begins.');
+  await book(page).getByRole('button', { name: 'Add footnote' }).click();
+  await saved(page);
+  const storedInfo = async () =>
+    (await (await page.request.get(`/v1/boards/${source.id}`)).json()).snapshot.board.info;
+  await expect.poll(async () => (await storedInfo())?.footnotes?.length).toBe(1);
+  const text = (await storedInfo()).text as string;
+  const image = /image:([0-9a-f]{64})/.exec(text)![1]!;
+
+  // The canvas marks the concept with its footnote number; its details read the note.
+  await page.getByRole('tab', { name: /Canvas/ }).click();
+  const marker = page.locator('.react-flow__node').first().locator('.footnote-marker');
+  await expect(marker).toHaveText('1');
+  await expect(marker).toHaveAttribute('aria-label', 'Footnote 1');
+  await page.locator('.react-flow__node').first().click();
+  const details = page.getByRole('region', { name: 'Footnotes' });
+  await expect(details).toContainText('Where the message begins.');
+  await details.getByRole('button', { name: 'Read in Info' }).click();
+  await expect(page.getByRole('tab', { name: 'Info' })).toHaveAttribute('aria-selected', 'true');
+
+  // The editable board file carries the picture beside the document.
+  await page.getByRole('tab', { name: /Canvas/ }).click();
+  await page.locator('.export-menu summary').click();
+  const pendingFile = page.waitForEvent('download');
+  await page.getByRole('button', { name: /^Editable board/ }).click();
+  const fileBytes = await readFile((await (await pendingFile).path())!);
+  const file = JSON.parse(fileBytes.toString());
+  expect(file.images).toEqual([expect.objectContaining({ id: image, mediaType: 'image/webp' })]);
+
+  // So does the collection bundle.
+  await page.goto('/boards');
+  await page.getByRole('button', { name: 'Library 1', exact: true }).click();
+  await page.getByText('Share or export Library', { exact: true }).click();
+  const pendingBundle = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export collection bundle' }).click();
+  const bundleBytes = await readFile((await (await pendingBundle).path())!);
+  expect(JSON.parse(bundleBytes.toString()).images).toEqual([
+    expect.objectContaining({ id: image }),
+  ]);
+
+  // Deleting the board removes the picture from this server, as if the file went elsewhere.
+  const remove = async (id: string) => {
+    const { revision } = await (await page.request.get(`/v1/boards/${id}`)).json();
+    expect((await page.request.delete(`/v1/boards/${id}`, { data: { revision } })).status()).toBe(
+      204,
+    );
+  };
+  await remove(source.id);
+  const others = async (except: string[]) =>
+    ((await (await page.request.get('/v1/boards')).json()) as { id: string }[]).filter(
+      (entry) => !except.includes(entry.id),
+    );
+
+  // Importing the board file uploads the picture again.
+  await page.goto('/canvas');
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({ name: 'board.json', mimeType: 'application/json', buffer: fileBytes });
+  await page
+    .getByRole('region', { name: 'Import review' })
+    .getByRole('button', { name: 'Import as new board', exact: true })
+    .click();
+  await saved(page);
+  await page.getByRole('tab', { name: 'Info' }).click();
+  const restored = leaf(page).getByRole('img', { name: 'A relay rack' });
+  await expect.poll(() => restored.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(3);
+  const [fromFile] = await others([]);
+  await remove(fromFile!.id);
+
+  // Importing the bundle does too, for every board that shows it.
+  await page.goto('/boards');
+  await page.getByLabel('Collection bundle file').setInputFiles({
+    name: 'library.json',
+    mimeType: 'application/json',
+    buffer: bundleBytes,
+  });
+  await expect(
+    page.getByText('Imported as new private boards in a new collection.', { exact: true }),
+  ).toBeVisible();
+  const [fromBundle] = await others([]);
+  const served = await page.request.get(`/v1/boards/${fromBundle!.id}/images/${image}`);
+  expect(served.status()).toBe(200);
+  expect(served.headers()['content-type']).toBe('image/webp');
 });

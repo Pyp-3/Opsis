@@ -6,7 +6,9 @@ Last reviewed: 2026-10-11.
 
 Chat tab and Info book (2026-10-11, user request): chat opens as its own tab with docking as
 an optional fallback, and a new **Info** tab reads each page like a book in step with the canvas,
-with the editor's text, safe links, stored pictures and footnotes on any object. See the goal
+with the editor's text, safe links, stored pictures and footnotes on any object. Follow-up:
+exported board files and bundles carry their pictures, footnotes are marked on the canvas, and
+MCP agents can read and write Info. See the goal
 section below for scope, verification and what remains.
 
 Page list polish (2026-10-11, user request): the page list now uses the canvas's
@@ -462,9 +464,18 @@ images inserted carefully for security. Respect the app's palettes, contrast and
       changes; Markdown exports include it. Fixed while testing: the labelled third tab pushed the
       board name out of the header at 1280 px, so **Linked from** and **Import** are icons below
       1440 px (accessible names unchanged).
-- [ ] Not yet: collection bundles and board files carry the text naming a picture but not the
-      picture, so pictures show as unavailable when imported on another server; no canvas marker
-      shows which objects have footnotes; MCP tools do not read or write Info.
+- [x] Follow-up (2026-10-11, user request "exports with images; fix the rest"): editable board
+      files and collection bundles carry their pages' pictures (`images`: id, type, base64,
+      validated by the shared `BundledImagesSchema`); importing sends the boards, then uploads
+      each picture to every imported board that shows it, skipping any whose bytes do not hash to
+      its id, so imports show their pictures on any server. Footnotes are marked on the canvas
+      (gold numbers on concepts, connections, group names, drawings and drawing groups), and a
+      selected concept lists its footnotes with **Read in Info**. MCP agents read Info in
+      `opsis_get_board` and use `opsis_write_info`, `opsis_add_footnote`,
+      `opsis_update_footnote` and `opsis_remove_footnote` (31 tools on both hosts; pictures only
+      by ids the board already holds). Fixed on the way: the desktop MCP bridge had no
+      `crypto.randomUUID`, so `opsis_add_page` (and the new footnotes) failed natively; the
+      bridge now supplies it from Go.
 
 Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
 builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,
@@ -481,6 +492,17 @@ dark mode and phone widths, with accessibility scans. Lint, typecheck, Rust form
 pass (one, board links, after updating it to click **Linked from** by its accessible name). The
 rebuilt Linux binary passes packaged integration, all 74 browser scenarios and all 24 hidden
 WebView checks. Desktop, dark and phone screenshots were reviewed. No paid model calls were made.
+
+Follow-up verified 2026-10-11 on Arch Linux: board file tests (pictures carried, malformed
+ones dropped), an MCP round trip through the real Fastify API (text with links, an unknown
+picture refused, footnotes on a concept and a connection, unknown objects and other pages
+refused, numbering, removal, one undo step each) and the Go bridge calling the same tools plus
+`opsis_add_page` natively. A new browser scenario checks the canvas marker and details panel,
+exports a board file and a collection bundle, deletes the original so its picture leaves the
+server, then imports each and finds the picture restored. Lint, typecheck, Rust formatting/Clippy
+and 24 tests, desktop check and full race suite, 564 unit tests and all 75 Fastify browser
+scenarios pass. The rebuilt Linux binary passes packaged integration (31 stdio tools), all 75
+browser scenarios and the hidden WebView smoke test. No paid model calls were made.
 
 ## In progress: board pages and link sharing (requested 2026-10-10)
 

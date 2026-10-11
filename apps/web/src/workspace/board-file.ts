@@ -1,6 +1,6 @@
 import { apiFetch as fetch } from '../app-url';
 import { z } from 'zod';
-import type { BoardDocument } from '@opsis/schema';
+import { BundledImagesSchema, type BoardDocument, type BundledImage } from '@opsis/schema';
 import { AUTH_EXPIRED } from './board-library-api';
 
 /**
@@ -8,20 +8,46 @@ import { AUTH_EXPIRED } from './board-library-api';
  * document, never inside it: collections are the account's private organization, not board
  * data, so the saved document stays unchanged and a file without the name is a plain board.
  * Collections travel by name, as in collection bundles, because ids differ between accounts.
+ * The pictures its pages show travel beside it too, as `images`, so the file is complete on
+ * any server.
  */
-export function boardFileJson(board: BoardDocument, collection?: string) {
-  return JSON.stringify(collection ? { ...board, collection } : board, null, 2);
+export function boardFileJson(
+  board: BoardDocument,
+  collection?: string,
+  images: readonly BundledImage[] = [],
+) {
+  return JSON.stringify(
+    {
+      ...board,
+      ...(collection ? { collection } : {}),
+      ...(images.length ? { images } : {}),
+    },
+    null,
+    2,
+  );
 }
 
 const CollectionName = z.string().trim().min(1).max(60);
 
-/** Separates a board file's collection name from the board itself, which is validated later. */
-export function splitBoardFile(value: unknown): { board: unknown; collection?: string } {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !('collection' in value))
-    return { board: value };
-  const { collection, ...board } = value as { collection: unknown };
+/**
+ * Separates a board file's collection name and pictures from the board itself, which is
+ * validated later. Pictures that are not well formed are dropped; the server checks the rest.
+ */
+export function splitBoardFile(value: unknown): {
+  board: unknown;
+  collection?: string;
+  images: BundledImage[];
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return { board: value, images: [] };
+  const { collection, images, ...board } = value as { collection?: unknown; images?: unknown };
   const name = CollectionName.safeParse(collection);
-  return name.success ? { board, collection: name.data } : { board };
+  const pictures = images === undefined ? null : BundledImagesSchema.safeParse(images);
+  return {
+    board,
+    ...(name.success ? { collection: name.data } : {}),
+    images: pictures?.success ? pictures.data : [],
+  };
 }
 
 const Collections = z.array(z.object({ id: z.string().uuid(), name: z.string() }));

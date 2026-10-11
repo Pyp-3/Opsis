@@ -78,8 +78,10 @@ its references and then any picture no remaining board shows and no template nam
 hosts accept only PNG, JPEG and WebP (checked by signature, at most 2 MB and 2,400 pixels a
 side, up to 200 per board) and serve them with their checked type, `nosniff` and a
 sandboxing content policy to anyone who may read the board. Pictures are in full-database
-backups. Collection bundles and board files hold the text that names a picture, not the
-picture, so on another server the picture is shown as unavailable.
+backups. Collection bundles and board files carry the pictures their pages show (`images`:
+id, type and base64 data beside the boards). Importing sends the boards first, then uploads
+each picture to every imported board that shows it, through the same checks as any upload; a
+picture whose bytes do not hash to its id is skipped.
 
 The revision archive starts with the saved state present when the migration is
 installed and records subsequent successful content saves and archive changes.

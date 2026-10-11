@@ -27,6 +27,17 @@ import {
 } from './canvas.js';
 import type { OpsisClient } from './client.js';
 import {
+  FootnoteTargetSchema,
+  FootnoteTextSchema,
+  InfoTextSchema,
+  addFootnote,
+  describeInfo,
+  knownPictures,
+  removeFootnote,
+  updateFootnote,
+  writeInfoText,
+} from './info.js';
+import {
   DrawingInputSchema,
   DrawingPatchSchema,
   SymbolPlacementSchema,
@@ -64,7 +75,9 @@ Boards can also hold drawings beside the diagram, so any 2D subject can be shown
 
 A board can have several pages, each its own canvas, read in order like a book or a pitch deck. opsis_get_board lists them; pass \`page\` (a number or id) to any reading or editing tool to work on that page instead of the first, and use opsis_add_page, opsis_update_page and opsis_remove_page to add, rename, reorder, hide or remove pages. Hidden pages are kept from people who only view the board.
 
-The account's own boards can be filed into private collections (folders): opsis_list_collections, opsis_create_collection and opsis_file_board, or pass collectionId to opsis_create_board. Filing is organization, not an edit, so it adds no undo step.`;
+The account's own boards can be filed into private collections (folders): opsis_list_collections, opsis_create_collection and opsis_file_board, or pass collectionId to opsis_create_board. Filing is organization, not an edit, so it adds no undo step.
+
+Each page also has an Info tab that reads it like a page of a book: the page's own text, then its concepts in order, then numbered footnotes. Write the text with opsis_write_info and notes on any concept, connection, group or drawing with opsis_add_footnote, opsis_update_footnote and opsis_remove_footnote; opsis_get_board returns them.`;
 
 const boardId = z
   .string()
@@ -208,7 +221,7 @@ export function registerTools(
     {
       title: 'Read a board',
       description:
-        'Returns a board’s title, summary, colours, its pages, and one page’s concepts (with ids and positions), connections, drawings, drawing layers and scale. Read before editing. Every page is its own canvas; pass `page` to read another one.',
+        'Returns a board’s title, summary, colours, its pages, and one page’s concepts (with ids and positions), connections, drawings, drawing layers, scale and Info (the page’s own text, its pictures and numbered footnotes). Read before editing. Every page is its own canvas; pass `page` to read another one.',
       inputSchema: { boardId, page },
       annotations: { readOnlyHint: true },
     },
@@ -221,6 +234,7 @@ export function registerTools(
         ...describeBoard(entry.id, entry.revision, board),
         ...(whole ? describePages(whole, shown) : {}),
         ...(board ? describeDrawings(board) : {}),
+        ...(board ? describeInfo(board) : {}),
         // Someone else's public board: readable here, but edits will be refused.
         ...(entry.access === 'viewer' ? { readOnly: true, owner: entry.owner?.name } : {}),
         open: open(id, undefined, shown),
@@ -698,6 +712,86 @@ export function registerTools(
     guarded(async ({ boardId: id, page: ref }) => {
       const { revision } = await client.edit(id, (snapshot) => ({
         snapshot: removePage(snapshot, ref),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_write_info',
+    {
+      title: 'Write a page’s Info text',
+      description:
+        'Replaces the text the Info tab shows for a page, read like a page of a book beside the canvas: a few paragraphs about the page in your own words, with links. The concepts and footnotes are listed after it automatically. Pass null or an empty string to remove the text. One undoable step.',
+      inputSchema: { boardId, page, text: InfoTextSchema.nullable() },
+    },
+    guarded(async ({ boardId: id, page: ref, text }) => {
+      const { revision } = await client.edit(id, (snapshot) => {
+        const allowed = knownPictures(snapshot);
+        return onPage(snapshot, ref, (page) => ({
+          snapshot: writeInfoText(page, text, allowed),
+          result: null,
+        }));
+      });
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_add_footnote',
+    {
+      title: 'Add a footnote',
+      description:
+        'Writes a short footnote on one object of a page: a concept, connection, group, drawing or drawing group. Info numbers footnotes in reading order and the canvas marks the object with its numbers. One undoable step.',
+      inputSchema: { boardId, page, on: FootnoteTargetSchema, text: FootnoteTextSchema },
+    },
+    guarded(async ({ boardId: id, page: ref, on, text }) => {
+      const { revision, result } = await editPage(id, ref, (snapshot) => {
+        const added = addFootnote(snapshot, on, text);
+        return { snapshot: added.snapshot, result: added.id };
+      });
+      return saved(id, revision, { footnoteId: result });
+    }),
+  );
+
+  server.registerTool(
+    'opsis_update_footnote',
+    {
+      title: 'Update a footnote',
+      description: 'Changes a footnote’s text, or moves it to another object of the same page.',
+      inputSchema: {
+        boardId,
+        page,
+        footnoteId: z.string().min(1).max(80).describe('Footnote id from opsis_get_board.'),
+        text: FootnoteTextSchema.optional(),
+        on: FootnoteTargetSchema.optional(),
+      },
+    },
+    guarded(async ({ boardId: id, page: ref, footnoteId, ...patch }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
+        snapshot: updateFootnote(snapshot, footnoteId, patch),
+        result: null,
+      }));
+      return saved(id, revision);
+    }),
+  );
+
+  server.registerTool(
+    'opsis_remove_footnote',
+    {
+      title: 'Remove a footnote',
+      description: 'Removes a footnote from a page. The reader can undo it.',
+      inputSchema: {
+        boardId,
+        page,
+        footnoteId: z.string().min(1).max(80).describe('Footnote id from opsis_get_board.'),
+      },
+      annotations: { destructiveHint: true },
+    },
+    guarded(async ({ boardId: id, page: ref, footnoteId }) => {
+      const { revision } = await editPage(id, ref, (snapshot) => ({
+        snapshot: removeFootnote(snapshot, footnoteId),
         result: null,
       }));
       return saved(id, revision);

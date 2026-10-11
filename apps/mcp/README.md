@@ -53,40 +53,51 @@ env = { OPSIS_AGENT_KEY = "opsis_agent_…" }
 
 ## Tools
 
-| Tool                       | What it does                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `opsis_list_boards`        | Saved boards, most recent first, with each board's collection                   |
-| `opsis_search_boards`      | Concepts matching words, across boards you own or edit; best first              |
-| `opsis_get_board`          | Title, summary, colours, concepts (ids, positions), arrows, drawings and scale  |
-| `opsis_create_board`       | A new empty board, optionally filed in a collection                             |
-| `opsis_list_collections`   | Your private collections, with how many boards each holds                       |
-| `opsis_create_collection`  | A new private collection                                                        |
-| `opsis_file_board`         | Moves an owned board into a collection, or out of every collection              |
-| `opsis_update_board`       | Title, summary, background palette, icon tint and drawing scale                 |
-| `opsis_add_concept`        | Adds a concept; `after` places it below another and draws the arrow             |
-| `opsis_update_concept`     | Label, summary, explanation, icon or kind                                       |
-| `opsis_remove_concept`     | Removes a concept and its arrows                                                |
-| `opsis_connect`            | Draws a labelled arrow (flow, request, response, feedback or retry)             |
-| `opsis_disconnect`         | Removes an arrow                                                                |
-| `opsis_write_diagram`      | Replaces a whole diagram in one step, or creates a board for it                 |
-| `opsis_add_drawings`       | Draws shapes, text and dimension lines beside the diagram, in one step          |
-| `opsis_update_drawing`     | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer   |
-| `opsis_remove_drawings`    | Removes drawings in one step                                                    |
-| `opsis_list_symbols`       | The ready-made symbols, by category, with their natural size                    |
-| `opsis_place_symbols`      | Draws symbols (doors, resistors, valves, pumps, people…) as groups, in one step |
-| `opsis_transform_drawings` | Moves, scales, mirrors, rotates, aligns or spaces drawings and groups           |
-| `opsis_repeat_drawings`    | Copies drawings or groups in a row, each a step further on                      |
-| `opsis_group_drawings`     | Puts drawings in a named group, or takes them out                               |
-| `opsis_render_board`       | A PNG picture of the board or a region, with rulers, to check the drawing       |
-| `opsis_add_page`           | Adds an empty page after another or at the end, optionally hidden from viewers  |
-| `opsis_update_page`        | Renames a page, hides or shows it, or moves it to another position              |
-| `opsis_remove_page`        | Removes a page and everything on it                                             |
+| Tool                       | What it does                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `opsis_list_boards`        | Saved boards, most recent first, with each board's collection                        |
+| `opsis_search_boards`      | Concepts matching words, across boards you own or edit; best first                   |
+| `opsis_get_board`          | Title, summary, colours, concepts (ids, positions), arrows, drawings, scale and Info |
+| `opsis_create_board`       | A new empty board, optionally filed in a collection                                  |
+| `opsis_list_collections`   | Your private collections, with how many boards each holds                            |
+| `opsis_create_collection`  | A new private collection                                                             |
+| `opsis_file_board`         | Moves an owned board into a collection, or out of every collection                   |
+| `opsis_update_board`       | Title, summary, background palette, icon tint and drawing scale                      |
+| `opsis_add_concept`        | Adds a concept; `after` places it below another and draws the arrow                  |
+| `opsis_update_concept`     | Label, summary, explanation, icon or kind                                            |
+| `opsis_remove_concept`     | Removes a concept and its arrows                                                     |
+| `opsis_connect`            | Draws a labelled arrow (flow, request, response, feedback or retry)                  |
+| `opsis_disconnect`         | Removes an arrow                                                                     |
+| `opsis_write_diagram`      | Replaces a whole diagram in one step, or creates a board for it                      |
+| `opsis_add_drawings`       | Draws shapes, text and dimension lines beside the diagram, in one step               |
+| `opsis_update_drawing`     | Moves, reshapes, relabels or restyles a drawing, or changes its concept/layer        |
+| `opsis_remove_drawings`    | Removes drawings in one step                                                         |
+| `opsis_list_symbols`       | The ready-made symbols, by category, with their natural size                         |
+| `opsis_place_symbols`      | Draws symbols (doors, resistors, valves, pumps, people…) as groups, in one step      |
+| `opsis_transform_drawings` | Moves, scales, mirrors, rotates, aligns or spaces drawings and groups                |
+| `opsis_repeat_drawings`    | Copies drawings or groups in a row, each a step further on                           |
+| `opsis_group_drawings`     | Puts drawings in a named group, or takes them out                                    |
+| `opsis_render_board`       | A PNG picture of the board or a region, with rulers, to check the drawing            |
+| `opsis_add_page`           | Adds an empty page after another or at the end, optionally hidden from viewers       |
+| `opsis_update_page`        | Renames a page, hides or shows it, or moves it to another position                   |
+| `opsis_remove_page`        | Removes a page and everything on it                                                  |
+| `opsis_write_info`         | Replaces a page's Info text (plain text with links), or removes it                   |
+| `opsis_add_footnote`       | Writes a footnote on a concept, connection, group, drawing or drawing group          |
+| `opsis_update_footnote`    | Changes a footnote's text or moves it to another object                              |
+| `opsis_remove_footnote`    | Removes a footnote                                                                   |
 
 A board can have several pages, each its own canvas. `opsis_get_board` lists them (number, id,
 title, and whether each is hidden from viewers). Every tool that reads or edits a diagram or
 drawings takes an optional `page`, a page number (1 is the first) or id, and works on that page;
 without it, tools use page 1. Each call is still one undoable step on the whole board, and the
 returned `open` link opens the page that was read or added.
+
+Each page's Info is what the app's Info tab reads like a page of a book: the page's own text,
+then its concepts in order, then numbered footnotes. `opsis_get_board` returns the page's text,
+the pictures it shows and its footnotes with their numbers and the objects they are on. Links in
+the text and in footnotes are written `[label](https://…)`; only `https`, `http` and `mailto`
+work. Agents cannot upload pictures: a `![description](image:<id>)` line may only show a picture
+the board already holds. Each Info edit is one undoable step, like any other.
 
 Filing a board in a collection is organization, not an edit: it adds no revision or undo step,
 and only the board's owner can file it.

@@ -1,4 +1,5 @@
 import { collectionInfoImages } from './info-export';
+import { bundleImagesOf, restoreBundledImages } from './info-images';
 import { apiFetch as fetch } from '../app-url';
 import { useRef, useState } from 'react';
 import { CollectionBundleSchema, type CollectionSharing } from '@opsis/schema';
@@ -62,13 +63,15 @@ export function CollectionActions({
       if (!collection) return;
       const response = await checked(await fetch(`/v1/collections/${collection.id}/bundle`));
       const bundle = CollectionBundleSchema.parse(await response.json());
-      if (format === 'bundle')
+      if (format === 'bundle') {
+        // The bundle keeps every page, so it carries every picture they show.
+        const images = await bundleImagesOf(bundle.boards);
         await download(
-          JSON.stringify(bundle, null, 2),
+          JSON.stringify({ ...bundle, ...(images.length ? { images } : {}) }, null, 2),
           'opsis-collection.json',
           'application/json',
         );
-      else {
+      } else {
         // The file is self-contained: pages' pictures are embedded.
         const images = await collectionInfoImages(bundle, { hiddenPages });
         const html = collectionHtml(bundle, { hiddenPages, images });
@@ -92,8 +95,11 @@ export function CollectionActions({
           event.target.value = '';
           if (!file) return;
           void run(async () => {
-            if (file.size > 16_000_000) throw new Error('Use a collection bundle up to 16 MB.');
-            const bundle = CollectionBundleSchema.parse(JSON.parse(await file.text()));
+            if (file.size > 120_000_000) throw new Error('Use a collection bundle up to 120 MB.');
+            const { images = [], ...bundle } = CollectionBundleSchema.parse(
+              JSON.parse(await file.text()),
+            );
+            // The boards go in one request; their pictures follow, one upload each.
             const response = await checked(
               await fetch('/v1/collections/import', {
                 method: 'POST',
@@ -101,10 +107,21 @@ export function CollectionActions({
                 body: JSON.stringify(bundle),
               }),
             );
-            const result = (await response.json()) as { id: string };
+            const result = (await response.json()) as { id: string; boards: string[] };
+            const restored = await restoreBundledImages(
+              bundle.boards.map((entry, index) => ({
+                boardId: result.boards[index]!,
+                board: entry.board,
+              })),
+              images,
+            );
             await refresh();
             imported(result.id);
-            setMessage('Imported as new private boards in a new collection.');
+            setMessage(
+              restored.failed
+                ? `Imported as new private boards in a new collection, but ${restored.failed} pictures could not be added.`
+                : 'Imported as new private boards in a new collection.',
+            );
           });
         }}
       />

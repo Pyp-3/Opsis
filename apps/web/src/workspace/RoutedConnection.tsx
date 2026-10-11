@@ -1,4 +1,5 @@
 import { BaseEdge, type Edge, type EdgeProps } from '@xyflow/react';
+import { footnoteMarkLabel } from '@opsis/schema';
 import type { RoutedEdge } from './routing';
 
 export function RoutedConnection({
@@ -7,7 +8,7 @@ export function RoutedConnection({
   markerEnd,
   style,
   selected,
-}: EdgeProps<Edge<{ route: RoutedEdge; current?: boolean }>>) {
+}: EdgeProps<Edge<{ route: RoutedEdge; current?: boolean; footnotes?: number[] | undefined }>>) {
   const route = data?.route;
   if (!route) return null;
   return (
@@ -45,6 +46,7 @@ export function RoutedConnection({
           />
         </g>
       )}
+      {data.footnotes && <ConnectionFootnotes route={route} numbers={data.footnotes} />}
       {route.label && (
         <g className="connection-label" aria-label={route.lines.join(' ')}>
           {route.callout && (
@@ -82,5 +84,27 @@ export function RoutedConnection({
         </g>
       )}
     </>
+  );
+}
+
+/** Footnote numbers on a connection: beside its label, or at the middle of an unlabelled one. */
+function ConnectionFootnotes({ route, numbers }: { route: RoutedEdge; numbers: number[] }) {
+  const middle = route.points[Math.floor(route.points.length / 2)];
+  const at = route.label
+    ? { x: route.label.x + route.label.width, y: route.label.y }
+    : middle
+      ? { x: middle.x + 10, y: middle.y - 10 }
+      : null;
+  if (!at) return null;
+  const text = numbers.join(',');
+  const width = 10 + text.length * 7;
+  return (
+    <g className="footnote-mark" transform={`translate(${at.x} ${at.y})`} pointerEvents="none">
+      <title>{footnoteMarkLabel(numbers)}</title>
+      <rect x={-width / 2} y={-10} width={width} height={20} rx={10} />
+      <text y={4} textAnchor="middle">
+        {text}
+      </text>
+    </g>
   );
 }

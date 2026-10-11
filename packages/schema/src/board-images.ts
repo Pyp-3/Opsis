@@ -1,5 +1,6 @@
+import { z } from 'zod';
 import type { BoardDocument, BoardSnapshot } from './board';
-import { infoTextImages } from './page-info';
+import { IMAGE_ID_PATTERN, infoTextImages } from './page-info';
 
 /**
  * Images in a page's Info are stored once per board, outside the board document, and named by
@@ -131,3 +132,26 @@ export function boardImageIds(board: BoardDocument): string[] {
   documentImages(board, ids);
   return [...ids].sort();
 }
+
+/**
+ * A picture carried inside an exported file (a collection bundle or an editable board file), so
+ * the file shows its pictures on any Opsis server. Importing uploads each one again, where the
+ * server checks it like any upload; one whose bytes do not hash to its id is skipped.
+ */
+export const BundledImageSchema = z
+  .object({
+    id: z.string().regex(IMAGE_ID_PATTERN),
+    mediaType: z.enum(IMAGE_MEDIA_TYPES),
+    data: z
+      .string()
+      .max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4)
+      .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  })
+  .strict();
+export type BundledImage = z.infer<typeof BundledImageSchema>;
+export const BundledImagesSchema = z
+  .array(BundledImageSchema)
+  .max(MAX_BOARD_IMAGES * 10)
+  .refine((images) => new Set(images.map((image) => image.id)).size === images.length, {
+    message: 'Duplicate pictures.',
+  });

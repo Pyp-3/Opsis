@@ -72,6 +72,7 @@ describe('Opsis MCP server', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'opsis_add_concept',
       'opsis_add_drawings',
+      'opsis_add_footnote',
       'opsis_add_page',
       'opsis_connect',
       'opsis_create_board',
@@ -87,6 +88,7 @@ describe('Opsis MCP server', () => {
       'opsis_place_symbols',
       'opsis_remove_concept',
       'opsis_remove_drawings',
+      'opsis_remove_footnote',
       'opsis_remove_page',
       'opsis_render_board',
       'opsis_repeat_drawings',
@@ -95,8 +97,10 @@ describe('Opsis MCP server', () => {
       'opsis_update_board',
       'opsis_update_concept',
       'opsis_update_drawing',
+      'opsis_update_footnote',
       'opsis_update_page',
       'opsis_write_diagram',
+      'opsis_write_info',
     ]);
     const add = tools.find((tool) => tool.name === 'opsis_add_concept')!;
     expect(add.inputSchema.required).toEqual(['boardId', 'label', 'summary']);
@@ -271,6 +275,98 @@ describe('Opsis MCP server', () => {
     expect((await call('opsis_remove_page', { boardId: id, page: 3 })).isError).toBe(false);
     expect((await call('opsis_get_board', { boardId: id })).json().pages).toHaveLength(2);
     expect((await call('opsis_remove_page', { boardId: id, page: 9 })).isError).toBe(true);
+  });
+
+  it('writes a page’s Info text and footnotes, each in one undoable step', async () => {
+    const created = (await call('opsis_create_board', { title: 'Mail' })).json();
+    const id = created.id as string;
+    await call('opsis_write_diagram', {
+      boardId: id,
+      title: 'Mail',
+      description: 'How mail moves.',
+      concepts: [
+        { id: 'send', label: 'Send', summary: 'You send it.' },
+        { id: 'relay', label: 'Relay', summary: 'Servers pass it on.' },
+      ],
+      connections: [{ from: 'send', to: 'relay', label: 'hands to' }],
+    });
+    const second = (await call('opsis_add_page', { boardId: id, title: 'Delivery' })).json();
+
+    const written = await call('opsis_write_info', {
+      boardId: id,
+      text: 'Mail moves in hops. See [RFC 5321](https://www.rfc-editor.org/rfc/rfc5321).',
+    });
+    expect(written.isError).toBe(false);
+    // Agents cannot upload pictures, so they may only show ones the board already holds.
+    const picture = await call('opsis_write_info', {
+      boardId: id,
+      text: `![Rack](image:${'a'.repeat(64)})`,
+    });
+    expect(picture.isError).toBe(true);
+    expect(picture.text).toMatch(/Only pictures already on this board/);
+
+    const note = (
+      await call('opsis_add_footnote', {
+        boardId: id,
+        on: { kind: 'concept', id: 'relay' },
+        text: 'Also called an MTA.',
+      })
+    ).json();
+    expect(note.footnoteId).toMatch(/^note-/);
+    const edge = (await call('opsis_get_board', { boardId: id })).json().connections[0].id;
+    await call('opsis_add_footnote', {
+      boardId: id,
+      on: { kind: 'connection', id: edge },
+      text: 'Over SMTP.',
+    });
+    const unknown = await call('opsis_add_footnote', {
+      boardId: id,
+      on: { kind: 'concept', id: 'nowhere' },
+      text: 'Lost',
+    });
+    expect(unknown.isError).toBe(true);
+    // Another page has its own footnotes.
+    expect(
+      (
+        await call('opsis_add_footnote', {
+          boardId: id,
+          page: second.pageId,
+          on: { kind: 'concept', id: 'relay' },
+          text: 'Not on this page',
+        })
+      ).isError,
+    ).toBe(true);
+    await call('opsis_update_footnote', {
+      boardId: id,
+      footnoteId: note.footnoteId,
+      text: 'Also called a mail transfer agent.',
+    });
+
+    const info = (await call('opsis_get_board', { boardId: id })).json().info;
+    expect(info.text).toContain('[RFC 5321](https://www.rfc-editor.org/rfc/rfc5321)');
+    expect(info.footnotes).toEqual([
+      expect.objectContaining({
+        number: 1,
+        on: { kind: 'concept', id: 'relay', label: 'Relay' },
+        text: 'Also called a mail transfer agent.',
+      }),
+      expect.objectContaining({ number: 2, text: 'Over SMTP.' }),
+    ]);
+    expect((await call('opsis_get_board', { boardId: id, page: 2 })).json().info).toBeUndefined();
+
+    await call('opsis_remove_footnote', { boardId: id, footnoteId: note.footnoteId });
+    await call('opsis_write_info', { boardId: id, text: null });
+    const stored = (
+      await app.inject({
+        url: `/v1/boards/${id}`,
+        headers: { authorization: `Bearer ${adaKey}` },
+      })
+    ).json() as { snapshot: BoardSnapshot };
+    expect(stored.snapshot.board!.info).toEqual({
+      footnotes: [expect.objectContaining({ text: 'Over SMTP.' })],
+    });
+    // The diagram, the page, the text, two notes, an edit, a removal and clearing the text.
+    expect(stored.snapshot.past).toHaveLength(8);
   });
 
   it('draws a scaled plan that the saved-board API accepts', async () => {

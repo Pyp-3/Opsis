@@ -1,6 +1,7 @@
 import { ConceptSources } from './ConceptSources';
 import type { RefObject } from 'react';
 import {
+  BookOpen,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -11,7 +12,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { BoardDocumentSchema, PROVIDER_LABELS, type BoardDocument } from '@opsis/schema';
+import {
+  BoardDocumentSchema,
+  PROVIDER_LABELS,
+  infoSpans,
+  numberedFootnotes,
+  type BoardDocument,
+} from '@opsis/schema';
 import { applyProcessResults } from '@opsis/engine';
 import { TerminalDetails } from './TerminalDetails';
 import { ProcessSampleEditor } from './ProcessSampleEditor';
@@ -41,6 +48,8 @@ type ConceptDetailsProps = {
   setPrompt: (prompt: string) => void;
   setShowIcons: (show: boolean) => void;
   setArranging: (arranging: boolean) => void;
+  /** Opens the Info tab, where this page's footnotes are read and written. */
+  readInfo?: () => void;
 };
 
 export function ConceptDetails({
@@ -61,7 +70,11 @@ export function ConceptDetails({
   setPrompt,
   setShowIcons,
   setArranging,
+  readInfo,
 }: ConceptDetailsProps) {
+  const footnotes = numberedFootnotes(board).filter(
+    ({ note }) => note.target.kind === 'concept' && note.target.id === activeNode.id,
+  );
   const index = board.nodes.indexOf(activeNode);
   const previous = index > 0 ? board.nodes[index - 1] : undefined;
   const next = index >= 0 && index < board.nodes.length - 1 ? board.nodes[index + 1] : undefined;
@@ -290,6 +303,30 @@ export function ConceptDetails({
           })()}
         </section>
         <ConceptSources key={activeNode.id} node={activeNode} disabled={busy} onChange={editNode} />
+        {(footnotes.length > 0 || readInfo) && (
+          <section className="detail-section detail-footnotes" aria-label="Footnotes">
+            <span className="eyebrow">Footnotes</span>
+            {footnotes.length ? (
+              <ol>
+                {footnotes.map(({ number, note }) => (
+                  <li key={note.id} value={number}>
+                    {infoSpans(note.text)
+                      .map((span) => span.text)
+                      .join('')}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="detail-note">No footnotes on this concept yet.</p>
+            )}
+            {readInfo && (
+              <button type="button" className="secondary-button" onClick={readInfo}>
+                <BookOpen size={14} aria-hidden />{' '}
+                {footnotes.length ? 'Read in Info' : 'Write in Info'}
+              </button>
+            )}
+          </section>
+        )}
         <button
           className="expand-concept"
           disabled={busy}

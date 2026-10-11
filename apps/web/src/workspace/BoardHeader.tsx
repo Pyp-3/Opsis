@@ -23,6 +23,7 @@ import {
 } from './export';
 import { navigate } from '../router';
 import { boardFileJson, collectionNameOf } from './board-file';
+import { bundleImagesOf } from './info-images';
 
 type BoardHeaderProps = {
   /** The open page: images and notes show what is on screen. */
@@ -41,6 +42,8 @@ type BoardHeaderProps = {
   setError: (error: string) => void;
   /** The collection the reader filed this board in, named in its JSON export. */
   collectionId?: string | null | undefined;
+  /** The saved board, whose pictures its JSON export carries. */
+  boardId: string;
 };
 
 export function BoardHeader({
@@ -55,6 +58,7 @@ export function BoardHeader({
   onImport,
   setError,
   collectionId,
+  boardId,
 }: BoardHeaderProps) {
   // Looked up ahead of time, so the export still runs within the click that asked for it.
   const [collection, setCollection] = useState<{ id: string; name?: string } | null>(null);
@@ -223,14 +227,20 @@ export function BoardHeader({
             </button>
             <button
               disabled={!board}
-              onClick={() =>
-                wholeBoard &&
-                exportAs(
-                  boardFileJson(wholeBoard, collectionName),
-                  'opsis-board.json',
-                  'application/json',
-                )
-              }
+              onClick={() => {
+                if (!wholeBoard) return;
+                if (exportMenu.current) exportMenu.current.open = false;
+                // The file carries the pictures its pages show, so it is complete anywhere.
+                void bundleImagesOf([{ id: boardId, board: wholeBoard }])
+                  .then((images) =>
+                    download(
+                      boardFileJson(wholeBoard, collectionName, images),
+                      'opsis-board.json',
+                      'application/json',
+                    ),
+                  )
+                  .catch((e: Error) => setError(e.message));
+              }}
             >
               <FileJson size={16} />
               <span>

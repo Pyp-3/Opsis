@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { useViewport, ViewportPortal } from '@xyflow/react';
 import {
   absoluteDrawing,
+  drawingBounds,
   drawingFrame,
+  footnoteMarkLabel,
+  footnoteMarks,
   isDrawingEditable,
   rotationCentre,
   visibleDrawings,
@@ -171,8 +174,59 @@ export function DrawingLayer({
               <DrawingShape drawing={draft} halo={halo} scale={scale} />
             </g>
           )}
+          {board && <DrawingFootnoteMarks board={board} zoom={zoom} />}
         </svg>
       </ViewportPortal>
+    </>
+  );
+}
+
+/**
+ * The footnote numbers written on drawings and drawing groups, at the top-right of each one's
+ * painted bounds, kept the same size on screen at every zoom. They are read in the Info tab.
+ */
+function DrawingFootnoteMarks({ board, zoom }: { board: BoardDocument; zoom: number }) {
+  const marks = useMemo(() => {
+    const numbered = footnoteMarks(board);
+    if (!numbered.size) return [];
+    const visible = visibleDrawings(board);
+    const placed: { key: string; numbers: number[]; x: number; y: number }[] = [];
+    for (const [key, numbers] of numbered) {
+      const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+      const members = visible.filter((item) =>
+        kind === 'drawing' ? item.id === id : kind === 'drawing-group' && item.groupId === id,
+      );
+      if (!members.length) continue;
+      const bounds = members.map((item) => drawingBounds(item, board.positions));
+      placed.push({
+        key,
+        numbers,
+        x: Math.max(...bounds.map((box) => box.maxX)),
+        y: Math.min(...bounds.map((box) => box.minY)),
+      });
+    }
+    return placed;
+  }, [board]);
+  return (
+    <>
+      {marks.map(({ key, numbers, x, y }) => {
+        const text = numbers.join(',');
+        const width = 10 + text.length * 7;
+        return (
+          <g
+            key={key}
+            className="footnote-mark"
+            data-footnotes={key}
+            transform={`translate(${x} ${y}) scale(${1 / zoom})`}
+          >
+            <title>{footnoteMarkLabel(numbers)}</title>
+            <rect x={-width / 2} y={-10} width={width} height={20} rx={10} />
+            <text y={4} textAnchor="middle">
+              {text}
+            </text>
+          </g>
+        );
+      })}
     </>
   );
 }

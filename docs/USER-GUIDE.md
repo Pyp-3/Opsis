@@ -355,17 +355,23 @@ Owners and editors can write on the page:
   stay under **No longer on this page** rather than being lost.
 
 Each save is one undoable step, like a canvas edit (**Undo** and **Redo** are in the Info
-toolbar too). Chat answers and agents never see or change the Info, and keep it when they
-rewrite the diagram. Search finds words in it, comparisons list its changes, Markdown exports
-include it, and a collection's web page and printout include it with its pictures.
+toolbar too). On the canvas, an object with footnotes carries a small gold marker with their
+numbers: on a concept's icon, beside a connection's label (or at its middle), after a group's
+name, and at the top-right of a drawing or drawing group. Selecting a concept lists its
+footnotes in its details, with **Read in Info** to open them there. Chat answers never see or
+change the Info, and keep it when they rewrite the diagram. Agents connected over MCP can read
+it and write the page's text and footnotes (see the [MCP guide](../apps/mcp/README.md)).
+Search finds words in it, comparisons list its changes, Markdown exports include it, and a
+collection's web page and printout include it with its pictures.
 
 Pictures are re-drawn in your browser before they are uploaded, so only their pixels are
 kept; metadata such as a photo's location is dropped. Each is stored once with the board
 (at most 2 MB and 2,400 pixels a side), not in the board document, so undo history and saved
 revisions do not copy it. Anyone who can read the board can see its pictures, including
-people opening a shared link; copies of the board keep them. A collection bundle or editable
-board file carries the text and footnotes, and its pictures show again when it is imported on
-the same Opsis server.
+people opening a shared link; copies of the board keep them. An **Editable board** file and a
+collection bundle carry their pictures too, so importing them on any Opsis server shows them.
+Importing uploads each picture again; one whose contents do not match its name is skipped and
+reported.
 
 The **Text settings** button (the T in the Info toolbar) picks the reading typeface (Book,
 Interface or Plain) and size; they are saved with your account under **Settings →

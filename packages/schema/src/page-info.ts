@@ -269,3 +269,20 @@ export function numberedFootnotes(page: FootnotePage): NumberedFootnote[] {
       object: objects[index] ?? null,
     }));
 }
+
+/** The footnote numbers on each object of a page, keyed `kind:id`, for markers on the canvas. */
+export function footnoteMarks(page: FootnotePage): Map<string, number[]> {
+  const marks = new Map<string, number[]>();
+  for (const { number, note, object } of numberedFootnotes(page)) {
+    if (!object) continue;
+    const key = `${note.target.kind}:${note.target.id}`;
+    marks.set(key, [...(marks.get(key) ?? []), number]);
+  }
+  return marks;
+}
+
+/** How a marker names its footnotes for assistive technology, e.g. "Footnotes 1 and 3". */
+export function footnoteMarkLabel(numbers: readonly number[]) {
+  if (numbers.length === 1) return `Footnote ${numbers[0]}`;
+  return `Footnotes ${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}`;
+}

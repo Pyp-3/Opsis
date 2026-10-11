@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { MarkerType } from '@xyflow/react';
-import { visibleBoard, type BoardDocument } from '@opsis/schema';
+import { footnoteMarks, visibleBoard, type BoardDocument } from '@opsis/schema';
 import type { DiagramNode } from './IconNode';
 import type { ProcessState } from './useProcessEngine';
 import { NODE_WIDTH, nodeHeight } from './geometry';
@@ -23,6 +23,11 @@ export function useBoardDiagram(
   process: ProcessState,
 ) {
   const board = useMemo(() => (source ? visibleBoard(source) : null), [source]);
+  // The page's footnotes, numbered as in Info, marked on the objects they are written on.
+  const marks = useMemo(
+    () => (source ? footnoteMarks(source) : new Map<string, number[]>()),
+    [source],
+  );
   const nodes: DiagramNode[] = useMemo(
     () =>
       board?.nodes.map((node, index) => ({
@@ -52,6 +57,7 @@ export function useBoardDiagram(
           icon: node.icon,
           customIcon: node.customIcon,
           linkedBoardId: node.linkedBoardId,
+          footnotes: marks.get(`concept:${node.id}`),
           kind: node.kind,
           number: index + 1,
           outgoing: board.edges.filter((edge) => edge.source === node.id).length,
@@ -72,7 +78,7 @@ export function useBoardDiagram(
                 : null,
         },
       })) ?? [],
-    [board, selected, playback, process.results],
+    [board, selected, playback, process.results, marks],
   );
   const routes = useMemo(() => (board ? routeBoard(board) : {}), [board]);
   const edges = useMemo(
@@ -80,7 +86,11 @@ export function useBoardDiagram(
       board?.edges.map((edge) => ({
         ...edge,
         type: 'routed',
-        data: { route: routes[edge.id]!, current: playback?.edgeId === edge.id },
+        data: {
+          route: routes[edge.id]!,
+          current: playback?.edgeId === edge.id,
+          footnotes: marks.get(`connection:${edge.id}`),
+        },
         sourceHandle: edgePorts(board, edge).source,
         targetHandle: edgePorts(board, edge).target,
         interactionWidth: 24,
@@ -112,7 +122,7 @@ export function useBoardDiagram(
         labelBgStyle: { fill: 'var(--bp-deep)', fillOpacity: 0.95 },
         labelBgPadding: [7, 5] as [number, number],
       })) ?? [],
-    [board, selectedEdge, routes, playback],
+    [board, selectedEdge, routes, playback, marks],
   );
   return { nodes, edges };
 }

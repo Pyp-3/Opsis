@@ -71,13 +71,14 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	}
 	slices.Sort(names)
 	expected := []string{
-		"opsis_add_concept", "opsis_add_drawings", "opsis_add_page", "opsis_connect", "opsis_create_board",
-		"opsis_create_collection", "opsis_disconnect", "opsis_file_board", "opsis_get_board",
-		"opsis_group_drawings", "opsis_list_boards", "opsis_list_collections", "opsis_list_public_boards",
-		"opsis_list_symbols", "opsis_place_symbols", "opsis_remove_concept", "opsis_remove_drawings",
-		"opsis_remove_page", "opsis_render_board", "opsis_repeat_drawings", "opsis_search_boards",
-		"opsis_transform_drawings", "opsis_update_board", "opsis_update_concept", "opsis_update_drawing",
-		"opsis_update_page", "opsis_write_diagram",
+		"opsis_add_concept", "opsis_add_drawings", "opsis_add_footnote", "opsis_add_page", "opsis_connect",
+		"opsis_create_board", "opsis_create_collection", "opsis_disconnect", "opsis_file_board",
+		"opsis_get_board", "opsis_group_drawings", "opsis_list_boards", "opsis_list_collections",
+		"opsis_list_public_boards", "opsis_list_symbols", "opsis_place_symbols", "opsis_remove_concept",
+		"opsis_remove_drawings", "opsis_remove_footnote", "opsis_remove_page", "opsis_render_board",
+		"opsis_repeat_drawings", "opsis_search_boards", "opsis_transform_drawings", "opsis_update_board",
+		"opsis_update_concept", "opsis_update_drawing", "opsis_update_footnote", "opsis_update_page",
+		"opsis_write_diagram", "opsis_write_info",
 	}
 	if !slices.Equal(names, expected) {
 		t.Fatalf("tools: got %v, want %v", names, expected)
@@ -127,7 +128,29 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 		t.Fatal(read["open"])
 	}
 
-	// Filing through MCP is organization on the native host too: no new revision.
+	// Info through the embedded tools: the page's text and a footnote on its concept.
+	concept := read["concepts"].([]any)[0].(map[string]any)["id"].(string)
+	call("opsis_write_info", map[string]any{"boardId": id, "text": "Read this page like a book."})
+	note := call("opsis_add_footnote", map[string]any{"boardId": id, "on": map[string]any{"kind": "concept", "id": concept}, "text": "A native note."})
+	if !strings.HasPrefix(note["footnoteId"].(string), "note-") {
+		t.Fatalf("footnote: %+v", note)
+	}
+	info := call("opsis_get_board", map[string]any{"boardId": id})["info"].(map[string]any)
+	footnotes := info["footnotes"].([]any)
+	if info["text"] != "Read this page like a book." || len(footnotes) != 1 || footnotes[0].(map[string]any)["number"] != float64(1) {
+		t.Fatalf("info: %+v", info)
+	}
+	call("opsis_remove_footnote", map[string]any{"boardId": id, "footnoteId": note["footnoteId"]})
+	call("opsis_write_info", map[string]any{"boardId": id, "text": nil})
+	// Pages are named with random ids too; this failed on the native host before it had crypto.
+	page := call("opsis_add_page", map[string]any{"boardId": id, "title": "Second"})
+	if len(page["pageId"].(string)) != 32 {
+		t.Fatalf("page: %+v", page)
+	}
+	call("opsis_remove_page", map[string]any{"boardId": id, "page": 2})
+
+	// Filing through MCP is organization on the native host too: no new revision (the Info and
+	// page edits above are the only ones after the first concept).
 	collection := call("opsis_create_collection", map[string]any{"name": "Native"})["id"].(string)
 	call("opsis_file_board", map[string]any{"boardId": id, "collectionId": collection})
 	var collections []struct {
@@ -145,7 +168,7 @@ func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 		CollectionID *string
 	}
 	callInto("opsis_list_boards", map[string]any{}, &boards)
-	if len(boards) != 1 || boards[0].Revision != 2 || boards[0].CollectionID == nil || *boards[0].CollectionID != collection {
+	if len(boards) != 1 || boards[0].Revision != 8 || boards[0].CollectionID == nil || *boards[0].CollectionID != collection {
 		t.Fatalf("filed board: %+v", boards)
 	}
 }

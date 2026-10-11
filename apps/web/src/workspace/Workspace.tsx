@@ -1,6 +1,6 @@
 import { apiFetch as fetch } from '../app-url';
 import { LegacyBatchReview } from './LegacyBatchReview';
-import { PROVIDER_LABELS } from '@opsis/schema';
+import { PROVIDER_LABELS, type BundledImage } from '@opsis/schema';
 import { BoardSharing } from './BoardSharing';
 import { BoardGroups, GroupBoundaries, GroupsSummary } from './BoardGroups';
 import { useRememberedOpen } from './useRememberedOpen';
@@ -104,6 +104,7 @@ import { useBoardGeneration } from './useBoardGeneration';
 import { GenerationReview } from './GenerationReview';
 import { importBoard } from './migration';
 import { fileIntoCollectionNamed, splitBoardFile } from './board-file';
+import { restoreBundledImages } from './info-images';
 const ProcessPlayer = lazy(() =>
   import('./ProcessPlayer').then((module) => ({ default: module.ProcessPlayer })),
 );
@@ -333,6 +334,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const [importPreview, setImportPreview] = useState<BoardDocument | null>(null);
   // The collection an imported board file names; the new board is filed there.
   const [importCollection, setImportCollection] = useState<string | null>(null);
+  // The pictures an imported board file carries, uploaded again once the board is saved.
+  const [importImages, setImportImages] = useState<BundledImage[]>([]);
   const importInput = useRef<HTMLInputElement>(null);
   const promptInput = useRef<HTMLTextAreaElement>(null);
   // The composer and canvas tools can be tucked away to give the canvas more room.
@@ -1056,6 +1059,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         <BoardHeader
           board={board}
           document={pages.document}
+          boardId={library.activeId}
           busy={busy}
           working={working}
           saved={saved}
@@ -1136,7 +1140,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             event.target.value = '';
             if (!file) return;
             try {
-              if (file.size > 20_000_000) throw new Error('This file is too large.');
+              // Files carry their pictures; only the board itself is sent in one request.
+              if (file.size > 120_000_000) throw new Error('This file is too large.');
               const text = await file.text();
               if (/\.json$/i.test(file.name)) {
                 const bundle = LegacyBundleSchema.safeParse(JSON.parse(text));
@@ -1155,6 +1160,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 : boardFromText(text, file.name);
               setImportPreview(next);
               setImportCollection(parsed?.collection ?? null);
+              setImportImages(parsed?.images ?? []);
               setLegacyBundle(null);
               setError('');
             } catch {
@@ -1200,6 +1206,19 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 setSelected(null);
                 setSelectedEdge(null);
                 setImportPreview(null);
+                if (importImages.length) {
+                  const restored = await library
+                    .ensureSaved()
+                    .then((id) =>
+                      restoreBundledImages([{ boardId: id, board: importPreview }], importImages),
+                    )
+                    .catch(() => ({ restored: 0, failed: importImages.length }));
+                  setImportImages([]);
+                  if (restored.failed)
+                    setError(
+                      `Imported the board, but ${restored.failed} of its pictures could not be added.`,
+                    );
+                }
                 if (!importCollection) return;
                 try {
                   await fileIntoCollectionNamed(await library.ensureSaved(), importCollection);
@@ -1700,6 +1719,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                 setPrompt={setPrompt}
                 setShowIcons={setShowIcons}
                 setArranging={setArranging}
+                readInfo={() => setCanvasTab('info')}
               />
             )}
             {activeEdge && board && (

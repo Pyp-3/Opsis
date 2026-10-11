@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
-import type { CustomIcon, Illustration } from '@opsis/schema';
+import { footnoteMarkLabel, type CustomIcon, type Illustration } from '@opsis/schema';
 import { boardIcons, iconMotion } from './icons';
 import { NodeIcon } from './NodeIcon';
 import { IllustrationView, usePrefersReducedMotion } from './Illustration';
@@ -10,6 +10,8 @@ import { wrapLabel } from './geometry';
 
 export type DiagramNode = Node<{
   linkedBoardId?: string | undefined;
+  /** The numbers of footnotes written on this concept, read in the Info tab. */
+  footnotes?: number[] | undefined;
   label: string;
   icon: keyof typeof boardIcons;
   customIcon: CustomIcon | undefined;
@@ -53,6 +55,15 @@ export function IconNode({ data, selected }: NodeProps<DiagramNode>) {
             aria-label="Links to another board"
           >
             ↗
+          </span>
+        )}
+        {data.footnotes && (
+          <span
+            className="footnote-marker"
+            title={`${footnoteMarkLabel(data.footnotes)} · read them in Info`}
+            aria-label={footnoteMarkLabel(data.footnotes)}
+          >
+            {data.footnotes.join(',')}
           </span>
         )}
         {data.stage && data.sample && (

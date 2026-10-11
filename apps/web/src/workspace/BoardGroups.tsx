@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { ChevronDown, Group } from 'lucide-react';
 import { ViewportPortal } from '@xyflow/react';
-import { BoardDocumentSchema, groupMembers, visibleBoard, type BoardDocument } from '@opsis/schema';
+import {
+  BoardDocumentSchema,
+  footnoteMarks,
+  groupMembers,
+  visibleBoard,
+  type BoardDocument,
+} from '@opsis/schema';
 import { NODE_WIDTH, nodeHeight } from './geometry';
 
 export function GroupBoundaries({ board }: { board: BoardDocument }) {
   const visible = visibleBoard(board);
+  const marks = footnoteMarks(board);
   return (
     <ViewportPortal>
       <div className="group-boundaries" aria-hidden="true">
@@ -30,7 +37,14 @@ export function GroupBoundaries({ board }: { board: BoardDocument }) {
                 key={group.id}
                 style={{ left, top, width: right - left, height: bottom - top }}
               >
-                <span>{group.label}</span>
+                <span>
+                  {group.label}
+                  {marks.has(`group:${group.id}`) && (
+                    <sup className="footnote-marker is-inline">
+                      {marks.get(`group:${group.id}`)!.join(',')}
+                    </sup>
+                  )}
+                </span>
               </div>
             );
           })}

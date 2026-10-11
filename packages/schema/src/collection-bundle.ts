@@ -3,6 +3,7 @@ import { BoardDocumentSchema } from './board';
 import { BoardTagsRequestSchema } from './board-organization';
 import { BoardVisibilitySchema } from './board-requests';
 import { mapBoardPages } from './board-pages';
+import { BundledImagesSchema } from './board-images';
 
 export const CollectionBundleSchema = z
   .object({
@@ -28,6 +29,8 @@ export const CollectionBundleSchema = z
           .strict(),
       )
       .max(100),
+    /** The pictures the boards' pages show; see BundledImageSchema. */
+    images: BundledImagesSchema.optional(),
   })
   .strict()
   .refine(

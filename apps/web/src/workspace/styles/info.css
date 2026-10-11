@@ -735,3 +735,59 @@
 .shared-header .reader-view-tabs {
   flex: none;
 }
+
+/* Footnote markers on the canvas: the numbers Info gives the notes on an object. */
+.footnote-marker {
+  position: absolute;
+  top: -4px;
+  left: -6px;
+  z-index: 2;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: var(--bp-deep);
+  background: var(--bp-gold);
+  border-radius: 9px;
+  box-shadow: 0 0 0 2px var(--bp-deep);
+  pointer-events: none;
+}
+.footnote-marker.is-inline {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+  box-shadow: none;
+}
+.footnote-mark rect {
+  fill: var(--bp-gold);
+  stroke: var(--bp-deep);
+  stroke-width: 2;
+}
+.footnote-mark text {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--bp-deep);
+}
+.detail-footnotes ol {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 8px;
+  padding-left: 1.4em;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.detail-footnotes ol li::marker {
+  font-weight: 700;
+  color: var(--accent-text);
+}
+.detail-footnotes .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
