@@ -9,6 +9,9 @@ import {
   BoardDrawingSchema,
   drawingTextSize,
   isDrawingPickable,
+  isDrawingEditable,
+  drawingsBox,
+  groupRotationCentre,
   layerOf,
   MAX_BOARD_DRAWINGS,
   MAX_DRAWING_POINTS,
@@ -28,6 +31,27 @@ export type Point = readonly [number, number];
 
 /** Rotation-handle distance in screen pixels, shared by painting and hit-testing. */
 export const ROTATION_HANDLE_OFFSET = 24;
+
+/** Shared painting and hit-test geometry for a multi-selection's editable drawings. */
+export function selectionRotationHandle(
+  board: BoardDocument,
+  ids: readonly string[],
+  zoom: number,
+) {
+  if (ids.length < 2) return null;
+  const originals = (board.drawings ?? []).filter(
+    (drawing) => ids.includes(drawing.id) && isDrawingEditable(drawing, board.drawingLayers),
+  );
+  if (!originals.length) return null;
+  const absolute = originals.map((drawing) => absoluteDrawing(drawing, board.positions));
+  const centre = groupRotationCentre(absolute);
+  const bounds = drawingsBox(absolute);
+  return {
+    originals,
+    centre,
+    at: [centre[0], bounds.y - ROTATION_HANDLE_OFFSET / zoom] as Point,
+  };
+}
 
 /** Rectangle from a drag between two corners, in any direction. */
 export function boxBetween([x1, y1]: Point, [x2, y2]: Point) {

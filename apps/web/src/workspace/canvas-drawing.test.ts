@@ -23,6 +23,7 @@ import {
   resizeDrawing,
   resizeHandles,
   simplifyStroke,
+  selectionRotationHandle,
 } from './canvas-drawing';
 import { DrawingShape } from './DrawingShape';
 import { boardSvg } from './export';
@@ -31,6 +32,29 @@ const ink = { ink: 'mint', line: 'solid', strokeWidth: 2 } as const;
 const box: BoardDrawing = { id: 'box', shape: 'rect', x: 0, y: 0, width: 100, height: 60, ...ink };
 
 describe('canvas drawing geometry', () => {
+  it('places the group handle at a constant screen offset using only editable bounds', () => {
+    const board = {
+      ...createEmptyBoard(),
+      positions: { concept: { x: 100, y: 200 } },
+      drawingLayers: [{ id: 'hidden', name: 'Hidden', hidden: true }],
+      drawings: [
+        { ...box, anchorId: 'concept' },
+        { ...box, id: 'second', x: 300, y: 200 },
+        { ...box, id: 'locked', x: 2000, locked: true },
+        { ...box, id: 'hidden', x: 3000, layerId: 'hidden' },
+      ],
+    };
+    const ids = board.drawings.map((item) => item.id);
+    for (const zoom of [0.5, 1, 2]) {
+      const handle = selectionRotationHandle(board, ids, zoom)!;
+      expect(handle.centre).toEqual([250, 230]);
+      expect(handle.at).toEqual([250, 200 - 24 / zoom]);
+      expect(handle.originals.map((item) => item.id)).toEqual(['box', 'second']);
+    }
+    expect(selectionRotationHandle(board, ['box'], 1)).toBeNull();
+    expect(selectionRotationHandle(board, ['locked', 'hidden'], 1)).toBeNull();
+  });
+
   it('picks filled polygons inside, paths along their curve and grouped drawings together', () => {
     const zone: BoardDrawing = {
       id: 'zone',

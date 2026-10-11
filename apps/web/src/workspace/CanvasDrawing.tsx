@@ -55,6 +55,7 @@ import {
   groupRotationCentre,
   rotateDrawing,
   rotateDrawingAbout,
+  rotatePoint,
   rotationCentre,
 } from '@opsis/schema';
 import { DrawingLayersPanel, useDrawingLayers } from './DrawingLayersPanel';
@@ -69,6 +70,7 @@ import {
   readDrawingClipboard,
   resizeDrawing,
   ROTATION_HANDLE_OFFSET,
+  selectionRotationHandle,
   round,
   roundDrawing,
   simplifyStroke,
@@ -155,6 +157,14 @@ type Gesture =
       /** For the rotation handle: the pointer's starting angle about the centre, in degrees. */
       startAngle: number;
     }
+  | {
+      kind: 'rotate-selection';
+      originals: BoardDrawing[];
+      positions: BoardDocument['positions'];
+      centre: Point;
+      handle: Point;
+      startAngle: number;
+    }
   | { kind: 'marquee'; from: Point; base: string[] }
   | { kind: 'erase' };
 
@@ -185,6 +195,7 @@ export function useCanvasDrawing(options: {
     fill: false,
   });
   const [draft, setDraft] = useState<BoardDrawing | null>(null);
+  const [rotationHandle, setRotationHandle] = useState<Point | null>(null);
   const [marquee, setMarquee] = useState<{ from: Point; to: Point } | null>(null);
   const [open, setOpen] = useRememberedOpen('opsis:drawing-tools-open', false);
   const [notice, setNotice] = useState('');
@@ -223,6 +234,7 @@ export function useCanvasDrawing(options: {
       setToolState(next);
       setDraft(null);
       setMarquee(null);
+      setRotationHandle(null);
       if (next !== 'select') setChosenIds([]);
       if (next !== 'select' && next !== 'diagram') setLayersOpen(false);
     },
@@ -463,6 +475,8 @@ export function useCanvasDrawing(options: {
     restyle,
     draft,
     setDraft,
+    rotationHandle,
+    setRotationHandle,
     marquee,
     setMarquee,
     changeDrawing,
@@ -556,6 +570,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     style,
     restyle,
     setDraft,
+    setRotationHandle,
     setMarquee,
     changeDrawing,
     changeDrawings,
@@ -613,6 +628,23 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     const current = boardRef.current;
     if (!current) return;
     if (tool === 'select') {
+      const rotation = selectionRotationHandle(current, selectedIds, flow.getZoom());
+      if (
+        rotation &&
+        Math.hypot(point[0] - rotation.at[0], point[1] - rotation.at[1]) <= 8 / flow.getZoom()
+      ) {
+        begin();
+        setRotationHandle(rotation.at);
+        gesture.current = {
+          kind: 'rotate-selection',
+          originals: rotation.originals,
+          positions: current.positions,
+          centre: rotation.centre,
+          handle: rotation.at,
+          startAngle: angleAbout(rotation.centre, point),
+        };
+        return;
+      }
       // A handle of the one selected drawing resizes it.
       if (selected && isDrawingEditable(selected, current.drawingLayers)) {
         const original = absoluteDrawing(selected, current.positions);
@@ -689,7 +721,33 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
     const point = at(event);
     if (current.kind === 'erase') eraseAt(point);
     else if (current.kind === 'marquee') setMarquee({ from: current.from, to: point });
-    else if (current.kind === 'resize') {
+    else if (current.kind === 'rotate-selection') {
+      const turned = angleAbout(current.centre, point) - current.startAngle;
+      const degrees = event.shiftKey ? Math.round(turned / 15) * 15 : turned;
+      setRotationHandle(rotatePoint(current.handle, current.centre, degrees));
+      setBoard((board) =>
+        board
+          ? {
+              ...board,
+              drawings: board.drawings?.map((item) => {
+                const original = current.originals.find((drawing) => drawing.id === item.id);
+                if (!original || !isDrawingEditable(item, board.drawingLayers)) return item;
+                return roundDrawing(
+                  anchorDrawing(
+                    rotateDrawingAbout(
+                      absoluteDrawing(original, current.positions),
+                      degrees,
+                      current.centre,
+                    ),
+                    item.anchorId ?? null,
+                    board.positions,
+                  ),
+                );
+              }),
+            }
+          : board,
+      );
+    } else if (current.kind === 'resize') {
       const fix = (value: number) => (event.altKey ? round(value) : snap(value));
       let resized: BoardDrawing;
       if (current.handle === 'rotate') {
@@ -755,6 +813,9 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
             }
           : undefined,
       );
+    } else if (current.kind === 'rotate-selection') {
+      setRotationHandle(null);
+      end();
     } else if (current.kind === 'resize' || current.kind === 'erase') end();
     else if (current.kind === 'marquee') {
       setMarquee(null);
@@ -830,6 +891,7 @@ export function DrawingControls({ drawing }: { drawing: CanvasDrawing }) {
             const current = gesture.current;
             if (current && current.kind !== 'draw' && current.kind !== 'marquee') end();
             gesture.current = null;
+            setRotationHandle(null);
             setDraft(null);
             setMarquee(null);
           }}

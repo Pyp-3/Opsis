@@ -62,6 +62,27 @@ describe('canvas drawing layer', () => {
     expect(container.querySelector('[data-provisional-drawing="waiting-preview"]')).toBeNull();
   });
 
+  it('renders a group handle for editable members and hides it for read-only or locked selections', () => {
+    const second = { ...shape, id: 'second', x: 100 };
+    const groupBoard = { ...board, drawings: [shape, second] };
+    const selection = { board: groupBoard, selection: [shape, second] };
+    const { container, rerender } = render(<DrawingLayer drawing={drawing(selection)} />);
+    const handle = container.querySelector('[data-handle="rotate-selection"]')!;
+    expect(handle.getAttribute('cx')).toBe('70');
+    expect(handle.getAttribute('cy')).toBe('-12');
+    expect(handle.getAttribute('r')).toBe('2.5');
+    expect(container.querySelector('[data-handle="rotate"]')).toBeNull();
+    rerender(<DrawingLayer drawing={drawing({ ...selection, active: false })} />);
+    expect(container.querySelector('[data-handle="rotate-selection"]')).toBeNull();
+    const locked = [shape, second].map((item) => ({ ...item, locked: true }));
+    rerender(
+      <DrawingLayer
+        drawing={drawing({ board: { ...groupBoard, drawings: locked }, selection: locked })}
+      />,
+    );
+    expect(container.querySelector('[data-handle="rotate-selection"]')).toBeNull();
+  });
+
   it('drops unfinished drawings and resize controls when editing becomes unavailable', () => {
     const selection = { selection: [shape], selected: shape, draft: shape };
     const { container, rerender } = render(<DrawingLayer drawing={drawing(selection)} />);

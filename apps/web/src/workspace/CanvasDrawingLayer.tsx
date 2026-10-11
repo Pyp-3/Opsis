@@ -16,6 +16,7 @@ import {
   drawingBox,
   resizeHandles,
   ROTATION_HANDLE_OFFSET,
+  selectionRotationHandle,
   type Point,
 } from './canvas-drawing';
 import { lookOf, paletteOf } from './canvas-theme';
@@ -37,6 +38,7 @@ export function DrawingLayer({
     marquee: { from: Point; to: Point } | null;
     active: boolean;
     draft: BoardDrawing | null;
+    rotationHandle?: Point | null;
   };
   /**
    * An agent's sketch drawings as they stream in, painted faintly above the board until the
@@ -70,6 +72,15 @@ export function DrawingLayer({
     board && selected && drawing.active && isDrawingEditable(selected, board.drawingLayers)
       ? absoluteDrawing(selected, board.positions)
       : null;
+  const rotation =
+    board && drawing.active
+      ? selectionRotationHandle(
+          board,
+          selection.map((item) => item.id),
+          zoom,
+        )
+      : null;
+  const rotationHandle = rotation ? (drawing.rotationHandle ?? rotation.at) : null;
   const area = marquee ? boxBetween(marquee.from, marquee.to) : null;
   return (
     <>
@@ -101,6 +112,18 @@ export function DrawingLayer({
           {outlines.map((item) => (
             <SelectionOutline key={item.id} drawing={item} zoom={zoom} />
           ))}
+          {rotationHandle && (
+            <circle
+              className="drawing-handle"
+              data-handle="rotate-selection"
+              cx={rotationHandle[0]}
+              cy={rotationHandle[1]}
+              r={5 / zoom}
+              fill={halo}
+              stroke="#ffffff"
+              strokeWidth={1.5 / zoom}
+            />
+          )}
           {resizable &&
             resizeHandles(resizable, ROTATION_HANDLE_OFFSET / zoom).map(({ handle, at }) =>
               handle === 'rotate' ? (

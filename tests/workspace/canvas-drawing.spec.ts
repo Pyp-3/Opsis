@@ -280,6 +280,143 @@ test('selects several drawings, copies, resizes, locks, layers and scales them',
   expect(saved.drawingScale).toEqual({ gridValue: 0.5, unit: 'm' });
 });
 
+test('a selection rotation handle turns attached drawings together as one saved undo step', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await signUp(page);
+  await openEmailExample(page);
+  await page.getByRole('button', { name: 'Hide the big picture' }).click();
+  await page.getByRole('button', { name: 'Show drawing tools' }).click();
+  const tools = page.getByRole('toolbar', { name: 'Drawing tools' });
+  await tools.getByRole('button', { name: 'Box', exact: true }).click();
+  await drag(page, [0.5, 0.3], [0.58, 0.4]);
+  await drag(page, [0.65, 0.3], [0.73, 0.4]);
+  await expect.poll(async () => (await drawings(page)).length).toBe(2);
+
+  // Attach one member at a nonzero concept position and include a locked group member.
+  // Start with empty history so one undo must restore the entire gesture.
+  const boardId = await page.evaluate(async () => {
+    const [entry] = await (await fetch('/v1/boards')).json();
+    const current = await (await fetch('/v1/boards/' + entry.id)).json();
+    const board = current.snapshot.board;
+    const [first, second] = board.drawings;
+    const anchorId = board.nodes.find(
+      (node: { id: string }) => board.positions[node.id].x || board.positions[node.id].y,
+    ).id;
+    const origin = board.positions[anchorId];
+    board.drawings = [
+      { ...first, groupId: 'turning', anchorId, x: first.x - origin.x, y: first.y - origin.y },
+      { ...second, groupId: 'turning' },
+      {
+        ...second,
+        id: 'locked-member',
+        x: second.x + second.width + 80,
+        groupId: 'turning',
+        locked: true,
+      },
+    ];
+    const response = await fetch('/v1/boards/' + entry.id, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        snapshot: { board, past: [], future: [] },
+        revision: current.revision,
+      }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return entry.id as string;
+  });
+  await page.reload();
+  await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(3);
+  await tools.getByRole('button', { name: 'Select drawings' }).click();
+  await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+  let previousTransform: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const transform = await page
+          .locator('.drawing-layer > g')
+          .first()
+          .getAttribute('transform');
+        const settled = transform === previousTransform;
+        previousTransform = transform;
+        return settled;
+      },
+      { intervals: [400] },
+    )
+    .toBe(true);
+
+  type Rectangle = Drawing & {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation?: number;
+  };
+  const before = await savedBoard(page);
+  const original = before.drawings as Rectangle[];
+  const rectangle = (id: string) => page.locator(`.drawing-layer [data-drawing="${id}"] rect`);
+  const firstBox = (await rectangle(original[0]!.id).boundingBox())!;
+  const secondBox = (await rectangle(original[1]!.id).boundingBox())!;
+  await page.mouse.click(firstBox.x, firstBox.y + firstBox.height / 2);
+  await expect(page.getByRole('region', { name: 'Selected drawings' })).toContainText(
+    '3 drawings selected',
+  );
+  const handle = page.locator('[data-handle="rotate-selection"]');
+  await expect(handle).toBeVisible();
+  const knob = (await handle.boundingBox())!;
+  const centre = {
+    x: (firstBox.x + secondBox.x + secondBox.width) / 2,
+    y: (firstBox.y + firstBox.y + firstBox.height) / 2,
+  };
+  const start = { x: knob.x + knob.width / 2, y: knob.y + knob.height / 2 };
+  // An 88-degree drag snaps to a quarter turn with Shift, even after zooming out.
+  await page.mouse.move(start.x, start.y);
+  await page.keyboard.down('Shift');
+  await page.mouse.down();
+  for (let step = 1; step <= 8; step++) {
+    const angle = ((88 * Math.PI) / 180) * (step / 8);
+    const dx = start.x - centre.x;
+    const dy = start.y - centre.y;
+    await page.mouse.move(
+      centre.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+      centre.y + dx * Math.sin(angle) + dy * Math.cos(angle),
+    );
+  }
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => ((await drawings(page))[0] as Rectangle).rotation).toBe(90);
+  const turned = (await drawings(page)) as Rectangle[];
+  const absolute = (item: Rectangle) => {
+    const origin = item.anchorId ? before.positions[item.anchorId]! : { x: 0, y: 0 };
+    return { x: item.x + origin.x + item.width / 2, y: item.y + origin.y + item.height / 2 };
+  };
+  const [a, b] = original.slice(0, 2).map(absolute);
+  const pivot = { x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 };
+  for (const index of [0, 1]) {
+    const oldCentre = absolute(original[index]!);
+    const newCentre = absolute(turned[index]!);
+    expect(newCentre.x).toBeCloseTo(pivot.x - (oldCentre.y - pivot.y), 0);
+    expect(newCentre.y).toBeCloseTo(pivot.y + (oldCentre.x - pivot.x), 0);
+    expect(turned[index]!.rotation).toBe(90);
+    expect(turned[index]!.anchorId).toBe(original[index]!.anchorId);
+  }
+  expect(turned[2]).toEqual(original[2]);
+  const snapshot = async () =>
+    (await (await page.request.get(`/v1/boards/${boardId}`)).json()).snapshot;
+  expect((await snapshot()).past).toHaveLength(1);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(() => drawings(page)).toEqual(original);
+  expect((await snapshot()).past).toHaveLength(0);
+  expect((await snapshot()).future).toHaveLength(1);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect.poll(() => drawings(page)).toEqual(turned);
+  await page.reload();
+  await expect(page.locator('.drawing-layer [data-drawing]')).toHaveCount(3);
+  expect(await drawings(page)).toEqual(turned);
+});
+
 test('chat sketches beside the diagram after review, and sketches rotate and resize', async ({
   page,
 }) => {
