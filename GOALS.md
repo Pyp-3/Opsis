@@ -503,6 +503,12 @@ images inserted carefully for security. Respect the app's palettes, contrast and
       Linux desktop app's engine) could not be launched by Playwright on this machine, so it is
       covered by the same block layout but not by that check. 569 unit tests and all 76 browser
       scenarios pass.
+      Fix (2026-10-11, user report: content seemed to overlap while a page turned): in Firefox
+      the turning leaf's front stayed visible after it passed the spine, so the old page showed
+      mirrored over the new one for the second half of the turn. Each face now has its own 3D
+      transform, which Firefox needs to hide a face's back. Frames captured mid-turn in Firefox
+      and Chromium show only the correct side. CSS-only; no browser assertion can see
+      mid-animation backfaces, so the frame check is not a committed test.
 
 Verified 2026-10-11 on Arch Linux: schema tests (parsing, unsafe links left literal, markup
 builders, footnote objects and numbering, per-page validation and limits, hidden-page filtering,

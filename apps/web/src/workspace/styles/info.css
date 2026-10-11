@@ -1059,6 +1059,9 @@
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
+  /* Firefox hides a face's back only when the face has a 3D transform of its own; without one,
+     the old page shows through mirrored over the new one once the leaf passes the spine. */
+  transform: rotateY(0deg);
 }
 .book-turn-face.is-back {
   transform: rotateY(180deg);
