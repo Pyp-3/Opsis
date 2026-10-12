@@ -1297,9 +1297,9 @@ generation), and the executable path an account saves is ignored there.
       WebView smoke test now calls the native bindings (28 checks). Lint, typecheck, Rust
       formatting/Clippy and 24 tests, desktop check and full race suite, 567 unit tests and all
       75 Fastify browser scenarios pass; the rebuilt Linux binary passes packaged integration
-      and all 75 browser scenarios. The live server needs this commit deployed (it does not yet
-      report `api`) before the app will connect; connecting with a real account there is left
-      to the user.
+      and all 75 browser scenarios. Live (2026-10-12): after `9890f82` was deployed to the
+      personal server (it now reports `api: 1`), the user connected the desktop app to it and
+      signed in with a real account successfully.
 
 - [ ] Not in this delivery: an audit log with retention, invite links and self-service
       password recovery (operator resets instead).
