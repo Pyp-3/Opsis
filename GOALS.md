@@ -12,9 +12,27 @@ startup a 15-second watchdog, and deliberately delay fixture readiness by 1.5 se
 to reproduce the old failure. Assert both readiness and `harness_cancelled`; handle
 fixture-write errors explicitly. Production process handling and deadlines are unchanged.
 Verified locally: ten consecutive runner race-test repetitions, the complete native
-race suite, native vet, and lint. macOS CI verification is pending the correction's
-push. Only the test fixture and watchdogs change; the executable does not need a
-behavior rebuild. Preserve UTF-8 without BOM and LF. No product roadmap goal changes.
+race suite, native vet, and lint. Commit `5de6cf1` is pushed; the previously failing
+native race/contract step passes on both Intel and ARM64 macOS in run 38250233290.
+Both macOS jobs completed successfully, including application builds, browser parity,
+hidden WebView smoke, packaging and signature verification. That run has a separate
+Windows packaged-service startup failure during database/MCP integration; it is not
+a green release pipeline yet. Only the test fixture and watchdogs change; the
+executable behavior is unchanged. UTF-8 without BOM and LF are verified.
+No product roadmap goal changes.
+
+Board-manager and delivery discussion (2026-10-12, user request): support hierarchy such
+as Education → Artificial Intelligence → Topic 1 with nested library collections that
+contain canvases and child collections, breadcrumbs, explicit move actions and search
+paths. Preserve existing collections as roots, private account ownership, board identity
+and all data when moving/deleting containers; tags and smart collections offer discovery
+across themes without duplicating boards. Proposed implementation remains pending.
+The user wants new work on a `development` branch and batches promoted manually to
+`main`, which should hold stable releases. Recommended CI: checks and compilation on
+development, a full platform gate before promotion, and packaging/publication only for
+validated main commits. Preserve increasing Windows updater build numbers when splitting
+workflows. Branch/workflow setup is still planned; no hierarchy or workflow changes have
+been applied in this discussion. Stabilize the remaining Windows CI startup issue first.
 
 Process engine responsiveness (2026-10-12, user request): implemented reproducible native,
 WASM and browser measurements; cancel obsolete preview subscriptions with a bounded
