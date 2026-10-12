@@ -4,6 +4,18 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
+macOS Intel CI follow-up (2026-10-12, user request): run 38248499566 failed in
+`TestRunnerCancelsAndTimesOutRealChildProcesses`: the one-second cancellation-test
+watchdog expired before the fake Node CLI reported readiness under native race-test
+load. Keep the independent 100 ms deadline assertion, give successful/cancelled
+startup a 15-second watchdog, and deliberately delay fixture readiness by 1.5 seconds
+to reproduce the old failure. Assert both readiness and `harness_cancelled`; handle
+fixture-write errors explicitly. Production process handling and deadlines are unchanged.
+Verified locally: ten consecutive runner race-test repetitions, the complete native
+race suite, native vet, and lint. macOS CI verification is pending the correction's
+push. Only the test fixture and watchdogs change; the executable does not need a
+behavior rebuild. Preserve UTF-8 without BOM and LF. No product roadmap goal changes.
+
 Process engine responsiveness (2026-10-12, user request): implemented reproducible native,
 WASM and browser measurements; cancel obsolete preview subscriptions with a bounded
 worker queue while preserving saves/exports, deduplication and stale-response guards;

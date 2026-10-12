@@ -23,7 +23,9 @@ func TestRunnerStreamsAndBoundsRealChildProcesses(t *testing.T) {
 	if err := os.WriteFile(script, []byte(`process.stdout.write('first\n'); setTimeout(() => process.stdout.write('last\n'), 30);`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	request := Request{Executable: script, Directory: directory, Environment: ChildEnvironment(), Timeout: time.Second, MaxInput: 100, MaxOutput: 100, MaxError: 100}
+	// Successful startup is not a deadline test: loaded race-test runners can take
+	// more than a second to launch Node. The deadline behavior is checked below.
+	request := Request{Executable: script, Directory: directory, Environment: ChildEnvironment(), Timeout: 15 * time.Second, MaxInput: 100, MaxOutput: 100, MaxError: 100}
 	lines := []string{}
 	output, err := runner.Run(context.Background(), request, func(line string) { lines = append(lines, line) })
 	if err != nil || output != "first\nlast\n" || len(lines) != 2 {
@@ -50,16 +52,34 @@ func TestRunnerCancelsAndTimesOutRealChildProcesses(t *testing.T) {
 	runner := ProcessRunner{Node: node}
 	directory := t.TempDir()
 	script := filepath.Join(directory, "fake.mjs")
-	_ = os.WriteFile(script, []byte(`process.stdout.write('ready\n'); setInterval(() => {}, 1000);`), 0600)
+	if err := os.WriteFile(script, []byte(`process.stdout.write('ready\n'); setInterval(() => {}, 1000);`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	request := Request{Executable: script, Directory: directory, Environment: ChildEnvironment(), Timeout: 100 * time.Millisecond, MaxInput: 100, MaxOutput: 100, MaxError: 100}
 	_, err = runner.Run(context.Background(), request, nil)
 	if !errors.Is(err, Error("harness_timeout")) {
 		t.Fatal(err)
 	}
+	// Reproduce startup slower than the old one-second cancellation-test deadline.
+	// Cancellation must be driven by readiness, with a separate watchdog for hangs.
+	if err := os.WriteFile(script, []byte(`setTimeout(() => process.stdout.write('ready\n'), 1500); setInterval(() => {}, 1000);`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request.Timeout = time.Second
-	_, err = runner.Run(ctx, request, func(string) { cancel() })
+	request.Timeout = 15 * time.Second
+	ready := false
+	_, err = runner.Run(ctx, request, func(line string) {
+		if line != "ready" {
+			t.Errorf("unexpected readiness line: %q", line)
+			return
+		}
+		ready = true
+		cancel()
+	})
+	if !ready {
+		t.Fatal("child never signalled readiness before cancellation", err)
+	}
 	if !errors.Is(err, Error("harness_cancelled")) {
 		t.Fatal(err)
 	}
