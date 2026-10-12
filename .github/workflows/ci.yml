@@ -14,10 +14,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/development' }}
 
 jobs:
+  # A main push whose exact files already passed a development push run is not tested
+  # again: its jobs only build, package and publish. Promotion PRs must be up to date with
+  # main, so a merge commit has the same tree as the development commit that passed.
+  # Without such a run (a direct fix, a cancelled run), main runs every check as before.
+  tested:
+    name: Find the passing development run
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run: ${{ steps.find.outputs.run }}
+    steps:
+      - name: Match this commit's files to a passing development run
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Any lookup that fails leaves no match, so main falls back to every check.
+          tree=$(gh api "repos/$GH_REPO/commits/$SHA" --jq .commit.tree.sha) || tree=''
+          runs=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=development&event=push&status=success&per_page=30" \
+            --jq '.workflow_runs[] | "\(.id) \(.head_sha)"') || runs=''
+          while read -r id head; do
+            [[ "$tree" =~ ^[0-9a-f]{40}$ && "$id" =~ ^[0-9]+$ ]] || continue
+            tested=$(gh api "repos/$GH_REPO/commits/$head" --jq .commit.tree.sha) || continue
+            if [ "$tested" = "$tree" ]; then
+              echo "Development run $id passed every check on $head, which has this commit's files."
+              echo "run=$id" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done <<< "$runs"
+          echo "No passing development run has these exact files; running every check."
+
   check:
     runs-on: ubuntu-latest
+    needs: tested
     # A promotion PR's head is development's tip, already checked by its push run.
-    if: github.event_name != 'pull_request' || github.head_ref != 'development'
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
     outputs:
       tag: ${{ steps.package.outputs.tag }}
       version: ${{ steps.package.outputs.version }}
@@ -30,25 +67,37 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Verify clean-install native SQLite
+        if: needs.tested.outputs.run == ''
         run: node scripts/verify-install.mjs
       - name: Recorded CLI compatibility (no paid calls)
+        if: needs.tested.outputs.run == ''
         run: pnpm exec vitest run apps/api/src/harness/compatibility.test.ts
       - name: Build process engine
         run: pnpm engine:build
       - name: Check and test Rust
+        if: needs.tested.outputs.run == ''
         run: pnpm engine:check && pnpm engine:test
       - name: Install browser
+        if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install --with-deps chromium
       - name: Lint
+        if: needs.tested.outputs.run == ''
         run: pnpm lint
       - name: Test release packaging
+        if: needs.tested.outputs.run == ''
         run: pnpm release:test
       - name: Test server deployment policy
+        if: needs.tested.outputs.run == ''
         run: python3 -m unittest discover -s scripts/server -p 'test_*.py'
       - name: Typecheck
+        if: needs.tested.outputs.run == ''
         run: pnpm typecheck
       - name: QA gate
+        if: needs.tested.outputs.run == ''
         run: pnpm test:qa
+      - name: Build the web release
+        if: needs.tested.outputs.run != ''
+        run: pnpm build
       - name: Package versioned release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: package
@@ -73,8 +122,9 @@ jobs:
 
   desktop:
     name: Linux desktop
+    needs: tested
     # A promotion PR's head is development's tip, already checked by its push run.
-    if: github.event_name != 'pull_request' || github.head_ref != 'development'
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -89,20 +139,26 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Check native code
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:check
       - name: Native race and contract tests
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:test
       - name: Build packaged executable
         run: pnpm desktop:build
       - name: Install browser
+        if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install --with-deps chromium
       - name: Existing database and packaged MCP integration
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:integration
       - name: Browser feature parity against Go API
+        if: needs.tested.outputs.run == ''
         env:
           OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis
         run: pnpm test:browser
       - name: Hidden WebKit, React and WASM smoke
+        if: needs.tested.outputs.run == ''
         run: |
           profile=$(mktemp -d)
           trap 'rm -rf "$profile"' EXIT
@@ -130,8 +186,9 @@ jobs:
 
   windows-desktop:
     name: Windows desktop
+    needs: tested
     # A promotion PR's head is development's tip, already checked by its push run.
-    if: github.event_name != 'pull_request' || github.head_ref != 'development'
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
     runs-on: windows-2025
     env:
       CGO_ENABLED: '1'
@@ -170,22 +227,28 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Check native code
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:check
       - name: Native race and contract tests
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:test
       - name: Build packaged executable
         run: pnpm desktop:build
       - name: Install browser
+        if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install chromium
       - name: Existing database and packaged MCP integration
+        if: needs.tested.outputs.run == ''
         env:
           OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis.exe
         run: pnpm desktop:integration
       - name: Browser feature parity against Go API
+        if: needs.tested.outputs.run == ''
         env:
           OPSIS_QA_DESKTOP_BINARY: output/desktop/opsis.exe
         run: pnpm test:browser
       - name: Hidden WebView2, React and WASM smoke
+        if: needs.tested.outputs.run == ''
         run: |
           profile=$(mktemp -d)
           trap 'rm -rf "$profile"' EXIT
@@ -226,8 +289,9 @@ jobs:
 
   macos-desktop:
     name: macOS desktop (${{ matrix.arch }})
+    needs: tested
     # A promotion PR's head is development's tip, already checked by its push run.
-    if: github.event_name != 'pull_request' || github.head_ref != 'development'
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
     strategy:
       fail-fast: false
       matrix:
@@ -250,18 +314,24 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Check native code
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:check
       - name: Native race and contract tests
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:test
       - name: Build application bundle
         run: pnpm desktop:build
       - name: Install browser
+        if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install chromium
       - name: Existing database and packaged MCP integration
+        if: needs.tested.outputs.run == ''
         run: pnpm desktop:integration
       - name: Browser feature parity against Go API
+        if: needs.tested.outputs.run == ''
         run: pnpm test:browser
       - name: Hidden WKWebView, React and WASM smoke
+        if: needs.tested.outputs.run == ''
         run: |
           profile=$(mktemp -d)
           trap 'rm -rf "$profile"' EXIT
