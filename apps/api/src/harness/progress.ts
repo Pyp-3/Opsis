@@ -1,4 +1,5 @@
 import { StreamedPreview } from './streamed-preview';
+import { codexOutput } from './codex-schema';
 import { reportedUsage } from './usage';
 import { claudeLimitsFromEvent } from '@opsis/schema';
 import type { HarnessProvider } from './types.js';
@@ -77,7 +78,7 @@ class DraftReader {
 }
 
 /** Turns a CLI's stdout lines into progress, keeping whatever state that needs. */
-export function progressReader(provider: HarnessProvider) {
+export function progressReader(provider: HarnessProvider, outputSchema?: string) {
   let note = '';
   let phase = '';
   let thinking = 0;
@@ -141,11 +142,17 @@ export function progressReader(provider: HarnessProvider) {
       const text = clean(item.text.split('\n').find((line) => line.trim()) ?? '');
       return text ? [{ type: 'note', text, done: true }] : [];
     }
-    if (item.type === 'agent_message')
-      return [
-        ...enter('drafting'),
-        ...(typeof item.text === 'string' ? preview.add(item.text) : []),
-      ];
+    if (item.type === 'agent_message') {
+      let text = typeof item.text === 'string' ? item.text : '';
+      if (outputSchema && text) {
+        try {
+          text = codexOutput(text, outputSchema);
+        } catch {
+          text = ''; // Malformed answers still go through the final validation/repair path.
+        }
+      }
+      return [...enter('drafting'), ...preview.add(text)];
+    }
     return [];
   }
 
