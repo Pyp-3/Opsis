@@ -4,15 +4,21 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
-CI promotion runs (2026-10-12, user request): a pull request from `development` to `main` no
-longer runs CI separately. Its head is `development`'s tip, already checked by that branch's
-push run, and branch protection's required checks (`check`, Linux, Windows and both macOS
-desktops) read those results from the same commit. Other pull requests, `development` pushes
-and `main` pushes (which build and publish) are unchanged. The CI policy test now checks this
-gate on all four jobs, and `docs/RELEASES.md` describes the current flow. Verified locally:
-release tests (12) and lint pass. The next promotion PR will confirm on GitHub that the skipped
-jobs and the earlier push checks satisfy branch protection. Changing `.github/` holds VPS
-deploys until a new baseline is approved.
+CI promotion runs (2026-10-12, user request): CI tests each change once, on `development`.
+A pull request from `development` to `main` runs no jobs; branch protection's required checks
+(`check`, Linux, Windows and both macOS desktops) come from the `development` push run on the
+same commit (confirmed on PR #3). At the user's request (they merge within a minute of
+`development` passing), a `main` push no longer repeats the checks either: a new `tested` job
+finds a passing `development` push run with the same Git tree, and every check step is then
+skipped, leaving install, build, package and publish. Release naming, metadata, update-manifest
+signing and the VPS updater are unchanged, because the builds are still made in the `main` run.
+With no matching run, or if the lookup fails, `main` runs every check as before. The CI policy
+test pins which steps are checks and which build, and a mutation (an ungated Lint step) fails
+it. The lookup script, run locally against the real history, matched PR #3's merge `fd46882` to
+`development` run 38287181221 and fell back for an older direct `main` commit. The first real
+`main` run with the gate is still to be observed. `docs/RELEASES.md` describes the flow, including
+fast-forwarding `development` after each promotion. Changing `.github/` holds VPS deploys until
+a new baseline is approved.
 
 Provider limits in chat and Board Manager polish (2026-10-12, user request): the composer
 shows the host's Claude and Codex subscription limits, read without spending usage, so people

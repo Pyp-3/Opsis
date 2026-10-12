@@ -2,17 +2,27 @@
 
 ## Automatic build releases
 
-Pushes to `development` and `main` run CI: lint, type checks, Rust tests, the complete QA
-suite and native desktop checks on Linux, Windows and macOS. Only a passing push to `main`
-publishes a GitHub **prerelease** with a Linux x64 desktop tarball, a developer ZIP, SHA-256
-checksums, and release metadata; `development` runs check without publishing, and a newer
+Every push to `development` runs CI: lint, type checks, Rust tests, the complete QA suite and
+native desktop checks on Linux, Windows and macOS. It publishes nothing, and a newer
 `development` push cancels an older run. Changes reach `main` only through a pull request
-from `development`. That promotion pull request runs no separate checks: its head is
-`development`'s latest commit, which that branch's push run already checked, and branch
-protection reads those results from the same commit. Merging it pushes a new commit to
-`main`, which is checked again and published. Other pull requests run the checks without
-publishing. Failed pushes do not publish, and `main` pushes each keep their own run. Release
-tags do not trigger another build.
+from `development`, which runs no separate checks: its head is `development`'s latest commit,
+which that branch's push run already checked, and branch protection reads those results from
+the same commit. The pull request must be up to date with `main`, so its merge commit has
+exactly the files that passed.
+
+A push to `main` first looks for a passing `development` push run whose commit has the same
+files (the same Git tree). When it finds one, the `main` run does not test again: each job
+installs, builds and packages, and CI publishes a GitHub **prerelease** with a Linux x64
+desktop tarball, a developer ZIP, Windows and macOS packages, SHA-256 checksums and release
+metadata. Without such a run (a commit pushed to `main` some other way, or a `development` run
+that was cancelled or failed) the `main` run checks everything first, as before; a failed lookup
+also falls back to every check. Other pull requests run the checks without publishing. Failed
+pushes do not publish, and `main` pushes each keep their own run. Release tags do not trigger
+another build.
+
+After merging a promotion, fast-forward `development` to `main` so the next pull request is not
+out of date; the push that does this starts a `development` run of the same files, which can be
+cancelled.
 
 `VERSION` tracks the base version (initially `0.1.0`). Each release is named
 `v0.1.0-build.<run-number>.<attempt>.g<commit-prefix>` and points to the exact pushed
