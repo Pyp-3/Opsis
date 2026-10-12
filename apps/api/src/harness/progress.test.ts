@@ -77,4 +77,24 @@ describe('agent progress', () => {
   it('still finds Claude’s answer at the end of a streamed run', () => {
     expect(extractHarnessResult('claude', CLAUDE.join('\n'))).toBe('{"title":"DNS"}');
   });
+  it('passes on the limits Claude reports while it works, and nothing for Codex', () => {
+    const event = JSON.stringify({
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status: 'allowed',
+        unifiedWindows: { five_hour: { utilization: 0.31, resetsAt: 1791838800 } },
+      },
+    });
+    expect(progressReader('claude')(event)).toEqual([
+      {
+        type: 'limits',
+        limits: expect.objectContaining({
+          provider: 'claude',
+          source: 'request',
+          windows: [expect.objectContaining({ id: 'session', usedPercent: 31 })],
+        }),
+      },
+    ]);
+    expect(progressReader('codex')(event)).toEqual([]);
+  });
 });

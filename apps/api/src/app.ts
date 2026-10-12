@@ -27,6 +27,13 @@ import { ProviderKeys, registerProviderKeys } from './provider-keys';
 import { localBoardClient } from './boards/client';
 import { fileThreadSessionCleaner, type ThreadSessionCleaner } from './cli-sessions.js';
 import { DEFAULT_SESSION_ROOT } from './harness/client.js';
+import {
+  ProviderLimitsTracker,
+  localLimitChecker,
+  observingLimits,
+  registerProviderLimits,
+  type LimitChecker,
+} from './provider-limits.js';
 
 const defaultDatabasePath = fileURLToPath(new URL('../data/opsis.sqlite', import.meta.url));
 
@@ -41,6 +48,8 @@ export type BuildAppOptions = FastifyServerOptions & {
   removeThreadSessions?: ThreadSessionCleaner;
   /** A personal server behind an HTTPS proxy; defaults to `OPSIS_PUBLIC_ORIGIN`, else local. */
   serverMode?: ServerMode | null;
+  /** Reads a provider's limits without a model call; defaults to the host's own CLIs. */
+  limitChecker?: LimitChecker;
 };
 
 function errorResponse(code: string, message: string, stage: string, retryable = false) {
@@ -116,6 +125,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     speech = process.env.OPSIS_SPEECH === 'off' ? null : kokoroEngine(),
     removeThreadSessions = fileThreadSessionCleaner(DEFAULT_SESSION_ROOT),
     serverMode = serverModeFromEnv(),
+    limitChecker = localLimitChecker(),
     ...fastifyOptions
   } = options;
   const app = Fastify({
@@ -139,9 +149,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ((agent, settings, schema) =>
       localBoardClient(agent, settings, schema, providerKeys.get(agent)));
   const agentFullAccess = !serverMode || serverMode.agentFullAccess === true;
-  registerBoardRoutes(app, serverMode ? serverExecutables(factory) : factory, {
-    fullAccess: agentFullAccess,
-  });
+  const limits = new ProviderLimitsTracker(limitChecker);
+  registerBoardRoutes(
+    app,
+    observingLimits(serverMode ? serverExecutables(factory) : factory, limits),
+    {
+      fullAccess: agentFullAccess,
+    },
+  );
   const store = new ApiStore(databasePath);
   registerAuth(app, store, {
     signup: !serverMode,
@@ -150,6 +165,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
   registerGuestAccess(app, store);
   registerProviderKeys(app, providerKeys);
+  registerProviderLimits(app, limits);
   // Generation spends the instance's API/CLI quota: only signed-in people may start it.
   // Checks use the matched route: the router decodes paths, so `/v1/boards/%67enerate` is
   // `/v1/boards/generate` too.

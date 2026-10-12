@@ -127,6 +127,45 @@ Compatibility is covered with fake runners and official protocol examples, not
 paid account entitlement tests. Live-provider smoke tests require explicit user
 authorization.
 
+## Subscription limits (Claude and Codex CLIs)
+
+Beside the composer, a meter shows how much of the host's Claude or Codex subscription
+windows are used and when each resets, as the provider itself reports it: for example
+`5h 12% · Week 41%`. Open it for every window, the plan (where reported), when the report
+was taken and **Check now**. A model with its own window (such as Claude's weekly Sonnet
+window, or a Codex limit for one model) is marked in the model picker when that window is
+nearly or fully used, and the meter applies only the windows that count the chosen model.
+The limits belong to the host's CLI logins, so every member account on a personal server
+sees and shares the same numbers; they are not account settings or board data.
+
+Reports come from two sources, neither of which spends usage:
+
+- **A check.** Claude Code runs its local `/usage` command in print mode
+  (`claude --print --output-format json --model opsis-limit-check-no-model-call --safe-mode
+--restricted --tools "" --strict-mcp-config --permission-prompts none
+--no-session-persistence /usage`, with `TZ=UTC` so reset times are unambiguous). The model
+  ID is deliberately unknown to the CLI: if a future version sent `/usage` to a model instead
+  of answering it locally, the CLI would refuse the model before any request, and an answer
+  with a model turn is not read as a report. Codex runs `codex app-server` and asks
+  `account/rateLimits/read` over its JSON-RPC stdio; the process is stopped once it answers.
+- **A request.** Claude's stream reports its windows as it works (`rate_limit_event`); the
+  host keeps the latest report and updates only the windows it names. Codex's `exec` stream
+  does not, so the composer asks for a check after each Codex request.
+
+The host keeps the latest report per provider in memory (a restart checks again), runs at most
+one check per provider at a time and per minute, and the composer asks for one when the
+report is missing or over five minutes old. Checks run with the same CLI, compatible
+versions and child environment as requests, in a disposable directory, and their output is
+never logged or returned; failures show a short reason (not installed or unsupported, no
+subscription limits reported, or a login problem). Members only: signed-out visitors, guest
+accounts and MCP agent keys cannot read or start checks. `OPSIS_LIMIT_CHECKS=off` turns checks
+off (the browser test suite does, so it never reads a developer's real logins).
+
+The limits are advice. The provider still decides whether a request is accepted; Opsis never
+blocks, retries or switches a request because of them. Kimi, Grok and Antigravity, and API
+connections, have no limit report here. Separate from these, the per-account **provider mode**
+caps in Model settings count your own requests against limits you choose.
+
 ## Official references
 
 Checked 2026-10-06:

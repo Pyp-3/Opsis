@@ -16,6 +16,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # A promotion PR's head is development's tip, already checked by its push run.
+    if: github.event_name != 'pull_request' || github.head_ref != 'development'
     outputs:
       tag: ${{ steps.package.outputs.tag }}
       version: ${{ steps.package.outputs.version }}
@@ -71,6 +73,8 @@ jobs:
 
   desktop:
     name: Linux desktop
+    # A promotion PR's head is development's tip, already checked by its push run.
+    if: github.event_name != 'pull_request' || github.head_ref != 'development'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -126,6 +130,8 @@ jobs:
 
   windows-desktop:
     name: Windows desktop
+    # A promotion PR's head is development's tip, already checked by its push run.
+    if: github.event_name != 'pull_request' || github.head_ref != 'development'
     runs-on: windows-2025
     env:
       CGO_ENABLED: '1'
@@ -220,6 +226,8 @@ jobs:
 
   macos-desktop:
     name: macOS desktop (${{ matrix.arch }})
+    # A promotion PR's head is development's tip, already checked by its push run.
+    if: github.event_name != 'pull_request' || github.head_ref != 'development'
     strategy:
       fail-fast: false
       matrix:

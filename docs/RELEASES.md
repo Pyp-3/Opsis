@@ -2,11 +2,17 @@
 
 ## Automatic build releases
 
-Every branch push runs CI. After lint, type checks, Rust tests, and the complete QA
-suite and native desktop checks pass, CI publishes a GitHub **prerelease** with a
-Linux x64 desktop tarball, a developer ZIP, SHA-256 checksums, and release metadata. Pull requests run checks without publishing. Failed pushes
-do not publish; rapid successive pushes each retain their own run. Release tags do not
-trigger another build.
+Pushes to `development` and `main` run CI: lint, type checks, Rust tests, the complete QA
+suite and native desktop checks on Linux, Windows and macOS. Only a passing push to `main`
+publishes a GitHub **prerelease** with a Linux x64 desktop tarball, a developer ZIP, SHA-256
+checksums, and release metadata; `development` runs check without publishing, and a newer
+`development` push cancels an older run. Changes reach `main` only through a pull request
+from `development`. That promotion pull request runs no separate checks: its head is
+`development`'s latest commit, which that branch's push run already checked, and branch
+protection reads those results from the same commit. Merging it pushes a new commit to
+`main`, which is checked again and published. Other pull requests run the checks without
+publishing. Failed pushes do not publish, and `main` pushes each keep their own run. Release
+tags do not trigger another build.
 
 `VERSION` tracks the base version (initially `0.1.0`). Each release is named
 `v0.1.0-build.<run-number>.<attempt>.g<commit-prefix>` and points to the exact pushed

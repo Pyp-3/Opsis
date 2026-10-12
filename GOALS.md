@@ -4,6 +4,25 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
+CI promotion runs (2026-10-12, user request): a pull request from `development` to `main` no
+longer runs CI separately. Its head is `development`'s tip, already checked by that branch's
+push run, and branch protection's required checks (`check`, Linux, Windows and both macOS
+desktops) read those results from the same commit. Other pull requests, `development` pushes
+and `main` pushes (which build and publish) are unchanged. The CI policy test now checks this
+gate on all four jobs, and `docs/RELEASES.md` describes the current flow. Verified locally:
+release tests (12) and lint pass. The next promotion PR will confirm on GitHub that the skipped
+jobs and the earlier push checks satisfy branch protection. Changing `.github/` holds VPS
+deploys until a new baseline is approved.
+
+Provider limits in chat and Board Manager polish (2026-10-12, user request): the composer
+shows the host's Claude and Codex subscription limits, read without spending usage, so people
+know when to send requests and which models are still available. See the goal section below.
+The Board Manager's collection row was tidied: collections sit in the chip row beside All
+boards and Unfiled, the collection search is a compact pill shown once collections nest or
+pass six, and **Import collection bundle** is a proper button. The user's Claude and Codex
+logins were synced to the personal server (previous files kept as backups); both CLIs report
+signed in inside the live container.
+
 macOS Intel CI follow-up (2026-10-12, user request): run 38248499566 failed in
 `TestRunnerCancelsAndTimesOutRealChildProcesses`: the one-second cancellation-test
 watchdog expired before the fake Node CLI reported readiness under native race-test
@@ -578,6 +597,50 @@ width and accessibility scans (it found and fixed a badge contrast failure). Lin
 formatting/Clippy and 24 tests, desktop check and full Go race suite, and `test:qa` (588 unit
 tests in 104 files; 76 browser scenarios pass, the Linux-only pixel baseline skipped) pass.
 Desktop screenshots of the thread list and access settings were reviewed. No paid model calls.
+
+## In progress: provider limits in chat (requested 2026-10-12)
+
+The user asked to track the agentic providers' current limits on the server, so people know
+when to send requests and which models to use. Scope chosen: the providers' own reports of
+their subscription windows for the host's Claude and Codex CLI logins (shared by every member
+account), advice only. Requests are never blocked, retried or switched because of them.
+
+- [x] Shared rules (`provider-limits.ts`): read Claude's local `/usage` text, Claude's streamed
+      `rate_limit_event` and Codex's `account/rateLimits/read`; merge partial request reports
+      into a full check; decide how a model stands (shared windows apply to every model, model
+      windows only to theirs; windows past their reset stop counting).
+- [x] No-call checks shared by both hosts (`harness/limits.ts`): Claude's `/usage` with an
+      unrecognised model ID, so the CLI refuses before any request if `/usage` ever stopped
+      being local, and `TZ=UTC`; Codex's app-server, with stdin left unclosed until its answer
+      (new `untilLine` / `Until` on both process runners).
+- [x] Hosts: `GET /v1/providers/limits` and `POST /v1/providers/limits/refresh` on Fastify and
+      the Go desktop, members only (not guests or MCP agent keys). Latest report in memory, at
+      most one check per provider at a time and per minute, problems in words, never provider
+      output. Claude's streamed reports are recorded during requests on both hosts.
+      `OPSIS_LIMIT_CHECKS=off` turns checks off (set for the browser suites).
+- [x] Composer meter (Canvas and Chat): `5h 12% · Week 41%`, warning and limited states with
+      reset countdowns, a panel with every window, plan, report age and **Check now**; the model
+      picker marks models whose own window is nearly or fully used. Checked when missing or over
+      five minutes old, and after each request (Codex) or by reading the recorded report (Claude).
+- [ ] Not yet: verify on the personal server once this reaches `main` (the server only deploys
+      `main`); Kimi, Grok, Antigravity and API connections have no limit report.
+
+Verified 2026-10-12 on Arch Linux: schema tests with the real `/usage` text and the Codex answer
+captured from the personal server (windows, UTC resets across midnight and the new year, other
+zones refused, model windows, refusals, merging, standing); Fastify tests (check arguments,
+`/usage` answers with a model turn ignored, Codex answer by ID, the off switch, one check per
+interval shared by concurrent callers, failure reasons, request reports recorded, members-only
+routes and validation); Node and Go runner tests where a real child exits as its input ends;
+Go tests of both checks through the embedded workflow, merging and a missing CLI. The real
+Fastify checker read this machine's Claude subscription windows without a model call; the
+server's Codex 0.159 answered `account/rateLimits/read` directly (local Codex 0.162.1 is outside
+the accepted versions, so its check correctly reports unsupported). A new browser scenario
+(fixed reports) covers the meter, panel, **Check now**, warning and limited states, the model
+picker note, a missing CLI and an accessibility scan; a second checks the panel on a phone; it
+found and fixed a contrast failure. Lint, typecheck, Rust check and 26 tests, desktop check and
+full race suite, 627 unit tests and all 82 Fastify browser scenarios pass. Desktop, light and
+phone screenshots were reviewed. Web and Go code paths are tested; the desktop binary was not
+rebuilt by hand. No model calls were made.
 
 ## In progress: chat tab and Info book (requested 2026-10-11)
 
@@ -1297,9 +1360,9 @@ generation), and the executable path an account saves is ignored there.
       WebView smoke test now calls the native bindings (28 checks). Lint, typecheck, Rust
       formatting/Clippy and 24 tests, desktop check and full race suite, 567 unit tests and all
       75 Fastify browser scenarios pass; the rebuilt Linux binary passes packaged integration
-      and all 75 browser scenarios. The live server needs this commit deployed (it does not yet
-      report `api`) before the app will connect; connecting with a real account there is left
-      to the user.
+      and all 75 browser scenarios. Live (2026-10-12): after `9890f82` was deployed to the
+      personal server (it now reports `api: 1`), the user connected the desktop app to it and
+      signed in with a real account successfully.
 
 - [ ] Not in this delivery: an audit log with retention, invite links and self-service
       password recovery (operator resets instead).

@@ -13,6 +13,50 @@ import (
 
 func (s *Server) EnableGeneration(engine *generation.Engine) {
 	engine.ProviderKeys = s.providerKeys
+	limits := generation.NewLimits(engine)
+	member := func(r *http.Request) error {
+		who := current(r)
+		if who.User == nil || who.ViaAgent {
+			return failure(401, "Sign in to see provider limits.")
+		}
+		return nil
+	}
+	s.handle("GET /v1/providers/limits", func(w http.ResponseWriter, r *http.Request) error {
+		if err := member(r); err != nil {
+			return err
+		}
+		writeJSON(w, 200, limits.Snapshot())
+		return nil
+	})
+	s.handle("POST /v1/providers/limits/refresh", func(w http.ResponseWriter, r *http.Request) error {
+		if err := member(r); err != nil {
+			return err
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
+		if err != nil {
+			return failure(413, "Request body is too large.")
+		}
+		providers := generation.LimitProviders
+		if len(strings.TrimSpace(string(body))) > 0 {
+			var request struct {
+				Providers []string `json:"providers"`
+			}
+			decoder := json.NewDecoder(strings.NewReader(string(body)))
+			decoder.DisallowUnknownFields()
+			if decoder.Decode(&request) != nil || len(request.Providers) == 0 || len(request.Providers) > len(generation.LimitProviders) {
+				return failure(400, "Choose Claude or Codex.")
+			}
+			for _, provider := range request.Providers {
+				if provider != "claude" && provider != "codex" {
+					return failure(400, "Choose Claude or Codex.")
+				}
+			}
+			providers = request.Providers
+		}
+		limits.Refresh(r.Context(), providers)
+		writeJSON(w, 200, limits.Snapshot())
+		return nil
+	})
 	s.handle("GET /v1/agents", func(w http.ResponseWriter, r *http.Request) error {
 		if _, err := requireUser(r); err != nil {
 			return err
@@ -58,6 +102,15 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 				w.WriteHeader(200)
 			}
 			result, err := engine.RunAs(ctx, operation, body, user.ID, func(progress json.RawMessage) {
+				// The provider's own report of its limits is the instance's to keep.
+				var event struct {
+					Type   string          `json:"type"`
+					Limits json.RawMessage `json:"limits"`
+				}
+				if json.Unmarshal(progress, &event) == nil && event.Type == "limits" {
+					// Merging runs the shared rule in its own VM; the stream does not wait for it.
+					go limits.Observe(context.Background(), event.Limits)
+				}
 				if stream {
 					send(map[string]any{"type": "progress", "progress": progress})
 				}

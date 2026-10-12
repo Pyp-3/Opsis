@@ -9,6 +9,7 @@ import { harnessArguments } from '../api/src/harness/arguments';
 import { extractHarnessResult } from '../api/src/harness/envelope';
 import { progressReader } from '../api/src/harness/progress';
 import { parseVersion } from '../api/src/harness/version';
+import { limitCheck, limitsFromCheckOutput } from '../api/src/harness/limits';
 import { withNativeSession, type SessionStore } from '../api/src/harness/sessions';
 import type { BoardClientFactory } from '../api/src/boards/client';
 import type { HarnessFile, LLMRequest, HarnessConfig } from '../api/src/harness/types';
@@ -18,6 +19,9 @@ import {
   agentDeadlineMs,
   boardOutputSchema,
   modelSettingsProblem,
+  LimitProviderSchema,
+  ProviderLimitsSchema,
+  mergeProviderLimits,
 } from '../../packages/schema/src/index';
 
 declare function nativePrepareClient(agent: string, executablePath: string): string;
@@ -31,6 +35,7 @@ declare function nativeComplete(
   onLine: (line: string) => void,
 ): string;
 declare function nativeCancelled(): boolean;
+declare function nativeLimitCheck(request: string): string;
 declare function nativeProgress(json: string): void;
 declare function nativeDecodeFile(base64: string): string;
 declare function nativeSessionRead(key: string): string;
@@ -201,4 +206,27 @@ export async function agents(): Promise<string> {
   for (const id of ['kimi', 'grok', 'antigravity'])
     agents.push({ id, available: true, detail: 'API · configure this instance’s key in Settings' });
   return JSON.stringify(agents);
+}
+
+/** Runs the shared no-call limit check with the CLI a request would use; see harness/limits. */
+export async function checkLimits(provider: string): Promise<string> {
+  const agent = LimitProviderSchema.parse(provider);
+  try {
+    const prepared = result<{ executable: string; version: string }>(
+      nativePrepareClient(agent, ''),
+    );
+    parseVersion(agent, prepared.version);
+    const { stdout } = result<{ stdout: string }>(
+      nativeLimitCheck(JSON.stringify({ executable: prepared.executable, ...limitCheck(agent) })),
+    );
+    return JSON.stringify({ limits: limitsFromCheckOutput(agent, stdout, new Date()) });
+  } catch (error) {
+    return JSON.stringify({ error: error instanceof HarnessError ? error.code : 'harness_exit' });
+  }
+}
+
+/** Combines a new report with the last one, as the browser API's tracker does. */
+export async function mergeLimits(previous: string, next: string): Promise<string> {
+  const known = previous ? ProviderLimitsSchema.parse(JSON.parse(previous)) : null;
+  return JSON.stringify(mergeProviderLimits(known, ProviderLimitsSchema.parse(JSON.parse(next))));
 }

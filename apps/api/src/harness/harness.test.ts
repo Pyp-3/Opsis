@@ -221,6 +221,26 @@ describe('SpawnProcessRunner supervision', () => {
     await expect(running).rejects.toThrowError('harness_cancelled');
   });
 
+  it('keeps stdin open until the awaited answer, then stops the child', async () => {
+    // Like Codex's app-server: it answers each line and exits as soon as input ends.
+    const server = `process.stdin.on('end', () => process.exit(3));
+      let buffer = '';
+      process.stdin.on('data', (chunk) => {
+        buffer += chunk;
+        for (let at; (at = buffer.indexOf('\\n')) >= 0; buffer = buffer.slice(at + 1)) {
+          const { id } = JSON.parse(buffer.slice(0, at));
+          setTimeout(() => process.stdout.write(JSON.stringify({ id }) + '\\n'), 20);
+        }
+      });`;
+    const stdin = '{"id":1}\n{"id":2}\n';
+    await expect(
+      runner.run(base(['-e', server], { stdin, untilLine: (line) => line === '{"id":2}' })),
+    ).resolves.toEqual({ exitCode: 0, stdout: '{"id":1}\n{"id":2}\n' });
+    await expect(
+      runner.run(base(['-e', server], { stdin, timeoutMs: 300, untilLine: () => false })),
+    ).rejects.toThrowError('harness_timeout');
+  });
+
   it('rejects oversized stdin before spawning', async () => {
     await expect(
       runner.run(base(['-e', 'process.exit(0)'], { stdin: 'x'.repeat(65) })),

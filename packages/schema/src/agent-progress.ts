@@ -2,12 +2,15 @@ import { z } from 'zod';
 import { BoardNodeSchema } from './board';
 import { AgentDrawingSchema } from './board-drawings';
 import { ReportedUsageSchema } from './provider-usage';
+import { ProviderLimitsSchema } from './provider-limits';
 export const AgentProgressSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('node'), node: BoardNodeSchema }),
   /** A sketch drawing validated as it streams in; provisional until the whole answer passes. */
   z.object({ type: z.literal('drawing'), drawing: AgentDrawingSchema }),
   z.object({ type: z.literal('preview-reset') }),
   z.object({ type: z.literal('usage'), usage: ReportedUsageSchema }),
+  /** The provider's own report of its usage windows, seen during the request. */
+  z.object({ type: z.literal('limits'), limits: ProviderLimitsSchema }),
   z.object({
     type: z.literal('phase'),
     phase: z.enum(['starting', 'thinking', 'writing', 'drafting']),

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Search } from 'lucide-react';
 import { collectionPathLabel } from '@opsis/schema';
 import type { BoardCollection } from './useBoardCollections';
 
@@ -21,65 +21,74 @@ export function CollectionTree({
   const [query, setQuery] = useState('');
   const children = (parentId: string | null) =>
     collections.filter((item) => (item.parentId ?? null) === parentId);
-  const branch = (parentId: string | null) => (
-    <ul className="board-collection-tree">
-      {children(parentId).map((item) => {
-        const hasChildren = children(item.id).length > 0;
-        const expanded = !collapsed.has(item.id);
-        return (
-          <li key={item.id}>
-            <div className="board-collection-tree-row">
-              {hasChildren ? (
+  const branch = (parentId: string | null) => {
+    // Nested rows line up with their siblings' collapse controls when a sibling has one; the
+    // top level sits in the chip row and needs no alignment.
+    const nested =
+      parentId !== null && children(parentId).some((item) => children(item.id).length > 0);
+    return (
+      <ul className="board-collection-tree" role="list">
+        {children(parentId).map((item) => {
+          const hasChildren = children(item.id).length > 0;
+          const expanded = !collapsed.has(item.id);
+          return (
+            <li key={item.id}>
+              <div className="board-collection-tree-row">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    className="board-collection-toggle"
+                    disabled={disabled}
+                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${collectionPathLabel(collections, item.id)}`}
+                    aria-expanded={expanded}
+                    onClick={() =>
+                      setCollapsed((before) => {
+                        const next = new Set(before);
+                        if (!next.delete(item.id)) next.add(item.id);
+                        return next;
+                      })
+                    }
+                  >
+                    {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </button>
+                ) : (
+                  nested && <span className="board-collection-toggle-space" />
+                )}
                 <button
                   type="button"
-                  className="board-collection-toggle"
                   disabled={disabled}
-                  aria-label={`${expanded ? 'Collapse' : 'Expand'} ${collectionPathLabel(collections, item.id)}`}
-                  aria-expanded={expanded}
-                  onClick={() =>
-                    setCollapsed((before) => {
-                      const next = new Set(before);
-                      if (!next.delete(item.id)) next.add(item.id);
-                      return next;
-                    })
-                  }
+                  aria-pressed={selected === item.id}
+                  title={collectionPathLabel(collections, item.id)}
+                  onClick={() => onSelect(item.id)}
                 >
-                  {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <Folder size={13} /> {item.name}{' '}
+                  <span className="board-collection-count">{count(item.id)}</span>
                 </button>
-              ) : (
-                <span className="board-collection-toggle-space" />
-              )}
-              <button
-                type="button"
-                disabled={disabled}
-                aria-pressed={selected === item.id}
-                title={collectionPathLabel(collections, item.id)}
-                onClick={() => onSelect(item.id)}
-              >
-                <Folder size={13} /> {item.name}{' '}
-                <span className="board-collection-count">{count(item.id)}</span>
-              </button>
-            </div>
-            {hasChildren && expanded && branch(item.id)}
-          </li>
-        );
-      })}
-    </ul>
-  );
+              </div>
+              {hasChildren && expanded && branch(item.id)}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
   return (
     <div className="board-collection-browser">
-      {collections.length > 0 && (
+      {/* A few flat collections are all in view; search helps once they nest or multiply. */}
+      {(collections.length > 6 || collections.some((item) => item.parentId)) && (
         <label className="board-collection-search">
-          Find collection
+          <Search size={13} aria-hidden />
           <input
+            type="search"
+            aria-label="Find collection"
             value={query}
-            placeholder="Search collection paths"
+            placeholder="Find collection"
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
       )}
       {query.trim() ? (
-        <ul className="board-collection-tree">
+        <ul className="board-collection-tree" role="list">
           {collections
             .filter((item) =>
               collectionPathLabel(collections, item.id)

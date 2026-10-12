@@ -14,6 +14,7 @@ const child = spawn(
       OPSIS_DATA_DIR: directory,
       OPSIS_DB_PATH: join(directory, 'opsis.sqlite'),
       OPSIS_SPEECH: 'off',
+      OPSIS_LIMIT_CHECKS: 'off',
       OPSIS_RATE_LIMIT: '10000',
     },
   },

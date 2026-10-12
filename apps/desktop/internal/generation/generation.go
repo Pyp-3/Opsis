@@ -152,6 +152,28 @@ func (e *Engine) execute(ctx context.Context, method string, args []string, prog
 		}
 		return output
 	})
+	_ = vm.Set("nativeLimitCheck", func(raw string) string {
+		var input struct {
+			Executable      string            `json:"executable"`
+			Args            []string          `json:"args"`
+			Stdin           string            `json:"stdin"`
+			Environment     map[string]string `json:"environment"`
+			UntilResponseID *int              `json:"untilResponseId"`
+			TimeoutMs       int               `json:"timeoutMs"`
+		}
+		if json.Unmarshal([]byte(raw), &input) != nil || !approved[input.Executable] {
+			return response(nil, harness.Error("harness_config"))
+		}
+		output, err := harness.CheckLimits(ctx, e.Runner, harness.LimitCheck{
+			Executable:      input.Executable,
+			Args:            input.Args,
+			Stdin:           input.Stdin,
+			Environment:     input.Environment,
+			UntilResponseID: input.UntilResponseID,
+			Timeout:         time.Duration(input.TimeoutMs) * time.Millisecond,
+		})
+		return response(map[string]string{"stdout": output}, err)
+	})
 	_ = vm.Set("nativeComplete", func(call goja.FunctionCall) goja.Value {
 		var input harness.Completion
 		if json.Unmarshal([]byte(call.Argument(0).String()), &input) != nil || !approved[input.Executable] {

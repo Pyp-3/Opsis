@@ -19,6 +19,8 @@ import { AgentLogo } from './AgentLogo';
 import { AttachButton, AttachmentChips } from './Attachments';
 import { saveModelPreferences, type ModelPreferences } from './model-settings';
 import { untilLabel, type AgentCaps, type AgentStatus } from './provider-usage';
+import { ProviderLimitsMeter } from './ProviderLimitsMeter';
+import { isLimitProvider, type ProviderLimitsEntry } from './useProviderLimits';
 
 type ProviderControls = {
   enabled: boolean;
@@ -43,6 +45,12 @@ type BoardComposerProps = {
   connectionError: string;
   status: { available: boolean; detail: string } | undefined;
   provider: ProviderControls;
+  /** The host's provider limits, for Claude's and Codex's CLIs. */
+  limits?: {
+    entryOf: (agent: string) => ProviderLimitsEntry | null;
+    now: number;
+    check: (agent: 'claude' | 'codex') => void;
+  };
   generation: { busy: boolean; cancel: () => void };
   generate: (event?: FormEvent) => Promise<void>;
   setAttachments: (attachments: BoardAttachment[]) => void;
@@ -73,6 +81,7 @@ export function BoardComposer({
   connectionError,
   status,
   provider,
+  limits,
   generation,
   generate,
   setAttachments,
@@ -300,6 +309,11 @@ export function BoardComposer({
             agent={agent}
             value={modelPreferences[agent]}
             disabled={busy}
+            limits={
+              modelPreferences[agent].connection !== 'api'
+                ? (limits?.entryOf(agent)?.limits ?? null)
+                : null
+            }
             onChange={(value) => {
               const next = { ...modelPreferences, [agent]: value };
               setModelPreferences(next);
@@ -419,6 +433,19 @@ export function BoardComposer({
                 : status?.detail || 'Checking local agent…')
           )}
         </span>
+        {limits &&
+          isLimitProvider(agent) &&
+          modelPreferences[agent].connection !== 'api' &&
+          !localTerminalExample && (
+            <ProviderLimitsMeter
+              key={agent}
+              provider={agent}
+              model={modelPreferences[agent].model}
+              entry={limits.entryOf(agent)}
+              now={limits.now}
+              onCheck={() => limits.check(agent)}
+            />
+          )}
         {providerTracked && provider.status && (
           <span
             className={`provider-pill ${providerBlocked ? 'is-blocked' : ''}`}
