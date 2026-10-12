@@ -18,8 +18,11 @@ and the actual schema file sent by the Go host. Verified locally: lint/typecheck
 Rust check/26 tests, native vet/race tests, a full 633-test unit run and 113 final
 harness/generation tests after the preview follow-up, rebuilt Linux executable,
 packaged database/MCP integration and all 28 isolated hidden WebView checks. Web
-and packaged browser suites use separate servers, databases and artifact directories;
-an initial trace-file collision's affected scenario passed on an isolated rerun.
+and packaged browser suites use separate servers, databases and artifact directories.
+Packaged Linux: all 82 browser scenarios pass. Fastify: 81 passed in the full run;
+the remaining scenario's trace-file collision passed on an isolated rerun. Initial
+development CI caught an unchecked fixture-array access in the last added test;
+the fixture was corrected without changing assertions or production behavior.
 Final browser results, hosted platform CI and deployment evidence are recorded in
 this task's promotion PR. No live provider generation is claimed. The user explicitly
 authorized this task's PR merge after checks.

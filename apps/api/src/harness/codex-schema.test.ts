@@ -182,8 +182,10 @@ describe('Codex Structured Outputs compatibility', () => {
     const output = JSON.parse(codexOutput(JSON.stringify(value), original));
     expect(output.nodes[0].process).toEqual({ op: 'sort', from: 'sample', order: 'asc' });
     expect(ProcessStepSchema.safeParse(output.nodes[0].process).success).toBe(true);
-    value.nodes[0].process.order = null as unknown as string;
-    const invalid = JSON.parse(codexOutput(JSON.stringify(value), original));
+    const invalidValue = {
+      nodes: value.nodes.map((node) => ({ ...node, process: { ...node.process, order: null } })),
+    };
+    const invalid = JSON.parse(codexOutput(JSON.stringify(invalidValue), original));
     expect(ProcessStepSchema.safeParse(invalid.nodes[0].process).success).toBe(false);
   });
 
