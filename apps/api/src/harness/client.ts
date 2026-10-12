@@ -8,6 +8,7 @@ import type { LLMClient, LLMRequest } from './types.js';
 import { HarnessError } from './errors.js';
 import { harnessArguments } from './arguments.js';
 import { extractHarnessResult } from './envelope.js';
+import { codexOutput, codexOutputSchema } from './codex-schema';
 import { progressReader, type HarnessProgress } from './progress.js';
 import {
   sessionKeyParts,
@@ -212,7 +213,8 @@ export class HarnessLLMClient implements LLMClient {
               run,
             )
           : await run(null);
-        return extractHarnessResult(this.config.provider, stdout);
+        const output = extractHarnessResult(this.config.provider, stdout);
+        return this.config.provider === 'codex' ? codexOutput(output, this.resultSchema) : output;
       } catch (error) {
         if (error instanceof HarnessError) throw error;
         throw new HarnessError('harness_exit');
@@ -228,9 +230,11 @@ export class HarnessLLMClient implements LLMClient {
     files: readonly HarnessFile[],
     onProgress: ((progress: HarnessProgress) => void) | undefined,
   ): Promise<string> {
+    const schema =
+      this.config.provider === 'codex' ? codexOutputSchema(this.resultSchema) : this.resultSchema;
     const workspace = plan
-      ? await sessionWorkspace(this.sessions!.root, request.session!.key, this.resultSchema)
-      : await (this.workspaceFactory?.() ?? privateHarnessWorkspace(this.resultSchema));
+      ? await sessionWorkspace(this.sessions!.root, request.session!.key, schema)
+      : await (this.workspaceFactory?.() ?? privateHarnessWorkspace(schema));
     const cwd = 'cwd' in workspace ? (workspace.cwd as string) : workspace.directory;
     const config = plan
       ? { ...this.config, session: { resume: plan.resume, ...(plan.id ? { id: plan.id } : {}) } }
@@ -273,7 +277,7 @@ export class HarnessLLMClient implements LLMClient {
         ...(onProgress
           ? {
               onStdoutLine: (() => {
-                const read = progressReader(this.config.provider);
+                const read = progressReader(this.config.provider, this.resultSchema);
                 return (line: string) => read(line).forEach(onProgress);
               })(),
             }

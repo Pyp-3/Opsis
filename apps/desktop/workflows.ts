@@ -7,6 +7,7 @@ import { prepareAttachments } from '../api/src/attachments';
 import { HarnessError, type HarnessErrorCode } from '../api/src/harness/errors';
 import { harnessArguments } from '../api/src/harness/arguments';
 import { extractHarnessResult } from '../api/src/harness/envelope';
+import { codexOutput, codexOutputSchema } from '../api/src/harness/codex-schema';
 import { progressReader } from '../api/src/harness/progress';
 import { parseVersion } from '../api/src/harness/version';
 import { limitCheck, limitsFromCheckOutput } from '../api/src/harness/limits';
@@ -90,6 +91,7 @@ const factory: BoardClientFactory = async (
       async () => nativeProviderPause(),
     );
   const provider = agent === 'antigravity' ? 'agy' : agent;
+  const outputSchema = provider === 'codex' ? codexOutputSchema(schema) : schema;
   const prepared = result<{ executable: string; version: string }>(
     nativePrepareClient(agent, settings.executablePath ?? ''),
   );
@@ -104,7 +106,7 @@ const factory: BoardClientFactory = async (
     ) {
       if (request.system.length + request.user.length > (settings.maxRequestCharacters ?? 768000))
         throw new HarnessError('harness_request_limit');
-      const read = progressReader(provider);
+      const read = progressReader(provider, schema);
       const timeoutMs = agentDeadlineMs(settings);
       const config: HarnessConfig = {
         provider,
@@ -137,7 +139,7 @@ const factory: BoardClientFactory = async (
               JSON.stringify({
                 executable: prepared.executable,
                 provider,
-                schema,
+                schema: outputSchema,
                 request: { system, user },
                 files,
                 workspaceFiles: providerWorkspaceFiles(provider, schema),
@@ -161,7 +163,8 @@ const factory: BoardClientFactory = async (
           ).stdout;
         },
       );
-      return extractHarnessResult(provider, stdout);
+      const output = extractHarnessResult(provider, stdout);
+      return provider === 'codex' ? codexOutput(output, schema) : output;
     },
   };
 };

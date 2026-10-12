@@ -4,6 +4,38 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
+VPS Codex diagnosis and update (2026-10-12, user request): the live Codex 0.159.0
+was installed and signed in, but both recent requests failed with HTTP 400
+`invalid_json_schema` before producing tokens. Drawing coordinates emitted draft-7
+tuple `items` arrays, which Codex's Structured Outputs endpoint rejects. Added a
+shared pure harness adapter used by the Fastify client and native workflow: represent
+coordinate pairs as bounded homogeneous arrays, use supported schema keywords and
+required nullable optional fields, then restore omitted fields before the existing
+Zod validation and proposal review. Stored board/process contracts are unchanged.
+Regression coverage checks all 16 board schema variants and illustrations, private
+staging with/without a chat session, process unions, validated provisional nodes,
+and the actual schema file sent by the Go host. Verified locally: lint/typecheck,
+Rust check/26 tests, native vet/race tests, a full 633-test unit run and 113 final
+harness/generation tests after the preview follow-up, rebuilt Linux executable,
+packaged database/MCP integration and all 28 isolated hidden WebView checks. Web
+and packaged browser suites use separate servers, databases and artifact directories.
+Packaged Linux: all 82 browser scenarios pass. Fastify: 81 passed in the full run;
+the remaining scenario's trace-file collision passed on an isolated rerun. Initial
+development CI caught an unchecked fixture-array access in the last added test;
+the fixture was corrected without changing assertions or production behavior.
+Final browser results, hosted platform CI and deployment evidence are recorded in
+this task's promotion PR. No live provider generation is claimed. The user explicitly
+authorized this task's PR merge after checks.
+
+The server checkout and live container were updated from `9890f82` to CI-approved
+`d8d5436` after reviewing the changed workflow and updating the operator baseline;
+the frozen dependency image and privileged updater are unchanged. Candidate startup
+passed, the public health endpoint and site return 200, and the updater retained a
+database snapshot, old configuration and previous container. The schema fix follows
+the existing successful-development-CI, main-release-CI and updater health gates;
+final release/deployment evidence belongs to the same promotion PR. No broader
+roadmap goal is marked complete; live-account generation remains unverified.
+
 CI promotion runs (2026-10-12, user request): CI tests each change once, on `development`.
 A pull request from `development` to `main` runs no jobs; branch protection's required checks
 (`check`, Linux, Windows and both macOS desktops) come from the `development` push run on the

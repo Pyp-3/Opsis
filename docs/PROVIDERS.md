@@ -127,6 +127,14 @@ Compatibility is covered with fake runners and official protocol examples, not
 paid account entitlement tests. Live-provider smoke tests require explicit user
 authorization.
 
+Codex's response schema is adapted to OpenAI's Structured Outputs subset before
+either host stages `--output-schema`. Coordinate pairs use homogeneous arrays of
+exactly two numbers; optional fields are required and nullable on the wire, with
+null restored to omission before answer validation. The original contracts still
+enforce string lengths, drawing shape rules and all board/process limits. This
+avoids `invalid_json_schema` errors from draft-7 tuple schemas without changing
+saved documents or retrying failed provider requests.
+
 ## Subscription limits (Claude and Codex CLIs)
 
 Beside the composer, a meter shows how much of the host's Claude or Codex subscription
