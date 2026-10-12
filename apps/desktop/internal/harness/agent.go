@@ -201,6 +201,18 @@ type Completion struct {
 	// Session is a chat thread's server-derived key ("account/thread"). The CLI then works
 	// in the thread's stable directory, where it finds its saved session again.
 	Session string `json:"session"`
+	// TimeoutSeconds bounds the run: three minutes by default, at most ten (full access).
+	TimeoutSeconds int `json:"timeoutSeconds"`
+}
+
+// MaxCompletionTimeout is the longest one CLI run may take, for full-access agents.
+const MaxCompletionTimeout = 600 * time.Second
+
+func completionTimeout(seconds int) time.Duration {
+	if seconds <= 0 {
+		return 180 * time.Second
+	}
+	return min(time.Duration(seconds)*time.Second, MaxCompletionTimeout)
 }
 
 var sessionSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`)
@@ -397,7 +409,7 @@ func Complete(ctx context.Context, runner Runner, input Completion, argumentsFor
 		encoded, _ := json.Marshal(map[string]any{"event": "user", "message": map[string]string{"content": stdin}})
 		stdin = string(encoded) + "\n"
 	}
-	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: stdin, Directory: cwd, Environment: environment, Timeout: 180 * time.Second, MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
+	return runner.Run(ctx, Request{Executable: input.Executable, Args: args, Stdin: stdin, Directory: cwd, Environment: environment, Timeout: completionTimeout(input.TimeoutSeconds), MaxInput: 768 * 1024, MaxOutput: limit, MaxError: 64 * 1024}, onLine)
 }
 
 func NodePath(directory string) string {

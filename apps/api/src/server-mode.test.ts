@@ -29,14 +29,22 @@ async function webRoot() {
   return dir;
 }
 
-async function serve(boardClientFactory?: BoardClientFactory, rateLimit = 1_000) {
+async function serve(
+  boardClientFactory?: BoardClientFactory,
+  rateLimit = 1_000,
+  env: Record<string, string> = {},
+) {
   const root = await webRoot();
   // Beside the web root, as in a real install: a path escaping the root must not reach it.
   const databasePath = join(root, '..', 'opsis.sqlite');
   const store = new ApiStore(databasePath);
   await createAccount(store, { email: 'Ada@Example.com', name: 'Ada', password: 'correct horse' });
   store.close();
-  const serverMode = serverModeFromEnv({ OPSIS_PUBLIC_ORIGIN: ORIGIN, OPSIS_WEB_ROOT: root });
+  const serverMode = serverModeFromEnv({
+    OPSIS_PUBLIC_ORIGIN: ORIGIN,
+    OPSIS_WEB_ROOT: root,
+    ...env,
+  });
   const app = buildApp({
     databasePath,
     speech: null,
@@ -97,7 +105,12 @@ describe('personal server mode', () => {
   it('closes sign-up, keeps logging in, and marks the session cookie Secure', async () => {
     const { app } = await serve();
     const instance = await app.inject(viaProxy({ url: '/v1/instance' }));
-    expect(instance.json()).toEqual({ signup: false, accountExecutablePaths: false, api: 1 });
+    expect(instance.json()).toEqual({
+      signup: false,
+      accountExecutablePaths: false,
+      agentFullAccess: false,
+      api: 1,
+    });
     const signup = await app.inject(
       viaProxy({
         method: 'POST',
@@ -194,6 +207,44 @@ describe('personal server mode', () => {
     expect(check.statusCode).toBe(200);
     expect(seen.at(-1)).toEqual(DEFAULT_BOARD_MODELS.claude);
     expect(seen.at(-1)).not.toHaveProperty('executablePath');
+  });
+
+  it('runs agents with full access only where the operator allows it', async () => {
+    const seen: (BoardModelSettings | undefined)[] = [];
+    const factory: BoardClientFactory = async (_agent, settings) => {
+      seen.push(settings);
+      return { model: 'fake', complete: async () => '{}' };
+    };
+    const full = { model: 'claude-sonnet-5-5', effort: 'low', access: 'full' } as const;
+    const request = (cookie: string, url: string, payload: object) =>
+      viaProxy({ method: 'POST', url, headers: { cookie }, payload });
+
+    const closed = (await serve(factory)).app;
+    let cookie = String((await logIn(closed)).headers['set-cookie']).split(';')[0]!;
+    const refused = await closed.inject(
+      request(cookie, '/v1/boards/generate', {
+        prompt: 'Explain DNS',
+        agent: 'claude',
+        settings: full,
+      }),
+    );
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().message).toMatch(/OPSIS_AGENT_FULL_ACCESS=1/);
+    // Every other route that starts an agent refuses it too, before any CLI starts.
+    const check = await closed.inject(
+      request(cookie, '/v1/boards/check-agent', { agent: 'claude', settings: full }),
+    );
+    expect(check.statusCode).not.toBe(200);
+    expect(seen).toEqual([]);
+
+    const open = (await serve(factory, 1_000, { OPSIS_AGENT_FULL_ACCESS: '1' })).app;
+    const instance = await open.inject(viaProxy({ url: '/v1/instance' }));
+    expect(instance.json()).toMatchObject({ agentFullAccess: true });
+    cookie = String((await logIn(open)).headers['set-cookie']).split(';')[0]!;
+    await open.inject(
+      request(cookie, '/v1/boards/check-agent', { agent: 'claude', settings: full }),
+    );
+    expect(seen.at(-1)).toMatchObject({ access: 'full' });
   });
 });
 

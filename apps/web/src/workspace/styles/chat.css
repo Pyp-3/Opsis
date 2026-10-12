@@ -245,9 +245,9 @@ body.chat-docked .generation-review {
 
 /* Thread list (sidebar in the full layout, menu otherwise) */
 .board-chat.is-full > .chat-thread-list {
-  flex: 0 0 260px;
+  flex: 0 0 clamp(248px, 22vw, 320px);
   overflow: auto;
-  padding: 8px;
+  padding: 10px;
   background: var(--rail);
   border-right: 1px solid var(--line);
 }
@@ -264,28 +264,36 @@ body.chat-docked .generation-review {
 }
 .chat-thread-list ul {
   display: grid;
-  gap: 2px;
-  margin: 0;
+  gap: 4px;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
+/* One column that may shrink, so long titles wrap and clip inside the item, not past it. */
 .chat-thread-item {
   display: grid;
-  justify-items: start;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 12px;
   text-align: left;
   color: var(--ink-2);
   background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 .chat-thread-item.is-new {
   display: flex;
   justify-content: flex-start;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
   font-weight: 500;
+  color: var(--ink);
+  border: 1px dashed var(--line-strong);
 }
 .chat-thread-item:hover:not(:disabled) {
   background: var(--hover);
@@ -293,17 +301,49 @@ body.chat-docked .generation-review {
 .chat-thread-item[aria-current='true'] {
   color: var(--ink);
   background: var(--surface);
+  border-color: var(--line);
   box-shadow:
     var(--shadow-sm),
-    0 0 0 1px var(--line);
+    inset 3px 0 0 var(--accent-text);
+}
+.chat-thread-item.is-new[aria-current='true'] {
+  border-style: solid;
+  box-shadow: var(--shadow-sm);
 }
 .chat-thread-title {
+  display: -webkit-box;
   overflow: hidden;
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.chat-thread-item.is-new .chat-thread-title {
+  display: block;
+}
+.chat-thread-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.chat-thread-agent {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--blend-fg);
+  background: var(--blend);
+  border-radius: 50%;
 }
 .chat-thread-item small {
+  min-width: 0;
   overflow: hidden;
   font-size: 11px;
   text-overflow: ellipsis;
@@ -748,4 +788,121 @@ body.chat-docked .generation-review {
 }
 .chat-focus .chat-link {
   margin: 0;
+}
+
+/* A reply's outcome and its way to the canvas, on one row */
+.chat-message-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 8px;
+}
+.chat-message-foot .chat-outcome,
+.chat-message-foot .chat-link {
+  margin-top: 0;
+}
+.chat-message-foot .chat-link {
+  margin-left: 0;
+}
+
+/* Pages: `@page` references in a message, and pages a reply read */
+.chat-mention {
+  padding: 0 3px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
+.chat-message.is-user .chat-mention {
+  background: var(--surface);
+}
+.chat-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.chat-pages button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 9px 2px 7px;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.chat-pages button:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.chat-empty-tip {
+  margin-top: 6px !important;
+  padding: 8px 12px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.chat-empty-tip kbd {
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* How requests run: full access and fast mode */
+.mode-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  margin-inline: 2px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+  align-self: center;
+}
+.mode-badge.is-full {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.mode-badge.is-fast {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent-text) 30%, transparent);
+}
+/* The line is faded; with a badge it is shown in full, so the badge keeps its contrast. */
+.request-identity:has(.mode-badge) {
+  opacity: 1;
+}
+.request-identity .mode-badge {
+  height: 18px;
+  margin-left: 6px;
+  font-size: 10.5px;
+}
+@media (max-width: 760px) {
+  .chat-head-actions .mode-badge {
+    width: 22px;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 0;
+  }
 }

@@ -2,21 +2,28 @@ import {
   PROVIDER_LABELS,
   type BoardAgent,
   type BoardChatEntry,
+  type ChatMessage,
   type ChatOutcome,
+  type PageSummary,
 } from '@opsis/schema';
 import {
+  BookOpen,
   Brain,
   ChevronDown,
   CircleAlert,
   Eye,
+  FileText,
+  FoldVertical,
   Lock,
   Maximize2,
   MessagesSquare,
   PanelRightOpen,
   Plus,
   RefreshCw,
+  ShieldAlert,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
 import {
   useEffect,
@@ -40,6 +47,66 @@ function since(time: number) {
   return new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+const MENTION_PART = /(@page[\s-]?\d{1,2}\b)/giu;
+const MENTION_NUMBER = /^@page[\s-]?(\d{1,2})$/iu;
+
+/** A message's text with its `@page` references marked, as the reader wrote them. */
+function MessageText({ text, pages }: { text: string; pages: readonly PageSummary[] }) {
+  if (pages.length < 2) return <p>{text}</p>;
+  return (
+    <p>
+      {text.split(MENTION_PART).map((part, index) => {
+        const number = MENTION_NUMBER.exec(part)?.[1];
+        const page = number ? pages[Number(number) - 1] : undefined;
+        return page ? (
+          <mark key={index} className="chat-mention" title={page.title}>
+            {part}
+          </mark>
+        ) : (
+          part
+        );
+      })}
+    </p>
+  );
+}
+
+/**
+ * The pages a message refers to: on the reader's message those it mentioned, on a reply those
+ * the agent was given or read. Each opens its page on the canvas.
+ */
+function MessagePages({
+  message,
+  pages,
+  onOpenPage,
+}: {
+  message: ChatMessage;
+  pages: readonly PageSummary[];
+  onOpenPage(id: string): void;
+}) {
+  const named = (message.pages ?? []).flatMap((id) => {
+    const index = pages.findIndex((page) => page.id === id);
+    return index < 0 ? [] : [{ id, number: index + 1, title: pages[index]!.title }];
+  });
+  if (!named.length) return null;
+  const reply = message.role === 'assistant';
+  return (
+    <ul className="chat-pages" aria-label={reply ? 'Pages the agent read' : 'Pages referenced'}>
+      {named.map((page) => (
+        <li key={page.id}>
+          <button
+            type="button"
+            title={`Open page ${page.number} on the canvas`}
+            onClick={() => onOpenPage(page.id)}
+          >
+            {reply ? <BookOpen size={12} aria-hidden /> : <FileText size={12} aria-hidden />}
+            {reply ? 'Read page' : 'Page'} {page.number} · {page.title}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const OUTCOME_LABELS: Partial<Record<ChatOutcome, string>> = {
   applied: 'Applied',
   review: 'Awaiting review',
@@ -60,7 +127,7 @@ function ThreadMemory({
   busy: boolean;
   onForget(): void;
 }) {
-  if (!thread.memory && !thread.condensed) return null;
+  if (!thread.memory && !thread.condensed && !thread.restart) return null;
   return (
     <details className="chat-memory">
       <summary>
@@ -71,6 +138,7 @@ function ThreadMemory({
             · {thread.condensed} earlier {thread.condensed === 1 ? 'message' : 'messages'} condensed
           </small>
         ) : null}
+        {thread.restart ? <small> · compacted: the next reply starts a fresh session</small> : null}
       </summary>
       <div className="chat-memory-body">
         <p className="chat-muted">
@@ -198,16 +266,26 @@ function ThreadList({
               className="chat-thread-item"
               aria-current={thread.id === chat.selectedId || undefined}
               disabled={busy}
+              title={threadTitle(thread)}
               onClick={() => onPick(thread)}
             >
               <span className="chat-thread-title">{threadTitle(thread)}</span>
-              <small>
-                {agentLabel(thread.agent)} · {thread.model} · {since(thread.updatedAt)}
-              </small>
+              <span className="chat-thread-meta">
+                <span className="chat-thread-agent" aria-hidden>
+                  {agentLabel(thread.agent).slice(0, 1)}
+                </span>
+                <small>
+                  <span className="sr-only">{agentLabel(thread.agent)} · </span>
+                  {thread.model} · {since(thread.updatedAt)}
+                </small>
+              </span>
             </button>
           </li>
         ))}
       </ul>
+      {!chat.loading && !chat.threads.length && (
+        <p className="chat-muted">No saved threads yet. Your first message starts one.</p>
+      )}
       {chat.loading && <p className="chat-muted">Loading threads…</p>}
     </div>
   );
@@ -231,6 +309,9 @@ export function BoardChat({
   error,
   onDismissError,
   sessionNote,
+  pages = [],
+  onOpenPage = () => undefined,
+  mode = { full: false, fast: false },
   children,
 }: {
   chat: ReturnType<typeof useBoardChat>;
@@ -249,6 +330,11 @@ export function BoardChat({
   onDismissError(): void;
   /** Says when a CLI agent resumes its own saved session for the thread. */
   sessionNote?: string | undefined;
+  /** The board's pages, for `@page` references and the pages a reply read. */
+  pages?: readonly PageSummary[];
+  onOpenPage?(id: string): void;
+  /** How the next request runs: with full access, in fast mode. */
+  mode?: { full: boolean; fast: boolean };
   children: ReactNode;
 }) {
   useSavedChatWidth();
@@ -332,6 +418,28 @@ export function BoardChat({
             </details>
           )}
           <div className="chat-head-actions">
+            {mode.full && (
+              <span
+                className="mode-badge is-full"
+                title="Requests run with full access: the agent's tools, skills and MCP servers, without permission prompts"
+              >
+                <ShieldAlert size={12} aria-hidden /> Full access
+              </span>
+            )}
+            {mode.fast && (
+              <span className="mode-badge is-fast" title="Requests use the agent's fast mode">
+                <Zap size={12} aria-hidden /> Fast
+              </span>
+            )}
+            <button
+              className="chat-icon-button"
+              aria-label="Compact thread"
+              title="Compact: fold older messages into the thread notes and start a fresh agent session"
+              disabled={busy || !selected || (selected.messages.length <= 2 && !!selected.restart)}
+              onClick={() => void chat.compact()}
+            >
+              <FoldVertical size={15} />
+            </button>
             <button
               className="chat-icon-button"
               aria-label="New thread"
@@ -408,6 +516,12 @@ export function BoardChat({
                 Explain something new, or ask for a change. Replies arrive here; diagrams and
                 proposals appear on the canvas.
               </p>
+              {pages.length > 1 && (
+                <p className="chat-empty-tip">
+                  One thread covers every page. Type <kbd>@</kbd> to reference a page; the agent can
+                  also read other pages when it needs them.
+                </p>
+              )}
             </div>
           )}
           {selected?.messages.map((message, index) => (
@@ -423,16 +537,22 @@ export function BoardChat({
                   <small>{selected.model}</small>
                 </header>
               )}
-              <p>{message.text}</p>
-              {message.outcome && OUTCOME_LABELS[message.outcome] && (
-                <small className={`chat-outcome is-${message.outcome}`}>
-                  {OUTCOME_LABELS[message.outcome]}
-                </small>
-              )}
-              {index === lastAssistant && layout !== 'docked' && !review && !progress && (
-                <button className="chat-link" onClick={onShowCanvas}>
-                  <Eye size={13} aria-hidden /> View on canvas
-                </button>
+              <MessageText text={message.text} pages={pages} />
+              <MessagePages message={message} pages={pages} onOpenPage={onOpenPage} />
+              {((message.outcome && OUTCOME_LABELS[message.outcome]) ||
+                (index === lastAssistant && layout !== 'docked' && !review && !progress)) && (
+                <footer className="chat-message-foot">
+                  {message.outcome && OUTCOME_LABELS[message.outcome] && (
+                    <small className={`chat-outcome is-${message.outcome}`}>
+                      {OUTCOME_LABELS[message.outcome]}
+                    </small>
+                  )}
+                  {index === lastAssistant && layout !== 'docked' && !review && !progress && (
+                    <button className="chat-link" onClick={onShowCanvas}>
+                      <Eye size={13} aria-hidden /> View on canvas
+                    </button>
+                  )}
+                </footer>
               )}
             </article>
           ))}

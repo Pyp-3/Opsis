@@ -92,3 +92,11 @@ func TestDiscoveryDoesNotSkipAnUnsafeFirstInstallation(t *testing.T) {
 		t.Fatal("relative override accepted", err)
 	}
 }
+
+func TestCompletionTimeoutIsBounded(t *testing.T) {
+	for seconds, want := range map[int]time.Duration{0: 180 * time.Second, 180: 180 * time.Second, 600: 600 * time.Second, 3600: MaxCompletionTimeout} {
+		if got := completionTimeout(seconds); got != want {
+			t.Errorf("completionTimeout(%d) = %v, want %v", seconds, got, want)
+		}
+	}
+}

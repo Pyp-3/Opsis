@@ -172,6 +172,8 @@ export async function withNativeSession(
     freshId: () => string;
     /** The local date, `YYYY-MM-DD`; tests fix it. */
     today?: () => string;
+    /** Start a new session (the reader compacted the thread); earlier ones stay listed. */
+    fresh?: boolean;
   },
   run: (plan: SessionPlan | null) => Promise<string>,
 ): Promise<string> {
@@ -180,7 +182,7 @@ export async function withNativeSession(
   const text = await store.read(key);
   const previous = parseSessionState(text);
   let transcripts = parseSessionTranscripts(text);
-  const plan = planSession(provider, model, previous, options.freshId());
+  const plan = planSession(provider, model, options.fresh ? null : previous, options.freshId());
   const day = (options.today ?? localDay)();
   const save = async (state: NativeSessionState | null) => {
     if (!state && !transcripts.length) return store.clear(key);

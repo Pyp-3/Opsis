@@ -15,6 +15,7 @@ import type { HarnessFile, LLMRequest, HarnessConfig } from '../api/src/harness/
 import type { HarnessProgress } from '../api/src/harness/progress';
 import {
   DEFAULT_BOARD_MODELS,
+  agentDeadlineMs,
   boardOutputSchema,
   modelSettingsProblem,
 } from '../../packages/schema/src/index';
@@ -99,13 +100,16 @@ const factory: BoardClientFactory = async (
       if (request.system.length + request.user.length > (settings.maxRequestCharacters ?? 768000))
         throw new HarnessError('harness_request_limit');
       const read = progressReader(provider);
+      const timeoutMs = agentDeadlineMs(settings);
       const config: HarnessConfig = {
         provider,
         model: settings.model,
         ...(settings.effort ? { effort: settings.effort } : {}),
         executable: prepared.executable,
-        timeoutMs: 180000,
+        timeoutMs,
         ...(settings.maxBudgetUSD !== undefined ? { maxBudgetUSD: settings.maxBudgetUSD } : {}),
+        ...(settings.access === 'full' ? { access: 'full' as const } : {}),
+        ...(settings.fast ? { fast: true } : {}),
       };
       const stdout = await withNativeSession(
         {
@@ -114,6 +118,7 @@ const factory: BoardClientFactory = async (
           key: request.session?.key,
           store: sessions,
           freshId: nativeRandomId,
+          ...(request.session?.fresh ? { fresh: true } : {}),
         },
         async (plan) => {
           const resume = plan?.resume ? request.session : undefined;
@@ -133,6 +138,7 @@ const factory: BoardClientFactory = async (
                 workspaceFiles: providerWorkspaceFiles(provider, schema),
                 environment: providerEnvironment(provider),
                 session: plan ? request.session!.key : '',
+                timeoutSeconds: timeoutMs / 1000,
               }),
               (schemaPath, paths) =>
                 JSON.stringify(
@@ -165,6 +171,8 @@ export async function run(operation: string, body: string, account = ''): Promis
     } as AbortSignal,
     progress: (value: unknown) => nativeProgress(JSON.stringify(value)),
     pause: async (ms: number) => nativePause(ms),
+    // The desktop app is a local install: its own user may run agents with full access.
+    fullAccess: true,
   };
   const outcome =
     operation === 'check-agent'

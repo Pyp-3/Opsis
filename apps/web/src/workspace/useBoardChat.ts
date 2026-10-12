@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BoardChatEntrySchema,
   appendChatMessage,
+  compactChatThread,
+  MAX_MESSAGE_PAGES,
   withChatOutcome,
   type BoardAgent,
   type BoardChatEntry,
@@ -86,25 +88,46 @@ export function useBoardChat(boardId: string) {
    * Adds the reader's message to the selected thread, or starts one. A full thread condenses its
    * oldest messages into the thread's notes and continues.
    */
-  async function begin(agent: BoardAgent, model: string, text: string, target = boardId) {
+  async function begin(
+    agent: BoardAgent,
+    model: string,
+    text: string,
+    target = boardId,
+    /** Pages the message names with `@page`. */
+    pages: readonly string[] = [],
+  ) {
     const thread =
       target === boardId && selected?.agent === agent && selected.model === model ? selected : null;
+    const message = {
+      role: 'user' as const,
+      text,
+      ...(pages.length ? { pages: pages.slice(0, MAX_MESSAGE_PAGES) } : {}),
+    };
     const next: BoardChatThread = thread
-      ? appendChatMessage(content(thread), { role: 'user', text })
-      : { id: crypto.randomUUID(), agent, model, messages: [{ role: 'user', text }] };
+      ? appendChatMessage(content(thread), message)
+      : { id: crypto.randomUUID(), agent, model, messages: [message] };
     return write(next, thread?.revision ?? 0, target);
   }
   /** Saves the agent's reply, what happened to its answer and its updated notes. */
   async function finish(
     thread: BoardChatEntry,
-    reply: { text: string; outcome: ChatOutcome; memory?: string | undefined },
+    reply: {
+      text: string;
+      outcome: ChatOutcome;
+      memory?: string | undefined;
+      /** Pages the agent was given or read to answer. */
+      pages?: readonly string[] | undefined;
+    },
     target = boardId,
   ) {
     const next = appendChatMessage(content(thread), {
       role: 'assistant',
       text: reply.text.slice(0, 4000),
       outcome: reply.outcome,
+      ...(reply.pages?.length ? { pages: reply.pages.slice(0, MAX_MESSAGE_PAGES) } : {}),
     });
+    // The turn after a compaction started the new session; later turns resume it.
+    delete next.restart;
     return write(
       reply.memory !== undefined ? { ...next, memory: reply.memory } : next,
       thread.revision,
@@ -122,6 +145,18 @@ export function useBoardChat(boardId: string) {
     delete next.memory;
     try {
       await write(next, selected.revision);
+    } catch {
+      // `write` already reported the problem.
+    }
+  }
+  /**
+   * Compacts the selected thread: older messages fold into its notes and the next turn starts a
+   * new CLI session, so a long conversation stays quick and inexpensive.
+   */
+  async function compact() {
+    if (!selected) return;
+    try {
+      await write(compactChatThread(content(selected)), selected.revision);
     } catch {
       // `write` already reported the problem.
     }
@@ -153,6 +188,7 @@ export function useBoardChat(boardId: string) {
     finish,
     settle,
     forget,
+    compact,
     remove,
     reload: () => {
       setLoading(true);

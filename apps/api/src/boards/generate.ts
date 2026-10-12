@@ -22,6 +22,9 @@ import {
   boardChanges,
   type BoardDocument,
   type BoardGraph,
+  chatPageDigest,
+  chatPageIndex,
+  pageReadsFor,
 } from '@opsis/schema';
 import type { LLMRequest } from '../harness/types.js';
 import { HarnessError } from '../harness/errors.js';
@@ -39,8 +42,13 @@ import {
   DRAWING_FIRST,
   PAGES,
   RESUME,
+  BOARD_PAGES,
+  NO_TOOLS,
+  FULL_ACCESS,
+  pagesReadNote,
   progressNotes,
 } from './prompts.js';
+import { FULL_ACCESS_OFF } from './transport.js';
 import { sessionKey } from '../harness/sessions.js';
 import { envelopeRepairPrompt, agentLabel, withoutInvalidCustomIcons } from './results.js';
 import { outcome, type AgentWork, type Outcome } from './transport.js';
@@ -221,19 +229,50 @@ function readTurn(
 /** Instructions for this turn beyond the diagram rules. */
 function turnInstructions(input: BoardRequest) {
   const chat = input.thread || input.conversation?.length || input.memory;
-  return `${chat ? CONVERSATION : ''}${input.focus ? FOCUS : ''}${input.priority === 'drawing' ? DRAWING_FIRST : ''}${input.newPages ? PAGES : ''}`;
+  return `${chat ? CONVERSATION : ''}${input.focus ? FOCUS : ''}${input.priority === 'drawing' ? DRAWING_FIRST : ''}${input.newPages ? PAGES : ''}${input.pages ? BOARD_PAGES : ''}`;
+}
+
+/**
+ * What the agent is told about the board's other pages: an index of every page and the pages
+ * the reader mentioned, in full. The rest stay on the server until the agent asks for them.
+ */
+function pageContext(input: BoardRequest) {
+  const pages = input.pages;
+  if (!pages) return null;
+  const mentioned = (pages.mentions ?? []).filter((id) => id !== pages.current);
+  const referenced = mentioned.flatMap((id) => chatPageDigest(pages.document, id) ?? []);
+  const index = chatPageIndex(pages.document, pages.current);
+  const given = [pages.current, ...mentioned];
+  return {
+    document: pages.document,
+    index,
+    referenced,
+    given,
+    canRead: index.length > given.length,
+  };
+}
+
+/** The page numbers an answer asks to read, if it is JSON that asks. */
+function readPagesOf(output: string): unknown {
+  try {
+    return (JSON.parse(output) as { readPages?: unknown } | null)?.readPages;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function generateBoard(
   body: unknown,
   factory: BoardClientFactory,
-  { signal, progress, account, pause }: Parameters<AgentWork>[0],
+  { signal, progress, account, pause, fullAccess }: Parameters<AgentWork>[0],
   prepareAttachments: AttachmentPreparer,
 ): Promise<Outcome> {
   const parsed = BoardRequestSchema.safeParse(body);
   if (!parsed.success)
     return outcome(400, { message: 'The prompt or current diagram is invalid.' });
   const input = parsed.data;
+  if (input.settings?.access === 'full' && fullAccess === false)
+    return outcome(403, { message: FULL_ACCESS_OFF });
   if (input.agent !== 'demo' && input.settings) {
     const problem = modelSettingsProblem(input.agent, input.settings);
     if (problem) return outcome(400, { message: problem });
@@ -383,10 +422,12 @@ export async function generateBoard(
   try {
     // The agent's earlier sketch, as it is shown it; follow-ups may change it by edits.
     const sketch = (input.board?.drawings ?? []) as AgentDrawing[];
+    const pages = pageContext(input);
     const schema = boardOutputSchemaFor({
       focus: !!input.focus,
       sketch: sketch.length > 0,
       pages: !!input.newPages,
+      readPages: !!pages?.canRead,
     });
     const client = await factory(
       input.agent,
@@ -401,15 +442,19 @@ export async function generateBoard(
       ...(input.priority ? { priority: input.priority } : {}),
       ...(input.focus ? { focus: input.focus } : {}),
       currentDiagram: input.board,
+      ...(pages ? { pages: pages.index } : {}),
+      ...(pages?.referenced.length ? { referencedPages: pages.referenced } : {}),
       ...(prepared.documents.length ? { documents: prepared.documents } : {}),
     };
+    const system =
+      input.settings?.access === 'full' ? SYSTEM.replace(NO_TOOLS, FULL_ACCESS) : SYSTEM;
     const key = sessionKey(account, input.thread);
     const lastOutcome = [...(input.conversation ?? [])]
       .reverse()
       .find((message) => message.role === 'assistant')?.outcome;
     const modelRequest: LLMRequest = {
       promptId: 'board/v8',
-      system: `${SYSTEM}${turn}${notes}\nSchema: ${schema}`,
+      system: `${system}${turn}${notes}\nSchema: ${schema}`,
       user: JSON.stringify({
         prompt: input.prompt,
         ...(input.conversation?.length ? { conversation: input.conversation } : {}),
@@ -434,20 +479,29 @@ export async function generateBoard(
         : {}),
     };
     let repair = '';
+    // Pages the agent asked to read: it may ask once, and reading is not a repair attempt.
+    let pagesRead = '';
+    let mayRead = !!pages?.canRead;
+    const read: string[] = [];
+    let calls = 0;
     for (let attempt = 0; attempt < 2; attempt++) {
       if (signal.aborted) throw new Error('Cancelled');
       progress({ type: 'preview-reset' });
       let output: string;
+      const suffix = pagesRead + repair;
+      // A compacted thread starts one new session; any later call here resumes that one.
+      const fresh = input.freshSession && calls++ === 0;
       try {
         output = await client.complete(
           {
             ...modelRequest,
-            user: modelRequest.user + repair,
+            user: modelRequest.user + suffix,
             ...(modelRequest.session
               ? {
                   session: {
                     ...modelRequest.session,
-                    resumeUser: modelRequest.session.resumeUser + repair,
+                    resumeUser: modelRequest.session.resumeUser + suffix,
+                    ...(fresh ? { fresh: true } : {}),
                   },
                 }
               : {}),
@@ -460,6 +514,23 @@ export async function generateBoard(
         repair = envelopeRepairPrompt(error, attempt);
         continue;
       }
+      if (pages && mayRead) {
+        mayRead = false;
+        const wanted = pageReadsFor(pages.document, readPagesOf(output), pages.given);
+        if (wanted.length) {
+          const digests = wanted.flatMap((id) => chatPageDigest(pages.document, id) ?? []);
+          for (const digest of digests)
+            progress({
+              type: 'note',
+              text: `Reading page ${digest.page} · ${digest.title}`,
+              done: false,
+            });
+          read.push(...wanted);
+          pagesRead = pagesReadNote(digests);
+          attempt--;
+          continue;
+        }
+      }
       let graph: BoardGraph;
       let turn: BoardTurn;
       let morePages: BoardGraph[] = [];
@@ -469,13 +540,15 @@ export async function generateBoard(
           memory,
           focusEdits,
           sketchEdits,
-          morePages: pages,
+          morePages: extraPages,
           ...content
         } = JSON.parse(output) as Record<string, unknown>;
+        // Only the first answer may ask to read pages; a later request to read is ignored.
+        delete content.readPages;
         // Further pages only when the reader asked for new pages; each is a complete diagram.
-        if (input.newPages && pages !== undefined && pages !== null)
+        if (input.newPages && extraPages !== undefined && extraPages !== null)
           morePages = AnswerPagesSchema.parse(
-            Array.isArray(pages) ? pages.map(withoutInvalidCustomIcons) : pages,
+            Array.isArray(extraPages) ? extraPages.map(withoutInvalidCustomIcons) : extraPages,
           );
         if (sketchEdits !== undefined && sketchEdits !== null) {
           if (content.drawings !== undefined)
@@ -493,6 +566,8 @@ export async function generateBoard(
           input,
           new Set(graph.nodes.map((node) => node.id)),
         );
+        const used = [...(pages?.given.slice(1) ?? []), ...read];
+        if (used.length) turn = { ...turn, pages: used };
       } catch (error) {
         if (attempt === 1)
           return outcome(502, {

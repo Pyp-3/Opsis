@@ -13,6 +13,13 @@ export type HarnessConfig = {
   maxBudgetUSD?: number;
   /** The chat thread's native CLI session for this run; see sessions.ts. */
   session?: { id?: string; resume: boolean };
+  /**
+   * Full access (Claude and Codex only): the CLI runs with the user's own settings, skills,
+   * plugins and MCP servers, with every tool and no permission prompts.
+   */
+  access?: 'full';
+  /** The CLI's fast mode (Claude and Codex only). */
+  fast?: boolean;
 };
 
 /** A bounded child-process request. Implementations must never invoke a shell. */
@@ -63,7 +70,13 @@ export type LLMRequest = {
    * A resumed session already holds the instructions and earlier turns, so it is sent the
    * shorter `resumeSystem`/`resumeUser` instead.
    */
-  session?: { key: string; resumeSystem: string; resumeUser: string };
+  session?: {
+    key: string;
+    resumeSystem: string;
+    resumeUser: string;
+    /** Start a new session for the thread rather than resuming its current one. */
+    fresh?: boolean;
+  };
 };
 
 export interface LLMClient {

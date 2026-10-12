@@ -76,6 +76,13 @@ export function useBoardGeneration(
       place?: ((board: BoardDocument, morePages: BoardDocument[]) => void) | undefined;
       /** The answer goes on new pages, and may hold several. */
       newPages?: boolean;
+      /**
+       * The whole board and the page asked from, on boards with several pages, so the agent
+       * gets the page index and the pages mentioned with `@page`, and may read others.
+       */
+      pages?: { document: BoardDocument; current: string; mentions: string[] } | undefined;
+      /** The thread was compacted: its CLI starts a new session from the notes. */
+      freshSession?: boolean;
     } = {},
   ) {
     const place = chat.place ?? ((board: BoardDocument) => commit(board));
@@ -124,6 +131,16 @@ export function useBoardGeneration(
           ...(selected ? { selectedId: selected } : {}),
           ...(attachments.length ? { attachments } : {}),
           ...(chat.newPages ? { newPages: true } : {}),
+          ...(chat.pages
+            ? {
+                pages: {
+                  document: chat.pages.document,
+                  current: chat.pages.current,
+                  ...(chat.pages.mentions.length ? { mentions: chat.pages.mentions } : {}),
+                },
+              }
+            : {}),
+          ...(chat.freshSession ? { freshSession: true } : {}),
         }),
       });
       const {

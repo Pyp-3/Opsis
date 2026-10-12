@@ -24,6 +24,13 @@ is the usual loopback-only local application.
   `OPSIS_CLAUDE_BIN`, `OPSIS_CODEX_BIN`, `OPSIS_KIMI_BIN`, `OPSIS_GROK_BIN` or
   `OPSIS_ANTIGRAVITY_BIN`, or leave them unset to use `PATH`. API keys are per instance, as
   on a local install (Settings → API keys, or `OPSIS_<PROVIDER>_API_KEY`).
+- **Full access.** Off unless `OPSIS_AGENT_FULL_ACCESS=1`. When set, accounts may choose
+  **Full access** for Claude or Codex: the CLI then runs as the server's user with that user's
+  own settings, skills, plugins and MCP servers, every tool and no permission prompts, for up to
+  ten minutes per request. It can run commands and write wherever that user can, and reads board
+  text that invited editors may have written, so enable it only when every member account is
+  someone you would trust with a shell. Without it, a full-access request is refused with 403
+  before any CLI starts; `/v1/instance` reports `agentFullAccess`.
 - **Shared links.** A board an owner shares with **Anyone with the link** (or makes Public)
   opens read-only for people without an account, through `GET /v1/guest/boards/<id>`. It is
   the only board route that needs no sign-in. It answers 404 for private and archived boards,
@@ -49,14 +56,15 @@ app's bundled pages. Keep the server and the desktop app updated together.
 
 ## Configuration
 
-| Variable              | Meaning                                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `OPSIS_PUBLIC_ORIGIN` | Required. The exact address people open, such as `https://opsis.example.com` (HTTPS, no path).                 |
-| `OPSIS_DB_PATH`       | The SQLite database. Use a persistent path such as `/var/lib/opsis/opsis.sqlite`.                              |
-| `HOST`, `PORT`        | Where the API listens; default `127.0.0.1:8000`. Keep loopback when Nginx runs on the same machine.            |
-| `OPSIS_TRUSTED_PROXY` | Which peers may set `X-Forwarded-*` headers; default `loopback`. Use the proxy's address if it runs elsewhere. |
-| `OPSIS_WEB_ROOT`      | The built web app; default `apps/web/dist` in the checkout.                                                    |
-| `OPSIS_SPEECH`        | `off` disables the server-side narrator voice.                                                                 |
+| Variable                  | Meaning                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `OPSIS_PUBLIC_ORIGIN`     | Required. The exact address people open, such as `https://opsis.example.com` (HTTPS, no path).                 |
+| `OPSIS_DB_PATH`           | The SQLite database. Use a persistent path such as `/var/lib/opsis/opsis.sqlite`.                              |
+| `HOST`, `PORT`            | Where the API listens; default `127.0.0.1:8000`. Keep loopback when Nginx runs on the same machine.            |
+| `OPSIS_TRUSTED_PROXY`     | Which peers may set `X-Forwarded-*` headers; default `loopback`. Use the proxy's address if it runs elsewhere. |
+| `OPSIS_WEB_ROOT`          | The built web app; default `apps/web/dist` in the checkout.                                                    |
+| `OPSIS_SPEECH`            | `off` disables the server-side narrator voice.                                                                 |
+| `OPSIS_AGENT_FULL_ACCESS` | `1` lets accounts run Claude and Codex with full access (tools, skills, MCP, no prompts). Off by default.      |
 
 Opsis refuses to start in server mode with an `http://` origin or without a built web app.
 A non-loopback `HOST` is accepted only in server mode. If you use one, firewall the port so

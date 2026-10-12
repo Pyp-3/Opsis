@@ -20,6 +20,7 @@ import { BoardAgentSchema, BoardModelSettingsSchema } from './model-settings';
 import { CHAT_CONVERSATION_WINDOW, ConversationMessageSchema, MAX_CHAT_MEMORY } from './board-chat';
 import { CHAT_PRIORITIES, ChatFocusSchema, FocusEditsSchema } from './chat-focus';
 import { HTTP_LINK_PATTERN, PageInfoSchema } from './page-info';
+import { MAX_PAGE_MENTIONS, MAX_PAGE_READS } from './chat-pages';
 export * from './board-icons';
 export * from './model-settings';
 export { EMAIL_DEMO } from './email-demo';
@@ -337,6 +338,21 @@ export const BoardRequestSchema = z
      * first and may add up to `MAX_ANSWER_PAGES` more in `morePages`, for a deck in one answer.
      */
     newPages: z.literal(true).optional(),
+    /**
+     * The whole board and the page the reader is on, on boards with several pages: the agent
+     * gets an index of the pages, the pages mentioned with `@page` in full, and may ask to read
+     * others (see chat-pages.ts). Only the pages this reader may see are ever sent.
+     */
+    pages: z
+      .object({
+        document: BoardDocumentSchema,
+        current: BoardPageIdSchema,
+        mentions: z.array(BoardPageIdSchema).max(MAX_PAGE_MENTIONS).optional(),
+      })
+      .strict()
+      .optional(),
+    /** The reader compacted the thread: start a new CLI session instead of resuming. */
+    freshSession: z.literal(true).optional(),
   })
   .strict();
 /** Extra pages one answer may add beside its main diagram, so it holds at most nine pages. */
@@ -361,6 +377,11 @@ export const BoardTurnSchema = z
     memory: z.string().max(MAX_CHAT_MEMORY).optional(),
     /** Proposed changes to the focused drawings. */
     focusEdits: FocusEditsSchema.optional(),
+    /** Pages the agent was given beyond the one it answered on: mentioned or read. */
+    pages: z
+      .array(BoardPageIdSchema)
+      .max(MAX_PAGE_MENTIONS + MAX_PAGE_READS)
+      .optional(),
   })
   .strict();
 export type BoardTurn = z.infer<typeof BoardTurnSchema>;
@@ -423,8 +444,10 @@ export function boardOutputSchemaFor(parts: {
   focus?: boolean;
   sketch?: boolean;
   pages?: boolean;
+  /** Other pages of the board the agent may ask to read. */
+  readPages?: boolean;
 }): string {
-  const key = `${parts.focus ? 'focus' : ''}:${parts.sketch ? 'sketch' : ''}:${parts.pages ? 'pages' : ''}`;
+  const key = `${parts.focus ? 'focus' : ''}:${parts.sketch ? 'sketch' : ''}:${parts.pages ? 'pages' : ''}:${parts.readPages ? 'read' : ''}`;
   const cached = outputSchemas.get(key);
   if (cached) return cached;
   let schema: z.ZodTypeAny = BoardOutputSchema;
@@ -439,6 +462,16 @@ export function boardOutputSchemaFor(parts: {
       sketchEdits: SketchEditsSchema.optional().describe(
         'Changes to your existing sketch instead of returning "drawings" whole; see the Drawings instructions.',
       ),
+    });
+  if (parts.readPages)
+    schema = (schema as typeof BoardOutputSchema).extend({
+      readPages: z
+        .array(z.number().int().min(1).max(MAX_BOARD_PAGES))
+        .max(MAX_PAGE_READS)
+        .optional()
+        .describe(
+          'Page numbers to read before answering; see the Pages instructions. Omit when you can answer.',
+        ),
     });
   const generated = zodToJsonSchema(schema, { $refStrategy: 'none' }) as JsonObject;
   const json = JSON.stringify(parts.pages ? withMorePages(generated) : generated);

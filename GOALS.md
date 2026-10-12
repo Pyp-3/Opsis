@@ -1,8 +1,15 @@
 # Opsis goals
 
-Last reviewed: 2026-10-11.
+Last reviewed: 2026-10-12.
 
 ## Current delivery
+
+Chat harness (2026-10-12, user request): one chat thread now serves every page. Requests
+carry a short page index, `@page` mentions send those pages in full, and the agent may ask the
+server to read up to four more pages per message. Threads can be compacted on demand, and
+Claude and Codex can run with per-agent **Full access** and **Fast mode**. The thread list was
+fixed: titles were squeezed and ran past their cards. See the goal section below for scope,
+verification and what remains.
 
 Chat tab and Info book (2026-10-11, user request): chat opens as its own tab with docking as
 an optional fallback, and a new **Info** tab reads each page like a book in step with the canvas,
@@ -421,6 +428,64 @@ Downloaded installers are now removed before each download and at startup.
 Remaining: obtain a code-signing certificate (a cloud-HSM certificate needs its
 provider's signing call) and the interactive save-dialog/clipboard check. (`.cmd` launcher
 parity and macOS packaging have since shipped; see above.)
+
+## In progress: chat harness (requested 2026-10-12)
+
+The user asked for a better chat: thread titles were squeezed; one thread should be able to
+refer to any page without sending whole pages ("token optimise": name a page with `@page`, and
+let the agent ask the server to read more); and chat should act like a harness that can compact,
+use fast mode and skills, with an option to run an agent in full, permission-free mode so it
+never refuses work because of a restrictive mode. Confirmed: restricted stays the default and
+full access is an explicit per-agent choice.
+
+- [x] Thread list: wider sidebar, two-line titles that stay inside their card (with a tooltip),
+      agent mark, model and age, an empty-list hint; a reply's outcome and **View on canvas**
+      share a spaced footer row.
+- [x] Pages in chat (`chat-pages.ts`, request `pages`): boards with several pages send an index
+      (number, title, first ten concept labels, hidden/drawings/Info flags), never every page.
+      `@page3` (typed with a page picker on `@`, or the **@** button; chips can remove it) sends
+      that page in full as `referencedPages` (concepts, connections, drawing text, Info text;
+      no layout). The agent may return `readPages` once per request (up to four, never the
+      current or an already-given page); the server answers from the board the request came
+      with and asks again. Reading is not a repair attempt. Replies list **Read page …** and user
+      messages **Page …** chips that open the page. Messages store page ids (optional `pages`,
+      no migration).
+- [x] Compact: folds older messages into the thread notes, keeps the latest exchange and marks
+      the thread (`restart`) so its next turn starts a new CLI session; earlier sessions stay
+      listed for transcript removal.
+- [x] Agent access (Model settings, per agent, account-saved): **Restricted** (unchanged
+      isolation) or **Full access**. Claude runs with `--dangerously-skip-permissions` and the
+      user's own settings, skills, plugins and MCP servers; Codex runs with
+      `--dangerously-bypass-approvals-and-sandbox` and its own configuration. The answer is still
+      validated JSON with the usual review; the agent is told not to edit boards over MCP during
+      the turn. Full-access requests get ten minutes instead of three on both hosts. Local
+      installs and the desktop allow it; a server only with `OPSIS_AGENT_FULL_ACCESS=1` (403
+      otherwise, before any CLI starts, on every agent route). **Fast mode** passes
+      `--settings {"fastMode":true}` (Claude) or `service_tier="fast"` (Codex). Badges show both.
+- [ ] Not yet: no live Claude/Codex call has exercised full access, fast mode, skills or the
+      read round (fake clients only); whether an account has fast mode is the provider's. Kimi,
+      Grok and Antigravity stay restricted. The read round re-sends the system prompt for API
+      connections (CLI sessions resume instead). A dedicated compaction by the model (rather
+      than the agent's running notes) is not implemented.
+- [ ] Not yet verified on a packaged executable: on this Windows 11 machine `pnpm desktop:build`
+      failed twice when Windows' `tar.exe` crashed (0xC0000005) packing the speech runtime, so the
+      native browser suite, packaged integration and hidden WebView2 smoke were not run locally;
+      they are left to the desktop CI jobs.
+
+Verified 2026-10-12 on Windows 11 (Node 22.23.2): schema tests (mentions, index, digest, reads,
+request and output schema, compaction, settings rules), harness tests (Claude/Codex arguments for
+restricted, full and fast, start and resume; config checks; a fresh session that keeps earlier
+transcripts listed), workflow tests through Fastify (index plus mentioned page, one read round
+with Info text, no reading of the current or missing pages, nothing offered on one-page boards,
+fresh session only on the first call, full-access instructions), server-mode tests (403 and no
+CLI start without `OPSIS_AGENT_FULL_ACCESS`, allowed with it, instance flag) and Go tests (desktop
+instance, deadlines, bounded run timeout). A new browser scenario covers the `@` page picker with
+keyboard and button, chips, a sent mention saved on the message, opening a page from its chip,
+compaction, the thread list's layout, full access and fast mode persisting across reload, phone
+width and accessibility scans (it found and fixed a badge contrast failure). Lint, typecheck, Rust
+formatting/Clippy and 24 tests, desktop check and full Go race suite, and `test:qa` (588 unit
+tests in 104 files; 76 browser scenarios pass, the Linux-only pixel baseline skipped) pass.
+Desktop screenshots of the thread list and access settings were reviewed. No paid model calls.
 
 ## In progress: chat tab and Info book (requested 2026-10-11)
 

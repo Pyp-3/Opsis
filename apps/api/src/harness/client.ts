@@ -207,6 +207,7 @@ export class HarnessLLMClient implements LLMClient {
                 key: session?.key,
                 store: this.sessions.store,
                 freshId: randomUUID,
+                ...(session?.fresh ? { fresh: true } : {}),
               },
               run,
             )

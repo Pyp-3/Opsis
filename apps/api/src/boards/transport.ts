@@ -10,9 +10,15 @@ export type AgentWork = (context: {
   account?: string;
   /** Waits, for the demo's paced streaming; hosts without timers supply their own. */
   pause?: (ms: number) => Promise<void>;
+  /** Whether this instance lets accounts run agents with full access. */
+  fullAccess?: boolean;
 }) => Promise<Outcome>;
 
-/** Agent calls end when the reader leaves or after three minutes. */
+/** Why a request for a full-access agent is refused where the operator has not allowed it. */
+export const FULL_ACCESS_OFF =
+  'Full access is turned off on this server. Its operator can allow it with OPSIS_AGENT_FULL_ACCESS=1; until then, switch the agent back to Restricted in Model settings.';
+
+/** Agent calls end when the reader leaves or after three minutes (see `agentDeadlineMs`). */
 const AGENT_DEADLINE_MS = 180_000;
 
 /**
@@ -20,13 +26,18 @@ const AGENT_DEADLINE_MS = 180_000;
  * agent's progress live, one JSON event per line, then `{ type: "result", status, body }`;
  * anyone else receives the result as an ordinary JSON response.
  */
-export async function respond(request: FastifyRequest, reply: FastifyReply, work: AgentWork) {
+export async function respond(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  work: AgentWork,
+  deadlineMs = AGENT_DEADLINE_MS,
+) {
   const controller = new AbortController();
   const cancel = () => {
     if (!reply.raw.writableEnded) controller.abort();
   };
   reply.raw.on('close', cancel);
-  const deadline = setTimeout(() => controller.abort(), AGENT_DEADLINE_MS);
+  const deadline = setTimeout(() => controller.abort(), deadlineMs);
   try {
     if (!request.headers.accept?.includes('application/x-ndjson')) {
       const result = await work({ signal: controller.signal, progress: () => undefined });

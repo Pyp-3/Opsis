@@ -3,15 +3,26 @@ import type { FastifyInstance } from 'fastify';
 import { localBoardClient, type BoardClientFactory } from './boards/client.js';
 import { generateBoard } from './boards/generate.js';
 import { illustrateBoard } from './boards/illustrate.js';
-import { respond } from './boards/transport.js';
+import { FULL_ACCESS_OFF, respond } from './boards/transport.js';
 import { prepareAttachments } from './attachments.js';
+import { agentDeadlineMs } from '@opsis/schema';
 
 export { localBoardClient, type BoardClient, type BoardClientFactory } from './boards/client.js';
 
 export function registerBoardRoutes(
   app: FastifyInstance,
   factory: BoardClientFactory = localBoardClient,
+  /** Whether accounts may run agents with full access here (see `InstanceInfo`). */
+  { fullAccess = true }: { fullAccess?: boolean } = {},
 ) {
+  // Where the operator has not allowed it, no route may start an agent with full access.
+  if (!fullAccess) {
+    const restricted = factory;
+    factory = (agent, settings, ...rest) =>
+      settings?.access === 'full'
+        ? Promise.reject(new Error(FULL_ACCESS_OFF))
+        : restricted(agent, settings, ...rest);
+  }
   let agentCache: { expires: number; value: unknown } | undefined;
   let pendingAgents: Promise<unknown> | undefined;
   app.get('/v1/agents', async () => {
@@ -57,13 +68,17 @@ export function registerBoardRoutes(
   });
 
   app.post('/v1/boards/generate', { bodyLimit: 40_000_000 }, (request, reply) =>
-    respond(request, reply, (context) =>
-      generateBoard(
-        request.body,
-        factory,
-        { ...context, ...(request.user ? { account: request.user.id } : {}) },
-        prepareAttachments,
-      ),
+    respond(
+      request,
+      reply,
+      (context) =>
+        generateBoard(
+          request.body,
+          factory,
+          { ...context, fullAccess, ...(request.user ? { account: request.user.id } : {}) },
+          prepareAttachments,
+        ),
+      agentDeadlineMs((request.body as { settings?: { access?: string } } | null)?.settings),
     ),
   );
   app.post('/v1/boards/illustrate', { bodyLimit: 4_000_000 }, (request, reply) =>

@@ -63,6 +63,25 @@ or its board, also removes the transcripts of every session the thread used; you
 CLI sessions are untouched. API connections and the other CLIs rely on the notes
 and recent messages.
 
+**Compact** (the folding icon above the conversation) trims a long thread on demand: older
+messages fold into the notes, the latest exchange stays, and the next reply starts a fresh CLI
+session that reads the notes instead of resuming the long transcript. Use it when replies slow
+down or a thread has wandered; **Thread notes** shows that the thread was compacted.
+
+**Agent access and fast mode.** Claude's and Codex's CLIs run **Restricted** by default: no
+tools, skills, plugins or personal settings, reading only your uploads. In **Model settings →
+Agent access** you can choose **Full access** for that agent instead: it then runs with its own
+settings, skills, plugins and MCP servers (including the Opsis MCP server if you set it up), with
+every tool and no permission prompts, so it never stops to ask. It acts as the user running
+Opsis and can run commands and change files, so use it on boards you trust: board text, imports
+and uploads can carry instructions written by someone else. A full-access request may run for up
+to ten minutes, and it still answers with a diagram or proposal you review as usual. **Fast
+mode** asks the CLI for its faster output where your account has it, usually at a higher price.
+Both choices belong to the agent, are saved to your account, and show as **Full access** and
+**Fast** badges in the chat while they are on. The desktop app and a local install allow full
+access; a [personal server](SERVER.md) allows it only when its operator sets
+`OPSIS_AGENT_FULL_ACCESS=1`.
+
 In a concept's details, choose **Linked board** to connect it to another saved
 board. Linked concepts carry an arrow badge. Double-click one, or choose **Open
 linked board**, to follow it; **Back to previous board** returns to your source.
@@ -313,7 +332,16 @@ pages waits while an answer is in progress or under review. To build a deck, cho
 beside **Drawing first** before you send: the answer goes on new pages after the current one,
 each named for its content, and the board keeps its name. One answer can write several pages
 (up to nine) when the request calls for them, such as "a five-page pitch" or "an overview, then
-each stage on its own page"; otherwise it writes one. Agents connected over MCP can read, fill,
+each stage on its own page"; otherwise it writes one.
+
+One chat thread serves every page. Each message on a board with pages tells the agent which pages
+exist (their numbers, titles and first concepts) without sending them all. Type `@` in the chat
+box (or press the **@** button) to pick a page: `@page3` sends that page in full, so the agent
+can build on it or compare with it while changing only the page you are on. When the agent needs
+a page you did not mention, it can ask to read up to four pages once per message; the server
+sends them from the board and the reply lists them as **Read page …**. Pages nobody needs are
+never sent, which keeps each request small. Choose a page chip under a message to open that page.
+Agents connected over MCP can read, fill,
 add, rename, reorder, hide and remove any page (see the [MCP guide](../apps/mcp/README.md)).
 
 ### Hide pages from viewers

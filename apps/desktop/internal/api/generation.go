@@ -47,7 +47,7 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 			if !json.Valid(body) {
 				return failure(400, "Invalid JSON.")
 			}
-			ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
+			ctx, cancel := context.WithTimeout(r.Context(), agentDeadline(body))
 			defer cancel()
 			stream := strings.Contains(r.Header.Get("Accept"), "application/x-ndjson")
 			send := func(value any) { _ = json.NewEncoder(w).Encode(value); _ = http.NewResponseController(w).Flush() }
@@ -76,4 +76,18 @@ func (s *Server) EnableGeneration(engine *generation.Engine) {
 			return nil
 		})
 	}
+}
+
+// agentDeadline matches the shared agentDeadlineMs: three minutes, or ten when the request
+// runs its agent with full access, which may use tools before it answers.
+func agentDeadline(body []byte) time.Duration {
+	var request struct {
+		Settings struct {
+			Access string `json:"access"`
+		} `json:"settings"`
+	}
+	if json.Unmarshal(body, &request) == nil && request.Settings.Access == "full" {
+		return 600 * time.Second
+	}
+	return 180 * time.Second
 }

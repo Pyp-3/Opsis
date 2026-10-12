@@ -77,6 +77,7 @@ import {
   addBoardPage,
   MAX_BOARD_PAGES,
   boardPages,
+  pageMentions,
   updateBoardPage,
   withBoardPage,
   type BoardAgent,
@@ -567,11 +568,15 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     setChatSending(true);
     try {
       const chatBoardId = await library.ensureSaved();
+      const mentioned = pages.documentRef.current
+        ? pageMentions(text, boardPages(pages.documentRef.current))
+        : [];
       const thread = await chat.begin(
         agent,
         agent === 'demo' ? 'built-in' : modelPreferences[agent].model,
         text,
         chatBoardId,
+        mentioned,
       );
       // The answer goes to the page it was asked from, even if the reader turns the page, or to
       // a new page after it.
@@ -601,6 +606,14 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         else pages.commitTo(sourcePage, candidate);
       };
       const focus = freshCanvas || newPage ? undefined : sentFocus;
+      // On a board with several pages the agent gets an index of them, the pages this message
+      // names with @page in full, and may ask to read others.
+      const boardNow = pages.documentRef.current;
+      const answerPage = newPage ?? sourcePage;
+      const pageContext =
+        boardNow && answerPage && boardPages(boardNow).length > 1
+          ? { document: boardNow, current: answerPage, mentions: mentioned }
+          : undefined;
       const result = await generation.generate(
         text,
         agent,
@@ -614,6 +627,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
           conversation: chatConversation(thread.messages),
           memory: thread.memory,
           thread: thread.id,
+          pages: pageContext,
+          freshSession: !!thread.restart,
           focus,
           priority: freshCanvas
             ? chatPriority({ prompt: text }).priority
@@ -636,6 +651,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             : 'Generation stopped or failed. No generated proposal was applied.',
           outcome,
           memory: result ? generation.turn.current?.memory : undefined,
+          pages: result ? generation.turn.current?.pages : undefined,
         },
         chatBoardId,
       );
@@ -964,6 +980,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         setAgent={setAgent}
         setSettingsOpen={setSettingsOpen}
         setSelected={setSelected}
+        pages={pageList}
       />
       {!busy && (
         <p className="composer-hint">
@@ -1785,6 +1802,17 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
                     ? `${PROVIDER_LABELS[agent]} resumes its own session for each thread`
                     : undefined
                 }
+                pages={pageList}
+                onOpenPage={(id) => {
+                  // Pages stay put while an answer is being written for one of them.
+                  if (working) return;
+                  goToPage(id);
+                  if (!chatDocked) setCanvasTab('canvas');
+                }}
+                mode={{
+                  full: agent !== 'demo' && modelPreferences[agent].access === 'full',
+                  fast: agent !== 'demo' && !!modelPreferences[agent].fast,
+                }}
               >
                 {readOnly ? (
                   <p className="chat-muted">

@@ -2,6 +2,7 @@ import { HarnessError } from '../harness/errors';
 import type { LLMClient, LLMRequest } from '../harness/types.js';
 import {
   DEFAULT_BOARD_MODELS,
+  agentDeadlineMs,
   modelSettingsProblem,
   boardOutputSchema,
   type BoardAgent,
@@ -72,7 +73,9 @@ export const localBoardClient: BoardClientFactory = async (
       OPSIS_LLM_MODEL: settings.model,
       OPSIS_LLM_EFFORT: settings.effort,
       OPSIS_HARNESS_BIN: executable,
-      OPSIS_HARNESS_TIMEOUT_MS: '180000',
+      OPSIS_HARNESS_TIMEOUT_MS: String(agentDeadlineMs(settings)),
+      ...(settings.access === 'full' ? { OPSIS_LLM_ACCESS: 'full' } : {}),
+      ...(settings.fast ? { OPSIS_LLM_FAST: '1' } : {}),
       ...(settings.maxBudgetUSD !== undefined
         ? { OPSIS_LLM_MAX_BUDGET_USD: String(settings.maxBudgetUSD) }
         : {}),

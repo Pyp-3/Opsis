@@ -12,7 +12,8 @@ import {
   Square,
   X,
 } from 'lucide-react';
-import type { BoardAgent, BoardAttachment, BoardDocument } from '@opsis/schema';
+import type { BoardAgent, BoardAttachment, BoardDocument, PageSummary } from '@opsis/schema';
+import { usePageMentions } from './PageMentions';
 import { ModelControls } from './ModelControls';
 import { AgentLogo } from './AgentLogo';
 import { AttachButton, AttachmentChips } from './Attachments';
@@ -53,6 +54,8 @@ type BoardComposerProps = {
   setSelected: (id: string | null) => void;
   /** Tucks the composer into a small button; omitted while it must stay open. */
   onMinimize?: () => void;
+  /** The board's pages, which a message can reference with `@page`. */
+  pages?: readonly PageSummary[];
 };
 
 export function BoardComposer({
@@ -80,7 +83,9 @@ export function BoardComposer({
   setSettingsOpen,
   setSelected,
   onMinimize,
+  pages = [],
 }: BoardComposerProps) {
+  const mentions = usePageMentions({ pages, prompt, setPrompt, input: promptInput });
   const [suggestions, setSuggestions] = useState(false);
   const [task, setTask] = useState('overview');
   const profiles = readModelProfiles();
@@ -110,7 +115,9 @@ export function BoardComposer({
       {agent !== 'demo' && (
         <AttachmentChips attachments={attachments} disabled={busy} onChange={setAttachments} />
       )}
+      {mentions.chips}
       <div className="composer-input">
+        {mentions.menu}
         <label className="sr-only" htmlFor="visual-prompt">
           What would you like to understand?
         </label>
@@ -122,18 +129,31 @@ export function BoardComposer({
           rows={2}
           placeholder={
             board
-              ? 'Ask a follow-up, or change something on the canvas…'
+              ? mentions.enabled
+                ? 'Ask a follow-up, or type @ to reference a page…'
+                : 'Ask a follow-up, or change something on the canvas…'
               : 'What would you like to understand?'
           }
           disabled={busy}
-          onChange={(event) => setPrompt(event.target.value)}
+          {...mentions.inputProps}
+          onChange={(event) => {
+            setPrompt(event.target.value);
+            mentions.sync(event.target.value);
+          }}
+          onClick={() => mentions.sync()}
+          onKeyUp={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') mentions.sync();
+          }}
+          onBlur={() => mentions.sync('')}
           onKeyDown={(event) => {
+            if (mentions.onKeyDown(event)) return;
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               void generate();
             }
           }}
         />
+        {mentions.button}
         {agent !== 'demo' && (
           <AttachButton
             attachments={attachments}
@@ -181,6 +201,10 @@ export function BoardComposer({
           {agent === 'claude' && modelPreferences[agent].model.includes('haiku')
             ? 'built-in reasoning'
             : modelPreferences[agent].effort}
+          {modelPreferences[agent].access === 'full' && (
+            <span className="mode-badge is-full">Full access</span>
+          )}
+          {modelPreferences[agent].fast && <span className="mode-badge is-fast">Fast</span>}
         </p>
       )}
       {agent !== 'demo' && settingsOpen && (

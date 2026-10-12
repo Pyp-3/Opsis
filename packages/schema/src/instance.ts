@@ -18,6 +18,12 @@ export const InstanceInfoSchema = z
     signup: z.boolean(),
     /** Accounts may choose the CLI executable path used for their requests. */
     accountExecutablePaths: z.boolean(),
+    /**
+     * Accounts may run Claude's and Codex's CLIs with full access (tools, skills, MCP servers
+     * and no permission prompts). A local install allows it; a server only when its operator
+     * sets `OPSIS_AGENT_FULL_ACCESS=1`. Absent on hosts from before it existed: not allowed.
+     */
+    agentFullAccess: z.boolean().optional(),
     /** See OPSIS_API_VERSION; absent on hosts from before it existed. */
     api: z.number().int().positive().optional(),
   })
@@ -28,5 +34,6 @@ export type InstanceInfo = z.infer<typeof InstanceInfoSchema>;
 export const LOCAL_INSTANCE: InstanceInfo = {
   signup: true,
   accountExecutablePaths: true,
+  agentFullAccess: true,
   api: OPSIS_API_VERSION,
 };

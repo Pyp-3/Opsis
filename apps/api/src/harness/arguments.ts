@@ -65,9 +65,22 @@ export function harnessArguments(
       '0',
     ];
   if (config.provider === 'claude') {
-    // Tools stay off unless files were uploaded; then only the read-only Read tool is offered,
-    // which reads PDFs and images natively from the private workspace.
+    // Restricted: tools stay off unless files were uploaded; then only the read-only Read tool
+    // is offered, which reads PDFs and images natively from the private workspace. Full access
+    // keeps the user's own settings, skills, plugins and MCP servers, and skips every prompt.
     const tools = files.length ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--tools', ''];
+    const isolation =
+      config.access === 'full'
+        ? ['--dangerously-skip-permissions']
+        : [
+            '--safe-mode',
+            '--restricted',
+            ...tools,
+            '--disable-slash-commands',
+            '--strict-mcp-config',
+            '--permission-prompts',
+            'none',
+          ];
     return [
       '--print',
       // Streamed events let the app show the agent's progress live.
@@ -82,13 +95,8 @@ export function harnessArguments(
       ...(config.maxBudgetUSD !== undefined
         ? ['--max-budget-usd', String(config.maxBudgetUSD)]
         : []),
-      '--safe-mode',
-      '--restricted',
-      ...tools,
-      '--disable-slash-commands',
-      '--strict-mcp-config',
-      '--permission-prompts',
-      'none',
+      ...isolation,
+      ...(config.fast ? ['--settings', JSON.stringify({ fastMode: true })] : []),
       // A chat thread's session is saved so its next turn can resume it; nothing else is.
       ...(config.session?.id
         ? config.session.resume
@@ -99,9 +107,10 @@ export function harnessArguments(
   }
   if (config.provider === 'codex') {
     const resume = config.session?.resume && config.session.id;
+    const full = config.access === 'full';
     return [
-      '--ask-for-approval',
-      'never',
+      // Full access runs Codex unsandboxed with the user's own configuration and rules.
+      ...(full ? [] : ['--ask-for-approval', 'never']),
       'exec',
       // `exec resume` takes the same isolation, with the sandbox set through configuration.
       ...(resume ? ['resume', config.session!.id!, '-'] : ['-']),
@@ -110,6 +119,7 @@ export function harnessArguments(
       // Concise reasoning summaries become live progress notes.
       '--config',
       'model_reasoning_summary="concise"',
+      ...(config.fast ? ['--config', 'service_tier="fast"'] : []),
       // Codex attaches images natively; other documents arrive as extracted text.
       ...paths
         .filter((_, index) => files[index]?.kind === 'image')
@@ -119,11 +129,19 @@ export function harnessArguments(
       '--json',
       // A chat thread's session is saved so its next turn can resume it; nothing else is.
       ...(config.session ? [] : ['--ephemeral']),
-      '--ignore-user-config',
-      '--ignore-rules',
-      ...(resume
-        ? ['--config', 'sandbox_mode="read-only"', '--skip-git-repo-check']
-        : ['--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never']),
+      ...(full
+        ? [
+            '--dangerously-bypass-approvals-and-sandbox',
+            '--skip-git-repo-check',
+            ...(resume ? [] : ['--color', 'never']),
+          ]
+        : [
+            '--ignore-user-config',
+            '--ignore-rules',
+            ...(resume
+              ? ['--config', 'sandbox_mode="read-only"', '--skip-git-repo-check']
+              : ['--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never']),
+          ]),
     ];
   }
   return [

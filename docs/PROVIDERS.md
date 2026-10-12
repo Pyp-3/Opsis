@@ -94,6 +94,21 @@ full instructions again. Requests without a thread (and every other CLI) remain
 ephemeral. Grok's CLI receives the whole request as one argument bounded at 30,000
 characters, so long chat requests on large boards may need its API connection.
 
+**Full access and fast mode (Claude and Codex).** Restricted is the default and is the
+integration described above. With **Full access** in Model settings, Claude Code runs with
+`--dangerously-skip-permissions` instead of `--safe-mode --restricted --tools ""
+--disable-slash-commands --strict-mcp-config --permission-prompts none`, so it loads the user's
+settings, CLAUDE.md, skills, plugins and MCP servers; Codex runs with
+`--dangerously-bypass-approvals-and-sandbox` and its own configuration and rules, instead of
+`--ask-for-approval never --sandbox read-only --ignore-user-config --ignore-rules`. The answer is
+still the structured JSON, validated and reviewed as usual, and the instructions tell the agent
+not to edit boards through MCP during the turn. Requests may then run for ten minutes rather
+than three. **Fast mode** adds `--settings '{"fastMode":true}'` (Claude) or
+`--config service_tier="fast"` (Codex); whether the account has fast mode, and its price, is the
+provider's. A personal server refuses full access unless `OPSIS_AGENT_FULL_ACCESS=1`
+([server guide](SERVER.md)). **Compact** in the chat starts the thread's next turn in a new
+session; earlier sessions stay listed, so deleting the thread still removes them.
+
 Antigravity uses the OS keyring login with a disposable home/configuration rather
 than importing user permissions or extensions. If your installation cannot access
 its login this way, use the API connection. Choose a model slug reported by

@@ -138,7 +138,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     boardClientFactory ??
     ((agent, settings, schema) =>
       localBoardClient(agent, settings, schema, providerKeys.get(agent)));
-  registerBoardRoutes(app, serverMode ? serverExecutables(factory) : factory);
+  const agentFullAccess = !serverMode || serverMode.agentFullAccess === true;
+  registerBoardRoutes(app, serverMode ? serverExecutables(factory) : factory, {
+    fullAccess: agentFullAccess,
+  });
   const store = new ApiStore(databasePath);
   registerAuth(app, store, {
     signup: !serverMode,
@@ -238,7 +241,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.get('/v1/health', async () => ({ status: 'ok' }));
   const instance: InstanceInfo = serverMode
-    ? { signup: false, accountExecutablePaths: false, api: OPSIS_API_VERSION }
+    ? { signup: false, accountExecutablePaths: false, agentFullAccess, api: OPSIS_API_VERSION }
     : LOCAL_INSTANCE;
   app.get('/v1/instance', async () => instance);
   if (serverMode) registerWebApp(app, serverMode.webRoot);

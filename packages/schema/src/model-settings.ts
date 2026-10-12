@@ -39,8 +39,26 @@ export const BoardModelSettingsSchema = z
       .optional(),
     maxRequestCharacters: z.number().int().min(1000).max(768000).optional(),
     maxBudgetUSD: z.number().finite().min(0.01).max(100).optional(),
+    /**
+     * How much the CLI may do on this machine. Restricted (the default) runs it without tools,
+     * skills, plugins or user settings; full lets it use everything it is configured with and
+     * skips its permission prompts. Only Claude's and Codex's CLIs, and only where the instance
+     * allows it (`InstanceInfo.agentFullAccess`).
+     */
+    access: z.enum(['restricted', 'full']).optional(),
+    /** The CLI's fast mode, where the account has it: quicker output at a higher price. */
+    fast: z.boolean().optional(),
   })
   .strict();
+/** The agents whose CLIs can run with full access and fast mode. */
+export const FULL_ACCESS_AGENTS: readonly ProviderAgent[] = ['claude', 'codex'];
+/**
+ * How long one agent request may run: three minutes, or ten with full access, where the agent
+ * may use tools, skills and MCP servers before it answers. Both hosts and the CLI use it.
+ */
+export function agentDeadlineMs(settings: { access?: string | undefined } | undefined) {
+  return settings?.access === 'full' ? 600_000 : 180_000;
+}
 export type BoardModelSettings = z.infer<typeof BoardModelSettingsSchema>;
 export const DEFAULT_BOARD_MODELS: Record<ProviderAgent, BoardModelSettings> = {
   claude: { model: 'haiku', effort: 'low' },
@@ -137,6 +155,11 @@ export function modelSettingsProblem(
   )?.efforts;
   if (allowed && !allowed.includes(settings.effort))
     return 'This model does not support the selected effort.';
+  if (
+    (settings.access === 'full' || settings.fast) &&
+    (!FULL_ACCESS_AGENTS.includes(agent) || settings.connection === 'api')
+  )
+    return 'Full access and fast mode need Claude’s or Codex’s CLI.';
   if (agent !== 'claude' && settings.maxBudgetUSD !== undefined)
     return 'This CLI does not support a dollar budget. Remove the budget before continuing.';
   return null;

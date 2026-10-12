@@ -21,11 +21,23 @@ export const MAX_CHAT_MESSAGES = 80;
 export const CHAT_CONVERSATION_WINDOW = 12;
 export const MAX_CHAT_MEMORY = 2000;
 
+/** Pages one message may name: those the reader mentioned, or those the agent read. */
+export const MAX_MESSAGE_PAGES = 8;
+const pageId = z
+  .string()
+  .min(1)
+  .max(80)
+  .regex(/^[a-zA-Z0-9_-]+$/);
 export const ChatMessageSchema = z
   .object({
     role: z.enum(['user', 'assistant']),
     text: z.string().trim().min(1).max(4000),
     outcome: z.enum(CHAT_OUTCOMES).optional(),
+    /**
+     * Board pages this message refers to, by id: the pages the reader mentioned with `@page`,
+     * or, on a reply, the pages the agent read to answer. Shown beside the message.
+     */
+    pages: z.array(pageId).max(MAX_MESSAGE_PAGES).optional(),
   })
   .strict();
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
@@ -43,6 +55,11 @@ export const BoardChatThreadSchema = z
     memory: z.string().max(MAX_CHAT_MEMORY).optional(),
     /** How many of the oldest messages were condensed into the memory to keep the thread going. */
     condensed: z.number().int().nonnegative().optional(),
+    /**
+     * The reader compacted the thread: its next turn starts a new CLI session from the notes
+     * and recent messages instead of resuming the long one.
+     */
+    restart: z.literal(true).optional(),
   })
   .strict();
 export const BoardChatWriteSchema = z
@@ -110,6 +127,36 @@ export function appendChatMessage<T extends BoardChatThread>(thread: T, message:
     ...thread,
     messages: [...messages, message],
     condensed: (thread.condensed ?? 0) + dropped.length,
+    ...(memory ? { memory } : {}),
+  };
+}
+
+/** Messages a compacted thread keeps verbatim: the latest exchange. */
+export const COMPACT_KEEP_MESSAGES = 2;
+
+/**
+ * Compacts a thread on the reader's request: older messages are condensed into the notes, as a
+ * full thread does on its own, and the next turn starts a new CLI session that reads the notes
+ * and the latest exchange rather than resuming the whole transcript. Nothing to compact leaves
+ * the thread as it is.
+ */
+export function compactChatThread<T extends BoardChatThread>(thread: T): T {
+  const keep = thread.messages.slice(-COMPACT_KEEP_MESSAGES);
+  if (keep[0]?.role === 'assistant' && thread.messages.length > keep.length)
+    keep.unshift(thread.messages[thread.messages.length - keep.length - 1]!);
+  const dropped = thread.messages.slice(0, thread.messages.length - keep.length);
+  if (!dropped.length) return thread.restart ? thread : { ...thread, restart: true };
+  const notes = dropped
+    .filter((item) => item.role === 'user')
+    .map((item) => `Earlier request: ${firstLine(item.text, 160)}`);
+  const memory = thread.memory?.trim()
+    ? thread.memory
+    : boundChatMemory(notes.join('\n')) || undefined;
+  return {
+    ...thread,
+    messages: keep,
+    condensed: (thread.condensed ?? 0) + dropped.length,
+    restart: true,
     ...(memory ? { memory } : {}),
   };
 }

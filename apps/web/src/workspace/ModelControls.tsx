@@ -1,4 +1,11 @@
-import { BOARD_MODEL_CHOICES, type BoardModelSettings, type ProviderAgent } from '@opsis/schema';
+import {
+  BOARD_MODEL_CHOICES,
+  FULL_ACCESS_AGENTS,
+  type BoardModelSettings,
+  type ProviderAgent,
+} from '@opsis/schema';
+import { ShieldCheck, Zap } from 'lucide-react';
+import { useInstance } from '../instance';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 const EFFORT_LABELS: Record<BoardModelSettings['effort'], string> = {
@@ -124,6 +131,95 @@ export function ModelControls({
         No automatic model upgrades.
       </span>
       <span className="model-usage-note">Model access depends on your agent account.</span>
+      {FULL_ACCESS_AGENTS.includes(agent) && value.connection !== 'api' && (
+        <AgentAccessControls value={value} disabled={disabled} onChange={onChange} />
+      )}
     </div>
+  );
+}
+
+/**
+ * How much Claude's or Codex's CLI may do: restricted (no tools, skills or user settings) or
+ * full access, and its fast mode. The instance decides whether full access is allowed.
+ */
+function AgentAccessControls({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: BoardModelSettings;
+  disabled: boolean;
+  onChange(value: BoardModelSettings): void;
+}) {
+  const instance = useInstance();
+  const allowed = instance?.agentFullAccess === true;
+  const full = value.access === 'full';
+  const set = (patch: Partial<BoardModelSettings>) => {
+    const next = { ...value, ...patch };
+    if (next.access !== 'full') delete next.access;
+    if (!next.fast) delete next.fast;
+    onChange(next);
+  };
+  return (
+    <fieldset className="agent-access">
+      <legend>
+        <ShieldCheck size={13} aria-hidden /> Agent access
+      </legend>
+      <div className="agent-access-choices" role="radiogroup" aria-label="Agent access">
+        <label className={full ? '' : 'is-chosen'}>
+          <input
+            type="radio"
+            name="agent-access"
+            checked={!full}
+            disabled={disabled}
+            onChange={() => set({ access: 'restricted' })}
+          />
+          <span>
+            <strong>Restricted</strong>
+            <small>No tools, skills or personal settings; reads only your uploads.</small>
+          </span>
+        </label>
+        <label className={full ? 'is-chosen is-full' : ''}>
+          <input
+            type="radio"
+            name="agent-access"
+            checked={full}
+            disabled={disabled || (!allowed && !full)}
+            onChange={() => set({ access: 'full' })}
+          />
+          <span>
+            <strong>Full access</strong>
+            <small>
+              Its own tools, skills, plugins and MCP servers, with no permission prompts. It can run
+              commands and change files as the user running Opsis.
+            </small>
+          </span>
+        </label>
+      </div>
+      {!allowed && instance && (
+        <p className={`agent-access-note ${full ? 'is-warning' : ''}`}>
+          {full
+            ? 'This server does not allow full access, so requests will be refused. Choose Restricted, or ask its operator to set OPSIS_AGENT_FULL_ACCESS=1.'
+            : 'Turned off on this server by its operator.'}
+        </p>
+      )}
+      {full && allowed && (
+        <p className="agent-access-note is-warning">
+          Full access trusts the agent with this computer. Board text, imports and uploads can carry
+          instructions written by someone else, so use it on boards you trust. Requests may run for
+          up to ten minutes.
+        </p>
+      )}
+      <label className="agent-access-fast">
+        <input
+          type="checkbox"
+          checked={!!value.fast}
+          disabled={disabled}
+          onChange={(event) => set({ fast: event.target.checked })}
+        />
+        <Zap size={13} aria-hidden /> Fast mode
+        <small>Quicker replies where your account has it; usually billed at a higher rate.</small>
+      </label>
+    </fieldset>
   );
 }

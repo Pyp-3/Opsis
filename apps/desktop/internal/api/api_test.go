@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type testClient struct {
@@ -202,8 +203,21 @@ func TestRenameNullBoardCreatesDocumentEvenWithDefaultTitle(t *testing.T) {
 func TestDesktopIsALocalInstance(t *testing.T) {
 	c := &testClient{t: t, server: newTestServer(t)}
 	got := c.request("GET", "/v1/instance", nil, 200)
-	if got["signup"] != true || got["accountExecutablePaths"] != true || got["api"] != float64(1) || len(got) != 3 {
-		t.Fatalf("desktop instance = %v, want open sign-up and account CLI paths", got)
+	if got["signup"] != true || got["accountExecutablePaths"] != true || got["agentFullAccess"] != true || got["api"] != float64(1) || len(got) != 4 {
+		t.Fatalf("desktop instance = %v, want open sign-up, account CLI paths and full access", got)
+	}
+}
+
+func TestFullAccessRequestsGetTheLongerDeadline(t *testing.T) {
+	for body, want := range map[string]time.Duration{
+		`{"settings":{"access":"full"}}`:       600 * time.Second,
+		`{"settings":{"access":"restricted"}}`: 180 * time.Second,
+		`{"prompt":"x"}`:                       180 * time.Second,
+		`not json`:                             180 * time.Second,
+	} {
+		if got := agentDeadline([]byte(body)); got != want {
+			t.Errorf("agentDeadline(%s) = %v, want %v", body, got, want)
+		}
 	}
 }
 

@@ -19,6 +19,12 @@ export type ServerMode = {
   webRoot: string;
   /** Operator-managed, public-view-only accounts. Never accepted from a browser. */
   guestEmails?: string[];
+  /**
+   * The operator lets accounts run Claude's and Codex's CLIs with full access on this server
+   * (`OPSIS_AGENT_FULL_ACCESS=1`): every tool, the server user's skills and MCP servers, and no
+   * permission prompts. Off unless set.
+   */
+  agentFullAccess?: true;
 };
 
 const defaultWebRoot = fileURLToPath(new URL('../../web/dist', import.meta.url));
@@ -58,6 +64,7 @@ export function serverModeFromEnv(env: NodeJS.ProcessEnv = process.env): ServerM
     trustedProxy,
     webRoot,
     ...(guestEmails?.length ? { guestEmails } : {}),
+    ...(env.OPSIS_AGENT_FULL_ACCESS?.trim() === '1' ? { agentFullAccess: true as const } : {}),
   };
 }
 
