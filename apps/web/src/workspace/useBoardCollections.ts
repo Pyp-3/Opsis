@@ -8,6 +8,7 @@ const CollectionSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   createdAt: z.number(),
+  parentId: z.string().uuid().nullable().optional(),
 });
 export type BoardCollection = z.infer<typeof CollectionSchema>;
 const SmartCollectionSchema = CollectionSchema.extend({ rule: SmartCollectionRuleSchema });
@@ -75,12 +76,19 @@ export function useBoardCollections(onBoardsChanged: () => Promise<unknown>) {
     smartCollections,
     error,
     busy,
-    async create(name: string) {
-      const result = await run(() => fetch('/v1/collections', json('POST', { name })), false);
+    async create(name: string, parentId: string | null = null) {
+      const result = await run(
+        () => fetch('/v1/collections', json('POST', { name, parentId })),
+        false,
+      );
       return result.ok ? CollectionSchema.parse(result.body) : null;
     },
     async rename(id: string, name: string) {
       return (await run(() => fetch(`/v1/collections/${id}`, json('PATCH', { name })), false)).ok;
+    },
+    async move(id: string, parentId: string | null) {
+      return (await run(() => fetch(`/v1/collections/${id}`, json('PATCH', { parentId })), false))
+        .ok;
     },
     /** Removes the collection only; its boards stay in the library, unfiled. */
     async remove(id: string) {

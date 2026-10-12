@@ -1,4 +1,9 @@
-import type { ReportedUsage, UsageRecord } from '@opsis/schema';
+import {
+  collectionPathLabel,
+  type CollectionNode,
+  type ReportedUsage,
+  type UsageRecord,
+} from '@opsis/schema';
 
 /** A measured total plus how many attempts did not report it; never zero-filled. */
 export type Measured = { total: number; unreported: number };
@@ -33,10 +38,15 @@ const add = (a: Measured, b: Measured): Measured => ({
 export function usageByCollection(
   records: UsageRecord[],
   boards: { id: string; collectionId?: string | null | undefined }[],
-  collections: { id: string; name: string }[],
+  collections: CollectionNode[],
 ): UsageGroup[] {
   const collectionOf = new Map(boards.map((board) => [board.id, board.collectionId ?? null]));
-  const names = new Map(collections.map((collection) => [collection.id, collection.name]));
+  const names = new Map(
+    collections.map((collection) => [
+      collection.id,
+      collectionPathLabel(collections, collection.id),
+    ]),
+  );
   const groups = new Map<string, UsageGroup>();
   for (const record of records) {
     const known = record.boardId !== undefined && collectionOf.has(record.boardId);

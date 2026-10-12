@@ -216,6 +216,63 @@
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
 }
+.board-collection-browser {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.board-collection-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.board-collection-search input {
+  width: min(100%, 320px);
+  min-width: 0;
+}
+.board-collection-tree {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.board-collection-tree .board-collection-tree {
+  margin: 4px 0 0 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.board-collection-tree-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+.board-collection-chips .board-collection-tree button {
+  height: auto;
+  min-height: 30px;
+  max-width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.board-collection-chips .board-collection-toggle {
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.board-collection-toggle-space {
+  width: 23px;
+  flex-shrink: 0;
+}
+.board-collection-breadcrumb {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.board-collection-breadcrumb button {
+  padding: 4px;
+  color: var(--ink-2);
+}
 .board-smart-hint {
   margin: 0;
   font-size: 12px;

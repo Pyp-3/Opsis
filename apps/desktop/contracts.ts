@@ -6,6 +6,10 @@ import {
   BoardCollaboratorRequestSchema,
   BoardCollectionAssignmentSchema,
   BoardCollectionRequestSchema,
+  BoardCollectionUpdateSchema,
+  collectionPlacement,
+  collectionDeletion,
+  type CollectionNode,
   MAX_BOARD_COLLECTIONS,
   AccountSettingSchema,
   UsageRecordSchema,
@@ -53,6 +57,7 @@ const parsers = {
   collectionSharing: CollectionSharingSchema,
   editor: BoardCollaboratorRequestSchema,
   collection: BoardCollectionRequestSchema,
+  collectionUpdate: BoardCollectionUpdateSchema,
   collectionAssignment: BoardCollectionAssignmentSchema,
   accountSetting: AccountSettingSchema,
   usageRecord: UsageRecordSchema,
@@ -106,6 +111,15 @@ export function apply(operation: string, json: string): string {
     } else if (operation === 'prepareCollectionImport') {
       const { bundle, ids } = input as { bundle: unknown; ids: string[] };
       value = prepareCollectionImport(bundle, ids);
+    } else if (operation === 'collectionPlacement') {
+      const { collections, candidate } = input as {
+        collections: CollectionNode[];
+        candidate: CollectionNode;
+      };
+      value = collectionPlacement(collections, candidate);
+    } else if (operation === 'collectionDeletion') {
+      const { collections, id } = input as { collections: CollectionNode[]; id: string };
+      value = collectionDeletion(collections, id);
     } else if (operation === 'collectionLimit') {
       value = MAX_BOARD_COLLECTIONS;
     } else if (operation === 'usageLimit') {

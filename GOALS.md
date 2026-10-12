@@ -15,24 +15,55 @@ Verified locally: ten consecutive runner race-test repetitions, the complete nat
 race suite, native vet, and lint. Commit `5de6cf1` is pushed; the previously failing
 native race/contract step passes on both Intel and ARM64 macOS in run 38250233290.
 Both macOS jobs completed successfully, including application builds, browser parity,
-hidden WebView smoke, packaging and signature verification. That run has a separate
-Windows packaged-service startup failure during database/MCP integration; it is not
-a green release pipeline yet. Only the test fixture and watchdogs change; the
+hidden WebView smoke, packaging and signature verification. That particular run failed
+separately during Windows packaged-service startup; subsequent main run 38258712653
+completed successfully on every platform. Only the test fixture and watchdogs change; the
 executable behavior is unchanged. UTF-8 without BOM and LF are verified.
 No product roadmap goal changes.
 
-Board-manager and delivery discussion (2026-10-12, user request): support hierarchy such
-as Education → Artificial Intelligence → Topic 1 with nested library collections that
-contain canvases and child collections, breadcrumbs, explicit move actions and search
-paths. Preserve existing collections as roots, private account ownership, board identity
-and all data when moving/deleting containers; tags and smart collections offer discovery
-across themes without duplicating boards. Proposed implementation remains pending.
-The user wants new work on a `development` branch and batches promoted manually to
-`main`, which should hold stable releases. Recommended CI: checks and compilation on
-development, a full platform gate before promotion, and packaging/publication only for
-validated main commits. Preserve increasing Windows updater build numbers when splitting
-workflows. Branch/workflow setup is still planned; no hierarchy or workflow changes have
-been applied in this discussion. Stabilize the remaining Windows CI startup issue first.
+Nested board manager and staged delivery (2026-10-12, implementation authorized):
+work is on `development`; only the user may promote it to `main` by manually merging
+a PR. Main protection requires all five existing platform checks, an up-to-date PR
+and resolved discussions (including for admins); automatic merges, force pushes and
+branch deletion are disabled. The first promotion must include the CI policy change.
+
+- [x] Verify nested private collections on both web and packaged desktop: child creation,
+      breadcrumbs, collapsible navigation, path search, collection/board moves and reload.
+- [x] Verify migration 8 preserves flat roots and boards; sibling names, ownership and cycle
+      guards share schema rules; deletion promotes children without deleting canvases.
+- [x] Configure protected main and disable automatic merging. Keep new pushes on development.
+- [ ] Verify development/PR checks compile all desktop platforms and never publish; main
+      gates publication on all tests. Keep the original updater build counter.
+
+Implemented and verified locally: hierarchy metadata stays outside board documents,
+revisions and undo. Sharing/export/counts/smart rules remain direct-member operations;
+portable bundles and named board files remain root copies. Database backups retain the
+hierarchy. Child promotion with conflicting sibling names fails atomically and asks for
+an explicit rename/move. MCP create accepts a parent id and list exposes parents.
+
+The previous Windows service-startup failure did not recur in fully green main CI run
+38258712653 (commit be2ce0b); no root cause is claimed. Added numeric child-exit diagnostics
+without exposing stderr/provider output and a real-process regression fixture; startup
+deadlines and retry behavior are unchanged. A confirmed cold lazy-import timing failure
+in the sign-in routing test now has a four-second assertion watchdog; its routing and
+sign-in assertions are unchanged.
+
+Verified 2026-10-12 on Windows: lint, typecheck, Rust checks and 26 Rust tests,
+604 unit/API/schema tests, native vet/race tests, and full web QA (79 browser scenarios
+passed, one Linux-only pixel baseline skipped). The same 79 scenarios passed against
+the packaged Windows Go API, including the new hierarchy scenario and mobile overflow.
+Packaged database-import/MCP integration passed with nested MCP creation and direct
+member counts; the isolated hidden WebView passed all 28 checks. Library screenshots
+were inspected. UTF-8 without BOM and LF verified for all 37 changed files.
+
+The Windows executable was built with `--reuse-runtime`: packaged speech code and
+dependencies are unchanged. CI policy tests pass locally. Full release packaging tests
+cannot complete on this Windows host because the POSIX `zip` command is unavailable;
+they remain required in Ubuntu CI. Clean cross-platform builds and the new development/
+PR workflow still require remote CI verification before main promotion. No live paid
+provider calls or user-data changes were made; the existing drawing test artifacts
+remain untouched.
+See [development policy](docs/DEVELOPMENT.md).
 
 Process engine responsiveness (2026-10-12, user request): implemented reproducible native,
 WASM and browser measurements; cancel obsolete preview subscriptions with a bounded

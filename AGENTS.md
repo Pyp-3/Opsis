@@ -110,6 +110,8 @@ reviewable commits where possible. Inspect the complete staged diff. Never commi
 credentials, local databases, generated WASM/build output, recordings, or test
 artifacts. Preserve existing user changes and commits. Report actual validation
 results and limitations. The user's standing delivery preference is to commit and
-push completed, validated work using a normal non-force push, so CI/CD runs for
-each delivery. Do not ask again for routine commits and pushes. Honor an explicit
+push completed, validated work to `development` using a normal non-force push,
+so CI runs for each delivery. Only the user promotes batches into `main` through
+a pull request; never merge, auto-merge or push feature work directly to `main`.
+Do not ask again for routine development commits and pushes. Honor an explicit
 request to keep a particular task local; never include unrelated user changes.

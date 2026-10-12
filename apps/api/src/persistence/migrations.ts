@@ -113,4 +113,14 @@ export const PERSISTENCE_MIGRATIONS = [
     CREATE INDEX board_image_refs_image ON board_image_refs(image_id);
     `,
   },
+  {
+    version: 8,
+    name: 'nested-board-collections',
+    sql: `
+    ALTER TABLE board_collections ADD COLUMN parent_id TEXT REFERENCES board_collections(id) ON DELETE SET NULL;
+    DROP INDEX board_collections_owner_name;
+    CREATE UNIQUE INDEX board_collections_sibling_name ON board_collections(owner_id, COALESCE(parent_id,''), name COLLATE NOCASE);
+    CREATE INDEX board_collections_parent ON board_collections(parent_id);
+    `,
+  },
 ] as const;

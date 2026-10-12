@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const duplicateCollectionName = "You already have a collection with that name."
+const duplicateCollectionName = "You already have a collection with that name in this location."
 const invalidCollectionName = "Enter a collection name (1–60 characters)."
 
 func collectionMissing() error { return failure(404, "Collection not found.") }
@@ -22,18 +22,20 @@ func ownsCollection(reader boardReader, id, userID string) (bool, error) {
 	return count > 0, err
 }
 
-// collectionNamed returns the id of the owner's collection with this name, ignoring case.
+// collectionNamed matches a root collection for portable imports, ignoring case.
 func collectionNamed(reader boardReader, userID, name string) (string, error) {
 	var id string
-	err := reader.QueryRow(`SELECT id FROM board_collections WHERE owner_id=? AND name=? COLLATE NOCASE`, userID, name).Scan(&id)
+	err := reader.QueryRow(`SELECT id FROM board_collections WHERE owner_id=? AND parent_id IS NULL AND name=? COLLATE NOCASE`, userID, name).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
 	return id, err
 }
 
-func (s *Server) listCollections(userID string) ([]map[string]any, error) {
-	rows, err := s.db.Query(`SELECT id,name,created_at FROM board_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE`, userID)
+func readCollections(reader interface {
+	Query(string, ...any) (*sql.Rows, error)
+}, userID string) ([]map[string]any, error) {
+	rows, err := reader.Query(`SELECT id,name,parent_id,created_at FROM board_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +44,50 @@ func (s *Server) listCollections(userID string) ([]map[string]any, error) {
 	for rows.Next() {
 		var id, name string
 		var created int64
-		if err := rows.Scan(&id, &name, &created); err != nil {
+		var parent sql.NullString
+		if err := rows.Scan(&id, &name, &parent, &created); err != nil {
 			return nil, err
 		}
-		collections = append(collections, map[string]any{"id": id, "name": name, "createdAt": created})
+		collections = append(collections, map[string]any{"id": id, "name": name, "parentId": collectionParent(parent), "createdAt": created})
 	}
 	return collections, rows.Err()
+}
+
+func collectionParent(parent sql.NullString) any {
+	if parent.Valid {
+		return parent.String
+	}
+	return nil
+}
+
+func (s *Server) listCollections(userID string) ([]map[string]any, error) {
+	return readCollections(s.db, userID)
+}
+
+func (s *Server) validateCollection(operation string, input any) error {
+	raw, err := s.contracts.Apply(operation, input)
+	if err != nil {
+		return err
+	}
+	var invalid *string
+	if err := json.Unmarshal(raw, &invalid); err != nil {
+		return err
+	}
+	if invalid == nil {
+		return nil
+	}
+	switch *invalid {
+	case "missing":
+		return collectionMissing()
+	case "cycle":
+		return failure(400, "A collection cannot contain itself or an ancestor.")
+	case "duplicate":
+		if operation == "collectionDeletion" {
+			return failure(409, "Move or rename child collections before deleting: a name already exists in the parent location.")
+		}
+		return failure(409, duplicateCollectionName)
+	}
+	return fmt.Errorf("unexpected collection validation result")
 }
 
 func (s *Server) writeCollection(w http.ResponseWriter, status int, userID, id string) error {
@@ -85,7 +125,8 @@ func (s *Server) collectionRoutes() {
 			return err
 		}
 		var body struct {
-			Name string `json:"name"`
+			Name     string  `json:"name"`
+			ParentID *string `json:"parentId"`
 		}
 		if err := s.body(w, r, "collection", &body); err != nil {
 			return invalidBody(err, invalidCollectionName)
@@ -103,12 +144,13 @@ func (s *Server) collectionRoutes() {
 			return err
 		}
 		defer tx.Rollback()
-		existing, err := collectionNamed(tx, user.ID, body.Name)
+		id := uuid.NewString()
+		collections, err := readCollections(tx, user.ID)
 		if err != nil {
 			return err
 		}
-		if existing != "" {
-			return failure(409, duplicateCollectionName)
+		if err := s.validateCollection("collectionPlacement", map[string]any{"collections": collections, "candidate": map[string]any{"id": id, "name": body.Name, "parentId": body.ParentID}}); err != nil {
+			return err
 		}
 		var count int
 		if err := tx.QueryRow(`SELECT count(*) FROM board_collections WHERE owner_id=?`, user.ID).Scan(&count); err != nil {
@@ -117,8 +159,7 @@ func (s *Server) collectionRoutes() {
 		if count >= limit {
 			return failure(400, fmt.Sprintf("You can have up to %d collections.", limit))
 		}
-		id := uuid.NewString()
-		if _, err := tx.Exec(`INSERT INTO board_collections(id,owner_id,name,created_at) VALUES(?,?,?,?)`, id, user.ID, body.Name, time.Now().UnixMilli()); err != nil {
+		if _, err := tx.Exec(`INSERT INTO board_collections(id,owner_id,name,created_at,parent_id) VALUES(?,?,?,?,?)`, id, user.ID, body.Name, time.Now().UnixMilli(), body.ParentID); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -133,12 +174,13 @@ func (s *Server) collectionRoutes() {
 		}
 		id := r.PathValue("id")
 		var body struct {
-			Name string `json:"name"`
+			Name     *string         `json:"name"`
+			ParentID json.RawMessage `json:"parentId"`
 		}
 		if !s.validID(id) {
 			return failure(400, invalidCollectionName)
 		}
-		if err := s.body(w, r, "collection", &body); err != nil {
+		if err := s.body(w, r, "collectionUpdate", &body); err != nil {
 			return invalidBody(err, invalidCollectionName)
 		}
 		tx, err := s.db.BeginTx(r.Context(), nil)
@@ -153,14 +195,38 @@ func (s *Server) collectionRoutes() {
 		if !owned {
 			return collectionMissing()
 		}
-		existing, err := collectionNamed(tx, user.ID, body.Name)
+		collections, err := readCollections(tx, user.ID)
 		if err != nil {
 			return err
 		}
-		if existing != "" && existing != id {
-			return failure(409, duplicateCollectionName)
+		var candidate map[string]any
+		for _, item := range collections {
+			if item["id"] == id {
+				candidate = map[string]any{"id": item["id"], "name": item["name"], "parentId": item["parentId"]}
+				break
+			}
 		}
-		if _, err := tx.Exec(`UPDATE board_collections SET name=? WHERE id=?`, body.Name, id); err != nil {
+		if candidate == nil {
+			return collectionMissing()
+		}
+		if body.Name != nil {
+			candidate["name"] = *body.Name
+		}
+		if body.ParentID != nil {
+			var parent *string
+			if err := json.Unmarshal(body.ParentID, &parent); err != nil {
+				return err
+			}
+			if parent == nil {
+				candidate["parentId"] = nil
+			} else {
+				candidate["parentId"] = *parent
+			}
+		}
+		if err := s.validateCollection("collectionPlacement", map[string]any{"collections": collections, "candidate": candidate}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE board_collections SET name=?,parent_id=? WHERE id=?`, candidate["name"], candidate["parentId"], id); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -188,6 +254,16 @@ func (s *Server) collectionRoutes() {
 		}
 		if !owned {
 			return collectionMissing()
+		}
+		collections, err := readCollections(tx, user.ID)
+		if err != nil {
+			return err
+		}
+		if err := s.validateCollection("collectionDeletion", map[string]any{"collections": collections, "id": id}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE board_collections SET parent_id=(SELECT parent_id FROM board_collections WHERE id=?) WHERE parent_id=?`, id, id); err != nil {
+			return err
 		}
 		// Removes the folder only: its boards stay, ungrouped.
 		if _, err := tx.Exec(`UPDATE boards_v2 SET collection_id=NULL WHERE collection_id=?`, id); err != nil {

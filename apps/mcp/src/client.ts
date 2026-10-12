@@ -22,7 +22,11 @@ const List = z.array(
     collectionId: z.string().nullable().optional(),
   }),
 );
-const Collection = z.object({ id: z.string().uuid(), name: z.string() });
+const Collection = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  parentId: z.string().nullable().optional(),
+});
 const SearchResults = z.object({
   results: z.array(
     z.object({
@@ -115,10 +119,10 @@ export function opsisClient(
       if (!response.ok) throw await failure(response, 'Could not list collections.');
       return z.array(Collection).parse(await response.json());
     },
-    async createCollection(name: string) {
+    async createCollection(name: string, parentId?: string) {
       const response = await call('/v1/collections', {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, ...(parentId ? { parentId } : {}) }),
       });
       if (!response.ok) throw await failure(response, 'Could not create the collection.');
       return Collection.parse(await response.json());

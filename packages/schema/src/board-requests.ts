@@ -17,8 +17,15 @@ export const BoardCreateRequestSchema = z
  */
 export const MAX_BOARD_COLLECTIONS = 100;
 export const BoardCollectionRequestSchema = z
-  .object({ name: z.string().trim().min(1).max(60) })
+  .object({
+    name: z.string().trim().min(1).max(60),
+    parentId: z.string().uuid().nullable().optional(),
+  })
   .strict();
+export const BoardCollectionUpdateSchema = BoardCollectionRequestSchema.partial().refine(
+  (body) => body.name !== undefined || body.parentId !== undefined,
+  'Choose a collection name or parent.',
+);
 export const BoardCollectionAssignmentSchema = z
   .object({ collectionId: z.string().uuid().nullable() })
   .strict();

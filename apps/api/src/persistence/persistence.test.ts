@@ -11,6 +11,50 @@ import { ApiStore } from '../storage.js';
 import { copyDatabase } from './database-copy.js';
 import { PERSISTENCE_MIGRATIONS } from './migrations.js';
 
+it('upgrades flat collections in place without losing boards or their filing', () => {
+  const folder = mkdtempSync(join(tmpdir(), 'opsis-flat-collections-'));
+  const path = join(folder, 'boards.sqlite');
+  new ApiStore(path).close();
+  const db = new Database(path);
+  try {
+    // Reconstruct the version-7 collection table in this isolated fixture.
+    db.exec(`DROP INDEX board_collections_sibling_name;
+      DROP INDEX board_collections_parent;
+      ALTER TABLE board_collections DROP COLUMN parent_id;
+      CREATE UNIQUE INDEX board_collections_owner_name ON board_collections(owner_id, name COLLATE NOCASE);
+      DELETE FROM schema_migrations WHERE version=8;
+      INSERT INTO users VALUES('owner','flat@example.test','Owner','hash',1);
+      INSERT INTO board_collections VALUES('collection','owner','Education',1);`);
+    db.prepare(
+      'INSERT INTO boards_v2(id,title,snapshot,revision,updated_at,owner_id,collection_id) VALUES(?,?,?,?,?,?,?)',
+    ).run(
+      'board',
+      'Original',
+      JSON.stringify({ board: null, past: [], future: [] }),
+      3,
+      1,
+      'owner',
+      'collection',
+    );
+  } finally {
+    db.close();
+  }
+  const upgraded = new ApiStore(path);
+  try {
+    expect(upgraded.listCollections('owner')).toEqual([
+      { id: 'collection', name: 'Education', createdAt: 1, parentId: null },
+    ]);
+    expect(upgraded.listBoards('owner', true)[0]).toMatchObject({
+      id: 'board',
+      collectionId: 'collection',
+      revision: 3,
+    });
+  } finally {
+    upgraded.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 it('duplicates privately, archives durably, guards revisions and protects private history', async () => {
   const app = buildApp({ databasePath: ':memory:' });
   const owner = await signIn(app),

@@ -23,6 +23,87 @@ async function accounts(app: ReturnType<typeof buildApp>) {
 }
 
 describe('board collections', () => {
+  it('persists nested containers, rejects cycles and preserves all contents on deletion', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsis-nesting-'));
+    const databasePath = join(directory, 'boards.sqlite');
+    let app = buildApp({ databasePath, speech: null });
+    try {
+      const { owner, stranger, request } = await accounts(app);
+      const create = async (name: string, parentId: string | null = null) => {
+        const result = await request(owner, 'POST', '/v1/collections', { name, parentId });
+        expect(result.statusCode).toBe(201);
+        return result.json() as { id: string; name: string; parentId: string | null };
+      };
+      const education = await create('Education');
+      const ai = await create('Artificial Intelligence', education.id);
+      const topic = await create('Topic 1: 日本語', ai.id);
+      const board = (
+        await request(owner, 'POST', '/v1/boards', { title: 'Lesson', collectionId: topic.id })
+      ).json();
+      const direct = (
+        await request(owner, 'POST', '/v1/boards', { title: 'Overview', collectionId: ai.id })
+      ).json();
+      expect(
+        (await request(owner, 'PATCH', `/v1/collections/${education.id}`, { parentId: topic.id }))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (await request(owner, 'PATCH', `/v1/collections/${ai.id}`, { parentId: ai.id })).statusCode,
+      ).toBe(400);
+      expect(
+        (await request(stranger, 'POST', '/v1/collections', { name: 'Sneaky', parentId: topic.id }))
+          .statusCode,
+      ).toBe(404);
+      expect(
+        (await request(stranger, 'PATCH', `/v1/collections/${ai.id}`, { parentId: null }))
+          .statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await request(owner, 'POST', '/v1/collections', {
+            name: 'artificial INTELLIGENCE',
+            parentId: education.id,
+          })
+        ).statusCode,
+      ).toBe(409);
+      const other = await create('Topic 1: 日本語', education.id);
+      expect((await request(owner, 'DELETE', `/v1/collections/${ai.id}`)).statusCode).toBe(409);
+      expect(
+        (await request(owner, 'GET', `/v1/collections/${ai.id}/bundle`)).json().boards,
+      ).toHaveLength(1);
+      expect(
+        (await request(owner, 'GET', `/v1/collections/${topic.id}/bundle`)).json().boards,
+      ).toHaveLength(1);
+      expect(
+        (await request(owner, 'PATCH', `/v1/collections/${other.id}`, { name: 'Other topic' }))
+          .statusCode,
+      ).toBe(200);
+      await app.close();
+      app = buildApp({ databasePath, speech: null });
+      const reopened = (cookie: string, method: Method, url: string, payload?: object) =>
+        app.inject({ method, url, headers: { cookie }, ...(payload ? { payload } : {}) });
+      expect((await reopened(owner, 'GET', '/v1/collections')).json()).toContainEqual(
+        expect.objectContaining(topic),
+      );
+      expect(
+        (await reopened(owner, 'PATCH', `/v1/collections/${ai.id}`, { parentId: null })).statusCode,
+      ).toBe(200);
+      expect((await reopened(owner, 'GET', `/v1/boards/${board.id}`)).json()).toEqual(board);
+      expect((await reopened(owner, 'DELETE', `/v1/collections/${ai.id}`)).statusCode).toBe(204);
+      expect((await reopened(owner, 'GET', '/v1/collections')).json()).toContainEqual(
+        expect.objectContaining({ id: topic.id, parentId: null }),
+      );
+      const listed = (await reopened(owner, 'GET', '/v1/boards')).json();
+      expect(listed.find((item: { id: string }) => item.id === board.id).collectionId).toBe(
+        topic.id,
+      );
+      expect(listed.find((item: { id: string }) => item.id === direct.id).collectionId).toBeNull();
+      expect((await reopened(owner, 'GET', `/v1/boards/${board.id}`)).json()).toEqual(board);
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   it('files owned boards privately without changing revisions, and ungroups on delete', async () => {
     const app = buildApp({ databasePath: ':memory:', speech: null });
     try {

@@ -43,3 +43,4 @@ export * from './board-preview';
 export * from './page-info';
 export * from './board-images';
 export * from './chat-pages';
+export * from './board-collections';

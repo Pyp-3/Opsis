@@ -26,6 +26,7 @@ import {
 import type { useBoardLibrary } from './useBoardLibrary';
 import { TemplatesPanel } from './TemplatesPanel';
 import type { BoardVisibility } from '@opsis/schema';
+import { collectionPathLabel } from '@opsis/schema';
 import { HomeBackdrop } from './HomeBackdrop';
 import { BoardRevisionPanel } from './BoardRevisionPanel';
 import { useBoardCollections } from './useBoardCollections';
@@ -124,7 +125,7 @@ export function BoardsPage({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const collections = useBoardCollections(refresh);
   const collectionName = (id: string | null | undefined) =>
-    collections.collections.find((collection) => collection.id === id)?.name;
+    id ? collectionPathLabel(collections.collections, id) || undefined : undefined;
   // A filter for a collection that no longer exists (deleted elsewhere) shows everything.
   const activeFilter =
     collectionFilter === 'all' ||
@@ -175,7 +176,7 @@ export function BoardsPage({
   );
   const historyEntry = library.entries.find((entry) => entry.id === historyId);
   const entries = visibleEntries
-    .filter((entry) => entry.title.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((entry) => matches(entry.title) || matches(collectionName(entry.collectionId) ?? ''))
     .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : b.updatedAt - a.updatedAt));
   const canSelect = selecting && tab === 'mine';
   const selectedEntries = canSelect ? entries.filter((entry) => selectedIds.has(entry.id)) : [];
