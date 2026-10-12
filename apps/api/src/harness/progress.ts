@@ -1,5 +1,6 @@
 import { StreamedPreview } from './streamed-preview';
 import { reportedUsage } from './usage';
+import { claudeLimitsFromEvent } from '@opsis/schema';
 import type { HarnessProvider } from './types.js';
 
 /**
@@ -158,6 +159,10 @@ export function progressReader(provider: HarnessProvider) {
     if (!event) return [];
     const usage = reportedUsage(provider, event);
     if (usage) return [{ type: 'usage', usage }];
+    if (provider === 'claude' && event.type === 'rate_limit_event') {
+      const limits = claudeLimitsFromEvent(event, new Date());
+      return limits ? [{ type: 'limits', limits }] : [];
+    }
     return provider === 'claude' ? claude(event) : provider === 'codex' ? codex(event) : [];
   };
 }

@@ -36,6 +36,11 @@ export type ProcessRunRequest = {
   signal?: AbortSignal;
   /** Called with each complete stdout line as it arrives, for live progress. */
   onStdoutLine?: (line: string) => void;
+  /**
+   * For a CLI that answers over stdio and exits when its input ends: stdin is left unclosed until a
+   * stdout line satisfies this, then the process is stopped and its output so far returned.
+   */
+  untilLine?: (line: string) => boolean;
 };
 
 /** Sanitized child-process result. Callers must not include stderr in diagnostics. */

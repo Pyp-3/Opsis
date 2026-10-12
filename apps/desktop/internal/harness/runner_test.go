@@ -120,3 +120,35 @@ func TestCompletionTimeoutIsBounded(t *testing.T) {
 		}
 	}
 }
+
+func TestRunnerKeepsInputOpenUntilTheAnswer(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node needed for fake CLI fixtures")
+	}
+	runner := ProcessRunner{Node: node}
+	directory := t.TempDir()
+	script := filepath.Join(directory, "app-server.mjs")
+	// Like Codex's app-server: answers each request line, and exits as soon as input ends.
+	if err := os.WriteFile(script, []byte(`process.stdin.on('end', () => process.exit(3));
+let buffer = '';
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  for (let at; (at = buffer.indexOf('\n')) >= 0; buffer = buffer.slice(at + 1)) {
+    const message = JSON.parse(buffer.slice(0, at));
+    setTimeout(() => process.stdout.write(JSON.stringify({ id: message.id }) + '\n'), 20);
+  }
+});`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := Request{Executable: script, Stdin: "{\"id\":1}\n{\"id\":2}\n", Directory: directory, Environment: ChildEnvironment(), Timeout: 15 * time.Second, MaxInput: 100, MaxOutput: 100, MaxError: 100, Until: func(line string) bool { return line == `{"id":2}` }}
+	output, err := runner.Run(context.Background(), request, nil)
+	if err != nil || output != "{\"id\":1}\n{\"id\":2}\n" {
+		t.Fatalf("answer: %q %v", output, err)
+	}
+	request.Until = func(string) bool { return false }
+	request.Timeout = 300 * time.Millisecond
+	if _, err := runner.Run(context.Background(), request, nil); !errors.Is(err, Error("harness_timeout")) {
+		t.Fatalf("an answer that never comes must time out: %v", err)
+	}
+}

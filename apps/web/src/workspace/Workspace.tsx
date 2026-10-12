@@ -133,6 +133,7 @@ import '@xyflow/react/dist/style.css';
 import './workspace.css';
 
 import { useProviderUsage, type ProviderAgent } from './provider-usage';
+import { isLimitProvider, useProviderLimits } from './useProviderLimits';
 
 const EXPLAIN_KEY = 'opsis:explain';
 const hasContent = (board: BoardDocument) => board.nodes.length > 0 || !!board.drawings?.length;
@@ -206,6 +207,9 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
   const saved = library.status;
   const [agent, setAgent] = useState<BoardAgent>(initial.snapshot.board?.agent ?? 'claude');
   const [modelPreferences, setModelPreferences] = useState(readModelPreferences);
+  const limits = useProviderLimits(
+    isLimitProvider(agent) && modelPreferences[agent].connection !== 'api' ? agent : null,
+  );
   const [agents, setAgents] = useState<ReturnType<typeof BoardAgentsSchema.parse>>([]);
   const [connectionError, setConnectionError] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -636,6 +640,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         },
       );
       if (result && callsAgent) provider.record(agent as ProviderAgent);
+      // Whatever the outcome, the provider's limits may have moved (or been reached).
+      if (callsAgent) limits.afterRequest(agent);
       // A new page the answer never filled is taken away again.
       if (!result && added && pages.documentRef.current === added) {
         boardHistory.travel();
@@ -971,6 +977,7 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
             if (agent !== 'demo') provider.setCaps(agent, caps);
           },
         }}
+        limits={{ entryOf: limits.entryOf, now: limits.now, check: limits.refresh }}
         generation={generation}
         generate={generate}
         setAttachments={setAttachments}

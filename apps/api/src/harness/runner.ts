@@ -34,6 +34,7 @@ export class SpawnProcessRunner implements ProcessRunner {
       let settled = false;
       let failure: HarnessError | undefined;
       let killTimer: NodeJS.Timeout | undefined;
+      let answered = false;
 
       const terminate = (error: HarnessError) => {
         failure ??= error;
@@ -57,10 +58,20 @@ export class SpawnProcessRunner implements ProcessRunner {
         }
         const text = chunk.toString('utf8');
         stdout += text;
-        if (!request.onStdoutLine) return;
+        if (!request.onStdoutLine && !request.untilLine) return;
         const lines = (pending + text).split('\n');
         pending = lines.pop() ?? '';
-        for (const line of lines) if (line.trim()) request.onStdoutLine(line);
+        for (const line of lines) {
+          if (!line.trim() || answered) continue;
+          request.onStdoutLine?.(line);
+          if (request.untilLine?.(line)) {
+            answered = true;
+            child.stdin.end();
+            child.kill('SIGTERM');
+            killTimer ??= setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS);
+            killTimer.unref();
+          }
+        }
       });
       child.stderr.on('data', (chunk: Buffer) => {
         stderrBytes += chunk.length;
@@ -76,11 +87,13 @@ export class SpawnProcessRunner implements ProcessRunner {
         if (killTimer) clearTimeout(killTimer);
         request.signal?.removeEventListener('abort', cancel);
         if (failure) reject(failure);
+        else if (answered) resolve({ exitCode: 0, stdout });
         else if (code !== 0) reject(new HarnessError('harness_exit'));
         else resolve({ exitCode: 0, stdout });
       });
       child.stdin.on('error', () => undefined);
-      child.stdin.end(request.stdin, 'utf8');
+      if (request.untilLine) child.stdin.write(request.stdin, 'utf8');
+      else child.stdin.end(request.stdin, 'utf8');
     });
   }
 }

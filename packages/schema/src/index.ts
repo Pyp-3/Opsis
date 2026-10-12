@@ -20,6 +20,7 @@ export const PACKAGE_NAME = '@opsis/schema';
 export * from './board-review';
 
 export * from './provider-usage';
+export * from './provider-limits';
 export * from './board-groups';
 export * from './document-import';
 export * from './board-comparison';

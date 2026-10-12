@@ -42,6 +42,8 @@ export default defineConfig({
             OPSIS_DB_PATH: ':memory:',
             OPSIS_RATE_LIMIT: '10000',
             OPSIS_SPEECH: 'off',
+            // Limit checks would read the developer's real CLI logins.
+            OPSIS_LIMIT_CHECKS: 'off',
           },
       url: `http://127.0.0.1:${apiPort}/v1/health`,
       reuseExistingServer: false,

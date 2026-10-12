@@ -275,6 +275,9 @@ container replacements. The optional `guest_emails` array sets `OPSIS_GUEST_EMAI
 Never put credentials in Git, build contexts, images or logs. A compromised runtime can
 read its mounted credentials; CI and file permissions do not eliminate that risk. All
 normal member accounts share the operator's provider usage; guests cannot start provider work.
+Members see those logins' subscription limits beside the composer; the server reads them with
+the CLIs' no-call checks, at most once a minute per provider (see [providers](PROVIDERS.md)).
+Set `OPSIS_LIMIT_CHECKS=off` to turn the checks off.
 
 There is no self-service sign-up, password reset by email or audit log. Rate limits are per
 process, and the server is a single SQLite instance. Every unrestricted member account can

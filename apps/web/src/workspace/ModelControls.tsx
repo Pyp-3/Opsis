@@ -1,8 +1,10 @@
 import {
   BOARD_MODEL_CHOICES,
   FULL_ACCESS_AGENTS,
+  limitStanding,
   type BoardModelSettings,
   type ProviderAgent,
+  type ProviderLimits,
 } from '@opsis/schema';
 import { ShieldCheck, Zap } from 'lucide-react';
 import { useInstance } from '../instance';
@@ -21,12 +23,25 @@ export function ModelControls({
   value,
   disabled,
   onChange,
+  limits = null,
 }: {
   agent: ProviderAgent;
   value: BoardModelSettings;
   disabled: boolean;
   onChange(value: BoardModelSettings): void;
+  /** The provider's reported limits on this host; marks models whose window is used up. */
+  limits?: ProviderLimits | null;
 }) {
+  // Windows every model shares are shown beside the composer; here, only a model's own.
+  const limitNote = (model: string) => {
+    const standing = limitStanding(limits, model, new Date());
+    if (standing.window?.models == null) return '';
+    return standing.state === 'limited'
+      ? ' · limit reached'
+      : standing.state === 'warning' && standing.window?.usedPercent != null
+        ? ` · ${Math.round(standing.window.usedPercent)}% used`
+        : '';
+  };
   const choices = BOARD_MODEL_CHOICES[agent];
   const isCustom = !choices.some((choice) => choice.id === value.model);
   const noEffort =
@@ -65,6 +80,7 @@ export function ModelControls({
                 .map((choice) => (
                   <option key={choice.id} value={choice.id}>
                     {choice.label}
+                    {limitNote(choice.id)}
                   </option>
                 ))}
             </optgroup>

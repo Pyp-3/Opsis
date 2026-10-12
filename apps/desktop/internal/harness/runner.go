@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,9 @@ type Request struct {
 	Environment                   []string
 	Timeout                       time.Duration
 	MaxInput, MaxOutput, MaxError int
+	// Until, for a CLI that answers over stdio and exits when its input ends, keeps stdin open
+	// until a stdout line satisfies it; the process is then stopped and its output returned.
+	Until func(string) bool
 }
 type Runner interface {
 	Run(context.Context, Request, func(string)) (string, error)
@@ -63,7 +67,16 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 	cmd := exec.Command(executable, args...)
 	cmd.Dir = request.Directory
 	cmd.Env = request.Environment
-	cmd.Stdin = strings.NewReader(request.Stdin)
+	if request.Until == nil {
+		cmd.Stdin = strings.NewReader(request.Stdin)
+	} else {
+		input, err := cmd.StdinPipe()
+		if err != nil {
+			return "", Error("harness_missing")
+		}
+		defer input.Close()
+		go func() { _, _ = io.WriteString(input, request.Stdin) }()
+	}
 	chunks := make(chan outputChunk, 16)
 	cmd.Stdout = channelWriter{true, chunks}
 	cmd.Stderr = channelWriter{false, chunks}
@@ -78,6 +91,7 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 	var pending []byte
 	stderrBytes := 0
 	var failure error
+	answered := false
 	var kill <-chan time.Time
 	var timer *time.Timer
 	terminate := func(code Error) {
@@ -127,7 +141,7 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 				continue
 			}
 			stdout.Write(chunk.data)
-			if onLine != nil {
+			if (onLine != nil || request.Until != nil) && !answered {
 				pending = append(pending, chunk.data...)
 				for {
 					index := bytes.IndexByte(pending, '\n')
@@ -136,8 +150,17 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 					}
 					line := string(pending[:index])
 					pending = pending[index+1:]
-					if strings.TrimSpace(line) != "" {
+					if strings.TrimSpace(line) == "" || answered {
+						continue
+					}
+					if onLine != nil {
 						onLine(line)
+					}
+					if request.Until != nil && request.Until(line) {
+						answered = true
+						tree.kill(false)
+						timer = time.NewTimer(2 * time.Second)
+						kill = timer.C
 					}
 				}
 			}
@@ -146,6 +169,9 @@ func (runner ProcessRunner) Run(parent context.Context, request Request, onLine 
 	waitErr := <-done
 	if failure != nil {
 		return "", failure
+	}
+	if answered {
+		return stdout.String(), nil
 	}
 	if waitErr != nil {
 		return "", Error("harness_exit")

@@ -89,6 +89,9 @@ export function applyProgress(activity: AgentActivity, progress: AgentProgress):
         ? { ...activity, usage: [...activity.usage, parsed.data].slice(-10) }
         : activity;
     }
+    case 'limits':
+      // The host records the provider's limits itself; the composer reads them from there.
+      return activity;
     case 'phase':
       return { ...activity, phase: progress.phase };
     case 'thinking':
