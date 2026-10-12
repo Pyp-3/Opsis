@@ -89,33 +89,33 @@ pub(crate) fn expand_set(set: &str) -> Result<Vec<char>, EngineError> {
 
 /// `sort -n` key comparison: optional leading blanks and minus sign, digits, optional fraction.
 /// Text without a leading number counts as zero. Compared exactly, without floating point.
-pub(crate) fn compare_numbers(a: &str, b: &str) -> Ordering {
-    fn parse(text: &str) -> (bool, &str, &str) {
-        let text = text.trim_start_matches([' ', '\t']);
-        let (negative, rest) = match text.strip_prefix('-') {
-            Some(rest) => (true, rest),
-            None => (false, text),
-        };
-        let int_end = rest
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(rest.len());
-        let int = rest[..int_end].trim_start_matches('0');
-        let frac = match rest[int_end..].strip_prefix('.') {
-            Some(after) => {
-                let end = after
-                    .find(|c: char| !c.is_ascii_digit())
-                    .unwrap_or(after.len());
-                after[..end].trim_end_matches('0')
-            }
-            None => "",
-        };
-        // Negative zero is zero.
-        (negative && !(int.is_empty() && frac.is_empty()), int, frac)
-    }
+pub(crate) fn number_key(text: &str) -> (bool, &str, &str) {
+    let text = text.trim_start_matches([' ', '\t']);
+    let (negative, rest) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    let int_end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    let int = rest[..int_end].trim_start_matches('0');
+    let frac = match rest[int_end..].strip_prefix('.') {
+        Some(after) => {
+            let end = after
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(after.len());
+            after[..end].trim_end_matches('0')
+        }
+        None => "",
+    };
+    // Negative zero is zero.
+    (negative && !(int.is_empty() && frac.is_empty()), int, frac)
+}
+
+pub(crate) fn compare_number_keys(a: (bool, &str, &str), b: (bool, &str, &str)) -> Ordering {
     let magnitude = |(_, ai, af): (bool, &str, &str), (_, bi, bf): (bool, &str, &str)| {
         ai.len().cmp(&bi.len()).then(ai.cmp(bi)).then(af.cmp(bf))
     };
-    let (a, b) = (parse(a), parse(b));
     match (a.0, b.0) {
         (false, true) => Ordering::Greater,
         (true, false) => Ordering::Less,
@@ -124,6 +124,12 @@ pub(crate) fn compare_numbers(a: &str, b: &str) -> Ordering {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn compare_numbers(a: &str, b: &str) -> Ordering {
+    compare_number_keys(number_key(a), number_key(b))
+}
+
+#[cfg(test)]
 pub(crate) fn compare_folded(a: &str, b: &str) -> Ordering {
     a.chars()
         .flat_map(char::to_uppercase)

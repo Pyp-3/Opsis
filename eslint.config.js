@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/target/**',
       '**/coverage/**',
+      'output/**',
       'pnpm-lock.yaml',
       'apps/desktop/assets/**',
       'apps/desktop/bundle/**',

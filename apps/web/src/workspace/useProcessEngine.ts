@@ -28,8 +28,9 @@ export function useProcessEngine(board: BoardDocument | null): ProcessState {
   useEffect(() => {
     if (!request.nodes.length) return;
     let active = true;
+    const controller = new AbortController();
     void Promise.resolve()
-      .then(() => calculateProcess(request))
+      .then(() => calculateProcess(request, { signal: controller.signal }))
       .then(
         (result) => {
           if (active)
@@ -67,6 +68,7 @@ export function useProcessEngine(board: BoardDocument | null): ProcessState {
       );
     return () => {
       active = false;
+      controller.abort();
     };
   }, [key, request]);
   return !request.nodes.length

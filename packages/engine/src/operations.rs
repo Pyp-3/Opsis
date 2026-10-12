@@ -6,7 +6,7 @@ use crate::contract::{
 use crate::drawing::drawing;
 use crate::text::ending;
 use crate::text::{
-    body, compare_folded, compare_numbers, expand_set, one_char, terminated, usual_ending,
+    body, compare_number_keys, expand_set, number_key, one_char, terminated, usual_ending,
     utf16_len,
 };
 use std::cmp::Ordering;
@@ -48,10 +48,6 @@ fn validate(operation: &Operation) -> Result<(), EngineError> {
                 ));
             }
         }
-        Operation::Translate { set1, set2, .. } => {
-            expand_set(set1)?;
-            expand_set(set2)?;
-        }
         Operation::Concat { from } | Operation::Paste { from, .. }
             if from.len() < 2 || from.len() > MAX_INPUTS =>
         {
@@ -72,6 +68,11 @@ pub(crate) fn transform(
     inputs: &[(&str, &str)],
 ) -> Result<StepResult, EngineError> {
     validate(operation)?;
+    // Validate and expand translation sets once, before checking the input value.
+    let translation = match operation {
+        Operation::Translate { set1, set2, .. } => Some((expand_set(set1)?, expand_set(set2)?)),
+        _ => None,
+    };
     let texts: Vec<&str> = match operation {
         Operation::Source { text } => vec![text],
         _ => inputs.iter().map(|&(_, text)| text).collect(),
@@ -128,15 +129,31 @@ pub(crate) fn transform(
             ..
         } => {
             let mut keep: Vec<usize> = (0..lines.len()).collect();
+            let numbers = numeric.then(|| {
+                lines
+                    .iter()
+                    .map(|line| number_key(body(line)))
+                    .collect::<Vec<_>>()
+            });
+            let folded = (!numeric && *ignore_case).then(|| {
+                lines
+                    .iter()
+                    .map(|line| {
+                        body(line)
+                            .chars()
+                            .flat_map(char::to_uppercase)
+                            .collect::<String>()
+                    })
+                    .collect::<Vec<_>>()
+            });
             // Like GNU sort, lines with equal keys fall back to a plain comparison.
             keep.sort_by(|&a, &b| {
-                let (a, b) = (body(lines[a]), body(lines[b]));
-                match (numeric, ignore_case) {
-                    (true, _) => compare_numbers(a, b),
-                    (false, true) => compare_folded(a, b),
-                    (false, false) => Ordering::Equal,
+                match (&numbers, &folded) {
+                    (Some(keys), _) => compare_number_keys(keys[a], keys[b]),
+                    (_, Some(keys)) => keys[a].cmp(&keys[b]),
+                    _ => Ordering::Equal,
                 }
-                .then_with(|| a.cmp(b))
+                .then_with(|| body(lines[a]).cmp(body(lines[b])))
             });
             if matches!(order, SortOrder::Desc) {
                 keep.reverse();
@@ -232,8 +249,8 @@ pub(crate) fn transform(
                 .collect();
             (output, identity())
         }
-        Operation::Translate { set1, set2, .. } => {
-            let (set1, set2) = (expand_set(set1)?, expand_set(set2)?);
+        Operation::Translate { .. } => {
+            let (set1, set2) = translation.expect("translation sets were validated above");
             // Like tr: a shorter second set repeats its last character; later mappings win.
             let mut map = HashMap::new();
             for (index, &c) in set1.iter().enumerate() {

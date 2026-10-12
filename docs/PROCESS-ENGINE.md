@@ -74,7 +74,11 @@ Both Zod and Rust validate their boundaries. Requests are limited to 50 nodes, 1
 
 ## Integration
 
-`layoutBoard` calculates supported process values before the board is displayed, reviewed or saved. The engine's output replaces terminal preview output and sample input. The workspace recalculates from process metadata when loading a board or receiving a changed source; stale calculations are hidden until the current result is available. Changing node positions does not trigger calculation. An eight-entry promise cache shares equivalent jobs, and one worker services all requests with a ten-second timeout. Errors are displayed instead of presenting cached model output as a calculated result: a request-level error replaces every calculated view, while a failed step shows its own message in terminal details and playback. Persisted boards keep the existing preview text for failed steps.
+`layoutBoard` calculates supported process values before the board is displayed, reviewed or saved. The engine's output replaces terminal preview output and sample input. The workspace recalculates from process metadata when loading a board or receiving a changed source; stale calculations are hidden until the current result is available. Changing node positions does not trigger calculation. An eight-entry result cache shares equivalent completed jobs; pending equivalent jobs share the same calculation. One worker runs one job at a time with at most eight queued jobs. Its ten-second deadline starts when a job is dispatched. A timeout or worker failure rejects only that job and restarts the worker for queued work; excess requests receive a busy error rather than displacing accepted work. Preview subscriptions are cancelled when superseded or unmounted; save/export subscribers keep shared work alive. A preview with no remaining subscribers is removed from the queue, or its active worker is terminated. Responses from a retired worker cannot settle a newer job. Errors are displayed instead of presenting cached model output as a calculated result: a request-level error replaces every calculated view, while a failed step shows its own message in terminal details and playback. Persisted boards keep the existing preview text for failed steps.
+
+Playback retains every static provenance trace while animating at most twelve evenly
+distributed kept rows on one SVG timeline. Particles start together and pause when the
+page is hidden or the trace view is offscreen. Reduced-motion readers see static traces.
 
 The sample editor recalculates and persists the whole updated board as one history entry; it refuses a sample that makes any step fail and names that step. Source deletion removes dependent process metadata transitively. Board sync also removes calculations whose sources disappeared during concurrent edits. Unrelated changes keep the operations. Exports preserve source operations and cached calculated terminal text; playback traces are rebuilt from the source.
 
@@ -92,6 +96,7 @@ pnpm install --frozen-lockfile
 pnpm engine:build
 pnpm engine:test
 pnpm engine:check
+pnpm engine:benchmark --native
 pnpm exec vitest run packages/engine packages/schema/src/process.test.ts apps/web/src/workspace/Workspace.test.tsx
 ```
 
@@ -100,3 +105,11 @@ pnpm exec vitest run packages/engine packages/schema/src/process.test.ts apps/we
 Rust tests exercise operation boundaries, invalid inputs and per-node failure propagation. Property tests (`proptest`) check row provenance, ordering and terminator invariants for every operation over random samples, that arbitrary `from` graphs always yield one outcome per node, and that any input string returns an envelope rather than panicking. Raise `PROPTEST_CASES` for a longer run. TypeScript tests load the actual generated WASM and validate its shared contract. Workspace tests use those same WASM calculations through an in-process test transport; production uses a real worker. CI builds the asset, checks formatting/Clippy, runs native Rust tests and the existing web QA gate.
 
 Future geometry or simulation modules should accept bounded declarative inputs, return typed results and retain deterministic fixtures. Benchmark existing routing before replacing it. Add explicit domain rules for new simulations; Rust alone does not establish the truth of an inferred process.
+
+The benchmark uses bounded synthetic small, 50-node/100-row/1000-character, sorting and
+Unicode workloads. It reports WASM byte size, initialization, and p50/p95 request
+validation, JSON encoding, evaluation, JSON decoding, result validation and complete
+adapter cost. `--native` also measures the same JSON inputs in a native release binary.
+The browser regression attaches cold worker/cache measurements and exercises rapid
+preview cancellation while a save remains subscribed. Measurements are diagnostic,
+not machine-dependent CI timing assertions. Preserve validation at both boundaries.

@@ -5,9 +5,17 @@ mod evaluator;
 mod operations;
 mod text;
 
-use contract::{EngineError, ErrorCode, Request};
+use contract::{EngineError, ErrorCode, Request, ResultSet};
 use evaluator::calculate;
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Response {
+    Success { ok: bool, result: ResultSet },
+    Failure { ok: bool, error: EngineError },
+}
 
 /// The only WASM entry point: bounded JSON in, calculated data and vector geometry out.
 #[wasm_bindgen]
@@ -27,10 +35,13 @@ pub fn evaluate(json: &str) -> String {
             })
             .and_then(calculate)
     };
-    match result {
-        Ok(result) => serde_json::json!({"ok": true, "result": result}).to_string(),
-        Err(error) => serde_json::json!({"ok": false, "error": error}).to_string(),
-    }
+    let response = match result {
+        Ok(result) => Response::Success { ok: true, result },
+        Err(error) => Response::Failure { ok: false, error },
+    };
+    // Avoid copying text and geometry into an intermediate JSON Value tree.
+    // These response types contain only JSON-compatible strings, integers and booleans.
+    serde_json::to_string(&response).expect("engine responses are JSON-compatible")
 }
 
 #[cfg(test)]

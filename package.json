@@ -13,6 +13,7 @@
     "engine:build": "pnpm --filter @opsis/engine build",
     "engine:test": "pnpm --filter @opsis/engine test:rust",
     "engine:check": "pnpm --filter @opsis/engine check:rust",
+    "engine:benchmark": "pnpm engine:build && node packages/engine/scripts/benchmark.mjs",
     "build": "pnpm -r build",
     "release:package": "node scripts/package-release.mjs",
     "release:test": "node --test scripts/package-release.test.mjs scripts/bundle-macos.test.mjs scripts/sync-desktop.test.mjs scripts/prune-releases.test.mjs",

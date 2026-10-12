@@ -11,3 +11,5 @@ apps/desktop/assets/
 apps/desktop/bundle/
 apps/desktop/build/
 apps/web/wailsjs/
+test-results*/
+output/

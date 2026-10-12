@@ -7,27 +7,93 @@ import {
 } from '@opsis/engine';
 import type { BoardGraph } from '@opsis/schema';
 
+type Subscriber = {
+  resolve: (result: EngineResult) => void;
+  reject: (error: Error) => void;
+  detach: () => void;
+};
+type Job = { id: number; key: string; request: EngineRequest; subscribers: Set<Subscriber> };
 let worker: Worker | undefined;
 let sequence = 0;
-const pending = new Map<
-  number,
-  {
-    resolve: (result: EngineResult) => void;
-    reject: (error: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  }
->();
-const cache = new Map<string, Promise<EngineResult>>();
+let active: Job | undefined;
+let timer: ReturnType<typeof setTimeout> | undefined;
+const queue: Job[] = [];
+const pending = new Map<string, Job>();
+const cache = new Map<string, EngineResult>();
+const MAX_QUEUED = 8;
 
-function stop(message: string) {
+function releaseWorker() {
   worker?.terminate();
   worker = undefined;
-  for (const job of pending.values()) {
-    clearTimeout(job.timer);
-    job.reject(new Error(message));
+}
+
+function finish(job: Job, outcome: EngineResult | Error) {
+  clearTimeout(timer);
+  timer = undefined;
+  active = undefined;
+  pending.delete(job.key);
+  if (!(outcome instanceof Error)) {
+    cache.set(job.key, outcome);
+    if (cache.size > 8) cache.delete(cache.keys().next().value!);
   }
-  pending.clear();
-  cache.clear();
+  for (const subscriber of job.subscribers) {
+    subscriber.detach();
+    if (outcome instanceof Error) subscriber.reject(outcome);
+    else subscriber.resolve(outcome);
+  }
+  job.subscribers.clear();
+  dispatch();
+}
+
+function failActive(message: string) {
+  releaseWorker();
+  if (active) finish(active, new Error(message));
+}
+
+/** Dispatch one job at a time; its deadline excludes time waiting behind another job. */
+function dispatch() {
+  if (active || !queue.length) return;
+  const job = queue.shift()!;
+  active = job;
+  try {
+    if (!worker) {
+      const created = new Worker(new URL('./process.worker.ts', import.meta.url), {
+        type: 'module',
+      });
+      worker = created;
+      created.onmessage = (event: MessageEvent) => {
+        // A terminated worker's late response cannot settle a replacement worker's job.
+        if (worker !== created || !active || active.id !== event.data?.id) return;
+        const current = active;
+        let outcome: EngineResult | Error;
+        try {
+          outcome =
+            event.data.ok === true
+              ? EngineResultSchema.parse(event.data.result)
+              : new Error(
+                  typeof event.data.error === 'string'
+                    ? event.data.error.slice(0, 2000)
+                    : 'The process could not be calculated.',
+                );
+        } catch {
+          outcome = new Error('The process engine returned invalid data.');
+        }
+        finish(current, outcome);
+      };
+      created.onerror = () => {
+        if (worker === created) failActive('The process engine could not load. Try again.');
+      };
+      created.onmessageerror = () => {
+        if (worker === created) failActive('The process engine could not return its result.');
+      };
+    }
+    timer = setTimeout(() => {
+      if (active === job) failActive('The process calculation timed out. Try a smaller sample.');
+    }, 10_000);
+    worker.postMessage({ id: job.id, request: job.request });
+  } catch {
+    failActive('The process engine could not start.');
+  }
 }
 
 export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest {
@@ -39,55 +105,61 @@ export function processRequest(board: Pick<BoardGraph, 'nodes'>): EngineRequest 
   });
 }
 
-/** One shared worker, bounded requests, and a small cache independent of node positions. */
-export function calculateProcess(request: EngineRequest): Promise<EngineResult> {
+/** Saves/exports remain subscribed by default; previews may cancel their own subscription. */
+export function calculateProcess(
+  request: EngineRequest,
+  options: { signal?: AbortSignal } = {},
+): Promise<EngineResult> {
+  const { signal } = options;
+  if (signal?.aborted)
+    return Promise.reject(new DOMException('Calculation cancelled.', 'AbortError'));
   const input = EngineRequestSchema.parse(request);
   if (!input.nodes.length) return Promise.resolve({ version: 3, nodes: [] });
   const key = JSON.stringify(input);
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    cache.delete(key);
+    cache.set(key, cached);
+    return Promise.resolve(cached);
+  }
+  let job = pending.get(key);
+  if (!job) {
+    if (queue.length >= MAX_QUEUED)
+      return Promise.reject(
+        new Error('The process engine is busy. Try again when the current calculations finish.'),
+      );
+    job = { id: ++sequence, key, request: input, subscribers: new Set() };
+    pending.set(key, job);
+    queue.push(job);
+  }
+  const current = job;
   const promise = new Promise<EngineResult>((resolve, reject) => {
-    if (!worker) {
-      worker = new Worker(new URL('./process.worker.ts', import.meta.url), { type: 'module' });
-      worker.onmessage = (event: MessageEvent) => {
-        const job = pending.get(event.data.id);
-        if (!job) return;
-        clearTimeout(job.timer);
-        pending.delete(event.data.id);
-        try {
-          if (event.data.ok === true) job.resolve(EngineResultSchema.parse(event.data.result));
-          else
-            job.reject(
-              new Error(
-                typeof event.data.error === 'string'
-                  ? event.data.error.slice(0, 2000)
-                  : 'The process could not be calculated.',
-              ),
-            );
-        } catch {
-          job.reject(new Error('The process engine returned invalid data.'));
-        }
-      };
-      worker.onerror = () => stop('The process engine could not load. Reload the canvas to retry.');
-      worker.onmessageerror = () => stop('The process engine could not return its result.');
+    const subscriber: Subscriber = {
+      resolve,
+      reject,
+      detach: () => signal?.removeEventListener('abort', cancel),
+    };
+    function cancel() {
+      subscriber.detach();
+      current.subscribers.delete(subscriber);
+      reject(new DOMException('Calculation cancelled.', 'AbortError'));
+      if (current.subscribers.size) return;
+      pending.delete(current.key);
+      if (active === current) {
+        clearTimeout(timer);
+        timer = undefined;
+        releaseWorker();
+        active = undefined;
+      } else {
+        const index = queue.indexOf(current);
+        if (index !== -1) queue.splice(index, 1);
+      }
+      dispatch();
     }
-    const id = ++sequence;
-    const timer = setTimeout(
-      () => stop('The process calculation timed out. Try a smaller sample.'),
-      10_000,
-    );
-    pending.set(id, { resolve, reject, timer });
-    try {
-      worker.postMessage({ id, request: input });
-    } catch {
-      stop('The process engine could not start.');
-    }
+    current.subscribers.add(subscriber);
+    signal?.addEventListener('abort', cancel, { once: true });
   });
-  cache.set(key, promise);
-  if (cache.size > 8) cache.delete(cache.keys().next().value!);
-  void promise.catch(() => {
-    if (cache.get(key) === promise) cache.delete(key);
-  });
+  dispatch();
   return promise;
 }
 

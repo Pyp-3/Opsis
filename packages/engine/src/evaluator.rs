@@ -34,7 +34,8 @@ fn resolve<'a>(
         return;
     };
     stack.push(id);
-    for source in operation.sources() {
+    let sources = operation.sources();
+    for &source in &sources {
         if let Some((&source, _)) = operations.get_key_value(source) {
             resolve(source, operations, outcomes, stack);
         }
@@ -44,9 +45,9 @@ fn resolve<'a>(
         // Marked while resolving its sources: it is part of a cycle.
         return;
     }
-    let mut inputs = Vec::new();
+    let mut inputs = Vec::with_capacity(sources.len());
     let mut problem = None;
-    for source in operation.sources() {
+    for source in sources {
         match outcomes.get(source) {
             Some(Outcome::Ok(result)) => inputs.push((source, result.output.as_str())),
             Some(Outcome::Failed(_)) => {
@@ -99,7 +100,7 @@ pub(crate) fn calculate(request: Request) -> Result<ResultSet, EngineError> {
             "A process is limited to 50 nodes.",
         ));
     }
-    let mut operations = HashMap::new();
+    let mut operations = HashMap::with_capacity(request.nodes.len());
     for node in &request.nodes {
         if !valid_id(&node.id) {
             return Err(EngineError::new(
@@ -121,8 +122,8 @@ pub(crate) fn calculate(request: Request) -> Result<ResultSet, EngineError> {
             ));
         }
     }
-    let mut outcomes = HashMap::new();
-    let mut stack = Vec::new();
+    let mut outcomes = HashMap::with_capacity(request.nodes.len());
+    let mut stack = Vec::with_capacity(request.nodes.len());
     for node in &request.nodes {
         resolve(&node.id, &operations, &mut outcomes, &mut stack);
     }

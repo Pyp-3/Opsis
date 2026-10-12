@@ -4,6 +4,34 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
+Process engine responsiveness (2026-10-12, user request): implemented reproducible native,
+WASM and browser measurements; cancel obsolete preview subscriptions with a bounded
+worker queue while preserving saves/exports, deduplication and stale-response guards;
+serialize Rust responses directly and prepare sort/translation keys once; synchronize
+bounded playback particles and pause them offscreen/hidden. Preserve process contract v3,
+exact Unicode/text terminators, provenance, branch failures, and one undoable sample edit.
+Acceptance: existing engine/property tests plus cancellation/timeout/queue/animation
+regressions, browser sample edit/undo/reload, full integration checks, and the rebuilt
+Windows app's isolated browser/hidden WebView checks. Verified: lint/typecheck,
+Rust formatting/Clippy and 26 tests, native vet/race tests, 599 unit tests, 78 browser
+scenarios on each of the Fastify and rebuilt Windows executable paths (one existing
+Linux visual baseline skipped in each run), packaged database/MCP integration and all
+28 hidden WebView checks. The final targeted browser rerun also verifies the actual SVG
+timeline and reduced-motion behavior. A timing-sensitive login test failed on the first
+full unit run, then passed in isolation and in the full rerun without assertion changes.
+Local profile comparisons favor optimization level 2: 326,338 WASM bytes versus 326,510
+for the updated size-oriented build and 349,841 before this work. Initial local runs
+reduced p50 large evaluations from 8.49 to 2.05 ms and sorting from 10.94 to 2.80 ms;
+concurrent QA load changes timings, so these are diagnostic observations, not guarantees.
+Incremental branch caching remains
+a possible measured follow-up;
+this delivery retains stateless Rust evaluation and the bounded whole-request cache.
+All changed text is strict UTF-8 without a BOM and uses LF endings. Local Windows
+`tar.exe` crashed while packing the cached speech runtime (access violation); a local
+Python archive workaround produced and verified the complete runtime for the rebuilt
+executable. That local packaging-tool issue remains open; Linux/macOS checks await CI.
+No broader roadmap goal is marked complete.
+
 Chat harness (2026-10-12, user request): one chat thread now serves every page. Requests
 carry a short page index, `@page` mentions send those pages in full, and the agent may ask the
 server to read up to four more pages per message. Threads can be compacted on demand, and

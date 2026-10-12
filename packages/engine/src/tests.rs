@@ -264,6 +264,27 @@ fn filters_ignoring_case_and_inverted() {
 }
 
 #[test]
+fn folded_sort_keeps_unicode_expansion_ties_and_mixed_terminators() {
+    let result = run(json!([
+        {"id": "s", "process": {"op": "source", "text": "ß\r\nSS\nss\nİ\nı\n😀"}},
+        {"id": "f", "process": {"op": "sort", "from": "s", "order": "asc", "ignoreCase": true}}
+    ]));
+    let sorted = &result["result"]["nodes"][1];
+    assert_eq!(sorted["output"], "ı\nSS\nss\nß\r\nİ\n😀\r\n");
+    assert_eq!(sorted["origins"], json!([[4], [1], [2], [0], [3], [5]]));
+}
+
+#[test]
+fn response_serialization_preserves_unicode_and_json_escapes() {
+    let text = "\0\"\\😀\r\n";
+    let result = run(json!([{ "id": "s", "process": {"op": "source", "text": text} }]));
+    assert_eq!(result["ok"], true);
+    assert_eq!(result["result"]["nodes"][0]["input"], text);
+    assert_eq!(result["result"]["nodes"][0]["output"], text);
+    assert_eq!(result["result"]["nodes"][0]["origins"], json!([[0]]));
+}
+
+#[test]
 fn counts_adjacent_duplicates_like_uniq_c() {
     let result = run(json!([
         {"id": "s", "process": {"op": "source", "text": "a\na\nb\na\r\na"}},
