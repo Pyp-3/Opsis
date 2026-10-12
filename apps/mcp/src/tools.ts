@@ -182,10 +182,15 @@ export function registerTools(
     {
       title: 'Create a collection',
       description:
-        'Creates a private collection to file boards in. Names are unique regardless of case.',
-      inputSchema: { name: z.string().trim().min(1).max(60) },
+        'Creates a private collection to file boards in. Names are unique within the parent regardless of case; omit parentId for a root collection.',
+      inputSchema: {
+        name: z.string().trim().min(1).max(60),
+        parentId: z.string().uuid().optional(),
+      },
     },
-    guarded(async ({ name }: { name: string }) => client.createCollection(name)),
+    guarded(async ({ name, parentId }: { name: string; parentId?: string | undefined }) =>
+      client.createCollection(name, parentId),
+    ),
   );
 
   server.registerTool(

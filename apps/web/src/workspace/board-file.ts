@@ -50,7 +50,9 @@ export function splitBoardFile(value: unknown): {
   };
 }
 
-const Collections = z.array(z.object({ id: z.string().uuid(), name: z.string() }));
+const Collections = z.array(
+  z.object({ id: z.string().uuid(), name: z.string(), parentId: z.string().nullable().optional() }),
+);
 
 async function listCollections() {
   const response = await fetch('/v1/collections');
@@ -80,7 +82,7 @@ export async function fileIntoCollectionNamed(boardId: string, name: string) {
     body: JSON.stringify(body),
   });
   let collection = (await listCollections()).find(
-    (item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    (item) => !item.parentId && item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
   );
   if (!collection) {
     const created = await fetch('/v1/collections', json('POST', { name }));

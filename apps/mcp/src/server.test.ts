@@ -496,7 +496,7 @@ describe('Opsis MCP server', () => {
     ).json();
     const loose = (await call('opsis_create_board', { title: 'Garden' })).json();
     expect((await call('opsis_list_collections')).json()).toEqual([
-      { id: networking.id, name: 'Networking', boards: 1 },
+      { id: networking.id, name: 'Networking', parentId: null, boards: 1 },
     ]);
     expect(
       (await call('opsis_file_board', { boardId: loose.id, collectionId: networking.id })).json(),
@@ -547,6 +547,17 @@ describe('Opsis MCP server', () => {
       collectionId: networking.id,
     });
     expect(foreign).toMatchObject({ isError: true, text: expect.stringMatching(/only owners/) });
+  });
+
+  it('creates child collections and lists their parents with direct board counts', async () => {
+    const root = (await call('opsis_create_collection', { name: 'Education' })).json();
+    const child = (await call('opsis_create_collection', { name: 'AI', parentId: root.id })).json();
+    expect(child).toMatchObject({ name: 'AI', parentId: root.id });
+    await call('opsis_create_board', { title: 'Neural networks', collectionId: child.id });
+    expect((await call('opsis_list_collections')).json()).toEqual([
+      { id: child.id, name: 'AI', parentId: root.id, boards: 1 },
+      { id: root.id, name: 'Education', parentId: null, boards: 0 },
+    ]);
   });
 
   it('explains what to do without a usable agent key', async () => {

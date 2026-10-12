@@ -122,6 +122,20 @@ try {
     assert.ok(!result.isError, `MCP ${name} failed`);
     return JSON.parse(result.content[0].text);
   };
+  const parent = await call('opsis_create_collection', { name: 'Education' });
+  const child = await call('opsis_create_collection', {
+    name: 'Artificial Intelligence',
+    parentId: parent.id,
+  });
+  assert.equal(child.parentId, parent.id, 'packaged MCP preserves parent metadata');
+  await call('opsis_file_board', { boardId: id, collectionId: child.id });
+  const collections = await call('opsis_list_collections', {});
+  assert.equal(collections.find((item) => item.id === child.id).boards, 1);
+  assert.equal(
+    collections.find((item) => item.id === parent.id).boards,
+    0,
+    'parent counts are direct only',
+  );
   assert.equal(
     (await call('opsis_get_board', { boardId: id })).open,
     `${address}/canvas?board=${id}`,

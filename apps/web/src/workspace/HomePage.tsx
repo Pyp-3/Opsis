@@ -14,6 +14,7 @@ import {
   DNS_DEMO,
   EMAIL_DEMO,
   PROCESS_EXAMPLES,
+  collectionPathLabel,
   type BoardDocument,
   type BoardGraph,
 } from '@opsis/schema';
@@ -84,7 +85,7 @@ export function HomePage({
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 6);
   const collectionName = (id: string | null | undefined) =>
-    collections.find((collection) => collection.id === id)?.name;
+    id ? collectionPathLabel(collections, id) || undefined : undefined;
   const allBoardsPath = from ? boardsInCollectionPath(from.id) : '/boards';
   const start = (text: string) => {
     if (text.trim() && !busy) onStart(text.trim());
@@ -213,7 +214,7 @@ export function HomePage({
                   disabled={busy}
                   onClick={() => setRecentFrom(collection.id)}
                 >
-                  <Folder size={13} /> {collection.name}
+                  <Folder size={13} /> {collectionPathLabel(collections, collection.id)}
                 </button>
               ))}
             </div>

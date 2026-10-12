@@ -142,6 +142,25 @@ is a recovery snapshot, not a merge: restoring does not combine newer changes fr
 the original database. Portable per-board JSON exports remain available and do not
 contain accounts, credentials or the long-term revision archive.
 
+## Nested library collections
+
+Migration 8 preserves existing collections as top-level containers and adds a nullable
+parent id. Collections remain private to their owner, contain direct boards and child
+collections, and require case-insensitive unique names among siblings. A board still
+has exactly one filing location; moves never edit its document, revision or history.
+Both API hosts use the same pure hierarchy validation to reject cycles and foreign
+parents. The library offers a collapsible list, breadcrumbs, path search, parent
+selection at creation and explicit collection/board move controls.
+
+Deleting a collection unfiles its direct boards and promotes child collections to
+its parent while preserving their boards. If a promoted child's name conflicts with
+a sibling, deletion returns a conflict without changing anything; move or rename
+that child explicitly first. Sharing, smart rules, counts, usage and collection
+bundles continue to apply to direct members. Sharing does not inherit through the
+tree. Bundles and named board-file imports remain private copies into root
+collections; they do not transport the container hierarchy. Database backups keep
+the complete hierarchy. Existing document and bundle versions remain unchanged.
+
 ## Verification
 
 - Fastify persistence tests cover legacy migration, reopening, live WAL backup and

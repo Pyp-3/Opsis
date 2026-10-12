@@ -129,8 +129,9 @@ export function CollectionActions({
         <details>
           <summary>Share or export {collection.name}</summary>
           <p>
-            Applies to all {members.length} boards in this collection, including archived boards.
-            New boards added later keep their own sharing settings.
+            Applies to all {members.length} boards directly in this collection, including archived
+            boards. Child collections are excluded. New boards added later keep their own sharing
+            settings.
           </p>
           <div className="collection-action-row">
             <button

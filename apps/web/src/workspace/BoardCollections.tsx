@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Folder,
   FolderInput,
   FolderPlus,
   Inbox,
@@ -14,10 +13,13 @@ import {
   matchesSmartCollection,
   normalizeTags,
   SmartCollectionRuleSchema,
+  collectionPath,
+  collectionPathLabel,
   type OrganizedBoard,
   type SmartCollectionRule,
 } from '@opsis/schema';
 import type { BoardCollection, SmartCollection, useBoardCollections } from './useBoardCollections';
+import { CollectionTree } from './CollectionTree';
 
 /** All boards, unfiled boards, one collection's id, or `smart:<id>` for a smart collection. */
 export type CollectionFilter = 'all' | 'unfiled' | (string & {});
@@ -78,8 +80,11 @@ export function CollectionBar({
   onFilter: (next: CollectionFilter) => void;
   disabled: boolean;
 }) {
-  const [mode, setMode] = useState<'idle' | 'create' | 'rename' | 'delete' | 'smart'>('idle');
+  const [mode, setMode] = useState<'idle' | 'create' | 'rename' | 'move' | 'delete' | 'smart'>(
+    'idle',
+  );
   const [name, setName] = useState('');
+  const [parent, setParent] = useState('');
   const selected = collections.collections.find((collection) => collection.id === filter);
   const selectedSmart = collections.smartCollections.find((item) => item.id === smartId(filter));
   const [editingSmart, setEditingSmart] = useState<SmartCollection | null>(null);
@@ -105,9 +110,16 @@ export function CollectionBar({
       <div className="board-collection-chips" role="group" aria-label="Show collection">
         {chip('all', 'All boards', <LayoutGrid size={13} />)}
         {chip('unfiled', 'Unfiled', <Inbox size={13} />)}
-        {collections.collections.map((collection) =>
-          chip(collection.id, collection.name, <Folder size={13} />),
-        )}
+        <CollectionTree
+          collections={collections.collections}
+          selected={filter}
+          disabled={busy}
+          count={count}
+          onSelect={(id) => {
+            onFilter(id);
+            setMode('idle');
+          }}
+        />
         {collections.smartCollections.map((smart) =>
           chip(SMART + smart.id, smart.name, <Sparkles size={13} />),
         )}
@@ -118,6 +130,7 @@ export function CollectionBar({
           onClick={() => {
             setMode('create');
             setName('');
+            setParent(selected?.id ?? '');
           }}
         >
           <FolderPlus size={13} /> New collection
@@ -134,6 +147,36 @@ export function CollectionBar({
           <WandSparkles size={13} /> New smart collection
         </button>
       </div>
+      {selected && (
+        <nav className="board-collection-breadcrumb" aria-label="Collection path">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              onFilter('all');
+              setMode('idle');
+            }}
+          >
+            Library
+          </button>
+          {collectionPath(collections.collections, selected.id).map((item) => (
+            <span key={item.id}>
+              <span aria-hidden> / </span>
+              <button
+                type="button"
+                disabled={busy}
+                aria-current={item.id === selected.id ? 'page' : undefined}
+                onClick={() => {
+                  onFilter(item.id);
+                  setMode('idle');
+                }}
+              >
+                {item.name}
+              </button>
+            </span>
+          ))}
+        </nav>
+      )}
       {selected && mode === 'idle' && (
         <div className="board-collection-actions">
           <button
@@ -145,6 +188,16 @@ export function CollectionBar({
             }}
           >
             <Pencil size={13} /> Rename collection
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setParent(selected.parentId ?? '');
+              setMode('move');
+            }}
+          >
+            <FolderInput size={13} /> Move collection
           </button>
           <button type="button" disabled={busy} onClick={() => setMode('delete')}>
             <Trash2 size={13} /> Delete collection
@@ -182,7 +235,7 @@ export function CollectionBar({
             const trimmed = name.trim();
             if (!trimmed) return;
             if (mode === 'create') {
-              const created = await collections.create(trimmed);
+              const created = await collections.create(trimmed, parent || null);
               if (!created) return;
               onFilter(created.id);
             } else if (!(await collections.rename(selected!.id, trimmed))) return;
@@ -201,12 +254,69 @@ export function CollectionBar({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
+          {mode === 'create' && (
+            <label>
+              Parent collection
+              <select
+                value={parent}
+                disabled={busy}
+                onChange={(event) => setParent(event.target.value)}
+              >
+                <option value="">Library (top level)</option>
+                {collections.collections.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {collectionPathLabel(collections.collections, item.id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div>
             <button disabled={busy || !name.trim()}>
               {mode === 'create' ? 'Create collection' : 'Save collection name'}
             </button>
             <button type="button" disabled={busy} onClick={() => setMode('idle')}>
               Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {mode === 'move' && selected && (
+        <form
+          className="board-rename board-collection-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (await collections.move(selected.id, parent || null)) setMode('idle');
+          }}
+        >
+          <label>
+            Parent collection
+            <select
+              value={parent}
+              disabled={busy}
+              onChange={(event) => setParent(event.target.value)}
+            >
+              <option value="">Library (top level)</option>
+              {collections.collections
+                .filter(
+                  (item) =>
+                    !collectionPath(collections.collections, item.id).some(
+                      (ancestor) => ancestor.id === selected.id,
+                    ),
+                )
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {collectionPathLabel(collections.collections, item.id)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div>
+            <button disabled={busy || parent === (selected.parentId ?? '')}>
+              Save collection location
+            </button>
+            <button type="button" disabled={busy} onClick={() => setMode('idle')}>
+              Cancel move
             </button>
           </div>
         </form>
@@ -230,7 +340,11 @@ export function CollectionBar({
         <div className="board-delete-confirm" role="group" aria-label="Confirm collection deletion">
           <p>
             Delete the collection “{selected.name}”? Its {count(selected.id)} boards stay in your
-            library under Unfiled.
+            library under Unfiled. Child collections move to{' '}
+            {selected.parentId
+              ? collectionPathLabel(collections.collections, selected.parentId)
+              : 'the library top level'}{' '}
+            with their boards intact.
           </p>
           <div>
             <button
@@ -354,7 +468,7 @@ function SmartCollectionForm({
             <option value="unfiled">Unfiled</option>
             {collections.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.name}
+                {collectionPathLabel(collections, item.id)}
               </option>
             ))}
           </select>
@@ -442,7 +556,7 @@ export function MoveToCollection({
           <option value="">No collection (unfiled)</option>
           {collections.map((collection) => (
             <option key={collection.id} value={collection.id}>
-              {collection.name}
+              {collectionPathLabel(collections, collection.id)}
             </option>
           ))}
         </select>
@@ -509,7 +623,7 @@ export function BulkMoveBar({
           <option value="">No collection (unfiled)</option>
           {collections.map((collection) => (
             <option key={collection.id} value={collection.id}>
-              {collection.name}
+              {collectionPathLabel(collections, collection.id)}
             </option>
           ))}
         </select>

@@ -3,6 +3,8 @@ import { dirname, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { PERSISTENCE_MIGRATIONS } from './persistence/migrations.js';
 import {
+  collectionPlacement,
+  collectionDeletion,
   BoardDocumentSchema,
   BoardSnapshotSchema,
   type BoardDocument,
@@ -37,7 +39,12 @@ export type BoardListing = {
   tags: string[];
   agent: string | null;
 };
-export type BoardCollection = { id: string; name: string; createdAt: number };
+export type BoardCollection = {
+  id: string;
+  name: string;
+  createdAt: number;
+  parentId: string | null;
+};
 
 function databasePath(path: string): string {
   if (path === ':memory:') return path;
@@ -292,10 +299,14 @@ export class ApiStore {
       const existing = this.listCollections(ownerId);
       if (existing.length >= MAX_BOARD_COLLECTIONS) throw new Error('Collection limit reached.');
       let name = bundle.name;
-      for (let n = 2; existing.some((item) => item.name.toLowerCase() === name.toLowerCase()); n++)
+      for (
+        let n = 2;
+        existing.some((item) => !item.parentId && item.name.toLowerCase() === name.toLowerCase());
+        n++
+      )
         name = bundle.name.slice(0, 48) + ` (import ${n})`;
       this.sqlite
-        .prepare('INSERT INTO board_collections VALUES(?,?,?,?)')
+        .prepare('INSERT INTO board_collections(id,owner_id,name,created_at) VALUES(?,?,?,?)')
         .run(collectionId, ownerId, name, Date.now());
       for (const entry of entries) {
         this.sqlite
@@ -564,15 +575,9 @@ export class ApiStore {
   listCollections(ownerId: string) {
     return this.sqlite
       .prepare(
-        'SELECT id, name, created_at AS createdAt FROM board_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE',
+        'SELECT id, name, parent_id AS parentId, created_at AS createdAt FROM board_collections WHERE owner_id=? ORDER BY name COLLATE NOCASE',
       )
       .all(ownerId) as BoardCollection[];
-  }
-
-  private collectionNamed(ownerId: string, name: string) {
-    return this.sqlite
-      .prepare('SELECT id FROM board_collections WHERE owner_id=? AND name=? COLLATE NOCASE')
-      .get(ownerId, name) as { id: string } | undefined;
   }
 
   ownsCollection(id: string, ownerId: string) {
@@ -581,26 +586,44 @@ export class ApiStore {
       .get(id, ownerId);
   }
 
-  createCollection(id: string, ownerId: string, name: string, limit: number) {
+  createCollection(
+    id: string,
+    ownerId: string,
+    name: string,
+    limit: number,
+    parentId: string | null = null,
+  ) {
     return this.sqlite.transaction(() => {
-      if (this.collectionNamed(ownerId, name)) return 'duplicate' as const;
+      const invalid = collectionPlacement(this.listCollections(ownerId), { id, name, parentId });
+      if (invalid) return invalid;
       const { count } = this.sqlite
         .prepare('SELECT count(*) AS count FROM board_collections WHERE owner_id=?')
         .get(ownerId) as { count: number };
       if (count >= limit) return 'limit' as const;
       this.sqlite
-        .prepare('INSERT INTO board_collections (id, owner_id, name, created_at) VALUES (?,?,?,?)')
-        .run(id, ownerId, name, Date.now());
+        .prepare(
+          'INSERT INTO board_collections (id, owner_id, name, created_at, parent_id) VALUES (?,?,?,?,?)',
+        )
+        .run(id, ownerId, name, Date.now(), parentId);
       return 'created' as const;
     })();
   }
 
-  renameCollection(id: string, ownerId: string, name: string) {
+  updateCollection(id: string, ownerId: string, name?: string, parentId?: string | null) {
     return this.sqlite.transaction(() => {
-      if (!this.ownsCollection(id, ownerId)) return 'missing' as const;
-      const existing = this.collectionNamed(ownerId, name);
-      if (existing && existing.id !== id) return 'duplicate' as const;
-      this.sqlite.prepare('UPDATE board_collections SET name=? WHERE id=?').run(name, id);
+      const collections = this.listCollections(ownerId);
+      const before = collections.find((item) => item.id === id);
+      if (!before) return 'missing' as const;
+      const candidate = {
+        id,
+        name: name ?? before.name,
+        parentId: parentId === undefined ? before.parentId : parentId,
+      };
+      const invalid = collectionPlacement(collections, candidate);
+      if (invalid) return invalid;
+      this.sqlite
+        .prepare('UPDATE board_collections SET name=?,parent_id=? WHERE id=?')
+        .run(candidate.name, candidate.parentId, id);
       return 'renamed' as const;
     })();
   }
@@ -608,8 +631,14 @@ export class ApiStore {
   /** Removes the folder only: its boards stay, ungrouped. */
   deleteCollection(id: string, ownerId: string) {
     return this.sqlite.transaction(() => {
-      if (!this.ownsCollection(id, ownerId)) return false;
+      const collections = this.listCollections(ownerId);
+      const invalid = collectionDeletion(collections, id);
+      if (invalid) return invalid;
+      const parentId = collections.find((item) => item.id === id)!.parentId;
       this.sqlite.prepare('UPDATE boards_v2 SET collection_id=NULL WHERE collection_id=?').run(id);
+      this.sqlite
+        .prepare('UPDATE board_collections SET parent_id=? WHERE parent_id=?')
+        .run(parentId, id);
       this.sqlite.prepare('DELETE FROM board_collections WHERE id=?').run(id);
       return true;
     })();

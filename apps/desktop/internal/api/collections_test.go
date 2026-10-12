@@ -69,3 +69,51 @@ func TestCollectionsFileOwnedBoardsPrivately(t *testing.T) {
 		}
 	}
 }
+
+func TestNestedCollectionsPreserveBoardsAndRejectCycles(t *testing.T) {
+	s := newTestServer(t)
+	owner := signup(t, s, "nested@example.test")
+	stranger := signup(t, s, "othernested@example.test")
+	create := func(name string, parent any) string {
+		return owner.request("POST", "/v1/collections", map[string]any{"name": name, "parentId": parent}, 201)["id"].(string)
+	}
+	education := create("Education", nil)
+	ai := create("Artificial Intelligence", education)
+	topic := create("Topic 1: 日本語", ai)
+	board := owner.request("POST", "/v1/boards", map[string]any{"title": "Lesson", "collectionId": topic}, 201)
+	direct := owner.request("POST", "/v1/boards", map[string]any{"title": "Overview", "collectionId": ai}, 201)
+	owner.request("PATCH", "/v1/collections/"+education, map[string]any{"parentId": topic}, 400)
+	owner.request("PATCH", "/v1/collections/"+ai, map[string]any{"parentId": ai}, 400)
+	stranger.request("POST", "/v1/collections", map[string]any{"name": "Sneaky", "parentId": topic}, 404)
+	stranger.request("PATCH", "/v1/collections/"+ai, map[string]any{"parentId": nil}, 404)
+	owner.request("POST", "/v1/collections", map[string]any{"name": "artificial INTELLIGENCE", "parentId": education}, 409)
+	other := create("Topic 1: 日本語", education)
+	owner.request("DELETE", "/v1/collections/"+ai, nil, 409)
+	bundle := owner.request("GET", "/v1/collections/"+ai+"/bundle", nil, 200)
+	if len(bundle["boards"].([]any)) != 1 {
+		t.Fatal("export included child collections")
+	}
+	owner.request("PATCH", "/v1/collections/"+other, map[string]any{"name": "Other topic"}, 200)
+	owner.request("PATCH", "/v1/collections/"+ai, map[string]any{"parentId": nil}, 200)
+	owner.request("DELETE", "/v1/collections/"+ai, nil, 204)
+	found := false
+	for _, raw := range owner.raw("GET", "/v1/collections", nil, 200).([]any) {
+		item := raw.(map[string]any)
+		if item["id"] == topic {
+			found = true
+			if item["parentId"] != nil {
+				t.Fatal("child not promoted to root")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("child collection was deleted")
+	}
+	if listedCollection(t, owner, board["id"].(string)) != topic || listedCollection(t, owner, direct["id"].(string)) != nil {
+		t.Fatal("boards lost their filing")
+	}
+	after := owner.request("GET", "/v1/boards/"+board["id"].(string), nil, 200)
+	if after["revision"] != board["revision"] {
+		t.Fatal("organization changed the board revision")
+	}
+}
