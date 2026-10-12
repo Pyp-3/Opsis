@@ -467,10 +467,13 @@ full access is an explicit per-agent choice.
       Grok and Antigravity stay restricted. The read round re-sends the system prompt for API
       connections (CLI sessions resume instead). A dedicated compaction by the model (rather
       than the agent's running notes) is not implemented.
-- [ ] Not yet verified on a packaged executable: on this Windows 11 machine `pnpm desktop:build`
-      failed twice when Windows' `tar.exe` crashed (0xC0000005) packing the speech runtime, so the
-      native browser suite, packaged integration and hidden WebView2 smoke were not run locally;
-      they are left to the desktop CI jobs.
+- [x] Packaged executables: on this Windows 11 machine `pnpm desktop:build` failed twice when
+      Windows' `tar.exe` crashed (0xC0000005) packing the speech runtime, so the native checks
+      ran in CI instead. CI run 38226659036 (efb1a4c) passed web checks and the Linux, Windows and
+      both macOS desktop jobs (native race tests, packaged integration, the browser suite against
+      each executable and the hidden WebView smoke), then published the prerelease. Its first
+      macOS x64 attempt hit 30-second `page.goto` timeouts in six unrelated scenarios, while the
+      new chat scenario passed there; the rerun of that job passed.
 
 Verified 2026-10-12 on Windows 11 (Node 22.23.2): schema tests (mentions, index, digest, reads,
 request and output schema, compaction, settings rules), harness tests (Claude/Codex arguments for
