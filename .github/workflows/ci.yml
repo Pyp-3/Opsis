@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main, development]
   pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  # Every push gets a release; only superseded PR checks may be cancelled.
-  group: ci-${{ github.event_name }}-${{ github.event_name == 'push' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Stable builds are never cancelled; superseded development and PR checks may be cancelled.
+  group: ci-${{ github.event_name }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/development' }}
 
 jobs:
   check:
@@ -48,11 +48,11 @@ jobs:
       - name: QA gate
         run: pnpm test:qa
       - name: Package versioned release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: package
         run: pnpm release:package
       - name: Upload release bundle
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: release-bundle
@@ -104,10 +104,10 @@ jobs:
           trap 'rm -rf "$profile"' EXIT
           xvfb-run -a env GDK_BACKEND=x11 OPSIS_DATA_DIR="$profile" OPSIS_SPEECH=off ./output/desktop/opsis --smoke-test
       - name: Package desktop release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pnpm desktop:package
       - name: Upload desktop release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: desktop-release
@@ -185,7 +185,7 @@ jobs:
           trap 'rm -rf "$profile"' EXIT
           OPSIS_DATA_DIR="$(cygpath -w "$profile")" OPSIS_SPEECH=off ./output/desktop/opsis.exe --smoke-test
       - name: Install Inno Setup
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
@@ -194,14 +194,14 @@ jobs:
       # Signing switches on when WINDOWS_CERTIFICATE secrets exist. Only main builds get
       # a signed update manifest, so installed apps update to main and nothing else.
       - name: Package desktop release and installer
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           OPSIS_UPDATE_SIGNING_KEY: ${{ github.ref == 'refs/heads/main' && secrets.OPSIS_UPDATE_SIGNING_KEY || '' }}
         run: pnpm desktop:package
       - name: Upload desktop release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: windows-desktop-release
@@ -259,10 +259,10 @@ jobs:
           trap 'rm -rf "$profile"' EXIT
           OPSIS_DATA_DIR="$profile" OPSIS_SPEECH=off "$OPSIS_QA_DESKTOP_BINARY" --smoke-test
       - name: Package desktop release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pnpm desktop:package
       - name: Verify packaged application
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           stage=$(mktemp -d)
           trap 'rm -rf "$stage"' EXIT
@@ -271,7 +271,7 @@ jobs:
           codesign --verify --strict "$app"
           OPSIS_DATA_DIR="$stage/profile" OPSIS_SPEECH=off "$app/Contents/MacOS/opsis" --diagnose
       - name: Upload desktop release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-desktop-release
@@ -291,7 +291,7 @@ jobs:
   release:
     name: Publish desktop and developer prerelease
     needs: [check, desktop, windows-desktop, macos-desktop]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -337,7 +337,7 @@ jobs:
   release-retention:
     name: Keep the 5 newest releases
     needs: release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     uses: ./.github/workflows/release-retention.yml
