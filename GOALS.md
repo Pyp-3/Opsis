@@ -4,6 +4,16 @@ Last reviewed: 2026-10-12.
 
 ## Current delivery
 
+CI promotion runs (2026-10-12, user request): a pull request from `development` to `main` no
+longer runs CI separately. Its head is `development`'s tip, already checked by that branch's
+push run, and branch protection's required checks (`check`, Linux, Windows and both macOS
+desktops) read those results from the same commit. Other pull requests, `development` pushes
+and `main` pushes (which build and publish) are unchanged. The CI policy test now checks this
+gate on all four jobs, and `docs/RELEASES.md` describes the current flow. Verified locally:
+release tests (12) and lint pass. The next promotion PR will confirm on GitHub that the skipped
+jobs and the earlier push checks satisfy branch protection. Changing `.github/` holds VPS
+deploys until a new baseline is approved.
+
 Provider limits in chat and Board Manager polish (2026-10-12, user request): the composer
 shows the host's Claude and Codex subscription limits, read without spending usage, so people
 know when to send requests and which models are still available. See the goal section below.
