@@ -3,6 +3,7 @@ import { bundleImagesOf, restoreBundledImages } from './info-images';
 import { apiFetch as fetch } from '../app-url';
 import { useRef, useState } from 'react';
 import { CollectionBundleSchema, type CollectionSharing } from '@opsis/schema';
+import { Upload } from 'lucide-react';
 import { download } from './export';
 import { collectionHtml, printCollection } from './collection-export';
 
@@ -81,8 +82,13 @@ export function CollectionActions({
     });
   return (
     <section className="collection-actions" aria-label="Collection sharing and export">
-      <button disabled={busy} onClick={() => input.current?.click()}>
-        Import collection bundle
+      <button
+        type="button"
+        className="collection-import"
+        disabled={busy}
+        onClick={() => input.current?.click()}
+      >
+        <Upload size={13} aria-hidden /> Import collection bundle
       </button>
       <input
         ref={input}
