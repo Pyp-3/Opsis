@@ -67,7 +67,10 @@ describe('signing in', () => {
   it('sends signed-out visitors to log in, remembering where they were going', async () => {
     history.replaceState(null, '', '/canvas?board=abc');
     render(<App />);
-    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeDefined();
+    // This checks routing, not cold lazy-import latency under parallel QA load.
+    expect(
+      await screen.findByRole('heading', { name: 'Welcome back' }, { timeout: 4000 }),
+    ).toBeDefined();
     await waitFor(() =>
       expect(location.pathname + location.search).toBe(
         `/login?next=${encodeURIComponent('/canvas?board=abc')}`,

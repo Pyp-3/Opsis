@@ -16,12 +16,13 @@ import (
 )
 
 type Service struct {
-	URL   *url.URL
-	cmd   *exec.Cmd
-	tree  *processTree
-	input io.WriteCloser
-	done  chan struct{}
-	once  sync.Once
+	URL     *url.URL
+	cmd     *exec.Cmd
+	tree    *processTree
+	input   io.WriteCloser
+	done    chan struct{}
+	once    sync.Once
+	waitErr error
 }
 
 // Start launches packaged Kokoro inference without a shell. Its process group
@@ -59,7 +60,7 @@ func Start(ctx context.Context, runtimeDir, models string) (*Service, error) {
 		// Keep draining even after malformed/excessive output so shutdown cannot hang.
 		_, _ = io.Copy(io.Discard, stdout)
 	}()
-	go func() { _ = cmd.Wait(); close(s.done) }()
+	go func() { s.waitErr = cmd.Wait(); close(s.done) }()
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()
 	select {
@@ -73,7 +74,10 @@ func Start(ctx context.Context, runtimeDir, models string) (*Service, error) {
 		return s, nil
 	case <-s.done:
 		tree.close()
-		return nil, errors.New("local service exited before becoming ready")
+		if s.waitErr != nil {
+			return nil, fmt.Errorf("local service exited before becoming ready: %w", s.waitErr)
+		}
+		return nil, errors.New("local service exited before becoming ready (exit status 0)")
 	case <-timer.C:
 		s.Close()
 		return nil, errors.New("local service startup timed out")
