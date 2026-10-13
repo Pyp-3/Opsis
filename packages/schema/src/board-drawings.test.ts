@@ -5,6 +5,9 @@ import {
   absoluteDrawing,
   BoardDrawingSchema,
   AgentDrawingSchema,
+  AGENT_SKETCH_LAYER,
+  MAX_AGENT_DRAWINGS,
+  withAgentSketch,
   dimensionLabel,
   drawingBounds,
   isDrawingEditable,
@@ -46,6 +49,35 @@ function boardWith(drawings: BoardDrawing[]): BoardDocument {
 }
 
 describe('canvas drawings', () => {
+  it('preserves individually locked agent drawings through replacements and omissions', () => {
+    const locked = { ...wall, id: 'locked', locked: true, layerId: AGENT_SKETCH_LAYER.id };
+    const board = { ...boardWith([locked]), drawingLayers: [AGENT_SKETCH_LAYER] };
+    const replaced = withAgentSketch(
+      board,
+      [
+        {
+          ...wall,
+          id: 'locked',
+          points: [
+            [0, 0],
+            [999, 0],
+          ],
+        },
+        { ...wall, id: 'new' },
+      ],
+      new Set(['pump']),
+    );
+    expect(replaced.drawings!.find((drawing) => drawing.id === 'locked')).toEqual(locked);
+    expect(replaced.drawings!.some((drawing) => drawing.id === 'new')).toBe(true);
+    expect(withAgentSketch(board, [], new Set(['pump'])).drawings).toEqual([locked]);
+    const fullProposal = Array.from({ length: MAX_AGENT_DRAWINGS }, (_, index) => ({
+      ...wall,
+      id: `new-${index}`,
+    }));
+    const full = withAgentSketch(board, fullProposal, new Set(['pump']));
+    expect(full.drawings).toHaveLength(MAX_AGENT_DRAWINGS);
+    expect(full.drawings![0]).toEqual(locked);
+  });
   it('keeps agent point counts consistent with saved drawings', () => {
     for (const [shape, validCounts] of [
       ['line', [2]],

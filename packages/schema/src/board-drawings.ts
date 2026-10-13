@@ -586,7 +586,7 @@ export function placeSketch(
 }
 
 /**
- * Replaces the agent's layer with its proposed drawings, leaving every other drawing alone.
+ * Replaces editable agent drawings, keeping individually locked marks and every other layer.
  * `proposed` undefined (the agent left its sketch out) or a hidden/locked agent layer keeps the
  * board as it is. IDs that clash with the reader's drawings are renamed, anchors to concepts the
  * board does not have are dropped (keeping the drawing where it would be), and drawings beyond
@@ -601,21 +601,34 @@ export function withAgentSketch<T extends SketchBoard>(
   const others = (board.drawings ?? []).filter(
     (drawing) => drawing.layerId !== AGENT_SKETCH_LAYER.id,
   );
-  const taken = new Set(others.map((drawing) => drawing.id));
-  const room = Math.max(0, MAX_BOARD_DRAWINGS - others.length);
-  const sketch = proposed.slice(0, room).map((drawing): BoardDrawing => {
-    let id = drawing.id;
-    for (let n = 2; taken.has(id); n++) id = `${drawing.id.slice(0, 70)}-agent${n === 2 ? '' : n}`;
-    taken.add(id);
-    const placed: BoardDrawing = { ...drawing, id, layerId: AGENT_SKETCH_LAYER.id };
-    return placed.anchorId && !nodeIds.has(placed.anchorId)
-      ? { ...absoluteDrawing(placed, board.positions), layerId: AGENT_SKETCH_LAYER.id }
-      : placed;
-  });
+  // A proposal or a layout pass cannot unlock, replace or omit individually locked marks.
+  const locked = agentSketchOf(board).filter((drawing) => drawing.locked);
+  const lockedIds = new Set(locked.map((drawing) => drawing.id));
+  const taken = new Set([...others, ...locked].map((drawing) => drawing.id));
+  const room = Math.max(
+    0,
+    Math.min(
+      MAX_BOARD_DRAWINGS - others.length - locked.length,
+      MAX_AGENT_DRAWINGS - locked.length,
+    ),
+  );
+  const sketch = proposed
+    .filter((drawing) => !lockedIds.has(drawing.id))
+    .slice(0, room)
+    .map((drawing): BoardDrawing => {
+      let id = drawing.id;
+      for (let n = 2; taken.has(id); n++)
+        id = `${drawing.id.slice(0, 70)}-agent${n === 2 ? '' : n}`;
+      taken.add(id);
+      const placed: BoardDrawing = { ...drawing, id, layerId: AGENT_SKETCH_LAYER.id };
+      return placed.anchorId && !nodeIds.has(placed.anchorId)
+        ? { ...absoluteDrawing(placed, board.positions), layerId: AGENT_SKETCH_LAYER.id }
+        : placed;
+    });
   const layers = board.drawingLayers ?? [];
   const next: SketchBoard = {
     ...board,
-    drawings: [...others, ...sketch],
+    drawings: [...others, ...locked, ...sketch],
     drawingLayers:
       sketch.length && !layers.some((layer) => layer.id === AGENT_SKETCH_LAYER.id)
         ? [...layers, AGENT_SKETCH_LAYER]

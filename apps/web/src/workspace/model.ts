@@ -5,6 +5,8 @@ import {
   placeSketch,
   sketchForAgent,
   withAgentSketch,
+  visibleDrawings,
+  AGENT_SKETCH_LAYER,
   type BoardDocument,
   type BoardGraph,
   type BoardAgent,
@@ -14,6 +16,14 @@ import { populateProcess } from './process-engine';
 export const STORAGE_KEY = 'opsis:board:v2';
 import { NODE_WIDTH, COLUMN_GAP, ROW_GAP, nodeHeight, wrapLabel } from './geometry';
 import { isReturnEdge, connectionLabel } from './connections';
+import {
+  blocksNode,
+  drawingFootprints,
+  nodeClusterFootprint,
+  nodeFootprint,
+  overlaps,
+} from './canvas-footprints';
+import { settleAgentSketch } from './sketch-layout';
 export { NODE_WIDTH, NODE_HEIGHT } from './geometry';
 
 /** Retain hand-placed nodes and place additions in unoccupied space. */
@@ -104,6 +114,23 @@ export async function layoutBoard(
     }
   }
   const positions: BoardDocument['positions'] = {};
+  // Arrange receives a saved document, not an agent answer. Its drawings must not be
+  // copied onto the agent's layer or renamed as if a new sketch were being proposed.
+  const proposedSketch = preservePositions === 'pinned' ? undefined : graph.drawings;
+  const previousDrawings = previous ? visibleDrawings(previous) : [];
+  const layoutDrawings = proposedSketch
+    ? [
+        ...previousDrawings.filter(
+          (drawing) => drawing.layerId !== AGENT_SKETCH_LAYER.id || drawing.locked,
+        ),
+        ...proposedSketch,
+      ]
+    : previousDrawings;
+  const fixedDrawings = drawingFootprints({
+    positions: previous?.positions ?? {},
+    drawings: previousDrawings.filter((drawing) => !drawing.anchorId),
+    ...(previous?.drawingScale ? { drawingScale: previous.drawingScale } : {}),
+  });
   for (const node of graph.nodes) {
     const prior = previous?.positions[node.id];
     if (prior && (preservePositions === 'all' || previous?.pinnedNodeIds?.includes(node.id)))
@@ -116,20 +143,39 @@ export async function layoutBoard(
     const parentPosition = parent && positions[parent.source];
     if (previous && parentPosition) {
       x = parentPosition.x;
-      y =
-        parentPosition.y +
-        nodeHeight(graph.nodes.find((item) => item.id === parent!.source)!) +
-        ROW_GAP;
+      const parentBox = nodeClusterFootprint(
+        graph.nodes.find((item) => item.id === parent!.source)!,
+        parentPosition,
+        layoutDrawings,
+        previous.drawingScale,
+      );
+      y = parentBox.y + parentBox.height + ROW_GAP;
     }
-    while (
-      Object.entries(positions).some(
-        ([id, p]) =>
-          Math.abs(p.x - x) < NODE_WIDTH + 32 &&
-          y < p.y + nodeHeight(graph.nodes.find((item) => item.id === id)!) + 32 &&
-          y + (node.height ?? 124) + 32 > p.y,
-      )
-    )
-      y += (node.height ?? 124) + ROW_GAP;
+    const concept = graph.nodes.find((item) => item.id === node.id)!;
+    const occupied = Object.entries(positions).map(([id, at]) =>
+      nodeClusterFootprint(
+        graph.nodes.find((item) => item.id === id)!,
+        at,
+        layoutDrawings,
+        previous?.drawingScale,
+      ),
+    );
+    // Each jump passes at least one obstacle permanently, bounding work by scene size.
+    for (let attempt = 0; attempt <= occupied.length + fixedDrawings.length; attempt++) {
+      const own = nodeClusterFootprint(concept, { x, y }, layoutDrawings, previous?.drawingScale);
+      const expanded = {
+        x: own.x - 16,
+        y: own.y - 16,
+        width: own.width + 32,
+        height: own.height + 32,
+      };
+      const blockers = [
+        ...occupied,
+        ...fixedDrawings.filter((drawing) => blocksNode(drawing, nodeFootprint(concept, { x, y }))),
+      ].filter((box) => overlaps(expanded, box));
+      if (!blockers.length) break;
+      y += Math.max(...blockers.map((box) => box.y + box.height)) + 32 - own.y;
+    }
     positions[node.id] = { x, y };
   }
   const edgePorts = Object.fromEntries(
@@ -162,7 +208,8 @@ export async function layoutBoard(
     return kept;
   });
   // An agent's sketch is not reader data: it is placed on the agent's own layer below.
-  const { drawings: proposedSketch, ...content } = graph;
+  const content = { ...graph };
+  delete content.drawings;
   const document = BoardDocumentSchema.parse({
     ...content,
     nodes,
@@ -203,6 +250,7 @@ export async function layoutBoard(
     // The page's Info is the editor's own writing; agents never see or change it.
     ...(previous?.info ? { info: previous.info } : {}),
   });
+  if (preservePositions === 'pinned') return BoardDocumentSchema.parse(settleAgentSketch(document));
   if (!proposedSketch) return document;
   // Without a diagram to look at, the agent could not know where concepts would land, so its
   // free-standing sketch is placed as a group to the right of the laid-out diagram.
@@ -210,7 +258,7 @@ export async function layoutBoard(
     ? proposedSketch
     : placeSketch(proposedSketch, besideDiagram(document));
   return BoardDocumentSchema.parse(
-    withAgentSketch(document, placed, new Set(nodes.map((node) => node.id))),
+    settleAgentSketch(withAgentSketch(document, placed, new Set(nodes.map((node) => node.id)))),
   );
 }
 

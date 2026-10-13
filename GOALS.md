@@ -4,6 +4,31 @@ Last reviewed: 2026-10-13.
 
 ## Current delivery
 
+Canvas/sketch overlap follow-up (2026-10-13, user request): native concepts and
+model-authored drawings were laid out independently; follow-up sketches could sit
+over existing icons and connection routing ignored their words and blocks. Add a
+browser-measured visible footprint policy, move complete editable agent pieces
+together when they collide, and reserve text/blocks for connections and new concepts.
+Preserve intentional containing frames, anchored/group-relative geometry, reader
+positions, hidden layers and locks. Arrange must not re-import reader drawings as
+agent drawings; Fit and SVG bounds must include visible sketch content. This is a
+scoped follow-up to P1 readability/manual-layout acceptance and canvas drawings;
+no whole roadmap goal is completed. Verified locally: lint/typecheck, Rust checks
+and 26 tests, final full 663-test unit/API/schema run, native vet/race suite, rebuilt
+Linux executable, database/MCP integration, 13 release-policy tests, six updater
+policy tests and all 28 isolated hidden WebView checks. Full browser runs covered
+83 scenarios: Fastify 82 passed and one startup failure; packaged host 81 passed
+and two navigation/startup failures. All three pass isolated reruns without weaker
+assertions. Added regressions exercise review, rendered SVG path/text clearance,
+Arrange/undo/redo/reload, ownership and Fit on both hosts. Tightened the new test
+to wait for asynchronous Arrange rather than an old Saved badge; its final offline
+font fixture avoids screenshot waits on Google's CDN. Production-bundled frontend
+also verified with an isolated Playwright CLI profile. Hosted CI and VPS evidence
+belong to the delivery PR; deployment does not mutate existing saved layouts.
+Refresh, then use Arrange downward and Fit diagram for existing boards. No paid
+provider calls or real-account data changes. The user explicitly authorized this
+task's PR merge and VPS deployment after CI passes.
+
 Codex invalid-arrow/deadline follow-up (2026-10-13, user request): VPS logs show
 the previous schema fix reached generation successfully. The latest answer had
 four points for an arrow in `sketchEdits.put`; the one validation repair was
