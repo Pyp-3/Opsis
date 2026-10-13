@@ -37,6 +37,14 @@ instead of the engine owner's `dist`). Builds, database/MCP integration and hidd
 native smoke passed, but archive failure correctly blocked the final macOS gates.
 Correct the artifact path and add a real tar round-trip test deriving the output
 directory from the engine build owner, checking both WASM bytes and executable modes.
+The first corrected hosted run passed every required job and reduced the macOS critical
+path to 16m36s. Its warm-cache rerun reduced that path to 12m12s, but Windows exposed an
+unrelated Info-book measurement race: a newly unhidden wide tab could retain its narrow
+single-page fallback when Chromium omitted the expected ResizeObserver follow-up. Retained
+screenshots confirmed the board and current app were loaded. Added a next-frame measurement,
+window-resize fallback and hook regression test without weakening the browser assertion;
+664 unit tests and three repeated browser scenarios pass locally, and the original failed
+Windows job passed on a job-only rerun before this follow-up commit.
 Changes to `.github/` intentionally retain the VPS baseline-review hold after a
 future user promotion; no server baseline is changed by this task.
 
