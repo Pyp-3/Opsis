@@ -145,7 +145,7 @@ jobs:
         if: needs.tested.outputs.run == ''
         run: pnpm desktop:test
       - name: Build packaged executable
-        run: pnpm desktop:build
+        uses: ./.github/actions/build-desktop
       - name: Install browser
         if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install --with-deps chromium
@@ -233,7 +233,7 @@ jobs:
         if: needs.tested.outputs.run == ''
         run: pnpm desktop:test
       - name: Build packaged executable
-        run: pnpm desktop:build
+        uses: ./.github/actions/build-desktop
       - name: Install browser
         if: needs.tested.outputs.run == ''
         run: pnpm exec playwright install chromium
@@ -287,8 +287,39 @@ jobs:
             playwright-report/
           retention-days: 7
 
-  macos-desktop:
-    name: macOS desktop (${{ matrix.arch }})
+  macos-native:
+    name: macOS native checks (${{ matrix.arch }})
+    needs: tested
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && needs.tested.outputs.run == '' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up native test tools
+        uses: ./.github/actions/setup-build-tools
+        with:
+          desktop: 'true'
+          rust: 'false'
+          go-cache-scope: native-checks
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check native code
+        run: pnpm desktop:check
+      - name: Native race and contract tests
+        run: pnpm desktop:test
+
+  macos-build:
+    name: macOS build (${{ matrix.arch }})
     needs: tested
     # A promotion PR's head is development's tip, already checked by its push run.
     if: ${{ !cancelled() && needs.tested.result != 'failure' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
@@ -313,29 +344,30 @@ jobs:
           desktop: 'true'
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Check native code
-        if: needs.tested.outputs.run == ''
-        run: pnpm desktop:check
-      - name: Native race and contract tests
-        if: needs.tested.outputs.run == ''
-        run: pnpm desktop:test
       - name: Build application bundle
-        run: pnpm desktop:build
-      - name: Install browser
-        if: needs.tested.outputs.run == ''
-        run: pnpm exec playwright install chromium
+        uses: ./.github/actions/build-desktop
       - name: Existing database and packaged MCP integration
         if: needs.tested.outputs.run == ''
         run: pnpm desktop:integration
-      - name: Browser feature parity against Go API
-        if: needs.tested.outputs.run == ''
-        run: pnpm test:browser
       - name: Hidden WKWebView, React and WASM smoke
         if: needs.tested.outputs.run == ''
         run: |
           profile=$(mktemp -d)
           trap 'rm -rf "$profile"' EXIT
           OPSIS_DATA_DIR="$profile" OPSIS_SPEECH=off "$OPSIS_QA_DESKTOP_BINARY" --smoke-test
+      - name: Archive the tested app and WASM for isolated browser shards
+        if: needs.tested.outputs.run == ''
+        # Tar preserves the executable mode and bundle structure across artifact transport.
+        run: tar -cf output/desktop/qa-app.tar output/desktop/Opsis.app packages/engine/pkg
+      - name: Upload browser test app
+        if: needs.tested.outputs.run == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-qa-app
+          path: output/desktop/qa-app.tar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
       - name: Package desktop release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pnpm desktop:package
@@ -356,15 +388,96 @@ jobs:
           path: output/desktop-release/
           if-no-files-found: error
           compression-level: 0
+
+  macos-browser:
+    name: macOS browser (${{ matrix.arch }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: [tested, macos-build]
+    if: ${{ !cancelled() && needs.tested.result != 'failure' && needs.macos-build.result == 'success' && needs.tested.outputs.run == '' && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Fit the standard five-macOS-job limit; Intel's slower suite gets more shards.
+        include:
+          - runner: macos-15-intel
+            arch: x64
+            shard: 1
+            shards: 3
+          - runner: macos-15-intel
+            arch: x64
+            shard: 2
+            shards: 3
+          - runner: macos-15-intel
+            arch: x64
+            shard: 3
+            shards: 3
+          - runner: macos-15
+            arch: arm64
+            shard: 1
+            shards: 2
+          - runner: macos-15
+            arch: arm64
+            shard: 2
+            shards: 2
+    runs-on: ${{ matrix.runner }}
+    env:
+      OPSIS_QA_DESKTOP_BINARY: output/desktop/Opsis.app/Contents/MacOS/opsis
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up browser tools
+        uses: ./.github/actions/setup-build-tools
+        with:
+          rust: 'false'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Download this run's built app and WASM
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-qa-app
+          path: output/desktop
+      - name: Restore executable permissions and WASM
+        run: tar -xf output/desktop/qa-app.tar
+      - name: Install browser
+        run: pnpm exec playwright install chromium
+      - name: Browser feature parity against Go API
+        # Each job has its own checkout, API process, temporary SQLite profile and Vite
+        # server. Keep one worker inside each shard; never share the in-memory API.
+        run: pnpm test:browser --shard=${{ matrix.shard }}/${{ matrix.shards }}
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-browser-failures
+          name: macos-${{ matrix.arch }}-browser-failures-${{ matrix.shard }}
           path: |
             test-results/
             playwright-report/
           retention-days: 7
+
+  macos-desktop:
+    # Preserve the exact branch-protection names; no successful build can mask a failed
+    # native check or browser shard. The main release still waits for these final gates.
+    name: macOS desktop (${{ matrix.arch }})
+    needs: [tested, macos-native, macos-build, macos-browser]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.head_ref != 'development') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - name: Require every macOS check or an exact tested-tree promotion
+        env:
+          TESTED_RUN: ${{ needs.tested.outputs.run }}
+          BUILD_RESULT: ${{ needs.macos-build.result }}
+          NATIVE_RESULT: ${{ needs.macos-native.result }}
+          BROWSER_RESULT: ${{ needs.macos-browser.result }}
+        run: |
+          test "$BUILD_RESULT" = success
+          if [ -n "$TESTED_RUN" ]; then
+            test "$NATIVE_RESULT" = skipped
+            test "$BROWSER_RESULT" = skipped
+          else
+            test "$NATIVE_RESULT" = success
+            test "$BROWSER_RESULT" = success
+          fi
 
   release:
     name: Publish desktop and developer prerelease

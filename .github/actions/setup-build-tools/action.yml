@@ -8,6 +8,12 @@ inputs:
   rust-components:
     description: Additional Rust components required by the job.
     default: ''
+  rust:
+    description: Install Rust/WASM tools (browser shards use the built WASM artifact).
+    default: 'true'
+  go-cache-scope:
+    description: Separate native-test and production-build cache writers.
+    default: desktop
 
 runs:
   using: composite
@@ -18,15 +24,41 @@ runs:
         node-version: 22
         cache: pnpm
     - uses: actions/setup-go@v5
+      id: go
       if: inputs.desktop == 'true'
       with:
         go-version-file: apps/desktop/go.mod
-        cache-dependency-path: apps/desktop/go.sum
+        cache: false
+    - name: Locate native build caches
+      id: go-cache
+      if: inputs.desktop == 'true'
+      shell: bash
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "arch=$(node -p 'process.arch')" >> "$GITHUB_OUTPUT"
+        echo "image-os=${ImageOS:?}" >> "$GITHUB_OUTPUT"
+        echo "image-version=${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+    # Immutable dependency-only keys never refresh compiled outputs after source changes.
+    # Restore the last compatible snapshot, let Go validate its entries, then save this
+    # source fingerprint. Different scopes prevent parallel tests/builds racing to save.
+    - uses: actions/cache@v4
+      if: inputs.desktop == 'true'
+      with:
+        path: |
+          ${{ steps.go-cache.outputs.build }}
+          ${{ steps.go-cache.outputs.modules }}
+        key: opsis-go-v1-${{ runner.os }}-${{ steps.go-cache.outputs.arch }}-${{ steps.go-cache.outputs.image-os }}-${{ steps.go-cache.outputs.image-version }}-${{ steps.go.outputs.go-version }}-${{ inputs.go-cache-scope }}-${{ hashFiles('apps/desktop/go.sum') }}-${{ hashFiles('apps/desktop/**/*.go', 'apps/desktop/*.ts', 'apps/api/src/**', 'packages/schema/src/**', 'apps/web/src/**', 'scripts/build-desktop-code.mjs', 'scripts/build-desktop.mjs', 'pnpm-lock.yaml', 'tsconfig*.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json') }}
+        restore-keys: |
+          opsis-go-v1-${{ runner.os }}-${{ steps.go-cache.outputs.arch }}-${{ steps.go-cache.outputs.image-os }}-${{ steps.go-cache.outputs.image-version }}-${{ steps.go.outputs.go-version }}-${{ inputs.go-cache-scope }}-${{ hashFiles('apps/desktop/go.sum') }}-
+          setup-go-${{ runner.os }}-${{ steps.go-cache.outputs.arch }}-${{ runner.os == 'Linux' && format('{0}-', steps.go-cache.outputs.image-os) || '' }}go-${{ steps.go.outputs.go-version }}-${{ hashFiles('apps/desktop/go.sum') }}
     - uses: dtolnay/rust-toolchain@master
+      if: inputs.rust == 'true'
       with:
         toolchain: '1.89.0'
         targets: wasm32-unknown-unknown
         components: ${{ inputs.rust-components }}
     - uses: Swatinem/rust-cache@v2
+      if: inputs.rust == 'true'
       with:
         workspaces: packages/engine

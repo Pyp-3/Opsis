@@ -1,0 +1,23 @@
+name: Build desktop with a fingerprinted speech runtime
+description: Reuse only unchanged target-specific speech dependencies; always rebuild the app.
+
+runs:
+  using: composite
+  steps:
+    - name: Identify the exact packaged Node version
+      id: node
+      shell: bash
+      run: |
+        echo "version=$(node -p 'process.version')" >> "$GITHUB_OUTPUT"
+        echo "image-os=${ImageOS:?}" >> "$GITHUB_OUTPUT"
+        echo "image-version=${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+    - name: Restore unchanged speech runtime
+      id: runtime
+      uses: actions/cache@v4
+      with:
+        path: apps/desktop/bundle/runtime.tar.gz
+        # No prefix restore: native addons and bundled source must match exactly.
+        key: opsis-speech-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.image-os }}-${{ steps.node.outputs.image-version }}-${{ steps.node.outputs.version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'tsconfig*.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json', '.npmrc', '.pnpmfile.cjs', 'apps/api/src/**', 'packages/schema/src/**', 'scripts/build-desktop.mjs', '.github/actions/build-desktop/action.yml', '.github/actions/setup-build-tools/action.yml', '.github/workflows/ci.yml') }}
+    - name: Build current app and release identity
+      shell: bash
+      run: pnpm desktop:build ${{ steps.runtime.outputs.cache-hit == 'true' && '--reuse-runtime' || '' }}
