@@ -441,7 +441,8 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     if (readingTimer.current) clearTimeout(readingTimer.current);
     const canvas = document.querySelector('.blueprint');
     const height = canvas?.clientHeight ?? 700;
-    const heading = canvas?.querySelector<HTMLElement>('.canvas-heading')?.offsetHeight ?? 0;
+    const headingElement = canvas?.querySelector<HTMLElement>('.canvas-heading');
+    const heading = headingElement?.offsetHeight ?? 0;
     const composer = canvas?.querySelector<HTMLElement>('.composer-wrap')?.offsetHeight ?? 0;
     const padding = {
       top: `${Math.min(height * 0.3, heading + 32)}px`,
@@ -463,8 +464,20 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
         });
       const bounds = canvasContentBounds(current, nodes);
       if (bounds) {
+        // A wrapped heading can be taller than 30% of the canvas, especially with
+        // offline/platform fonts. Reserve its actual bottom, not that legacy cap.
+        const headingBottom =
+          headingElement && canvas
+            ? Math.max(
+                0,
+                headingElement.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top,
+              )
+            : 0;
         void flow.setViewport(
-          getViewportForBounds(bounds, canvas?.clientWidth ?? 900, height, 0.25, 1.1, padding),
+          getViewportForBounds(bounds, canvas?.clientWidth ?? 900, height, 0.25, 1.1, {
+            ...padding,
+            top: `${headingBottom + 16}px`,
+          }),
           { duration: 300 },
         );
         return;

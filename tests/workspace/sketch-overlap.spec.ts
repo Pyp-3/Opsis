@@ -96,6 +96,10 @@ test('reviewed sketches avoid concepts and Arrange preserves reader drawings thr
       expect(moved.points).toEqual(original.points.map(([x, y]) => [x + dx, y + dy]));
     else expect([moved.x! - original.x!, moved.y! - original.y!]).toEqual([dx, dy]);
   }
+  // Reproduce the taller heading seen with CI/offline fonts, without depending on the OS.
+  await page.locator('.canvas-heading').evaluate((heading) => {
+    heading.style.width = '340px';
+  });
   await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
   await expect
     .poll(async () =>

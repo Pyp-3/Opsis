@@ -29,6 +29,17 @@ Refresh, then use Arrange downward and Fit diagram for existing boards. No paid
 provider calls or real-account data changes. The user explicitly authorized this
 task's PR merge and VPS deployment after CI passes.
 
+First hosted run (38352850980, `bc31ceb`) caught a real drawing-aware Fit regression:
+Ubuntu's offline font wraps the heading onto another line, exceeding the inherited
+30%-height top-padding cap and covering the sketch's top edge. Reserve the actual
+heading bottom for drawings while leaving the no-drawing Fit policy unchanged;
+force a narrower/wrapped heading in the regression so local tests reproduce it.
+The failed run is not eligible for merge or deployment; final CI remains required.
+The wrapped-heading follow-up passes typecheck, 31 targeted geometry/workspace
+tests, both browser scenarios on Fastify and the rebuilt Go host, database/MCP
+integration and all 28 isolated hidden WebView checks. Assertions are unchanged
+and the narrower heading makes the platform-specific case explicit.
+
 Codex invalid-arrow/deadline follow-up (2026-10-13, user request): VPS logs show
 the previous schema fix reached generation successfully. The latest answer had
 four points for an arrow in `sketchEdits.put`; the one validation repair was
