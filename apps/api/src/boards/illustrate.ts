@@ -6,7 +6,7 @@ import {
   DEFAULT_BOARD_MODELS,
   illustrateOutputSchema,
 } from '@opsis/schema';
-import { HarnessError } from '../harness/errors.js';
+import { HarnessError, harnessAbortError } from '../harness/errors.js';
 import type { BoardClientFactory } from './client.js';
 import { ILLUSTRATE_SYSTEM, DRAWING_NOTES, progressNotes } from './prompts.js';
 import { envelopeRepairPrompt, agentLabel, acceptIllustrations } from './results.js';
@@ -78,7 +78,7 @@ export async function illustrateBoard(
     });
     let repair = '';
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (signal.aborted) throw new Error('Cancelled');
+      if (signal.aborted) throw harnessAbortError(signal);
       let output: string;
       try {
         output = await client.complete(
@@ -94,6 +94,7 @@ export async function illustrateBoard(
           [],
           progress,
         );
+        if (signal.aborted) throw harnessAbortError(signal);
       } catch (error) {
         repair = envelopeRepairPrompt(error, attempt);
         continue;
@@ -118,7 +119,8 @@ export async function illustrateBoard(
       message:
         'The agent’s drawings were invalid after one repair attempt. Your icons are unchanged.',
     });
-  } catch (error) {
+  } catch (caughtError) {
+    const error = signal.aborted ? harnessAbortError(signal) : caughtError;
     if (error instanceof HarnessError && error.code.startsWith('provider_'))
       return outcome(502, { message: error.message });
     if (error instanceof HarnessError && error.code === 'harness_request_limit')

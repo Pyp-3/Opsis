@@ -1,8 +1,27 @@
 # Opsis goals
 
-Last reviewed: 2026-10-12.
+Last reviewed: 2026-10-13.
 
 ## Current delivery
+
+Codex invalid-arrow/deadline follow-up (2026-10-13, user request): VPS logs show
+the previous schema fix reached generation successfully. The latest answer had
+four points for an arrow in `sketchEdits.put`; the one validation repair was
+interrupted by the browser host's 180-second total deadline. Generic cancellation
+then produced a misleading CLI login/model/usage message. Encode point counts at
+Codex's wire boundary using shared drawing rules, preserve host deadline reasons
+in the process runner and both generation handlers, and reject late answers without another
+repair. Preserve saved document contracts, explicit model settings, existing
+three/ten-minute budgets and one invalid-output repair. Regression coverage uses
+fake agents and isolated data, never a paid provider call. Other CLI schemas remain
+compact and unchanged. Verified locally: lint/typecheck, Rust check/26 tests, all
+646 unit/API/schema tests, native vet/race suite, 13 release-policy tests, rebuilt
+Linux executable, packaged database/MCP integration and all 28 isolated hidden
+WebView checks. Full web and packaged browser suites are running on separate ports
+and artifact directories; final browser, hosted CI and deployment evidence belongs
+to this follow-up's delivery PR. The user explicitly authorized its merge and VPS
+deployment after CI passes. No roadmap goal is completed; live-provider generation
+remains unverified.
 
 VPS Codex diagnosis and update (2026-10-12, user request): the live Codex 0.159.0
 was installed and signed in, but both recent requests failed with HTTP 400

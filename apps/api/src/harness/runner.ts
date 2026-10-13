@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
-import { HarnessError } from './errors.js';
+import { HarnessError, harnessAbortError } from './errors.js';
 import type { ProcessRunner, ProcessRunRequest, ProcessRunResult } from './types.js';
 import { executableCommand } from '../cli-executable.js';
 
@@ -16,7 +16,7 @@ export class SpawnProcessRunner implements ProcessRunner {
     if (byteLength(request.stdin) > request.maxStdinBytes) {
       return Promise.reject(new HarnessError('harness_overflow'));
     }
-    if (request.signal?.aborted) return Promise.reject(new HarnessError('harness_cancelled'));
+    if (request.signal?.aborted) return Promise.reject(harnessAbortError(request.signal));
 
     return new Promise((resolve, reject) => {
       const command = executableCommand(request.executable, request.args);
@@ -47,7 +47,7 @@ export class SpawnProcessRunner implements ProcessRunner {
         request.timeoutMs,
       );
       deadline.unref();
-      const cancel = () => terminate(new HarnessError('harness_cancelled'));
+      const cancel = () => terminate(harnessAbortError(request.signal!));
       request.signal?.addEventListener('abort', cancel, { once: true });
 
       child.stdout.on('data', (chunk: Buffer) => {

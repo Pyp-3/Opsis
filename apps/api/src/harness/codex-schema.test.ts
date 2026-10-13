@@ -52,7 +52,9 @@ describe('Codex Structured Outputs compatibility', () => {
 
   it('keeps coordinate bounds and exactly two items, and refuses mixed tuples', () => {
     const schema = JSON.parse(codexOutputSchema(boardOutputSchemaFor({})));
-    const points = schema.properties.drawings.anyOf[0].items.properties.points.anyOf[0];
+    const points = schema.properties.drawings.anyOf[0].items.anyOf[0].properties.points;
+    expect(points.minItems).toBe(2);
+    expect(points.maxItems).toBe(2);
     expect(points.items).toEqual({
       type: 'array',
       minItems: 2,
@@ -77,6 +79,43 @@ describe('Codex Structured Outputs compatibility', () => {
     ).toBe(false);
   });
 
+  it('enforces shape point counts in drawings, focus updates, sketch edits and extra pages', () => {
+    const schema = JSON.parse(
+      codexOutputSchema(boardOutputSchemaFor({ focus: true, sketch: true, pages: true })),
+    );
+    const drawingSchemas = [
+      schema.$defs.drawing,
+      schema.properties.focusEdits.anyOf[0].properties.update.items,
+      schema.properties.sketchEdits.anyOf[0].properties.put.items,
+    ];
+    expect(schema.properties.drawings.anyOf[0].items.$ref).toBe('#/$defs/drawing');
+    expect(schema.properties.morePages.anyOf[0].items.properties.drawings.anyOf[0].items.$ref).toBe(
+      '#/$defs/drawing',
+    );
+    for (const drawing of drawingSchemas) {
+      for (const [shape, min, max] of [
+        ['line', 2, 2],
+        ['arrow', 2, 2],
+        ['dimension', 2, 2],
+        ['arc', 3, 3],
+        ['polygon', 3, 120],
+      ] as const) {
+        const branch = drawing.anyOf.find(
+          (candidate: { properties: { shape: { enum: string[] } } }) =>
+            candidate.properties.shape.enum.includes(shape),
+        );
+        expect(branch).toBeDefined();
+        expect(branch.properties.points).toMatchObject({
+          type: 'array',
+          minItems: min,
+          maxItems: max,
+        });
+        expect(branch.properties.points.anyOf).toBeUndefined();
+        expect(branch.required).toContain('points');
+      }
+    }
+  });
+
   it('restores optional omissions in drawings, page references and focus/sketch edits', () => {
     const original = boardOutputSchemaFor({
       focus: true,
@@ -96,6 +135,7 @@ describe('Codex Structured Outputs compatibility', () => {
       ],
       x: null,
       d: null,
+      endMarker: null,
     };
     const value = {
       ...EMAIL_DEMO,
@@ -118,6 +158,7 @@ describe('Codex Structured Outputs compatibility', () => {
     expect(output).not.toHaveProperty('sketchEdits');
     expect(output).not.toHaveProperty('readPages');
     expect(output.drawings[0]).not.toHaveProperty('x');
+    expect(output.drawings[0]).not.toHaveProperty('endMarker');
     expect(output.morePages[0].drawings[0]).not.toHaveProperty('d');
     const { morePages, ...graph } = output;
     expect(BoardGraphSchema.safeParse(graph).success).toBe(true);

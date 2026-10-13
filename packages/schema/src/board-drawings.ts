@@ -190,6 +190,51 @@ export const AgentDrawingSchema = BoardDrawingObject.omit({ layerId: true, locke
   .extend({ points: z.array(point).min(2).max(120).optional() })
   .superRefine(checkShape);
 export type AgentDrawing = z.infer<typeof AgentDrawingSchema>;
+
+/**
+ * Refinements do not survive JSON Schema export. Structured-output transports can opt into
+ * point-count branches rather than spending the one repair fixing a four-point arrow. Keep
+ * this at the transport boundary: other CLIs put the compact schema in bounded prompt/argv.
+ * Saved contracts and their validators remain unchanged.
+ */
+export function agentDrawingOutputSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  const shapes = properties?.shape?.enum;
+  const points = properties?.points;
+  if (
+    schema.type !== 'object' ||
+    !Array.isArray(shapes) ||
+    shapes.length !== DRAWING_SHAPES.length ||
+    !DRAWING_SHAPES.every((shape) => shapes.includes(shape)) ||
+    points?.type !== 'array' ||
+    points.maxItems !== 120
+  )
+    return schema;
+  const required = (schema.required ?? []) as string[];
+  const counted = (shapes: DrawingShape[], min: number, max: number) => ({
+    ...schema,
+    properties: {
+      ...properties,
+      shape: { type: 'string', enum: shapes },
+      points: { ...points, minItems: min, maxItems: max },
+    },
+    required: [...new Set([...required, 'points'])],
+  });
+  return {
+    anyOf: [
+      counted(['line', 'arrow', 'dimension'], 2, 2),
+      counted(['arc'], 3, 3),
+      counted(['polygon'], 3, 120),
+      {
+        ...schema,
+        properties: {
+          ...properties,
+          shape: { type: 'string', enum: ['stroke', 'rect', 'ellipse', 'text', 'path'] },
+        },
+      },
+    ],
+  };
+}
 /**
  * One of the reader's own drawings as a chat agent is shown it when the reader puts it in focus:
  * the stored shape without its layer or lock, so long strokes keep every sample.
