@@ -358,7 +358,7 @@ jobs:
       - name: Archive the tested app and WASM for isolated browser shards
         if: needs.tested.outputs.run == ''
         # Tar preserves the executable mode and bundle structure across artifact transport.
-        run: tar -cf output/desktop/qa-app.tar output/desktop/Opsis.app packages/engine/pkg
+        run: tar -cf output/desktop/qa-app.tar output/desktop/Opsis.app packages/engine/dist
       - name: Upload browser test app
         if: needs.tested.outputs.run == ''
         uses: actions/upload-artifact@v4

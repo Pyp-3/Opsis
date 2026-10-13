@@ -1,4 +1,14 @@
-import { readFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
@@ -161,7 +171,7 @@ test("browser shards receive this run's built app, executable modes and WASM, no
   const browser = jobBlock('macos-browser');
   assert.match(
     build,
-    /tar -cf output\/desktop\/qa-app.tar output\/desktop\/Opsis.app packages\/engine\/pkg/,
+    /tar -cf output\/desktop\/qa-app.tar output\/desktop\/Opsis.app packages\/engine\/dist/,
   );
   assert.ok(build.includes('name: macos-${{ matrix.arch }}-qa-app'));
   assert.ok(browser.includes('name: macos-${{ matrix.arch }}-qa-app'));
@@ -181,6 +191,41 @@ test("browser shards receive this run's built app, executable modes and WASM, no
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   assert.match(config, /workers: 1/);
   assert.match(config, /reuseExistingServer: false/);
+});
+
+test('the actual QA tar commands transfer generated WASM and retain an executable app', () => {
+  const engineBuild = readFileSync(
+    new URL('../packages/engine/scripts/build.mjs', import.meta.url),
+    'utf8',
+  );
+  const engineOutput = /'--out-dir',\s*'([^']+)'/.exec(engineBuild)?.[1];
+  assert.ok(engineOutput, 'derive the generated directory from its build owner');
+  const stage = mkdtempSync(join(tmpdir(), 'opsis-ci-artifact-'));
+  try {
+    const binary = 'output/desktop/Opsis.app/Contents/MacOS/opsis';
+    const wasm = `packages/engine/${engineOutput}/opsis_engine_bg.wasm`;
+    mkdirSync(join(stage, 'output/desktop/Opsis.app/Contents/MacOS'), { recursive: true });
+    mkdirSync(join(stage, `packages/engine/${engineOutput}`), { recursive: true });
+    writeFileSync(join(stage, binary), 'generated test executable\n');
+    chmodSync(join(stage, binary), 0o755);
+    const bytes = Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]);
+    writeFileSync(join(stage, wasm), bytes);
+    const archive = steps('macos-build').find(
+      (s) => s.name === 'Archive the tested app and WASM for isolated browser shards',
+    );
+    const restore = steps('macos-browser').find(
+      (s) => s.name === 'Restore executable permissions and WASM',
+    );
+    const command = (step) => /run: (tar .*)/.exec(step.text)?.[1];
+    assert.equal(spawnSync('bash', ['-e', '-c', command(archive)], { cwd: stage }).status, 0);
+    rmSync(join(stage, 'output/desktop/Opsis.app'), { recursive: true });
+    rmSync(join(stage, `packages/engine/${engineOutput}`), { recursive: true });
+    assert.equal(spawnSync('bash', ['-e', '-c', command(restore)], { cwd: stage }).status, 0);
+    assert.equal(statSync(join(stage, binary)).mode & 0o111, 0o111);
+    assert.deepEqual(readFileSync(join(stage, wasm)), bytes);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
 });
 
 test('protected macOS gates reject failures, cancellations and unexpected skipped tests', () => {

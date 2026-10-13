@@ -32,6 +32,11 @@ delivery PR. No roadmap goal is completed.
 Build reruns replace only their generated QA app artifact; browser-only reruns can
 reuse the latest same-run app, while failure artifacts retain attempt-specific names.
 Policy tests and actionlint verify these rerun boundaries.
+First hosted run on `4da7b8a` caught an incorrect WASM handoff directory (`pkg`
+instead of the engine owner's `dist`). Builds, database/MCP integration and hidden
+native smoke passed, but archive failure correctly blocked the final macOS gates.
+Correct the artifact path and add a real tar round-trip test deriving the output
+directory from the engine build owner, checking both WASM bytes and executable modes.
 Changes to `.github/` intentionally retain the VPS baseline-review hold after a
 future user promotion; no server baseline is changed by this task.
 
