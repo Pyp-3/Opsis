@@ -64,10 +64,19 @@ export function useBookMetrics(
       setMetrics((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     };
     measure();
-    if (typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    // A tab panel can be measured once while its `hidden` style is still settling. Chromium on
+    // Windows has then occasionally kept the narrow fallback because ResizeObserver did not
+    // deliver another notification. Measure again after layout and keep the window fallback for
+    // viewport changes; the observer remains the precise path for sidebar and toolbar resizing.
+    const frame = requestAnimationFrame(measure);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(element);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [scroller, bar]);
   return metrics;
 }

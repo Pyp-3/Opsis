@@ -12,10 +12,21 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Pyp-3/Opsis/apps/desktop/internal/api"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestLoopbackRequestsUseTheCompleteToolDeadline(t *testing.T) {
+	client := loopbackClient()
+	if client.Timeout != 0 {
+		t.Fatalf("nested HTTP timeout %s shortens the %s tool deadline", client.Timeout, toolDeadline)
+	}
+	if toolDeadline != 30*time.Second {
+		t.Fatalf("tool deadline = %s", toolDeadline)
+	}
+}
 
 func TestNativeMCPKeepsToolsAndUndoableEdits(t *testing.T) {
 	native, err := api.New(filepath.Join(t.TempDir(), "opsis.sqlite"), nil)

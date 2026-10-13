@@ -4,6 +4,54 @@ Last reviewed: 2026-10-13.
 
 ## Current delivery
 
+CI latency follow-up (2026-10-13, user request): the last passing development run
+38354701379 took 32m33s on macOS Intel versus 17m51s on ARM. Intel spent 5m53s
+in native race tests, 5m28s building and 16m09s in single-worker browser parity.
+Refresh compiled Go caches by source fingerprint with compatible snapshot fallback
+and separate test/build writers. Reuse only exact-source, runner-image, target and
+Node-version speech runtimes; always rebuild the current app/release identity.
+Run macOS native checks alongside the build, then run the entire browser suite in
+three isolated Intel jobs and two ARM jobs using that run's app and WASM artifact,
+fitting the standard five-concurrent-macOS-job limit without dropping any scenarios.
+Preserve one worker per API/profile, both protected macOS check names, all original
+native/database/MCP/hidden-WebView checks, release publication/retention and exact
+tested-tree promotion. Final macOS gates reject failed/cancelled/unexpectedly skipped
+dependencies. No larger paid runners, missing-platform shortcuts, branch-protection
+changes or automatic main promotion. Policy tests cover the cache boundaries,
+artifact transport, shard coverage and fail-closed gates. Verified locally: actionlint
+1.7.12, lint/typecheck, Rust checks/26 tests, 663 unit/API/schema tests, native vet/race,
+18 packaging/workflow-policy tests, six updater-policy tests, a rebuilt Linux executable
+using the runtime-reuse path, database/MCP integration and all 28 hidden WebView checks.
+Both two-/three-shard enumerations cover all 84 scenarios with no duplication. The
+local three-shard native run had 79 passes and five existing accessibility/navigation
+timeouts while four browser workers saturated the shared eight-core host (load 19);
+all five pass on a lighter-load rerun, with no changed assertions or deadlines.
+The full Fastify browser run had 83 passes and one navigation timeout, which passes
+an isolated rerun without test changes. Hosted cold/warm timings belong to the
+delivery PR. No roadmap goal is completed.
+Build reruns replace only their generated QA app artifact; browser-only reruns can
+reuse the latest same-run app, while failure artifacts retain attempt-specific names.
+Policy tests and actionlint verify these rerun boundaries.
+First hosted run on `4da7b8a` caught an incorrect WASM handoff directory (`pkg`
+instead of the engine owner's `dist`). Builds, database/MCP integration and hidden
+native smoke passed, but archive failure correctly blocked the final macOS gates.
+Correct the artifact path and add a real tar round-trip test deriving the output
+directory from the engine build owner, checking both WASM bytes and executable modes.
+The first corrected hosted run passed every required job and reduced the macOS critical
+path to 16m36s. Its warm-cache rerun reduced that path to 12m12s, but Windows exposed an
+unrelated Info-book measurement race: a newly unhidden wide tab could retain its narrow
+single-page fallback when Chromium omitted the expected ResizeObserver follow-up. Retained
+screenshots confirmed the board and current app were loaded. Added a next-frame measurement,
+window-resize fallback and hook regression test without weakening the browser assertion;
+664 unit tests and three repeated browser scenarios pass locally, and the original failed
+Windows job passed on a job-only rerun before this follow-up commit.
+The next Windows run passed that browser regression but exposed a separate packaged-render
+boundary: `opsis_render_board` hit the bridge's 20-second HTTP timeout before its existing
+30-second tool deadline. Keep the single outer deadline, remove the premature nested timeout
+and include the returned MCP error in integration failures; do not retry or skip the render.
+Changes to `.github/` intentionally retain the VPS baseline-review hold after a
+future user promotion; no server baseline is changed by this task.
+
 Canvas/sketch overlap follow-up (2026-10-13, user request): native concepts and
 model-authored drawings were laid out independently; follow-up sketches could sit
 over existing icons and connection routing ignored their words and blocks. Add a

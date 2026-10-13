@@ -24,6 +24,8 @@ var once sync.Once
 var program *goja.Program
 var compileError error
 
+const toolDeadline = 30 * time.Second
+
 type Bridge struct {
 	Base, Key, Web string
 	client         *http.Client
@@ -31,6 +33,15 @@ type Bridge struct {
 type catalog struct {
 	Instructions string      `json:"instructions"`
 	Tools        []*mcp.Tool `json:"tools"`
+}
+
+func loopbackClient() *http.Client {
+	return &http.Client{
+		// The per-tool context below owns the complete deadline. A shorter client timeout used to
+		// cut the packaged preview rasteriser off before the tool's existing 30-second bound.
+		Transport:     &http.Transport{Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 func New(base, key, web string) (*mcp.Server, error) {
@@ -42,7 +53,7 @@ func New(base, key, web string) (*mcp.Server, error) {
 	if err != nil || address.Scheme != "http" || address.User != nil || address.RawQuery != "" || !loopback(address.Hostname()) {
 		return nil, errors.New("MCP requires a direct loopback Opsis API address")
 	}
-	b := &Bridge{Base: base, Key: key, Web: web, client: &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	b := &Bridge{Base: base, Key: key, Web: web, client: loopbackClient()}
 	_, definitions, err := b.vm(context.Background())
 	if err != nil {
 		return nil, err
@@ -138,7 +149,7 @@ func (b *Bridge) call(ctx context.Context, name string, args json.RawMessage) (*
 	if len(args) == 0 {
 		args = json.RawMessage(`{}`)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, toolDeadline)
 	defer cancel()
 	vm, _, err := b.vm(ctx)
 	if err != nil {

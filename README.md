@@ -60,4 +60,6 @@ Personal servers can restrict operator-created guest accounts to a read-only pub
 [User guide](docs/USER-GUIDE.md) · [Agent settings](docs/AGENT-CONFIGURATION.md) · [Contributing](CONTRIBUTING.md) · [Release notes and packaging](docs/RELEASES.md)
 
 Development happens on `development`; only manually promoted batches reach protected
-`main` and release packaging. See [the development and release policy](docs/DEVELOPMENT.md).
+`main` and release packaging. CI uses fingerprinted native caches, parallel macOS
+native checks and isolated browser shards without dropping platform coverage.
+See [the development and release policy](docs/DEVELOPMENT.md).

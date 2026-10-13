@@ -151,7 +151,11 @@ try {
   assert.equal(edited.snapshot.board.nodes.length, 1);
   // Board previews: the packaged Node service rasterises with its bundled sharp.
   const preview = await mcp.callTool({ name: 'opsis_render_board', arguments: { boardId: id } });
-  assert.ok(!preview.isError, 'MCP opsis_render_board failed');
+  const previewError = preview.content
+    .filter((item) => item.type === 'text')
+    .map((item) => item.text)
+    .join(' ');
+  assert.ok(!preview.isError, `MCP opsis_render_board failed: ${previewError || 'no detail'}`);
   assert.equal(preview.content[0].type, 'image', 'packaged runtime renders a PNG preview');
   assert.equal(Buffer.from(preview.content[0].data, 'base64').subarray(1, 4).toString(), 'PNG');
   assert.equal((await request('DELETE', `/v1/auth/agent-keys/${key.id}`)).status, 204);
