@@ -45,6 +45,10 @@ screenshots confirmed the board and current app were loaded. Added a next-frame 
 window-resize fallback and hook regression test without weakening the browser assertion;
 664 unit tests and three repeated browser scenarios pass locally, and the original failed
 Windows job passed on a job-only rerun before this follow-up commit.
+The next Windows run passed that browser regression but exposed a separate packaged-render
+boundary: `opsis_render_board` hit the bridge's 20-second HTTP timeout before its existing
+30-second tool deadline. Keep the single outer deadline, remove the premature nested timeout
+and include the returned MCP error in integration failures; do not retry or skip the render.
 Changes to `.github/` intentionally retain the VPS baseline-review hold after a
 future user promotion; no server baseline is changed by this task.
 
