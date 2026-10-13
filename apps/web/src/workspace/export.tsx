@@ -14,6 +14,7 @@ import { NodeIcon } from './NodeIcon';
 import { NODE_WIDTH } from './model';
 import { routeBoard } from './routing';
 import { wrapLabel, nodeHeight } from './geometry';
+import { drawingFootprints } from './canvas-footprints';
 import { connectionStyle, PORT_OFFSETS, connectionLabel } from './connections';
 import { iconColorOf, lookOf, paletteOf, type CanvasLook } from './canvas-theme';
 
@@ -46,6 +47,10 @@ export function boardSvg(board: BoardDocument, look: CanvasLook = lookOf(board))
         { x: bounds.maxX, y: bounds.maxY },
       ];
     }),
+    ...drawingFootprints(board).flatMap((box) => [
+      { x: box.x, y: box.y },
+      { x: box.x + box.width, y: box.y + box.height },
+    ]),
     ...Object.values(routes).flatMap((route) => [
       ...route.points,
       ...(route.label

@@ -5,6 +5,7 @@ import { BoardSharing } from './BoardSharing';
 import { BoardGroups, GroupBoundaries, GroupsSummary } from './BoardGroups';
 import { useRememberedOpen } from './useRememberedOpen';
 import { readingViewport, NODE_HEIGHT } from './geometry';
+import { canvasContentBounds } from './canvas-footprints';
 import { BoardHeader } from './BoardHeader';
 import { BoardLinks } from './BoardLinks';
 import { useBoardDiagram, type PlaybackFocus } from './useBoardDiagram';
@@ -38,6 +39,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  getViewportForBounds,
   type NodeChange,
 } from '@xyflow/react';
 import {
@@ -439,18 +441,54 @@ function BoardWorkspace({ user, onSignOut, settingsError }: WorkspaceProps) {
     if (readingTimer.current) clearTimeout(readingTimer.current);
     const canvas = document.querySelector('.blueprint');
     const height = canvas?.clientHeight ?? 700;
-    const heading = canvas?.querySelector<HTMLElement>('.canvas-heading')?.offsetHeight ?? 0;
+    const headingElement = canvas?.querySelector<HTMLElement>('.canvas-heading');
+    const heading = headingElement?.offsetHeight ?? 0;
     const composer = canvas?.querySelector<HTMLElement>('.composer-wrap')?.offsetHeight ?? 0;
+    const padding = {
+      top: `${Math.min(height * 0.3, heading + 32)}px`,
+      bottom: `${Math.min(height * 0.4, composer + 36)}px`,
+      x: '48px',
+    } as const;
+    const current = boardRef.current;
+    if (current?.drawings?.length) {
+      const nodes = flow
+        .getNodes()
+        .filter((node) => !node.hidden)
+        .map((node) => {
+          const internal = flow.getInternalNode(node.id);
+          return {
+            ...(internal?.internals.positionAbsolute ?? node.position),
+            width: internal?.measured.width ?? node.width ?? NODE_WIDTH,
+            height: internal?.measured.height ?? node.height ?? NODE_HEIGHT,
+          };
+        });
+      const bounds = canvasContentBounds(current, nodes);
+      if (bounds) {
+        // A wrapped heading can be taller than 30% of the canvas, especially with
+        // offline/platform fonts. Reserve its actual bottom, not that legacy cap.
+        const headingBottom =
+          headingElement && canvas
+            ? Math.max(
+                0,
+                headingElement.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top,
+              )
+            : 0;
+        void flow.setViewport(
+          getViewportForBounds(bounds, canvas?.clientWidth ?? 900, height, 0.25, 1.1, {
+            ...padding,
+            top: `${headingBottom + 16}px`,
+          }),
+          { duration: 300 },
+        );
+        return;
+      }
+    }
     void flow.fitView({
-      padding: {
-        top: `${Math.min(height * 0.3, heading + 32)}px`,
-        bottom: `${Math.min(height * 0.4, composer + 36)}px`,
-        x: '48px',
-      },
+      padding,
       duration: 300,
       maxZoom: 1.1,
     });
-  }, [flow]);
+  }, [flow, boardRef]);
   const readingView = useCallback(() => {
     const current = boardRef.current;
     if (!current) return;

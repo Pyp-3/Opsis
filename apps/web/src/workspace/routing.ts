@@ -1,9 +1,17 @@
 import type { BoardDocument, BoardPort } from '@opsis/schema';
 import { edgePorts, PORT_OFFSETS, connectionLabel, isReturnEdge, replyLead } from './connections';
 import { NODE_WIDTH, wrapLabel, nodeHeight } from './geometry';
+import {
+  blocksNode,
+  drawingFootprints,
+  overlaps,
+  type CanvasRect,
+  type DrawingFootprint,
+} from './canvas-footprints';
+export { overlaps } from './canvas-footprints';
 
 export type Point = { x: number; y: number };
-export type Rect = { x: number; y: number; width: number; height: number };
+export type Rect = CanvasRect;
 export type RoutedEdge = {
   points: Point[];
   path: string;
@@ -29,8 +37,22 @@ const inflate = (rect: Rect, amount: number): Rect => ({
   width: rect.width + amount * 2,
   height: rect.height + amount * 2,
 });
-export function overlaps(a: Rect, b: Rect) {
-  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+
+/** Extra clearance must not turn a clear fixed port exit into an overlapping object.
+ * Search may ignore an object covering an exit, so only shrink its padding, never its ink.
+ */
+function drawingClearance(rect: Rect, exits: Point[]): Rect {
+  const distances = exits
+    .map((point) =>
+      Math.max(
+        rect.x - point.x,
+        point.x - rect.x - rect.width,
+        rect.y - point.y,
+        point.y - rect.y - rect.height,
+      ),
+    )
+    .filter((distance) => distance > 0);
+  return inflate(rect, Math.max(0, Math.min(PAD, ...distances) - 1e-6));
 }
 export function crosses(a: Point, b: Point, rect: Rect): boolean {
   if (a.x !== b.x && a.y !== b.y) {
@@ -427,6 +449,7 @@ function nudge(
   routes: { points: Point[]; stubs: [number, number]; fixed?: boolean }[],
   boxes: Footprint[],
   ends: string[][],
+  drawingObstacles: (ends: string[]) => Rect[],
 ) {
   type Ref = {
     route: number;
@@ -497,13 +520,14 @@ function nudge(
           );
           const touched = segments(moved).slice(Math.max(0, ref.i - 1), ref.i + 2);
           const own = ends[ref.route]!;
-          const clear = touched.every(([a, b]) =>
-            boxes.every((box) => {
-              const rect = own.includes(box.id)
-                ? { ...box, y: box.y + 90, height: box.height - 90 }
-                : box;
-              return !crosses(a, b, rect);
-            }),
+          const clear = touched.every(
+            ([a, b]) =>
+              boxes.every((box) => {
+                const rect = own.includes(box.id)
+                  ? { ...box, y: box.y + 90, height: box.height - 90 }
+                  : box;
+                return !crosses(a, b, rect);
+              }) && drawingObstacles(own).every((box) => !crosses(a, b, box)),
           );
           if (clear) {
             routes[ref.route]!.points = moved;
@@ -518,11 +542,20 @@ function nudge(
 /** Orthogonal arrows that route around objects with few turns, then share corridors as lanes. */
 const routeCache = new Map<string, Record<string, RoutedEdge>>();
 export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
-  // Descriptions, drawings, selections and colour changes do not alter geometry.
+  const drawings = drawingFootprints(board);
+  // Include resolved drawing geometry: edits, anchor moves, text/font changes and hidden
+  // layers can change routes. Descriptions, selections and ink colours still do not.
   const key = JSON.stringify({
     nodes: board.nodes.map((node) => [node.id, nodeHeight(node)]),
     positions: board.positions,
     ports: board.edgePorts,
+    drawings: drawings.map(({ x, y, width, height, container }) => [
+      x,
+      y,
+      width,
+      height,
+      container,
+    ]),
     edges: board.edges.map((edge) => [
       edge.id,
       edge.source,
@@ -533,12 +566,15 @@ export function routeBoard(board: BoardDocument): Record<string, RoutedEdge> {
   });
   const cached = routeCache.get(key);
   if (cached) return cached;
-  const result = computeRoutes(board);
+  const result = computeRoutes(board, drawings);
   if (routeCache.size >= 4) routeCache.delete(routeCache.keys().next().value!);
   routeCache.set(key, result);
   return result;
 }
-function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
+function computeRoutes(
+  board: BoardDocument,
+  drawings: DrawingFootprint[],
+): Record<string, RoutedEdge> {
   const boxes: Footprint[] = board.nodes.map((node) => ({
     id: node.id,
     ...(board.positions[node.id] ?? { x: 0, y: 0 }),
@@ -547,6 +583,28 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
   }));
   const byId = new Map(boxes.map((box) => [box.id, box]));
   const padded = boxes.map((box) => inflate(box, PAD));
+  const obstaclesFor = (ends: string[]) =>
+    drawings.filter((drawing) =>
+      ends.every((id) => !byId.has(id) || blocksNode(drawing, byId.get(id)!)),
+    );
+  const envelope = boxes.length
+    ? {
+        x: Math.min(...boxes.map((box) => box.x)) - 64,
+        y: Math.min(...boxes.map((box) => box.y)) - 64,
+        width:
+          Math.max(...boxes.map((box) => box.x + box.width)) -
+          Math.min(...boxes.map((box) => box.x)) +
+          128,
+        height:
+          Math.max(...boxes.map((box) => box.y + box.height)) -
+          Math.min(...boxes.map((box) => box.y)) +
+          128,
+      }
+    : { x: 0, y: 0, width: 0, height: 0 };
+  // A sketch well beside the graph must not multiply the A* grid. Only intersecting
+  // obstacles need corridors; all visible drawings still reserve space for edge labels.
+  const nearby = drawings.filter((drawing) => overlaps(envelope, drawing));
+  const corridors = [...padded, ...nearby.map((drawing) => inflate(drawing, PAD))];
   // Candidate corridors: object edges plus the middle of every gap between them.
   const axis = (values: number[], margin: number) => {
     const sorted = [...new Set(values)].sort((a, b) => a - b);
@@ -555,13 +613,13 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
   };
   const xsBase = boxes.length
     ? axis(
-        padded.flatMap((r) => [r.x, r.x + r.width]),
+        corridors.flatMap((r) => [r.x, r.x + r.width]),
         48,
       )
     : [];
   const ysBase = boxes.length
     ? axis(
-        padded.flatMap((r) => [r.y, r.y + r.height]),
+        corridors.flatMap((r) => [r.y, r.y + r.height]),
         48,
       )
     : [];
@@ -611,17 +669,25 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
   const clearOf = (points: Point[], ends: string[]) =>
     segments(points)
       .slice(1, -1)
-      .every(([a, b]) =>
-        boxes.every(
-          (box) =>
-            !crosses(
-              a,
-              b,
-              ends.includes(box.id) ? { ...box, y: box.y + 90, height: box.height - 90 } : box,
-            ),
-        ),
+      .every(
+        ([a, b]) =>
+          boxes.every(
+            (box) =>
+              !crosses(
+                a,
+                b,
+                ends.includes(box.id) ? { ...box, y: box.y + 90, height: box.height - 90 } : box,
+              ),
+          ) && obstaclesFor(ends).every((box) => !crosses(a, b, box)),
       );
   for (const edge of edges) {
+    const drawingObstacles = obstaclesFor([edge.source, edge.target]).filter((drawing) =>
+      nearby.includes(drawing),
+    );
+    const searchObstacles = (exits: Point[]) => [
+      ...padded,
+      ...drawingObstacles.map((drawing) => drawingClearance(drawing, exits)),
+    ];
     const p = ports.get(edge.id)!;
     const stubFor = (end: 'source' | 'target') => {
       const peers = attachments.get(`${edge[end]}:${p[end]}`)!;
@@ -643,7 +709,7 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
       startDirection,
       goal,
       goalDirection,
-      padded,
+      searchObstacles([start, goal]),
       xsBase,
       ysBase,
       occupancy,
@@ -680,7 +746,7 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
       outward(tp.source),
       back[1]![2]!,
       (outward(tp.target) + 2) & 3,
-      padded,
+      searchObstacles([back[0]![2]!, back[1]![2]!]),
       xsBase,
       ysBase,
       occupancy,
@@ -696,6 +762,7 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
       const edge = board.edges.find((item) => item.id === route.id)!;
       return [edge.source, edge.target];
     }),
+    obstaclesFor,
   );
 
   // Labels are placed once every arrow is final, so none can land on a later line.
@@ -705,6 +772,10 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
   const nodeObstacles = boxes.map((box) => inflate(box, 6));
   for (const route of routed) {
     const edge = board.edges.find((item) => item.id === route.id)!;
+    const labelObstacles = [
+      ...nodeObstacles,
+      ...obstaclesFor([edge.source, edge.target]).map((box) => inflate(box, 6)),
+    ];
     const points = route.points.filter(
       (p, i) => !i || p.x !== route.points[i - 1]!.x || p.y !== route.points[i - 1]!.y,
     );
@@ -712,7 +783,7 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
     let label = labelPosition(
       points,
       lines,
-      [...nodeObstacles, ...placed.map((r) => inflate(r, 6))],
+      [...labelObstacles, ...placed.map((r) => inflate(r, 6))],
       paths,
     );
     let callout: string | undefined;
@@ -722,7 +793,7 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
       const [a, b] = segments(points).sort((a, b) => length(b) - length(a))[0]!;
       const anchor = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const free = (rect: Rect) =>
-        !nodeObstacles.some((box) => overlaps(rect, box)) &&
+        !labelObstacles.some((box) => overlaps(rect, box)) &&
         !placed.some((r) => overlaps(inflate(r, 6), rect)) &&
         !paths.some((path) => segments(path).some(([p, q]) => crosses(p, q, inflate(rect, 5))));
       let spot: Rect | undefined;
@@ -738,7 +809,15 @@ function computeRoutes(board: BoardDocument): Record<string, RoutedEdge> {
           if (free(rect)) spot = rect;
         }
       label = spot ?? {
-        x: Math.min(...boxes.map((box) => box.x), ...paths.flat().map((p) => p.x)) - width - 24,
+        x:
+          Math.min(
+            ...boxes.map((box) => box.x),
+            ...drawings.map((box) => box.x),
+            ...placed.map((box) => box.x),
+            ...paths.flat().map((p) => p.x),
+          ) -
+          width -
+          24,
         y: anchor.y - height / 2,
         width,
         height,
