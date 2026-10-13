@@ -221,6 +221,25 @@ describe('SpawnProcessRunner supervision', () => {
     await expect(running).rejects.toThrowError('harness_cancelled');
   });
 
+  it.each([false, true])('preserves a host deadline with already-aborted=%s', async (aborted) => {
+    const controller = new AbortController();
+    const deadline = new HarnessError('harness_timeout');
+    if (aborted) controller.abort(deadline);
+    const running = runner.run(
+      base(['-e', 'setInterval(() => {}, 1000)'], { signal: controller.signal }),
+    );
+    if (!aborted) controller.abort(deadline);
+    await expect(running).rejects.toThrowError('harness_timeout');
+  });
+
+  it('redacts arbitrary abort reasons instead of treating them as deadlines', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('SECRET_CALLER_REASON'));
+    await expect(
+      runner.run(base(['-e', 'process.exit(0)'], { signal: controller.signal })),
+    ).rejects.toThrowError(/^harness_cancelled:/u);
+  });
+
   it('keeps stdin open until the awaited answer, then stops the child', async () => {
     // Like Codex's app-server: it answers each line and exits as soon as input ends.
     const server = `process.stdin.on('end', () => process.exit(3));

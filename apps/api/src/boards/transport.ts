@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { HarnessProgress } from '../harness/index.js';
+import { HarnessError } from '../harness/errors.js';
 
 export type Outcome = { status: number; body: unknown };
 export const outcome = (status: number, body: unknown): Outcome => ({ status, body });
@@ -37,7 +38,10 @@ export async function respond(
     if (!reply.raw.writableEnded) controller.abort();
   };
   reply.raw.on('close', cancel);
-  const deadline = setTimeout(() => controller.abort(), deadlineMs);
+  const deadline = setTimeout(
+    () => controller.abort(new HarnessError('harness_timeout')),
+    deadlineMs,
+  );
   try {
     if (!request.headers.accept?.includes('application/x-ndjson')) {
       const result = await work({ signal: controller.signal, progress: () => undefined });

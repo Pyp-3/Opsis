@@ -1,4 +1,5 @@
 import { HarnessError } from './errors';
+import { agentDrawingOutputSchema } from '@opsis/schema';
 
 type Schema = Record<string, unknown>;
 const object = (value: unknown): Schema =>
@@ -11,7 +12,7 @@ const object = (value: unknown): Schema =>
  */
 export function codexOutputSchema(json: string): string {
   function convert(value: unknown): Schema {
-    const schema = { ...object(value) };
+    const schema = { ...agentDrawingOutputSchema(object(value)) };
     delete schema.$schema;
     delete schema.minLength;
     delete schema.maxLength;

@@ -45,3 +45,12 @@ export class HarnessError extends Error {
     this.name = 'HarnessError';
   }
 }
+
+/** Preserve a host deadline without exposing arbitrary caller-supplied abort reasons. */
+export function harnessAbortError(signal: AbortSignal): HarnessError {
+  return new HarnessError(
+    signal.reason instanceof HarnessError && signal.reason.code === 'harness_timeout'
+      ? 'harness_timeout'
+      : 'harness_cancelled',
+  );
+}

@@ -27,7 +27,7 @@ import {
   pageReadsFor,
 } from '@opsis/schema';
 import type { LLMRequest } from '../harness/types.js';
-import { HarnessError } from '../harness/errors.js';
+import { HarnessError, harnessAbortError } from '../harness/errors.js';
 import {
   AttachmentError,
   attachmentInstructions,
@@ -485,7 +485,7 @@ export async function generateBoard(
     const read: string[] = [];
     let calls = 0;
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (signal.aborted) throw new Error('Cancelled');
+      if (signal.aborted) throw harnessAbortError(signal);
       progress({ type: 'preview-reset' });
       let output: string;
       const suffix = pagesRead + repair;
@@ -510,6 +510,7 @@ export async function generateBoard(
           prepared.files,
           progress,
         );
+        if (signal.aborted) throw harnessAbortError(signal);
       } catch (error) {
         repair = envelopeRepairPrompt(error, attempt);
         continue;
@@ -582,7 +583,10 @@ export async function generateBoard(
     return outcome(502, {
       message: 'The agent did not return a diagram. Your board is unchanged.',
     });
-  } catch (error) {
+  } catch (caughtError) {
+    // Some providers reduce AbortSignal reasons to a generic cancellation. The host's
+    // total request deadline still wins, including while repairing invalid output.
+    const error = signal.aborted ? harnessAbortError(signal) : caughtError;
     if (error instanceof HarnessError && error.code === 'harness_request_limit')
       return outcome(400, {
         message:

@@ -133,7 +133,17 @@ exactly two numbers; optional fields are required and nullable on the wire, with
 null restored to omission before answer validation. The original contracts still
 enforce string lengths, drawing shape rules and all board/process limits. This
 avoids `invalid_json_schema` errors from draft-7 tuple schemas without changing
-saved documents or retrying failed provider requests.
+saved documents or retrying failed provider requests. Codex's drawing schemas also
+encode shape-specific point counts: two for a line, arrow or dimension, three for
+an arc, and at least three for a polygon. These constraints reach both hosts'
+Codex schemas, including focus updates, sketch edits and extra pages. Other CLI
+schemas stay compact for their bounded prompt/argument interfaces.
+
+The browser host's total request deadline includes any invalid-output repair.
+Deadline cancellation is preserved as a timeout, including when a provider reports
+only a generic abort, so a slow generation is reported as taking too long rather
+than as a CLI login/usage failure. Restricted/full-access limits remain three/ten
+minutes; late answers are not accepted and failures are not automatically retried.
 
 ## Subscription limits (Claude and Codex CLIs)
 

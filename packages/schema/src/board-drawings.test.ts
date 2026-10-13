@@ -4,6 +4,7 @@ import {
   anchorDrawing,
   absoluteDrawing,
   BoardDrawingSchema,
+  AgentDrawingSchema,
   dimensionLabel,
   drawingBounds,
   isDrawingEditable,
@@ -45,6 +46,28 @@ function boardWith(drawings: BoardDrawing[]): BoardDocument {
 }
 
 describe('canvas drawings', () => {
+  it('keeps agent point counts consistent with saved drawings', () => {
+    for (const [shape, validCounts] of [
+      ['line', [2]],
+      ['arrow', [2]],
+      ['dimension', [2]],
+      ['arc', [3]],
+      ['polygon', [3, 4]],
+      ['stroke', [2, 3, 4]],
+    ] as const) {
+      for (const count of [0, 1, 2, 3, 4]) {
+        const drawing = {
+          id: 'geometry',
+          shape,
+          ...ink,
+          points: Array.from({ length: count }, (_, index) => [index, index]),
+        };
+        const expected = (validCounts as readonly number[]).includes(count);
+        expect(AgentDrawingSchema.safeParse(drawing).success, `${shape}: ${count}`).toBe(expected);
+        expect(BoardDrawingSchema.safeParse(drawing).success, `${shape}: ${count}`).toBe(expected);
+      }
+    }
+  });
   it('accepts each shape with its required geometry and rejects incomplete ones', () => {
     const valid: BoardDrawing[] = [
       {
