@@ -165,6 +165,11 @@ test("browser shards receive this run's built app, executable modes and WASM, no
   );
   assert.ok(build.includes('name: macos-${{ matrix.arch }}-qa-app'));
   assert.ok(browser.includes('name: macos-${{ matrix.arch }}-qa-app'));
+  const upload = steps('macos-build').find((step) => step.name === 'Upload browser test app');
+  assert.match(upload.text, /overwrite: true/); // Immutable v4 names must support build reruns.
+  assert.ok(
+    browser.includes('browser-failures-${{ matrix.shard }}-attempt-${{ github.run_attempt }}'),
+  );
   assert.match(browser, /tar -xf output\/desktop\/qa-app.tar/);
   assert.match(
     browser,

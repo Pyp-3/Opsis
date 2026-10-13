@@ -29,6 +29,9 @@ all five pass on a lighter-load rerun, with no changed assertions or deadlines.
 The full Fastify browser run had 83 passes and one navigation timeout, which passes
 an isolated rerun without test changes. Hosted cold/warm timings belong to the
 delivery PR. No roadmap goal is completed.
+Build reruns replace only their generated QA app artifact; browser-only reruns can
+reuse the latest same-run app, while failure artifacts retain attempt-specific names.
+Policy tests and actionlint verify these rerun boundaries.
 Changes to `.github/` intentionally retain the VPS baseline-review hold after a
 future user promotion; no server baseline is changed by this task.
 

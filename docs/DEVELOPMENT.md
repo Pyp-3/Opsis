@@ -39,6 +39,8 @@ own API process, temporary database/profile and Vite server. This fits the stand
 five-concurrent-macOS-job limit, giving the slower architecture more shards.
 Tests stay single-worker inside each shard. The entire suite runs, with only its
 existing platform-specific skips. Shards are file-based, so their times may differ.
+Build reruns replace the generated QA app artifact; browser-only reruns reuse the
+latest app from that workflow run. Failure evidence has attempt-specific names.
 
 The protected `macOS desktop (x64)` and `macOS desktop (arm64)` names are final gates
 over every macOS build, native check and browser shard. A failed, cancelled or

@@ -365,6 +365,9 @@ jobs:
         with:
           name: macos-${{ matrix.arch }}-qa-app
           path: output/desktop/qa-app.tar
+          # A build rerun replaces only this generated test app. Browser-only reruns
+          # can still download the latest app from this same workflow run.
+          overwrite: true
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -446,7 +449,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-browser-failures-${{ matrix.shard }}
+          name: macos-${{ matrix.arch }}-browser-failures-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             test-results/
             playwright-report/
